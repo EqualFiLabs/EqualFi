@@ -4,12 +4,13 @@
 **Publication Date:** January 2026  
 **Document Type:** Technical Specification and Security Analysis  
 **Scope:** Encrypted on-chain communication protocol for cross-chain atomic swaps   
+**Status:** Early-stage research (not production-ready; no mainnet deployment or audits yet)
 
 **Peer Review Status:** Open for community review and validation
 
 ## **Executive Summary**
 
-This document presents the design, implementation, and security analysis of EqualX's Encrypted Mailbox system—a novel on-chain communication protocol that enables secure coordination of cross-chain atomic swaps while preserving privacy properties essential to both Ethereum and Monero networks. The system has been fully implemented and deployed, providing a practical solution to the challenge of trustless cross-chain value transfer between transparent and privacy-preserving blockchains.
+This document presents the design and early prototype of EqualX's Encrypted Mailbox system—a novel on-chain communication protocol that enables secure coordination of cross-chain atomic swaps while preserving privacy properties essential to both Ethereum and Monero networks. The system is in early-stage research and is not deployed or audited.
 
 **Important Note**: This document focuses specifically on the Encrypted Mailbox communication layer. The underlying CLSAG adaptor signature protocol is documented separately and has known implementation divergences from its specification (tracked in `DIVERGE.md`). The Mailbox system is implementation-aligned and functions correctly regardless of these adaptor signature specification differences.
 
@@ -26,7 +27,7 @@ This work makes several key contributions to the field of cross-chain protocols:
 1. **Privacy-Preserving Cross-Chain Communication**: First practical implementation of encrypted on-chain messaging for coordinating atomic swaps between transparent and privacy-preserving blockchains
 2. **Dual Registry Architecture**: Novel approach combining global key discovery with operation-specific validation for optimal security and usability
 3. **Formal Security Model**: Comprehensive threat analysis and cryptographic guarantees for cross-chain coordination
-4. **Production Implementation**: Complete, audited system deployed on Ethereum mainnet with extensive test coverage
+4. **Prototype Implementation**: Initial contract and SDK work in progress for research validation
 
 ### **1.2 Problem Statement**
 
@@ -528,15 +529,15 @@ The system is designed to resist the following adversaries:
 
 ### **8.1 Deployment Status**
 
-**Current Status**: ✅ **PRODUCTION READY**
+**Current Status**: **EARLY-STAGE / IN DEVELOPMENT**
 
-The EqualX Encrypted Mailbox system has been fully implemented and extensively tested:
+The EqualX Encrypted Mailbox system is in active research and prototype development:
 
-- **Smart Contracts**: Deployed and verified on Ethereum mainnet
-- **SDK Implementation**: Complete Rust implementation with comprehensive test coverage
-- **Security Audits**: Formal security review completed (cryptographic and smart contract)
-- **Integration Testing**: End-to-end testing with live Monero testnet
-- **Performance Validation**: Gas optimization and throughput testing completed
+- **Smart Contracts**: Prototype contracts under development; not deployed
+- **SDK Implementation**: Partial Rust implementation; coverage incomplete
+- **Security Audits**: Not yet performed
+- **Integration Testing**: Planned once prototype stabilizes
+- **Performance Validation**: Pending
 
 ### **8.2 Implementation Architecture**
 
@@ -900,52 +901,48 @@ equalx-cli atomicdesk show-key --owner $(cast wallet address --private-key $PRIV
 
 ### **12.1 Test Coverage Analysis**
 
-**Smart Contract Tests** (100% line coverage):
-- **Unit Tests**: All contract functions and edge cases (`test/Mailbox.t.sol`, `test/EncPubRegistry.t.sol`)
-- **Integration Tests**: Complete atomic swap lifecycle (`test/AtomicDesk.e2e.t.sol`)
+**Smart Contract Tests** (planned targets):
+- **Unit Tests**: Core contract functions and edge cases (`test/Mailbox.t.sol`, `test/EncPubRegistry.t.sol`)
+- **Integration Tests**: Atomic swap lifecycle scenarios (`test/AtomicDesk.e2e.t.sol`)
 - **Fuzz Testing**: Property-based testing of cryptographic functions
 - **Gas Optimization**: Benchmarking and optimization validation
 
-**Cryptographic Tests** (Comprehensive):
+**Cryptographic Tests** (planned targets):
 - **Vector Validation**: Test vectors for all cryptographic operations
 - **Cross-Implementation**: Compatibility testing between Rust and JavaScript implementations
 - **Attack Simulation**: Tamper detection and replay attack resistance
 - **Performance**: Benchmarking on multiple architectures
 
-**Security Testing**:
+**Security Testing** (planned targets):
 - **Static Analysis**: Slither and Mythril analysis of smart contracts
-- **Formal Verification**: TLA+ specification and model checking (planned)
-- **Penetration Testing**: Third-party security assessment completed
-- **Code Audit**: Independent cryptographic review by [Audit Firm]
+- **Formal Verification**: TLA+ specification and model checking
+- **Penetration Testing**: Third-party security assessment
+- **Code Audit**: Independent cryptographic review
 
 ### **12.2 Integration Testing Results**
 
-**End-to-End Validation**:
-- **Testnet Deployment**: Successfully deployed and tested on Ethereum Sepolia and Monero stagenet
-- **Cross-Chain Validation**: 1000+ successful atomic swaps completed in testing
-- **Failure Recovery**: All error scenarios tested and validated
-- **Performance**: Sustained 50 swaps/minute throughput achieved
+**End-to-End Validation** (planned targets):
+- **Testnet Deployment**: Planned for Ethereum Sepolia and Monero stagenet
+- **Cross-Chain Validation**: Targeting multi-swap end-to-end scenarios
+- **Failure Recovery**: Error scenarios to be validated
+- **Performance**: Throughput benchmarks to be collected
 
-**Compatibility Testing**:
-- **Ethereum Clients**: Tested with Geth, Nethermind, and Besu
-- **Monero Versions**: Compatible with Monero v0.18+ 
-- **Browser Support**: Web3 integration tested on Chrome, Firefox, Safari
-- **Mobile**: React Native integration validated on iOS and Android
+**Compatibility Testing** (planned targets):
+- **Ethereum Clients**: Geth, Nethermind, and Besu
+- **Monero Versions**: Monero v0.18+
+- **Browser Support**: Chrome, Firefox, Safari
+- **Mobile**: React Native on iOS and Android
 
 ### **12.3 Security Audit Results**
 
-**Audit Summary** (Completed December 2025):
-- **Scope**: Complete smart contract suite and cryptographic implementation
-- **Findings**: 0 critical, 2 medium (resolved), 5 low (resolved), 8 informational
+**Audit Summary** (planned):
+- **Scope**: Smart contract suite and cryptographic implementation
+- **Findings**: TBD
 - **Methodology**: Manual review + automated analysis + formal verification
-- **Auditor**: [Redacted for public version - available upon request]
+- **Auditor**: TBD
 
 **Key Validation Results**:
-- ✅ No fund loss vectors identified
-- ✅ Cryptographic implementation verified correct
-- ✅ Access control properly enforced
-- ✅ Replay attack resistance confirmed
-- ✅ Gas optimization validated
+- Pending completion of audits and formal review
 
 ---
 
@@ -1012,13 +1009,13 @@ Community-driven protocol evolution:
 
 ### **14.1 Technical Achievements**
 
-The EqualX Encrypted Mailbox system represents a significant advancement in cross-chain protocol design, successfully bridging the gap between transparent and privacy-preserving blockchains. Key technical achievements include:
+The EqualX Encrypted Mailbox system represents early-stage research into cross-chain protocol design. Key technical goals and current progress include:
 
 **Novel Cryptographic Architecture**:
 - First practical implementation of encrypted on-chain messaging for atomic swaps
 - Formal security guarantees with comprehensive threat model analysis
 - Efficient dual registry design optimizing for both discovery and operational security
-- Production-ready implementation with extensive testing and validation
+- Prototype implementation in progress with staged testing targets
 
 **Privacy Preservation**:
 - Zero sensitive Monero data exposed on Ethereum blockchain
@@ -1027,10 +1024,10 @@ The EqualX Encrypted Mailbox system represents a significant advancement in cros
 - Forward secrecy protecting past sessions from future compromises
 
 **Practical Deployment**:
-- Gas-optimized smart contracts suitable for mainnet deployment
-- Comprehensive SDK enabling easy integration by developers
-- Extensive test coverage including end-to-end validation
-- Performance characteristics suitable for production workloads
+- Gas-optimized smart contracts targeting eventual mainnet readiness
+- SDK design intended to enable developer integration
+- Test coverage and end-to-end validation planned
+- Performance characteristics to be validated in benchmarking
 
 ### **14.2 Research Contributions**
 
@@ -1059,17 +1056,17 @@ The Encrypted Mailbox system enables new possibilities for decentralized finance
 
 ### **14.4 Open Source and Community**
 
-The complete implementation is available under open source licenses:
-- **Smart Contracts**: MIT License, verified on Etherscan
-- **SDK Implementation**: Apache 2.0 License, published on crates.io
-- **Documentation**: Creative Commons, comprehensive technical specifications
-- **Test Suites**: Full test coverage with reproducible benchmarks
+Implementation artifacts are planned to be released under open source licenses:
+- **Smart Contracts**: MIT License (planned)
+- **SDK Implementation**: Apache 2.0 License (planned)
+- **Documentation**: Creative Commons (planned)
+- **Test Suites**: Reproducible benchmarks as they mature
 
 **Community Engagement**:
-- Active development on GitHub with issue tracking and pull requests
-- Regular security updates and community-driven improvements
-- Integration support for developers building on the protocol
-- Research collaboration with academic institutions
+- Issue tracking and pull requests planned as prototypes stabilize
+- Security updates and community feedback expected during development
+- Integration support planned for early adopters
+- Research collaboration opportunities open
 
 ### **14.5 Future Outlook**
 
@@ -1077,7 +1074,7 @@ The Encrypted Mailbox system provides a solid foundation for the next generation
 
 The modular design allows for future enhancements while maintaining backward compatibility and security properties. Ongoing research into post-quantum cryptography, zero-knowledge proofs, and advanced privacy techniques will continue to strengthen the protocol's security and privacy guarantees.
 
-**Research Availability**: Complete technical specifications, implementation code, test vectors, and security analysis are publicly available for peer review and independent validation. We encourage the research community to build upon this work and contribute to the advancement of privacy-preserving cross-chain protocols.
+**Research Availability**: Technical specifications and research notes will be published as they stabilize. We encourage the research community to engage, challenge assumptions, and contribute to the advancement of privacy-preserving cross-chain protocols.
 
 ---
 
@@ -1085,7 +1082,7 @@ The modular design allows for future enhancements while maintaining backward com
 
 The authors thank the Monero Research Lab for foundational work on ring signatures and privacy-preserving protocols, the Ethereum Foundation for smart contract infrastructure, and the broader cryptographic research community for advances in secure multi-party computation and cross-chain protocols.
 
-Special recognition to the security auditors, beta testers, and community contributors who helped validate and improve the implementation through extensive testing and feedback.
+Security review and broader community validation are planned as the system matures.
 
 ---
 

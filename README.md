@@ -34,12 +34,15 @@ _**We must build for the right reasons.**_
 ### Equalis Protocol
 - [Equalis-Design.md](./Equalis/Equalis-Design.md) - Complete protocol design document
 - [Equalis-Direct.md](./Equalis/Equalis-Direct.md) - Bilateral instruments and P2P lending
-- [YBLO.md](./Equalis/YBLO.md) - Yield-Bearing Limit Orders specification
+- [Equalis-Direct.md#5-yield-bearing-limit-orders-yblo](./Equalis/Equalis-Direct.md#5-yield-bearing-limit-orders-yblo) - Yield-Bearing Limit Orders (YBLOs)
+- [EqualIndexV3.md](./Equalis/EqualIndexV3.md) - EqualIndex V3 design document
 - [GAS-ESTIMATES-EL.md](./Equalis/GAS-ESTIMATES-EL.md) - Comprehensive gas analysis
 - [SYNTHETIC-CALL-PUT.md](./Equalis/SYNTHETIC-CALL-PUT.md) - Options-like instruments
 
 ### EqualX Research
-- [EQUALX-UNIFIED-DESIGN.md](./EqualX/EQUALX-UNIFIED-DESIGN.md) - Commitment-driven exchange design (contains MAM line)
+- [ATOMICDESKS-DESIGN.md](./EqualX/ATOMICDESKS-DESIGN.md) - Atomic desks design
+- [MAILBOX-DESIGN.md](./EqualX/MAILBOX-DESIGN.md) - Encrypted mailbox research documentation
+- [CLSAG-ADAPTOR-SPEC.md](./EqualX/CLSAG-ADAPTOR-SPEC.md) - CLSAG adaptor signature specification
 - [GAS-ESTIMATES.md](./EqualX/GAS-ESTIMATES.md) - EqualX gas analysis
 
 ## Why non-reactive finance (NoRFi)
@@ -90,7 +93,7 @@ Equalis is intentionally conservative in what it assumes and permissive in what 
 
 The result is a lending primitive that prioritizes predictability over reactivity, correctness over speed, and explicit user agency over implicit protocol intervention. This makes Equalis well-suited not only for human users, but for long-lived autonomous systems that require stable, reasoned interaction with on-chain credit.
 
-For detailed information on Yield-Bearing Limit Orders, see [/Equalis/YBLO.md](./Equalis/YBLO.md). For comprehensive gas analysis, see [/Equalis/GAS-ESTIMATES-EL.md](./Equalis/GAS-ESTIMATES-EL.md).
+For detailed information on Yield-Bearing Limit Orders, see [/Equalis/Equalis-Direct.md#5-yield-bearing-limit-orders-yblo](./Equalis/Equalis-Direct.md#5-yield-bearing-limit-orders-yblo). For comprehensive gas analysis, see [/Equalis/GAS-ESTIMATES-EL.md](./Equalis/GAS-ESTIMATES-EL.md).
 
 ## Gas reality
 

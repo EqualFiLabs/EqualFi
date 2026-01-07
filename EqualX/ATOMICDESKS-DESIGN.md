@@ -1,6 +1,7 @@
 # EqualX Atomic Desks Design Document
 
 **Version:** 1.0
+**Status:** Early-stage research (not production-ready)
 
 ## 1. Overview
 

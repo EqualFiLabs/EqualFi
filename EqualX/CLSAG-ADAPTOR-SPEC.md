@@ -1,6 +1,7 @@
 # CLSAG Adaptor Signature Specification
 
 **Version:** 1.0
+**Status:** Early-stage research (not production-ready)
 
 ---
 

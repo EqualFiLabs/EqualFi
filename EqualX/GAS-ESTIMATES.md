@@ -1,6 +1,7 @@
 # EqualX Gas Efficiency Report
 
 _Generated via Foundry gas reports on 2025‑12‑29 (UTC)_
+_Status: early-stage research; numbers reflect prototype harnesses_
 
 ## Methodology
 - Commands:
@@ -85,4 +86,3 @@ _Notes_:
 _Notes_:
 - ETH <> XMR Atomic flows remain isolated from the router; costs unchanged by the router simplification.
 - Native ETH collateral adds ~350k gas over ERC20 collateral due to value handling.
-

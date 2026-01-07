@@ -1,6 +1,6 @@
 # Equalis Protocol - Design Document
 
-**Version:** 6.0  
+**Version:** 8.0  
 
 ---
 
@@ -16,6 +16,7 @@
 8. [Integration Points](#integration-points)
 9. [Testing Strategy](#testing-strategy)
 10. [Deployment and Operations](#deployment-and-operations)
+11. [Position NFT Derivatives](#position-nft-derivatives)
 
 ---
 
@@ -23,7 +24,7 @@
 
 ### 1.1 Protocol Overview
 
-Equalis is a deterministic, lossless credit primitive that replaces price-based liquidations and utilization curves with time-based credit and account-level accounting. The protocol implements a credit and exchange system where:
+Equalis is a deterministic, lossless credit primitive that replaces price-based liquidations and utilization curves with time-based credit and account-level accounting. The protocol implements a lending system where:
 
 - **No liquidations via oracles**: Credit risk is bounded by deterministic rates, terms, and loan-to-value parameters
 - **Account-level solvency**: Each account's obligations are always covered by their own locked principal
@@ -34,20 +35,17 @@ Equalis is a deterministic, lossless credit primitive that replaces price-based 
 
 1. **Position NFT System**: Each user position is represented as an ERC-721 NFT, enabling transferable account containers with all associated deposits, loans, and yield
 2. **Dual Index Accounting**: FeeIndex (monotone increasing) for yield distribution and MaintenanceIndex for proportional fee deduction with normalized fee base calculation
-3. **Oracle-Free Cross-Asset Lending**: Equalis Direct enables true P2P lending between any assets without price oracles - lenders set their own cross-asset terms and collateral ratios
-4. **Equalis Direct Term Loans**: Peer-to-peer term lending with optional early exercise (American-style settlement), configurable prepayment policies, and borrower-initiated offers
-5. **Equalis Direct Rolling Loans**: Peer-to-peer rolling credit with periodic payments, arrears tracking, amortization support, and configurable grace periods
-6. **Ratio Tranche Offers**: CLOB-style offers with price ratios for variable-size fills, enabling order book-like trading dynamics for both lenders and borrowers
-7. **Yield-Bearing Limit Orders (YBLOs)**: Trading orders that encumber capital at a specified price ratio without creating agreements, supporting partial fills with direct asset transfers while allowing capital to remain productive and enabling spot trading funded by in-pool encumbrances.
+3. **Zero-Interest Self-Secured Credit**: Self-secured same-asset borrowing has no interest charges - borrowers repay exactly the principal borrowed, with protocol revenue derived from usage-based fees (flashloans, MAM curves) rather than interest
+4. **Oracle-Free Cross-Asset Lending**: Equalis Direct enables true P2P lending between any assets without price oracles - lenders set their own cross-asset terms and collateral ratios
+5. **Equalis Direct Term Loans**: Peer-to-peer term lending with optional early exercise (American-style settlement), configurable prepayment policies, and borrower-initiated offers
+6. **Equalis Direct Rolling Loans**: Peer-to-peer rolling credit with periodic payments, arrears tracking, amortization support, and configurable grace periods
+7. **Ratio Tranche Offers**: CLOB-style offers with price ratios for variable-size fills, enabling order book-like trading dynamics for both lenders and borrowers
 8. **Active Credit Index**: Time-gated fee subsidies for active credit participants (P2P lenders and same-asset borrowers) with weighted dilution anti-gaming protection
 9. **Penalty-Based Default Settlement**: Fixed 5% penalty system for loan defaults instead of full liquidation, ensuring proportional and predictable outcomes
 10. **Normalized Principal Accounting**: Fee base calculations prevent recursive fee inflation while maintaining lending expressiveness across same-asset and cross-asset domains
 11. **EqualIndex Integration**: Multi-asset index token system with deterministic fee structures
 12. **Diamond Architecture**: Modular facet-based design enabling upgradability while maintaining storage isolation
-
-## Gas reality
-
-Yield-Bearing Limit Orders (YBLOs) are measured in Foundry tests with the following gas costs: Post ~550k, Accept ~347k no-fees/~419k fees, Cancel ~58k. These are current measured values, not estimates. The design prioritizes correctness and explicit commitments over raw gas efficiency. See [/Equalis/GAS-ESTIMATES-EL.md](./GAS-ESTIMATES-EL.md) for complete analysis.
+13. **Position NFT Derivatives**: Oracle-free AMM Auctions, Options, Futures, and Maker Auction Markets using Position NFTs as the universal identity and Pools as unified collateral source
 
 ---
 
@@ -74,6 +72,16 @@ Yield-Bearing Limit Orders (YBLOs) are measured in Foundry tests with the follow
 │  │    Admin     │  │  Maintenance │  │     View     │           │
 │  │    Facet     │  │    Facet     │  │   Facets     │           │
 │  └──────────────┘  └──────────────┘  └──────────────┘           │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │  AmmAuction  │  │   Options    │  │   Futures    │           │
+│  │    Facet     │  │    Facet     │  │    Facet     │           │
+│  └──────────────┘  └──────────────┘  └──────────────┘           │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐                             │
+│  │  MamCurve    │  │  Derivative  │                             │
+│  │    Facet     │  │  ViewFacet   │                             │
+│  └──────────────┘  └──────────────┘                             │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Shared Libraries                           │
@@ -104,6 +112,7 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 - Each facet uses dedicated storage slots via diamond storage pattern
 - `LibAppStorage`: Main application state (pools, global config)
 - `LibDirectStorage`: Equalis Direct state (offers, agreements)
+- `LibDerivativeStorage`: Derivative products state (auctions, options, futures)
 - `EqualIndexStorage`: Index token state (vaults, fee pots)
 - `LibPositionNFT`: Position NFT configuration
 
@@ -122,17 +131,16 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 | **PositionManagementFacet** | Position NFT lifecycle | `mintPositionWithDeposit`, `depositToPosition`, `withdrawFromPosition` |
 | **PoolManagementFacet** | Pool creation and managed pool config | `initPool`, `initManagedPool`, `setWhitelistEnabled`, `transferManager` |
 | **FlashLoanFacet** | Pool-local flash loans | `flashLoan` |
-| **EqualisDirectOfferFacet** | P2P term lending offers | `postOffer`, `postRatioTrancheOffer`, `cancelOffer`, `cancelRatioTrancheOffer` |
-| **EqualisDirectAgreementFacet** | P2P term agreement acceptance | `acceptOffer`, `acceptRatioTrancheOffer`, `acceptBorrowerOffer` |
-| **EqualisDirectLifecycleFacet** | P2P term lifecycle | `repay`, `recover`, `exerciseDirect`, `callDirect` |
-| **EqualisDirectRollingOfferFacet** | P2P rolling offers | `postRollingOffer`, `postBorrowerRollingOffer`, `cancelRollingOffer` |
-| **EqualisDirectRollingAgreementFacet** | P2P rolling acceptance | `acceptRollingOffer` |
-| **EqualisDirectRollingPaymentFacet** | P2P rolling payments | `makeRollingPayment` |
-| **EqualisDirectRollingLifecycleFacet** | P2P rolling lifecycle | `recoverRolling`, `exerciseRolling`, `repayRollingInFull` |
-| **EqualisDirectLimitOrderFacet** | P2P YBLO trading | `postLimitOrder`, `acceptLimitOrder`, `cancelLimitOrder` |
+| **EqualLendDirectOfferFacet** | P2P term lending offers | `postOffer`, `postRatioTrancheOffer`, `postBorrowerOffer`, `cancelOffer` |
+| **EqualLendDirectAgreementFacet** | P2P term agreement acceptance | `acceptOffer`, `acceptRatioTrancheOffer`, `acceptBorrowerOffer` |
+| **EqualLendDirectLifecycleFacet** | P2P term lifecycle | `repay`, `recover`, `exerciseDirect`, `callDirect` |
+| **EqualLendDirectRollingOfferFacet** | P2P rolling offers | `postRollingOffer`, `postBorrowerRollingOffer`, `getRollingOffer`, `cancelRollingOffer` |
+| **EqualLendDirectRollingAgreementFacet** | P2P rolling acceptance | `acceptRollingOffer`, `getRollingAgreement` |
+| **EqualLendDirectRollingPaymentFacet** | P2P rolling payments | `makeRollingPayment` |
+| **EqualLendDirectRollingLifecycleFacet** | P2P rolling lifecycle | `recoverRolling`, `exerciseRolling`, `repayRollingInFull` |
 | **EqualIndex Facets (V3)** | Multi-asset index tokens | Admin (`setIndexFees`, `setPaused`), Actions (`mint`, `burn`, `flashLoan`), View (`getIndex`, `getIndexAssets`, etc.) |
 | **MaintenanceFacet** | AUM fee management | `pokeMaintenance`, `settleMaintenance` |
-| **Admin / Governance** | Protocol governance | `setTimelock`, `setTreasury`, protocol splits |
+| **AdminFacet / AdminGovernanceFacet** | Protocol governance | `setTimelock`, `setTreasury`, fee split configuration |
 | **ActiveCreditViewFacet** | Active credit queries | `pendingActiveCredit`, `getActiveCreditState` |
 | **ConfigViewFacet** | Protocol configuration queries | `getPoolConfig`, `getDirectConfig` |
 | **EnhancedLoanViewFacet** | Detailed loan information | `getLoanDetails`, `getLoanStatus` |
@@ -142,8 +150,14 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 | **MultiPoolPositionViewFacet** | Cross-pool position state | `getPositionAcrossPools` |
 | **PoolUtilizationViewFacet** | Utilization metrics | `getPoolUtilization` |
 | **PositionViewFacet** | Position state queries | `getPositionState`, `getPositionDebt` |
-| **EqualLendDirectViewFacet** | Direct lending queries | `getOffer`, `getAgreement`, `getUserOffers` |
-| **EqualLendDirectRollingViewFacet** | Rolling direct queries | `getRollingOffer`, `getRollingAgreement` |
+| **EqualLendDirectViewFacet** | Direct lending queries | `getOffer`, `getBorrowerOffer`, `getAgreement`, `getLenderOffers` |
+| **EqualLendDirectRollingViewFacet** | Rolling direct helpers | `getRollingStatus`, `calculateRollingPayment`, `aggregateRollingExposure` |
+| **AmmAuctionFacet** | Time-bounded AMM auctions | `createAuction`, `swapExactIn`, `finalizeAuction`, `cancelAuction` |
+| **OptionsFacet** | Covered call and secured put options | `createOptionSeries`, `exerciseOptions`, `reclaimOptions` |
+| **FuturesFacet** | Physical delivery futures | `createFuturesSeries`, `settleFutures`, `reclaimFutures` |
+| **MamCurveFacet** | Dutch auction market making curves | `createCurve`, `createCurvesBatch`, `updateCurve`, `updateCurvesBatch`, `cancelCurve`, `cancelCurvesBatch`, `executeCurveSwap`, `loadCurveForFill`, `setMamPaused` |
+| **MamCurveViewFacet** | MAM curve queries | `getCurve`, `getCurvesByPosition`, `getCurvesByPositionId` |
+| **DerivativeViewFacet** | Derivative product queries | `getAmmAuction`, `getOptionSeries`, `getFuturesSeries` |
 
 ---
 
@@ -174,7 +188,7 @@ require(solvencyRatio >= depositorLTVBps)
 **Implementation**:
 - Borrower defaults absorbed by borrower's own principal
 - No socialized losses across the pool
-- Penalty proceeds distributed to protocol, not other depositors
+- Default penalties are funded by the defaulting position and distributed between enforcers, treasury, and protocol indices (FeeIndex / Active Credit Index)
 - Pool isolation prevents cross-pool contagion
 
 **Guarantees**:
@@ -187,20 +201,22 @@ require(solvencyRatio >= depositorLTVBps)
 **Principle**: All credit terms are fixed at origination with no reactive adjustments.
 
 **Implementation**:
-- Fixed APY rates set in immutable pool configuration
+- Zero interest for self-secured same-asset credit
+- Fixed APY rates for P2P lending set by lenders
 - Payment schedules determined by time, not utilization
 - No oracle-based liquidations
-- Upfront interest realization for fixed-term loans
+- Upfront interest realization for P2P fixed-term loans only
 
 **Loan Types**:
 1. **Pool Rolling Credit**: Open-ended lines with periodic payment requirements
-   - Payment interval: 30 days (configurable)
+   - Payment interval: 30 days (fixed)
    - Delinquency threshold: 2 missed payments
    - Penalty threshold: 3 missed payments
+   - **Zero interest** - borrowers repay only principal
 
-2. **Pool Fixed-Term Loans**: Explicit term with upfront interest payment
-   - Interest calculated at origination
-   - Repayment only requires principal (interest already paid)
+2. **Pool Fixed-Term Loans**: Explicit term with no interest
+   - **Zero interest** - borrowers repay only principal
+   - Repayment only requires principal
    - Penalty after expiry timestamp
 
 3. **Direct Term Loans**: P2P bilateral term loans
@@ -244,7 +260,7 @@ paid = min(outstanding, poolAvailable, contractBalance);
 
 **Key Characteristics**:
 - Each NFT can participate in multiple pools simultaneously
-- Position key derived deterministically: `address(uint160(uint256(keccak256(abi.encodePacked(nftContract, tokenId)))))`
+- Position key derived deterministically: `keccak256(abi.encodePacked(nftContract, tokenId))` (a `bytes32`)
 - Same position key used across all pools for this NFT
 - Transferring NFT transfers all deposits, loans, and yield across all pools
 - Users can hold multiple NFTs for different account containers
@@ -284,8 +300,7 @@ struct PoolPositionState {
 - Position key remains unchanged (derived from contract + tokenId)
 - All pool memberships transfer with NFT
 - All pool data (principal, loans, yield) across all pools transfers
-- Outstanding Direct offers cancelled on transfer
-- Tranche-backed Direct offers refund unused tranche escrow on transfer-triggered cancellation
+- Transfers are blocked while outstanding Direct offers exist (cancel before transfer)
 - New owner inherits deposits and obligations in all pools
 
 **Tranche-Backed Direct Offers**:
@@ -393,6 +408,14 @@ Unmanaged pools remain permissionless and immutable after creation.
 
 **Purpose**: Distribute protocol fees proportionally to all depositors as yield, with normalized fee base calculation to prevent recursive fee inflation, plus time-gated subsidies for active credit participants.
 
+**Fee Sources**:
+- Flashloan execution fees
+- MAM curve fill fees
+- Penalty fees (63% to FeeIndex after enforcer share)
+- Direct lending platform fees
+- Action fees (configurable)
+- **Note**: Interest is not charged on self-secured same-asset borrowing; protocol revenue derives from usage-based fees
+
 **Mechanism**:
 ```solidity
 // Global pool index (1e18 scale)
@@ -496,8 +519,8 @@ lenderFeeBase = newLenderPrincipal  // Fee base follows restored principal
 - **Precise**: Remainder tracking prevents rounding loss
 
 **Fee Sources**:
-- Interest payments (rolling and fixed-term)
-- Flash loan fees
+- Flashloan fees
+- MAM curve fill fees
 - Penalty fees (63% to FeeIndex after enforcer share)
 - Direct lending platform fees
 - Action fees (configurable)
@@ -559,7 +582,8 @@ userPrincipal[user] -= reduction
 
 **Characteristics**:
 - Open-ended credit lines
-- Periodic payment requirements (30 days default)
+- **Zero interest** - borrowers repay only principal
+- Periodic payment requirements (30 days) for tracking delinquency
 - Expandable via `expandRollingFromPosition`
 - Single rolling loan per position per pool
 
@@ -568,12 +592,11 @@ userPrincipal[user] -= reduction
    - Verify solvency: `newDebt <= collateral * depositorLTVBps / 10000`
    - Charge ACTION_BORROW fee
    - Transfer borrowed funds to NFT owner
-   - Initialize loan state
+   - Initialize loan state with `apyBps = 0`
 
 2. **Payment**: `makePaymentFromPosition(tokenId, poolId, paymentAmount)`
-   - Calculate minimum payment: accrued interest since last payment
-   - Split payment: interest portion + principal portion
-   - Route interest to FeeIndex via treasury split
+   - **No minimum payment** - any amount applies directly to principal
+   - Entire payment reduces `principalRemaining`
    - Reset missed payment counter
 
 3. **Expand**: `expandRollingFromPosition(tokenId, poolId, amount)`
@@ -582,7 +605,7 @@ userPrincipal[user] -= reduction
    - Transfer additional funds
 
 4. **Close**: `closeRollingCreditFromPosition(tokenId, poolId)`
-   - Calculate total payoff: remaining principal + accrued interest
+   - Calculate total payoff: remaining principal only (no interest)
    - Transfer payoff from owner
    - Clear loan state
    - Charge ACTION_CLOSE_ROLLING fee
@@ -612,22 +635,21 @@ struct RollingCreditLoan {
 
 **Characteristics**:
 - Explicit term with fixed expiry
-- Upfront interest payment
+- **Zero interest** - borrowers repay only principal
 - Multiple fixed-term loans per position
 - No payment schedule (lump sum at maturity)
 
 **Lifecycle**:
 1. **Open**: `openFixedFromPosition(tokenId, poolId, amount, termIndex)`
    - Select term configuration from pool's `fixedTermConfigs`
-   - Calculate upfront interest: `(amount * apyBps * durationSecs) / (365 days * 10_000)`
-   - Deduct interest from position principal immediately
-   - Route interest to FeeIndex via treasury split
-   - Verify solvency after interest deduction
+   - No interest calculation or deduction
+   - Verify solvency
    - Transfer borrowed funds
    - Set expiry: `block.timestamp + durationSecs`
+   - Set `fullInterest = 0` and `interestRealized = false`
 
 2. **Repay**: `repayFixedFromPosition(tokenId, poolId, loanId, amount)`
-   - Transfer principal payment (no interest - already paid)
+   - Transfer principal payment only
    - Reduce `principalRemaining`
    - Close loan if fully repaid
    - Charge ACTION_REPAY fee
@@ -637,14 +659,14 @@ struct RollingCreditLoan {
 struct FixedTermLoan {
     uint256 principal;
     uint256 principalRemaining;
-    uint256 fullInterest;           // Already paid upfront
+    uint256 fullInterest;           // Always 0 for self-secured pool loans
     uint256 principalAtOpen;        // Penalty calculation basis
     uint40 openedAt;
     uint40 expiry;
-    uint16 apyBps;
-    address borrower;               // Position key
+    uint16 apyBps;                  // Stored from pool config (not charged for self-secured pool loans)
+    bytes32 borrower;               // Position key
     bool closed;
-    bool interestRealized;          // Always true
+    bool interestRealized;          // Always false for self-secured pool loans
 }
 ```
 
@@ -700,7 +722,6 @@ function calculatePenalty(uint256 principalAtOpen) internal pure returns (uint25
 - **Ratio Tranche Offers**: CLOB-style offers with price ratios for variable-size fills (both lender and borrower)
 - **Optional Early Exercise**: Lenders can allow borrowers to voluntarily forfeit collateral before maturity (American-style settlement)
 - **Configurable Prepayment**: Lenders can control whether borrowers can repay before maturity
-- **Auto-Exercise on Fill**: Offers can be configured to immediately exercise upon acceptance (useful for synthetic options)
 - **Lender Call**: Lenders can optionally accelerate the due timestamp
 - **24-Hour Grace Period**: Repayment allowed for 24 hours after due timestamp before recovery becomes available
 - Multiple agreements per position
@@ -936,92 +957,7 @@ function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPosition
 - **CLOB-Style Trading**: Variable-size fills enable order book-like trading dynamics
 - **Price Discovery**: Multiple counterparties can fill at the posted ratio
 
-### 4.8 Equalis Direct - YBLO (P2P Trading)
-
-**Overview**: Trading orders that encumber capital at a specified price ratio without creating agreements. Fills resolve via direct asset transfers rather than agreement creation, providing a trading path where capital remains on platform earning yield while waiting for fills.
-
-**Key Features**:
-- **No Agreement Creation**: Fills transfer assets directly between maker and taker positions
-- **Partial Fills**: Orders support multiple partial fills down to a configurable minimum
-- **Capital Efficiency**: Encumbered capital continues earning fee index yield while waiting for fills
-- **Lightweight Fees**: Flat basis points fee on filled amount (no APR/duration calculation)
-- **Bilateral Trading**: Both lenders and borrowers can post YBLO's
-- **Solvency Integration**: Encumbered amounts included in LTV calculations for other offer types
-
-**Data Structures**:
-```solidity
-struct LimitOrder {
-    uint256 orderId;
-    address owner;
-    uint256 positionId;
-    uint256 makerPoolId;           // Pool for maker-side asset
-    address borrowAsset;
-    address collateralAsset;
-    uint256 priceNumerator;        // collateral = principal * num / denom
-    uint256 priceDenominator;
-    uint256 cap;                   // Total amount available for fills
-    uint256 remaining;             // Unfilled amount
-    uint256 minFill;               // Minimum fill amount
-    bool isBorrowerSide;           // true = borrower posting collateral
-    bool active;                   // Order can be filled
-    bool cancelled;                // Order was cancelled
-}
-
-struct LimitOrderConfig {
-    uint16 feeBps;                 // Flat fee in basis points
-    uint16 treasuryFeeBps;         // Portion of fee sent to treasury
-    address treasury;              // Treasury recipient
-}
-```
-
-**Lifecycle**:
-
-1. **Post YBLO*: `postLimitOrder(LimitOrderParams)`
-   - Verify maker owns Position NFT
-   - Validate maker pool and assets exist and match
-   - Check available principal vs existing encumbrance
-   - Increase encumbrance by cap amount (reuses existing directOfferEscrow/directLockedPrincipal mappings)
-   - Store order with remaining = cap, active = true
-   - Emit `LimitOrderPosted` event
-
-2. **Accept YBLO**: `acceptLimitOrder(orderId, takerPositionId, takerPoolId, fillAmount)`
-   - Validate order is active and not cancelled
-   - Validate fillAmount within [minFill, remaining]
-   - Validate taker pool asset matches counterparty asset
-   - Compute counterparty amount using price ratio
-   - Reduce encumbrance by fill amount
-   - Apply lightweight fee (deducted from taker's received amount)
-   - Transfer assets between maker and taker positions
-   - Mark order filled if remaining == 0
-   - Emit `LimitOrderFilled` event
-
-3. **Cancel YBLO**: `cancelLimitOrder(orderId)`
-   - Verify caller is order owner
-   - Release remaining encumbrance
-   - Mark order cancelled and inactive
-   - Emit `LimitOrderCancelled` event
-
-**Price Ratio Mechanics**:
-- Lender-side orders (`isBorrowerSide = false`): `collateral = fillAmount * priceNumerator / priceDenominator`
-- Borrower-side orders (`isBorrowerSide = true`): `principal = fillAmount * priceDenominator / priceNumerator`
-
-**Fee Distribution**:
-- Fee calculated as: `fillAmount * feeBps / 10000`
-- Fee deducted from taker's received amount
-- Fee split between treasury and fee index according to configured ratios
-
-**Position Transfer Handling**:
-- When a position NFT is transferred, all outstanding YBLO's for that position are automatically cancelled
-- All encumbered amounts are released
-- `LimitOrderCancelled` events emitted with Transfer reason
-
-**Use Cases**:
-- **Spot Trading**: Direct asset exchange at specified ratios without loan agreements
-- **Capital Parking**: Earn yield while waiting for favorable fill prices
-- **Order Book Trading**: CLOB-style trading dynamics with partial fills
-- **Gas Efficiency**: Lower gas costs compared to agreement-based flows
-
-### 4.9 Equalis Direct - Rolling Loans (P2P Rolling Credit)
+### 4.8 Equalis Direct - Rolling Loans (P2P Rolling Credit)
 
 **Overview**: Bilateral rolling credit between Position NFT holders with periodic payments, arrears tracking, and configurable amortization.
 
@@ -1429,20 +1365,20 @@ struct PoolData {
     uint256 activeCreditPrincipalTotal;
     
     // Per-user mappings (keyed by position key)
-    mapping(address => uint256) userPrincipal;
-    mapping(address => uint256) userFeeIndex;
-    mapping(address => uint256) userMaintenanceIndex;
-    mapping(address => uint256) userAccruedYield;
-    mapping(address => ActiveCreditState) userActiveCreditStateP2P;
-    mapping(address => ActiveCreditState) userActiveCreditStateDebt;
+    mapping(bytes32 => uint256) userPrincipal;
+    mapping(bytes32 => uint256) userFeeIndex;
+    mapping(bytes32 => uint256) userMaintenanceIndex;
+    mapping(bytes32 => uint256) userAccruedYield;
+    mapping(bytes32 => ActiveCreditState) userActiveCreditStateP2P;
+    mapping(bytes32 => ActiveCreditState) userActiveCreditStateDebt;
     
     // Loan mappings
-    mapping(address => RollingCreditLoan) rollingLoans;
+    mapping(bytes32 => RollingCreditLoan) rollingLoans;
     mapping(uint256 => FixedTermLoan) fixedTermLoans;
-    mapping(address => uint256) activeFixedLoanCount;
-    mapping(address => uint256) fixedTermPrincipalRemaining;
-    mapping(address => uint256[]) userFixedLoanIds;
-    mapping(address => mapping(uint256 => uint256)) loanIdToIndex;
+    mapping(bytes32 => uint256) activeFixedLoanCount;
+    mapping(bytes32 => uint256) fixedTermPrincipalRemaining;
+    mapping(bytes32 => uint256[]) userFixedLoanIds;
+    mapping(bytes32 => mapping(uint256 => uint256)) loanIdToIndex;
 }
 
 struct ActiveCreditState {
@@ -1496,8 +1432,8 @@ toFeeIndex = amount - toTreasury - toActiveCredit;
 **Formula**:
 ```solidity
 // In PositionNFT.sol
-function getPositionKey(uint256 tokenId) public view returns (address) {
-    return address(uint160(uint256(keccak256(abi.encodePacked(address(this), tokenId)))));
+function getPositionKey(uint256 tokenId) public view returns (bytes32) {
+    return keccak256(abi.encodePacked(address(this), tokenId));
 }
 ```
 
@@ -1778,13 +1714,6 @@ event RollingAgreementExercised(uint256 indexed agreementId, address indexed bor
 event RollingAgreementRepaid(uint256 indexed agreementId, address indexed borrower, uint256 repaymentAmount, uint256 arrearsCleared, uint256 principalCleared);
 ```
 
-**YBLO Events**:
-```solidity
-event LimitOrderPosted(uint256 indexed orderId, address indexed owner, uint256 indexed positionId, uint256 makerPoolId, address borrowAsset, address collateralAsset, uint256 priceNumerator, uint256 priceDenominator, uint256 cap, uint256 minFill, bool isBorrowerSide);
-event LimitOrderFilled(uint256 indexed orderId, address indexed taker, uint256 indexed takerPositionId, uint256 takerPoolId, uint256 fillAmount, uint256 counterpartyAmount, uint256 remaining, uint256 feeAmount);
-event LimitOrderCancelled(uint256 indexed orderId, uint256 releasedAmount, LimitOrderCancelReason reason);
-```
-
 **Active Credit Index Events**:
 ```solidity
 event ActiveCreditIndexAccrued(uint256 indexed pid, uint256 amount, uint256 delta, uint256 newIndex, bytes32 source);
@@ -1860,7 +1789,7 @@ event ManagerRenounced(uint256 indexed pid, address indexed formerManager);
 - Transfer to new owner
 - Verify position key unchanged
 - Verify new owner can operate loans
-- Verify Direct offers cancelled
+- Verify transfer reverts if Direct offers exist
 
 **Scenario 5: Managed Pool Whitelist Enforcement**
 - Create managed pool with whitelist enabled
@@ -1888,24 +1817,28 @@ event ManagerRenounced(uint256 indexed pid, address indexed formerManager);
    - FlashLoanFacet
    - MaintenanceFacet
    - AdminFacet
+   - AdminGovernanceFacet
+   - FeeFacet
+   - OwnershipFacet
 
 3. **Deploy Position NFT**:
    ```solidity
    PositionNFT nft = new PositionNFT();
-   nft.setMinter(address(diamond));
+   // If you are wiring manually, set the diamond reference before setting the minter.
    nft.setDiamond(address(diamond));
+   nft.setMinter(address(diamond));
    ```
 
 4. **Deploy Direct Lending Facets**:
-   - EqualisDirectOfferFacet
-   - EqualisDirectAgreementFacet
-   - EqualisDirectLifecycleFacet
-   - EqualisDirectRollingOfferFacet
-   - EqualisDirectRollingAgreementFacet
-   - EqualisDirectRollingPaymentFacet
-   - EqualisDirectRollingLifecycleFacet
-   - EqualisDirectRollingViewFacet
-   - EqualisDirectViewFacet
+   - EqualLendDirectOfferFacet
+   - EqualLendDirectAgreementFacet
+   - EqualLendDirectLifecycleFacet
+   - EqualLendDirectRollingOfferFacet
+   - EqualLendDirectRollingAgreementFacet
+   - EqualLendDirectRollingPaymentFacet
+   - EqualLendDirectRollingLifecycleFacet
+   - EqualLendDirectRollingViewFacet
+   - EqualLendDirectViewFacet
 
 5. **Deploy View Facets**:
    - ActiveCreditViewFacet
@@ -1918,17 +1851,34 @@ event ManagerRenounced(uint256 indexed pid, address indexed formerManager);
    - PoolUtilizationViewFacet
    - PositionViewFacet
 
-6. **Deploy Optional Facets**:
+6. **Deploy Derivative Facets**:
+   - AmmAuctionFacet
+   - OptionsFacet
+   - FuturesFacet
+   - MamCurveFacet
+   - MamCurveViewFacet
+   - DerivativeViewFacet
+
+7. **Deploy Derivative Token Contracts**:
+   ```solidity
+   OptionToken optionToken = new OptionToken(baseURI, owner, address(diamond));
+   FuturesToken futuresToken = new FuturesToken(baseURI, owner, address(diamond));
+
+   OptionsFacet(diamond).setOptionToken(address(optionToken));
+   FuturesFacet(diamond).setFuturesToken(address(futuresToken));
+   ```
+
+8. **Deploy Optional Facets**:
    - EqualIndexFacetV3
    - EqualIndexAdminFacetV3
    - EqualIndexActionsFacetV3
    - EqualIndexViewFacetV3
 
-7. **Configure Protocol**:
+9. **Configure Protocol**:
    ```solidity
    AdminFacet(diamond).setTimelock(timelockAddress);
-   AdminFacet(diamond).setTreasury(treasuryAddress);
-   MaintenanceFacet(diamond).setFoundationReceiver(receiverAddress);
+   AdminGovernanceFacet(diamond).setTreasury(treasuryAddress);
+   AdminGovernanceFacet(diamond).setFoundationReceiver(receiverAddress);
    ```
 
 ### 10.2 Operational Procedures
@@ -1936,8 +1886,11 @@ event ManagerRenounced(uint256 indexed pid, address indexed formerManager);
 **Unmanaged Pool Creation**:
 ```solidity
 ImmutablePoolConfig memory config = ImmutablePoolConfig({
-    rollingApyBps: 1000,              // 10% APY
+    // Self-secured pool loans do not charge interest; these fields are currently informational.
+    rollingApyBps: 0,
+    rollingApyBpsExternal: 0,
     depositorLTVBps: 8000,            // 80% LTV
+    externalBorrowCRBps: 15000,       // 150% CR (used for external collateral paths)
     maintenanceRateBps: 100,          // 1% annual
     flashLoanFeeBps: 9,               // 0.09%
     flashLoanAntiSplit: true,
@@ -1950,11 +1903,15 @@ ImmutablePoolConfig memory config = ImmutablePoolConfig({
     aumFeeMinBps: 50,
     aumFeeMaxBps: 500,
     fixedTermConfigs: [
-        FixedTermConfig(30 days, 800),
-        FixedTermConfig(90 days, 1000),
-        FixedTermConfig(180 days, 1200)
+        FixedTermConfig(30 days, 0),
+        FixedTermConfig(90 days, 0),
+        FixedTermConfig(180 days, 0)
     ],
-    // ... action fees
+    borrowFee: ActionFeeConfig({amount: 0, enabled: false}),
+    repayFee: ActionFeeConfig({amount: 0, enabled: false}),
+    withdrawFee: ActionFeeConfig({amount: 0, enabled: false}),
+    flashFee: ActionFeeConfig({amount: 0, enabled: false}),
+    closeRollingFee: ActionFeeConfig({amount: 0, enabled: false})
 });
 
 uint256 poolId = PoolManagementFacet(diamond).initPool{value: poolCreationFee}(
@@ -1967,8 +1924,8 @@ uint256 poolId = PoolManagementFacet(diamond).initPool{value: poolCreationFee}(
 **Managed Pool Creation**:
 ```solidity
 ManagedPoolConfig memory config = ManagedPoolConfig({
-    rollingApyBps: 1000,
-    rollingApyBpsExternal: 1200,
+    rollingApyBps: 0,
+    rollingApyBpsExternal: 0,
     depositorLTVBps: 8000,
     externalBorrowCRBps: 15000,
     maintenanceRateBps: 100,
@@ -2037,7 +1994,7 @@ DirectRollingConfig memory rollingConfig = DirectRollingConfig({
 ### A.1 Glossary
 
 - **Position NFT**: ERC-721 token representing an isolated account in a pool
-- **Position Key**: Deterministic address derived from NFT contract and token ID
+- **Position Key**: Deterministic `bytes32` derived from NFT contract and token ID
 - **FeeIndex**: Cumulative yield distribution index (1e18 scale)
 - **MaintenanceIndex**: Cumulative AUM fee deduction index
 - **Active Credit Index**: Time-gated yield distribution for active credit participants
@@ -2055,14 +2012,26 @@ DirectRollingConfig memory rollingConfig = DirectRollingConfig({
 - **Managed Pool**: Pool with mutable configuration and whitelist gating
 - **Whitelist**: Position key-based access control for managed pools
 - **Lender Call**: Optional feature allowing lender to accelerate due timestamp
-- **Auto-Exercise on Fill**: Immediate exercise upon offer acceptance
+- **Explicit Exercise**: Direct loans require an explicit `exerciseDirect` call (not automatic on acceptance)
 - **Borrower Offer**: Direct lending offer posted by borrower specifying desired terms
 - **Ratio Tranche Offer**: CLOB-style offer with price ratio for variable-size fills
 - **Borrower Ratio Tranche Offer**: Borrower-posted ratio tranche offer with collateral cap
-- **Yield Bearing Limit Order (YBLO)**: Trading order that encumbers capital at a specified price ratio without creating agreements
-- **Maker**: Party posting a YBLO (either lender or borrower side)
-- **Taker**: Party accepting/filling a YBLO (pays the fee)
-- **Fill Amount**: Maker-side amount in a YBLO fill (principal for lender-side, collateral for borrower-side)
+- **AMM Auction**: Time-bounded constant-product liquidity pool created by a Maker using assets from two pools
+- **Option Series**: Set of fungible ERC-1155 tokens representing covered call or secured put options
+- **Futures Series**: Set of fungible ERC-1155 tokens representing physical delivery futures
+- **Option Token**: ERC-1155 contract for option rights, controlled by the Diamond
+- **Futures Token**: ERC-1155 contract for futures rights, controlled by the Diamond
+- **Strike Price**: Predetermined price at which an option can be exercised (1e18 normalized)
+- **Forward Price**: Predetermined price for futures settlement (1e18 normalized)
+- **Invariant**: Constant product (k = reserveA × reserveB) maintained by AMM auctions
+- **MAM Curve**: Maker Auction Market curve - a time-bounded Dutch auction for selling base assets at linearly interpolated prices
+- **Dutch Auction**: Auction mechanism where price decreases (or increases) over time until a buyer accepts
+- **Base Asset**: The asset being sold in a MAM curve (locked by maker)
+- **Quote Asset**: The asset received by maker in exchange for base asset fills
+- **Curve Generation**: Version counter incremented on each curve update, enabling price/timing changes without cancellation
+- **Curve Commitment**: Hash of the full curve descriptor, updated on each generation change
+- **Flash Accounting**: Deferred ledger update model where userPrincipal and userFeeIndex are not updated during intermediate states
+- **Encumbered Balance**: Principal flagged as backing a derivative, preventing withdrawal but continuing to accrue fees
 
 ### A.2 Formula Reference
 
@@ -2125,6 +2094,38 @@ newStartTime = currentTime - newTimeCredit
 collateralRequired = (principalAmount * priceNumerator) / priceDenominator
 ```
 
+**MAM Curve Linear Price Interpolation**:
+```
+// At time t within [startTime, startTime + duration]
+elapsed = t - startTime
+delta = |endPrice - startPrice|
+adjustment = (delta * elapsed) / duration
+
+// If endPrice >= startPrice (ascending):
+price = startPrice + adjustment
+
+// If endPrice < startPrice (descending):
+price = startPrice - adjustment
+
+// Boundary conditions:
+// t <= startTime: price = startPrice
+// t >= endTime: price = endPrice
+```
+
+**MAM Curve Fill Calculation**:
+```
+// Quote to base conversion (1e18 scaled)
+baseFill = (amountIn * 1e18) / price
+
+// Fee calculation
+feeAmount = (amountIn * feeRateBps) / 10_000
+
+// Fee distribution
+makerFee = (feeAmount * 7000) / 10_000      // 70%
+indexFee = (feeAmount * 2000) / 10_000      // 20%
+treasuryFee = feeAmount - makerFee - indexFee // 10%
+```
+
 ### A.3 References
 
 - [EIP-2535: Diamond Standard](https://eips.ethereum.org/EIPS/eip-2535)
@@ -2132,6 +2133,477 @@ collateralRequired = (principalAmount * priceNumerator) / priceDenominator
 - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
 - [Foundry Book](https://book.getfoundry.sh/)
 
----
+## 11. Position NFT Derivatives
 
-**Document Version:** 7.0
+### 11.1 Overview
+
+Equalis includes oracle-free AMM Auctions, Options, Futures, and Maker Auction Markets (MAM) integrated using Position NFTs as the universal identity and Pools as the unified collateral source. This enables users to underwrite derivatives, provide AMM liquidity, and create Dutch auction curves without withdrawing funds from the protocol.
+
+**Key Characteristics**:
+- **Oracle-Free**: All products operate without external price oracles
+- **Fully Collateralized**: 100% collateralization at the smart contract level
+- **Flash Accounting**: Liabilities isolated via `directLockedPrincipal` and `directLentPrincipal`
+- **Capital Efficient**: Locked collateral continues earning fee index yield
+- **Unified Identity**: Single Position NFT can simultaneously hold deposits, write options, sell futures, market-make AMMs, and create MAM curves
+
+### 11.2 Product Types
+
+#### A. AMM Auctions (Time-Bounded Liquidity)
+
+**Mechanism**: A Maker locks assets from two pools (Pool A + Pool B) to define a constant-product curve (k = x * y). Auctions may be scheduled with a start time in the future.
+
+**Key Features**:
+- Deterministic pricing based on invariant (no oracle required)
+- Time-bounded with configurable start and end times
+- Configurable swap fees with protocol fee split
+- Reserves tracked as `directLentPrincipal` so they continue earning fee index
+
+**Data Structure**:
+```solidity
+struct AmmAuction {
+    bytes32 makerPositionKey;
+    uint256 makerPositionId;
+    uint256 poolIdA;
+    uint256 poolIdB;
+    address tokenA;
+    address tokenB;
+    uint256 reserveA;
+    uint256 reserveB;
+    uint256 invariant;           // k = reserveA * reserveB
+    uint64 startTime;
+    uint64 endTime;
+    uint16 feeBps;
+    FeeAsset feeAsset;           // TokenIn or TokenOut
+    uint256 makerFeeAAccrued;
+    uint256 makerFeeBAccrued;
+    bool active;
+    bool finalized;
+}
+```
+
+**Lifecycle**:
+1. **Create**: `createAuction(params)` - Lock reserves via `directLentPrincipal`, compute invariant
+2. **Swap**: `swapExactIn(auctionId, tokenIn, amountIn, minOut, recipient)` - Execute constant-product swap
+3. **Finalize**: `finalizeAuction(auctionId)` - Release locks, apply net reserve changes to maker principal
+4. **Cancel**: `cancelAuction(auctionId)` - Maker can cancel before expiry, returning reserves
+
+#### B. Options (Yield-Bearing Covered Derivatives)
+
+**Mechanism**: A Maker locks collateral to mint fungible ERC-1155 Option Tokens.
+- **Covered Call**: Maker locks underlying asset (e.g., ETH)
+- **Secured Put**: Maker locks strike asset (e.g., USDC)
+
+**Key Features**:
+- American or European style exercise
+- Strike price uses canonical 1e18 quote-per-1e18-underlying normalization
+- Locked funds continue earning passive yield while backing the derivative
+- ERC-1155 tokens freely tradeable on secondary markets
+
+**Data Structure**:
+```solidity
+struct OptionSeries {
+    bytes32 makerPositionKey;
+    uint256 makerPositionId;
+    uint256 underlyingPoolId;
+    uint256 strikePoolId;
+    address underlyingAsset;
+    address strikeAsset;
+    uint256 strikePrice;         // 1e18 scaled (strike per underlying)
+    uint64 expiry;
+    uint256 totalSize;
+    uint256 remaining;
+    uint256 collateralLocked;
+    bool isCall;
+    bool isAmerican;
+    bool reclaimed;
+}
+```
+
+**Lifecycle**:
+1. **Create**: `createOptionSeries(params)` - Lock collateral via `directLockedPrincipal`, mint ERC-1155 tokens to maker
+2. **Exercise**: `exerciseOptions(seriesId, amount, recipient)` - Holder burns tokens, atomic swap of strike for collateral
+3. **Reclaim**: `reclaimOptions(seriesId)` - Maker burns remaining supply after expiry to reclaim collateral
+
+#### C. Futures (Physical Delivery)
+
+**Mechanism**: A Maker locks the underlying asset to mint ERC-1155 Futures Tokens.
+
+**Key Features**:
+- American (early settlement allowed) or European style
+- Forward price uses canonical 1e18 normalization
+- Grace period before maker can reclaim unsettled futures
+- Physical delivery of underlying on settlement
+
+**Data Structure**:
+```solidity
+struct FuturesSeries {
+    bytes32 makerPositionKey;
+    uint256 makerPositionId;
+    uint256 underlyingPoolId;
+    uint256 quotePoolId;
+    address underlyingAsset;
+    address quoteAsset;
+    uint256 forwardPrice;        // 1e18 scaled
+    uint64 expiry;
+    uint256 totalSize;
+    uint256 remaining;
+    uint256 underlyingLocked;
+    uint64 graceUnlockTime;
+    bool isEuropean;
+    bool reclaimed;
+}
+```
+
+**Lifecycle**:
+1. **Create**: `createFuturesSeries(params)` - Lock underlying via `directLockedPrincipal`, mint ERC-1155 tokens
+2. **Settle**: `settleFutures(seriesId, amount, recipient)` - Holder burns tokens, pays forward price, receives underlying
+3. **Reclaim**: `reclaimFutures(seriesId)` - Maker burns remaining supply after grace period to reclaim underlying
+
+#### D. Maker Auction Markets (MAM Curves)
+
+**Mechanism**: A Maker creates a time-bounded Dutch auction curve that sells a base asset for a quote asset at a linearly interpolated price. The price transitions from `startPrice` to `endPrice` over the curve's duration, enabling price discovery through time-based execution.
+
+**Key Features**:
+- Linear Dutch auction pricing (price interpolates between start and end over duration)
+- Time-bounded with configurable start time and duration
+- Partial fills supported with remaining volume tracking
+- Configurable swap fees with 70/20/10 split (maker/FeeIndex/treasury)
+- Base collateral locked via `directLockedPrincipal` (continues earning fee index)
+- Generation-based updates allow price/timing changes without cancellation
+- Batch operations for efficient multi-curve management
+- CurveId-only execution path for gas efficiency
+
+**Price Mechanics**:
+```solidity
+// Linear interpolation: price transitions from startPrice to endPrice over duration
+// At t <= startTime: price = startPrice
+// At t >= endTime: price = endPrice
+// Between: price = startPrice + (endPrice - startPrice) * elapsed / duration
+
+function computePrice(
+    uint256 startPrice,
+    uint256 endPrice,
+    uint256 start,
+    uint256 duration,
+    uint256 t
+) returns (uint256) {
+    if (t <= start) return startPrice;
+    uint256 end = start + duration;
+    if (t >= end) return endPrice;
+    uint256 elapsed = t - start;
+    uint256 delta = (endPrice > startPrice) 
+        ? (endPrice - startPrice) 
+        : (startPrice - endPrice);
+    uint256 adj = (delta * elapsed) / duration;
+    return (endPrice >= startPrice) 
+        ? (startPrice + adj) 
+        : (startPrice - adj);
+}
+```
+
+**Data Structures**:
+```solidity
+/// @notice Execution side relative to tokenA/tokenB
+enum Side {
+    SellAForB,
+    SellBForA
+}
+
+/// @notice Fee asset marker
+enum FeeAsset {
+    TokenIn,
+    TokenOut
+}
+
+/// @notice Canonical curve descriptor used at creation time
+struct CurveDescriptor {
+    bytes32 makerPositionKey;
+    uint256 makerPositionId;
+    uint256 poolIdA;
+    uint256 poolIdB;
+    address tokenA;
+    address tokenB;
+    bool side;                   // false: SellAForB, true: SellBForA
+    bool priceIsQuotePerBase;    // Price interpretation flag
+    uint128 maxVolume;           // Maximum base asset volume
+    uint128 startPrice;          // Starting price (1e18 scaled)
+    uint128 endPrice;            // Ending price (1e18 scaled)
+    uint64 startTime;            // Auction start timestamp
+    uint64 duration;             // Auction duration in seconds
+    uint32 generation;           // Update counter (starts at 1)
+    uint16 feeRateBps;           // Fee rate in basis points
+    FeeAsset feeAsset;           // Fee charged on TokenIn
+    uint96 salt;                 // Unique identifier for commitment
+}
+
+/// @notice Minimal onchain representation for a committed curve
+struct StoredCurve {
+    bytes32 commitment;          // Hash of full descriptor
+    uint128 remainingVolume;     // Unfilled base volume
+    uint64 endTime;              // Computed end timestamp
+    uint32 generation;           // Current generation number
+    bool active;                 // Curve can be filled
+}
+
+/// @notice Mutable parameters for curve updates
+struct CurveUpdateParams {
+    uint128 startPrice;
+    uint128 endPrice;
+    uint64 startTime;
+    uint64 duration;
+}
+
+/// @notice View struct for fill operations
+struct CurveFillView {
+    bytes32 makerPositionKey;
+    uint256 makerPositionId;
+    uint256 poolIdA;
+    uint256 poolIdB;
+    address tokenA;
+    address tokenB;
+    bool baseIsA;
+    uint128 startPrice;
+    uint128 endPrice;
+    uint64 startTime;
+    uint64 duration;
+    uint16 feeRateBps;
+    uint128 remainingVolume;
+}
+```
+
+**Storage Layout**:
+```solidity
+// Per-curve storage split for gas optimization
+struct CurveData {
+    bytes32 makerPositionKey;
+    uint256 makerPositionId;
+    uint256 poolIdA;
+    uint256 poolIdB;
+}
+
+struct CurveImmutables {
+    address tokenA;
+    address tokenB;
+    uint128 maxVolume;
+    uint96 salt;
+    uint16 feeRateBps;
+    bool priceIsQuotePerBase;
+    FeeAsset feeAsset;
+}
+
+struct CurvePricing {
+    uint128 startPrice;
+    uint128 endPrice;
+    uint64 startTime;
+    uint64 duration;
+}
+```
+
+**Lifecycle**:
+
+1. **Create**: `createCurve(CurveDescriptor)` or `createCurvesBatch(CurveDescriptor[])`
+   - Verify maker owns Position NFT and has pool membership
+   - Validate descriptor parameters (prices, timing, pools)
+   - Lock base asset volume via `directLockedPrincipal`
+   - Compute commitment hash and store curve data
+   - Emit `CurveCreated` event
+
+2. **Update**: `updateCurve(curveId, CurveUpdateParams)` or `updateCurvesBatch(curveIds, params)`
+   - Verify caller is curve maker
+   - Validate new timing parameters (startTime must be in future)
+   - Increment generation counter
+   - Recompute commitment hash with new parameters
+   - Emit `CurveUpdated` event
+
+3. **Fill**: `executeCurveSwap(curveId, amountIn, minOut, deadline, recipient)`
+   - Verify curve is active and within time window
+   - Compute current price via linear interpolation
+   - Calculate base fill amount from quote input
+   - Verify sufficient remaining volume
+   - Apply slippage protection (minOut check)
+   - Pull quote tokens from taker
+   - Distribute fees: 70% maker, 20% FeeIndex, 10% treasury
+   - Credit maker with quote amount plus maker fee share
+   - Unlock and transfer base tokens to recipient
+   - Emit `CurveFilled` event
+
+4. **Cancel**: `cancelCurve(curveId)` or `cancelCurvesBatch(curveIds)`
+   - Verify caller is curve maker
+   - Unlock remaining base volume
+   - Mark curve inactive
+   - Emit `CurveCancelled` event
+
+**Fee Distribution**:
+```solidity
+// Fee split constants
+uint16 constant FEE_SPLIT_MAKER_BPS = 7000;     // 70% to maker
+uint16 constant FEE_SPLIT_INDEX_BPS = 2000;     // 20% to FeeIndex
+uint16 constant FEE_SPLIT_TREASURY_BPS = 1000;  // 10% to treasury
+
+// Fee calculation on fill
+feeAmount = (amountIn * feeRateBps) / 10_000;
+makerFee = (feeAmount * 7000) / 10_000;
+indexFee = (feeAmount * 2000) / 10_000;
+treasuryFee = feeAmount - makerFee - indexFee;
+
+// Maker receives: amountIn + makerFee (credited to quote pool principal)
+// FeeIndex receives: indexFee (accrued to quote pool FeeIndex)
+// Treasury receives: treasuryFee (transferred out)
+```
+
+**Collateral Locking**:
+```solidity
+// On curve creation - lock base asset
+ds.directLockedPrincipal[positionKey][basePoolId] += maxVolume;
+
+// On fill - unlock filled amount
+ds.directLockedPrincipal[positionKey][basePoolId] -= baseFill;
+
+// On cancel - unlock remaining volume
+ds.directLockedPrincipal[positionKey][basePoolId] -= remainingVolume;
+```
+
+**Generation-Based Updates**:
+- Each curve starts with `generation = 1`
+- Updates increment generation and recompute commitment
+- Allows price/timing adjustments without cancellation
+- Immutable fields (pools, tokens, maxVolume, salt, feeRate) cannot change
+- Only mutable fields (startPrice, endPrice, startTime, duration) can be updated
+
+**Validation Rules**:
+- `maxVolume > 0`
+- `startPrice > 0` and `endPrice > 0`
+- `duration > 0`
+- `startTime >= block.timestamp`
+- `poolIdA != poolIdB`
+- `tokenA != tokenB` and both non-zero
+- Pool underlying assets must match descriptor tokens
+- Maker must have pool membership in both pools
+- `priceIsQuotePerBase` must be `true` (current implementation)
+- `feeAsset` must be `TokenIn` (current implementation)
+- `generation` must be `1` at creation
+
+### 11.3 Collateral Locking Model
+
+**AMM Reserves** (via `directLentPrincipal`):
+```solidity
+// Lock - reserves continue earning fee index
+ds.directLentPrincipal[positionKey][poolId] += amount;
+
+// Unlock on finalization
+ds.directLentPrincipal[positionKey][poolId] -= amount;
+```
+
+**Options/Futures/MAM Collateral** (via `directLockedPrincipal`):
+```solidity
+// Lock - prevents withdrawal, excluded from LTV
+ds.directLockedPrincipal[positionKey][poolId] += amount;
+
+// Unlock on exercise/settlement/reclaim/fill/cancel
+ds.directLockedPrincipal[positionKey][poolId] -= amount;
+```
+
+**Solvency Integration**:
+- `directLockedPrincipal` subtracted from available collateral for LTV calculations
+- `directLentPrincipal` treated as encumbered but continues earning fee index
+- Both prevent withdrawal of the encumbered amount
+- MAM curves use `directLockedPrincipal` for base asset locking
+
+### 11.4 Oracle-Free Solvency Guarantees
+
+**AMM**: Invariant math guarantees reserves cannot be drained below k through swap operations.
+
+**Options/Futures**: 100% collateralization at the smart contract level guarantees the Writer can always fulfill the obligation. No liquidations are possible or necessary.
+
+**MAM Curves**: Full base volume locked at creation guarantees maker can fulfill any fill up to `maxVolume`. Linear price interpolation is deterministic and requires no external price feeds.
+
+### 11.5 ERC-1155 Token Contracts
+
+Two new ERC-1155 contracts controlled by the Diamond:
+
+**OptionToken**:
+- Mint/burn callable only by Diamond
+- Series-specific metadata URIs
+- Freely tradeable
+
+**FuturesToken**:
+- Mint/burn callable only by Diamond
+- Series-specific metadata URIs
+- Freely tradeable
+
+### 11.6 Access Control
+
+- **Creation**: Restricted to Position NFT owners and approved operators
+- **Exercise/Settlement**: Restricted to ERC-1155 token holders and their approved operators
+- **Reclaim**: Restricted to current Position NFT owner (maker rights follow NFT)
+- **Pause**: Governance can pause creation while allowing finalization/exercise/settlement/reclaim
+
+### 11.7 Events
+
+```solidity
+// AMM Auctions
+event AuctionCreated(uint256 indexed auctionId, bytes32 indexed makerPositionKey, ...);
+event AuctionSwapped(uint256 indexed auctionId, address indexed swapper, ...);
+event AuctionFinalized(uint256 indexed auctionId, ...);
+event AuctionCancelled(uint256 indexed auctionId, ...);
+
+// Options
+event SeriesCreated(uint256 indexed seriesId, bytes32 indexed makerPositionKey, bool isCall, ...);
+event Exercised(uint256 indexed seriesId, address indexed holder, uint256 amount);
+event Reclaimed(uint256 indexed seriesId, uint256 collateralReturned);
+
+// Futures
+event FuturesSeriesCreated(uint256 indexed seriesId, bytes32 indexed makerPositionKey, ...);
+event Settled(uint256 indexed seriesId, address indexed holder, uint256 amount);
+event FuturesReclaimed(uint256 indexed seriesId, uint256 underlyingReturned);
+
+// MAM Curves
+event CurveCreated(
+    uint256 indexed curveId,
+    bytes32 indexed makerPositionKey,
+    uint256 indexed makerPositionId,
+    uint256 poolIdA,
+    uint256 poolIdB,
+    address tokenA,
+    address tokenB,
+    bool baseIsA,
+    uint128 maxVolume,
+    uint128 startPrice,
+    uint128 endPrice,
+    uint64 startTime,
+    uint64 duration,
+    uint16 feeRateBps
+);
+event CurveUpdated(
+    uint256 indexed curveId,
+    bytes32 indexed makerPositionKey,
+    uint32 generation,
+    CurveUpdateParams params
+);
+event CurveFilled(
+    uint256 indexed curveId,
+    address indexed taker,
+    address indexed recipient,
+    uint256 amountIn,
+    uint256 amountOut,
+    uint256 feeAmount,
+    uint256 remainingVolume
+);
+event CurveCancelled(uint256 indexed curveId, bytes32 indexed makerPositionKey, uint256 remainingVolume);
+event CurvesBatchCreated(bytes32 indexed makerPositionKey, uint256 indexed firstCurveId, uint256 count);
+event CurvesBatchUpdated(bytes32 indexed makerPositionKey, uint256 count);
+event CurvesBatchCancelled(bytes32 indexed makerPositionKey, uint256 count);
+event MamPausedUpdated(bool paused);
+```
+
+### 11.8 Use Cases
+
+1. **Structured Products**: Bundle complex strategies (e.g., "Yield Enhanced Note" = Buy Bond + Write Put) into a single tradeable Position NFT
+2. **Covered Call Writing**: Earn premium on held assets while maintaining yield exposure
+3. **Secured Put Writing**: Generate yield on stablecoins while setting buy prices
+4. **AMM Market Making**: Provide time-bounded liquidity with deterministic pricing
+5. **Physical Delivery Futures**: Lock in forward prices for asset delivery
+6. **Dutch Auction Sales**: Time-bounded price discovery for asset sales via MAM curves
+7. **Programmatic Market Making**: Create multiple MAM curves with different price ranges for sophisticated trading strategies
+
+---

@@ -1,13 +1,14 @@
 # EqualLend / EqualIndex Gas Estimates
 
-_Generated via `forge test --match-path test/root/GasScenarioReport.t.sol --gas-report` and `forge test --match-path "test/gas/*t.sol" --gas-report` on 2026-01-03 (UTC)._
+_Generated via `forge test --match-path test/root/GasScenarioReport.t.sol --gas-report` and `forge test --match-path "test/gas/*t.sol" --gas-report` on 2026-01-07 (UTC)._
 _Sources of truth: `gas-report-scenarios.txt` (scenario tables), `gas-report-latest.txt` (function-level tables), and `gas-report-direct-limit-order.txt` (limit order gas scenarios)._
 
 ## Methodology
 - Scenario report values come from the dedicated gas scenario suite and reflect end-to-end flows.
 - Function-level values use the **Max** column to avoid 0-min artifacts when a function is invoked during setup.
 - Gas tests pause metering during setup so the reported values focus on the target call.
-- Token behavior, cold vs warm slots, and storage layout can move numbers.
+- Derivative swap harness values are from single-file gas runs and are appended to `gas-report-latest.txt`.
+- Options/Futures harness values are from single-file gas runs and are appended to `gas-report-latest.txt`.
 
 ## Scenario Benchmarks (GasScenarioReport.t.sol)
 ### EqualIndex Flows
@@ -25,7 +26,7 @@ _Notes_:
 ### Pool Creation & Admin
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Minimal pool initialization (`test_gas_PoolInitMinimal`) | `PoolManagementFacet.initPool` | **790,360** |
+| Minimal pool initialization (`test_gas_PoolInitMinimal`) | `PoolManagementFacet.initPool` | **790,494** |
 
 _Notes_:
 - Pool creation lives in `PoolManagementFacet`; non-governance callers also pay the configured creation fee (not included here).
@@ -38,34 +39,48 @@ _Notes_:
 | Withdraw only (`test_gas_PositionWithdrawOnly`) | `PositionManagementFacet.withdrawFromPosition` | **72,447** |
 | Roll yield to principal (`test_gas_RollYieldToPosition`) | `PositionManagementFacet.rollYieldToPosition` | **62,464** |
 | Close pool position (no commitments) (`test_gas_PositionClosePoolPosition`) | `PositionManagementFacet.closePoolPosition` | **78,027** |
-| Deposit + withdraw + cleanup (`test_gas_PositionDepositWithdrawCloseCleanup`) | `PositionManagementFacet.depositToPosition + withdrawFromPosition + cleanupMembership` | **6,342,119** |
+| Deposit + withdraw + cleanup (`test_gas_PositionDepositWithdrawCloseCleanup`) | `PositionManagementFacet.depositToPosition + withdrawFromPosition + cleanupMembership` | **6,341,255** |
 
 ### Borrowing
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Open rolling borrow (`test_gas_BorrowRollingOnly`) | `LendingFacet.openRollingFromPosition` | **213,481** |
-| Open fixed-term borrow (`test_gas_BorrowFixedOnly`) | `LendingFacet.openFixedFromPosition` | **531,419** |
+| Open rolling borrow (`test_gas_BorrowRollingOnly`) | `LendingFacet.openRollingFromPosition` | **299,313** |
+| Open fixed-term borrow (`test_gas_BorrowFixedOnly`) | `LendingFacet.openFixedFromPosition` | **523,157** |
 
 ### Loan Lifecycles
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Rolling lifecycle (`test_gas_RollingLifecycle`) | `LendingFacet.openRollingFromPosition + makePaymentFromPosition + closeRollingCreditFromPosition` | **7,439,462** |
-| Fixed lifecycle (`test_gas_FixedLifecycle`) | `LendingFacet.openFixedFromPosition + repayFixedFromPosition` | **7,764,538** |
+| Rolling lifecycle (`test_gas_RollingLifecycle`) | `LendingFacet.openRollingFromPosition + makePaymentFromPosition + closeRollingCreditFromPosition` | **7,482,624** |
+| Fixed lifecycle (`test_gas_FixedLifecycle`) | `LendingFacet.openFixedFromPosition + repayFixedFromPosition` | **7,691,498** |
 
 ### Direct Offers
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Post lender offer (`test_gas_DirectPostOfferOnly`) | `EqualLendDirectOfferFacet.postOffer` | **507,304** |
-| Accept lender offer (`test_gas_DirectAcceptOfferOnly`) | `EqualLendDirectAgreementFacet.acceptOffer` | **1,024,590** |
-| Post borrower offer (`test_gas_DirectPostBorrowerOfferOnly`) | `EqualLendDirectOfferFacet.postBorrowerOffer` | **482,192** |
-| Accept borrower offer (`test_gas_DirectAcceptBorrowerOfferOnly`) | `EqualLendDirectAgreementFacet.acceptBorrowerOffer` | **1,028,840** |
-| Direct offer repay flow (`test_gas_DirectOfferRepayFlow`) | `EqualLendDirectOfferFacet.postOffer + EqualLendDirectAgreementFacet.acceptOffer + EqualLendDirectLifecycleFacet.repay` | **41,367,125** |
+| Post lender offer (`test_gas_DirectPostOfferOnly`) | `EqualLendDirectOfferFacet.postOffer` | **507,117** |
+| Accept lender offer (`test_gas_DirectAcceptOfferOnly`) | `EqualLendDirectAgreementFacet.acceptOffer` | **1,024,393** |
+| Post borrower offer (`test_gas_DirectPostBorrowerOfferOnly`) | `EqualLendDirectOfferFacet.postBorrowerOffer` | **481,546** |
+| Accept borrower offer (`test_gas_DirectAcceptBorrowerOfferOnly`) | `EqualLendDirectAgreementFacet.acceptBorrowerOffer` | **1,027,999** |
+| Direct offer repay flow (`test_gas_DirectOfferRepayFlow`) | `EqualLendDirectOfferFacet.postOffer + EqualLendDirectAgreementFacet.acceptOffer + EqualLendDirectLifecycleFacet.repay` | **40,263,463** |
 
 ### Penalties
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Rolling penalty (`test_gas_PenaltyRolling`) | `PenaltyFacet.penalizePositionRolling` | **5,483,022** |
-| Fixed penalty (`test_gas_PenaltyFixed`) | `PenaltyFacet.penalizePositionFixed` | **5,606,527** |
+| Rolling penalty (`test_gas_PenaltyRolling`) | `PenaltyFacet.penalizePositionRolling` | **5,732,127** |
+| Fixed penalty (`test_gas_PenaltyFixed`) | `PenaltyFacet.penalizePositionFixed` | **5,855,478** |
+
+### Derivative swap harnesses (test/derivatives/*Gas.t.sol)
+| Scenario (Foundry test) | Entry point(s) | Gas (max) |
+| --- | --- | --- |
+| AMM swap exact-in (`testGasSwapExactIn`) | `AmmAuctionFacet.swapExactIn` | **189,321** |
+| MAM curve swap (`testGasExecuteCurveSwap`) | `MamCurveFacet.executeCurveSwap` | **198,485** |
+
+### Options & Futures harnesses (test/derivatives/*Gas.t.sol)
+| Scenario (Foundry test) | Entry point(s) | Gas (max) |
+| --- | --- | --- |
+| Options create series (`testGasCreateOptionSeries`) | `OptionsFacet.createOptionSeries` | **665,690** |
+| Options exercise (`testGasExerciseOptions`) | `OptionsFacet.exerciseOptions` | **180,024** |
+| Futures create series (`testGasCreateFuturesSeries`) | `FuturesFacet.createFuturesSeries` | **667,815** |
+| Futures settle (`testGasSettleFutures`) | `FuturesFacet.settleFutures` | **177,416** |
 
 ## Function-Level Gas Tests (test/gas/*t.sol)
 ### EqualIndexAdminFacetV3
@@ -139,8 +154,6 @@ _Notes_:
 | `aggregateRollingExposure` | 16,509 |
 
 ### Limit order views
-
-Yield-Bearing Limit Orders (YBLOs) view functions:
 | Function | Gas (max) |
 | --- | --- |
 | `getLimitOrder` | 26,804 |
@@ -148,19 +161,6 @@ Yield-Bearing Limit Orders (YBLOs) view functions:
 | `getLimitOrderEncumbrance` | 14,278 |
 | `getLimitOrdersByPosition` | 7,828 |
 | `getLimitOrderConfig` | 2,850 |
-
-### Direct limit order scenarios (DirectLimitOrderGas.t.sol)
-
-Yield-Bearing Limit Orders (YBLOs) gas measurements:
-| Scenario (Foundry test) | Entry point(s) | Gas |
-| --- | --- | --- |
-| Accept (no fees) (`test_gas_LimitOrderAccept`) | `EqualLendDirectLimitOrderFacet.acceptLimitOrder` | **347,048** |
-| Accept (fees ratio) (`test_gas_LimitOrderAcceptWithFeesRatio`) | `EqualLendDirectLimitOrderFacet.acceptLimitOrder` | **418,590** |
-| Accept borrower-side (fees ratio) (`test_gas_LimitOrderAcceptWithFeesRatioBorrowerSide`) | `EqualLendDirectLimitOrderFacet.acceptLimitOrder` | **418,792** |
-| Cancel (no fees) (`test_gas_LimitOrderCancel`) | `EqualLendDirectLimitOrderFacet.cancelLimitOrder` | **57,805** |
-| Cancel (fees ratio) (`test_gas_LimitOrderCancelWithFeesRatio`) | `EqualLendDirectLimitOrderFacet.cancelLimitOrder` | **58,091** |
-| Post (no fees) (`test_gas_LimitOrderPost`) | `EqualLendDirectLimitOrderFacet.postLimitOrder` | **549,866** |
-| Post (fees ratio) (`test_gas_LimitOrderPostWithFeesRatio`) | `EqualLendDirectLimitOrderFacet.postLimitOrder` | **548,086** |
 
 ### Diamond loupe views
 | Function | Gas (max) |
@@ -384,4 +384,3 @@ Yield-Bearing Limit Orders (YBLOs) gas measurements:
 | Function | Gas (max) |
 | --- | --- |
 | `selectors` | 715 |
-
