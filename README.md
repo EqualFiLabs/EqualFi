@@ -34,10 +34,11 @@ _**We must build for the right reasons.**_
 ### Equalis Protocol
 - [Equalis-Design.md](./Equalis/Equalis-Design.md) - Complete protocol design document
 - [Equalis-Direct.md](./Equalis/Equalis-Direct.md) - Bilateral instruments and P2P lending
-- [Equalis-Direct.md#5-yield-bearing-limit-orders-yblo](./Equalis/Equalis-Direct.md#5-yield-bearing-limit-orders-yblo) - Yield-Bearing Limit Orders (YBLOs)
 - [EqualIndexV3.md](./Equalis/EqualIndexV3.md) - EqualIndex V3 design document
 - [GAS-ESTIMATES-EL.md](./Equalis/GAS-ESTIMATES-EL.md) - Comprehensive gas analysis
-- [SYNTHETIC-CALL-PUT.md](./Equalis/SYNTHETIC-CALL-PUT.md) - Options-like instruments
+- [Synthetic-Options-Design.md](./Equalis/Synthetic-Options-Design.md) - Options-like instruments
+- [Derivatives-Design.md](./Equalis/Derivatives-Design.md) - Derivatives design
+- [MAM.pdf](./Equalis/MAM.pdf) - Maker Auction Markets paper
 
 ### EqualX Research
 - [ATOMICDESKS-DESIGN.md](./EqualX/ATOMICDESKS-DESIGN.md) - Atomic desks design
@@ -53,7 +54,7 @@ EqualFi is building from an alternative design space using first principles.
 
 The work in this repository focuses on deterministic, non-reactive financial primitives. Instead of relying on continuous price feeds or liquidation races, these systems define outcomes through explicit parameters, time, and local accounting invariants. Risk is expressed at the moment a position is created, not discovered later through emergency response.
 This repository collects the core research and designs behind that approach:
-  * Equalis, a decentralized financial protocol enabling pooled credit, bilateral options-like instruments, and spot trading via Yield-Bearing Limit Orders (YBLOs) built around time-based settlement, bounded default handling, and account-level isolation rather than price-triggered liquidations which allows for multiple instruments from one primitive
+  * Equalis, a decentralized financial protocol enabling pooled credit, bilateral options-like instruments, and spot trading, bounded default handling, and account-level isolation rather than price-triggered liquidations which allows for multiple instruments from one primitive
   * EqualIndex, a deterministic index primitive where asset composition, fees, and redemption behavior are fixed and analyzable without oracles.
   * Maker Auction Markets (MAMs), a market structure where liquidity is expressed as explicit, fully collateralized commitments instead of reactive pool pricing.
 EqualFi’s goal is to maintain maximum composability and capital efficiency via determinism and user agency. A system that makes on-chain finance easier to reason about under adversarial conditions, easier to verify, and more suitable for long-lived autonomous systems and humans.
@@ -92,16 +93,6 @@ Defaults are handled through **bounded settlement**, not forced liquidation into
 Equalis is intentionally conservative in what it assumes and permissive in what it enables. It does not attempt to predict prices, optimize utilization, or dynamically tune risk parameters. Instead, it provides a minimal, deterministic substrate on top of which more expressive financial instruments can be constructed.
 
 The result is a lending primitive that prioritizes predictability over reactivity, correctness over speed, and explicit user agency over implicit protocol intervention. This makes Equalis well-suited not only for human users, but for long-lived autonomous systems that require stable, reasoned interaction with on-chain credit.
-
-For detailed information on Yield-Bearing Limit Orders, see [/Equalis/Equalis-Direct.md#5-yield-bearing-limit-orders-yblo](./Equalis/Equalis-Direct.md#5-yield-bearing-limit-orders-yblo). For comprehensive gas analysis, see [/Equalis/GAS-ESTIMATES-EL.md](./Equalis/GAS-ESTIMATES-EL.md).
-
-## Gas reality
-
-Yield-Bearing Limit Orders (YBLOs) are measured in Foundry tests:
-
-- Post ~550k
-- Accept ~347k no-fees, ~419k fees
-- Cancel ~58k
 
 These are current measured Foundry tests, not estimates. See [/Equalis/GAS-ESTIMATES-EL.md](./Equalis/GAS-ESTIMATES-EL.md) for complete gas analysis.
 
@@ -275,6 +266,6 @@ Twitter: @hooftly
 
 EqualFi Labs Discord: https://discord.gg/6amxag7eBZ
 
-### Discliamer
+### Disclaimer
 
 Some documents were drafted with AI assistance. 
