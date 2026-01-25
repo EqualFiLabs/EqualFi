@@ -1,6 +1,6 @@
 # Equalis Protocol - Design Document
 
-**Version:** 9.0  
+**Version:** 10.0 (Updated for native ETH support)
 
 ---
 
@@ -46,6 +46,7 @@ Equalis is a deterministic, lossless credit primitive that replaces price-based 
 11. **EqualIndex Integration**: Multi-asset index token system with deterministic fee structures
 12. **Diamond Architecture**: Modular facet-based design enabling upgradability while maintaining storage isolation
 13. **Position NFT Derivatives**: Oracle-free AMM Auctions, Options, Futures, and Maker Auction Markets using Position NFTs as the universal identity and Pools as unified collateral source
+14. **Native ETH Support**: Full support for native ETH (represented as `address(0)`) across all protocol features including pools, lending, derivatives, and index tokens via the unified `LibCurrency` library
 
 ---
 
@@ -1128,7 +1129,7 @@ struct DirectRollingConfig {
     uint16 minRollingApyBps;          // e.g., 1 (0.01%)
     uint16 maxRollingApyBps;          // e.g., 10000 (100%)
     uint16 defaultPenaltyBps;         // Penalty rate for defaults
-    uint64 minPaymentWei;             // Minimum accepted payment to avoid dust
+    uint16 minPaymentBps;             // Minimum payment as bps of outstanding principal
 }
 ```
 
@@ -1251,7 +1252,7 @@ struct DirectRollingConfig {
     uint16 minRollingApyBps;          // Minimum APY (e.g., 1 = 0.01%)
     uint16 maxRollingApyBps;          // Maximum APY (e.g., 10000 = 100%)
     uint16 defaultPenaltyBps;         // Default penalty rate
-    uint64 minPaymentWei;             // Minimum payment to avoid dust
+    uint16 minPaymentBps;             // Minimum payment as bps of outstanding principal
 }
 ```
 
@@ -1329,7 +1330,6 @@ struct Index {
     uint16[] mintFeeBps;            // Per-asset mint fee
     uint16[] burnFeeBps;            // Per-asset burn fee
     uint16 flashFeeBps;             // Flash loan fee
-    uint16 protocolCutBps;          // Protocol share of fees
     uint256 totalUnits;             // Total supply
     address token;                  // ERC20 token address
     bool paused;
@@ -1705,7 +1705,64 @@ function calculateDirectInterest(
 3. External contract failures (isolated pools)
 4. Network-level attacks (L1/L2 security model)
 
-### 7.2 Access Control
+### 7.2 Native ETH Security
+
+The protocol supports native ETH (represented as `address(0)`) across all features via the `LibCurrency` library:
+
+**Native ETH Representation**:
+- Native ETH pools use `underlying = address(0)`
+- `LibCurrency.isNative(token)` returns `true` for `address(0)`
+- All balance checks and transfers route through `LibCurrency`
+
+**Tracked Balance Accounting**:
+```solidity
+// Global native ETH tracking
+uint256 nativeTrackedTotal;  // Sum of all native ETH obligations
+
+// Available native ETH = contract balance - tracked total
+function nativeAvailable() internal view returns (uint256) {
+    uint256 balance = address(this).balance;
+    uint256 tracked = LibAppStorage.s().nativeTrackedTotal;
+    return balance > tracked ? balance - tracked : 0;
+}
+```
+
+**msg.value Validation**:
+```solidity
+// Enforce exact msg.value for native ETH operations
+function assertMsgValue(address token, uint256 amount) internal view {
+    if (isNative(token)) {
+        if (msg.value != 0 && msg.value != amount) {
+            revert UnexpectedMsgValue(msg.value);
+        }
+        return;
+    }
+    if (msg.value != 0) {
+        revert UnexpectedMsgValue(msg.value);
+    }
+}
+```
+
+**Native ETH Transfer Safety**:
+```solidity
+function transfer(address token, address to, uint256 amount) internal {
+    if (isNative(token)) {
+        (bool success,) = to.call{value: amount}("");
+        if (!success) {
+            revert NativeTransferFailed(to, amount);
+        }
+        return;
+    }
+    IERC20(token).safeTransfer(to, amount);
+}
+```
+
+**Security Properties**:
+1. **No Double Counting**: `nativeTrackedTotal` prevents the same ETH from being counted in multiple pools
+2. **Exact Value Enforcement**: `msg.value` must exactly match expected amounts
+3. **Reentrancy Protection**: All native ETH transfers occur after state updates
+4. **Balance Isolation**: Each pool's `trackedBalance` is independent
+5. **Overflow Protection**: Solidity 0.8+ arithmetic checks apply
 
 **Roles**:
 - **Owner**: Diamond owner (via LibDiamond)
@@ -1732,7 +1789,7 @@ function calculateDirectInterest(
   - Can deposit, withdraw, borrow, repay
   - Can transfer NFTs (transfers all state)
 
-### 7.3 Reentrancy Protection
+### 7.4 Reentrancy Protection
 
 **Strategy**: ReentrancyGuard on all state-changing external functions.
 
@@ -1743,7 +1800,7 @@ function calculateDirectInterest(
 - Index operations (mint, burn, flash)
 - Withdrawals and deposits
 
-### 7.4 Invariants
+### 7.5 Invariants
 
 **Global Invariants**:
 1. `sum(userPrincipal[all users]) == totalDeposits` (per pool)
@@ -2093,7 +2150,7 @@ DirectRollingConfig memory rollingConfig = DirectRollingConfig({
     minRollingApyBps: 1,
     maxRollingApyBps: 10000,
     defaultPenaltyBps: 500,
-    minPaymentWei: 1e15
+    minPaymentBps: 50
 });
 ```
 

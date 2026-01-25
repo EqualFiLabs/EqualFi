@@ -32,6 +32,7 @@ The EqualLend Direct lending rail enables option-like payoffs through a clever u
 | **Flexible Exercise** | American or European style via `allowEarlyExercise` flag |
 | **Centralized Encumbrance** | Collateral tracked via unified `LibEncumbrance` system |
 | **Centralized Fee Routing** | Default fees distributed via `LibFeeRouter` (ACI/FI/Treasury) |
+| **Native ETH Support** | Full support for native ETH as borrow or collateral asset via `LibCurrency` |
 
 ### The Core Mechanism
 
@@ -757,9 +758,15 @@ event DirectAgreementCalled(uint256 indexed agreementId, uint256 indexed lenderP
 
 9. **Centralized Fee Routing**: Default/exercise fees are routed through `LibFeeRouter` ensuring consistent distribution to Treasury, ACI, and Fee Index.
 
+10. **Native ETH Support**: Synthetic options fully support native ETH (represented as `address(0)`) as either the borrow asset or collateral asset:
+    - **Repayment with Native ETH**: When repaying a loan where the borrow asset is native ETH, users send ETH via `msg.value`. The facet validates the exact amount using `LibCurrency.assertMsgValue()`.
+    - **Collateral Transfers**: Native ETH collateral is transferred via `LibCurrency.transfer()` which uses a low-level call with proper error handling.
+    - **Tracked Balance Accounting**: Native ETH is tracked via `nativeTrackedTotal` to prevent double-counting across pools.
+    - **Fee Distribution**: Native ETH fees are properly tracked and distributed through the centralized fee routing system.
+
 ---
 
-**Document Version:** 1.1
+**Document Version:** 2.0 (Updated for native ETH support)
 **Last Updated:** January 2026
 
-*Changes in 1.1: Updated to reflect centralized encumbrance system (LibEncumbrance), centralized fee routing (LibFeeRouter with ACI/FI/Treasury split), simplified DirectConfig structure, and Active Credit Index integration.*
+*Changes in 2.0: Added native ETH support documentation. Updated to reflect centralized encumbrance system (LibEncumbrance), centralized fee routing (LibFeeRouter with ACI/FI/Treasury split), simplified DirectConfig structure, and Active Credit Index integration.*

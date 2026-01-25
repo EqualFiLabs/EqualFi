@@ -1,6 +1,6 @@
 # AMM Auction System Design
 
-**Version:** 1.1 (Updated for centralized fee index and encumbrance systems)
+**Version:** 2.0 (Updated for native ETH support and centralized fee index/encumbrance systems)
 
 This document describes the AMM Auction system, which allows Position NFT holders to create time-bounded automated market maker (AMM) pools using their deposited liquidity. These auctions enable trustless token swaps with constant-product pricing.
 
@@ -30,6 +30,7 @@ The AMM Auction system enables liquidity providers to create temporary AMM pools
 | **Fee Earning** | Makers earn fees on every swap |
 | **Cancelable** | Makers can cancel before expiry |
 | **Multi-Indexed** | Discoverable by pool, token, or pair |
+| **Native ETH Support** | Full support for native ETH as either token in the pair via `LibCurrency` |
 
 ### System Participants
 
@@ -459,6 +460,7 @@ uint256 auctionId = ammAuctionFacet.createAuction(params);
 #### Swapping Tokens
 
 ```solidity
+// External swap (ERC20 transfers)
 // 1. Approve input token
 weth.approve(diamond, amountIn);
 
@@ -768,6 +770,12 @@ require(principal >= totalEncumbered + withdrawAmount, "Insufficient available p
 9. **Treasury Requirement**: Treasury address must be set for fee distribution to work.
 
 10. **Centralized Fee Index**: Fee distribution uses `LibFeeIndex.accrueWithSource()` for consistent, auditable fee accounting across all protocol features.
+
+11. **Native ETH Support**: AMM Auctions fully support native ETH (represented as `address(0)`) as either token in the pair:
+    - **Swapping with Native ETH**: When swapping into a native ETH pool, users send ETH via `msg.value`. The facet validates the exact amount using `LibCurrency.assertMsgValue()`.
+    - **Receiving Native ETH**: When swapping out of a native ETH pool, the output is transferred via `LibCurrency.transfer()` which uses a low-level call.
+    - **Tracked Balance Accounting**: Native ETH is tracked via `nativeTrackedTotal` to prevent double-counting across pools.
+    - **Reserve Updates**: On finalization, native ETH reserves are properly reconciled with `nativeTrackedTotal`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Community Auction System Design
 
-**Version:** 1.1 (Updated for centralized fee index and encumbrance systems)
+**Version:** 2.0 (Updated for native ETH support and centralized fee index/encumbrance systems)
 
 This document describes the Community Auction system, which extends the AMM Auction model to support multiple makers pooling liquidity into a shared auction. This enables smaller capital holders to participate in market making collectively, sharing maker fees proportionally based on their contribution.
 
@@ -35,6 +35,7 @@ The Community Auction system enables multiple Position NFT holders to pool their
 | **Pro-Rata Fees** | Maker fees distributed proportionally via fee index |
 | **Share-Based** | Contributions tracked via price-neutral liquidity shares |
 | **Free Entry/Exit** | Makers can join before end and leave at any time |
+| **Native ETH Support** | Full support for native ETH as either token in the pair via `LibCurrency` |
 
 ### System Participants
 
@@ -1007,6 +1008,12 @@ LibEncumbrance.position(positionKey, poolIdB).directLent -= withdrawnB;
 ```
 
 14. **Centralized Pool Fee Index (LibFeeIndex)**: Pool depositor fees are distributed via `LibFeeIndex.accrueWithSource()` for consistent, auditable fee accounting.
+
+15. **Native ETH Support**: Community Auctions fully support native ETH (represented as `address(0)`) as either token in the pair:
+    - **Swapping with Native ETH**: When swapping into a native ETH pool, users send ETH via `msg.value`. The facet validates the exact amount using `LibCurrency.assertMsgValue()`.
+    - **Receiving Native ETH**: When swapping out of a native ETH pool, the output is transferred via `LibCurrency.transfer()` which uses a low-level call.
+    - **Tracked Balance Accounting**: Native ETH is tracked via `nativeTrackedTotal` to prevent double-counting across pools.
+    - **Fee Distribution**: Native ETH fees are properly tracked and distributed to makers, fee index, and treasury.
 
 ---
 

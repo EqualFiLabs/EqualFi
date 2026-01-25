@@ -27,6 +27,7 @@ The derivatives system enables Position NFT holders to create options and future
 - **Centralized Encumbrance**: Collateral tracked via unified `LibEncumbrance` system
 - **Centralized Fee Routing**: Fees distributed via `LibFeeRouter` (ACI/FI/Treasury)
 - **Custom Fees**: Series creators can specify custom fee rates within bounds
+- **Native ETH Support**: Full support for native ETH as underlying, strike, or quote asset via `LibCurrency`
 
 ### System Participants
 
@@ -47,10 +48,10 @@ The derivatives system enables Position NFT holders to create options and future
       │ lock collateral                                    exercise/settle
       ▼                                                               ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Diamond Protocol                                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-│  │ OptionsFacet │  │ FuturesFacet │  │ OptionToken  │  │ FuturesToken │    │
-│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+│                           Diamond Protocol                                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │ OptionsFacet │  │ FuturesFacet │  │ OptionToken  │  │ FuturesToken │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -949,9 +950,15 @@ event Reclaimed(
 
 11. **Fee Bounds Validation**: Custom fees must be within configured `[minFeeBps, maxFeeBps]` bounds.
 
+12. **Native ETH Support**: Options and Futures fully support native ETH (represented as `address(0)`) as underlying, strike, or quote asset:
+    - **Exercise/Settlement Payments**: When exercising options or settling futures with native ETH, users send ETH via `msg.value`. The facet validates the exact amount using `LibCurrency.assertMsgValue()`.
+    - **Collateral Transfers**: Native ETH collateral is transferred via `LibCurrency.transfer()` which uses a low-level call with proper error handling.
+    - **Tracked Balance Accounting**: Native ETH is tracked via `nativeTrackedTotal` to prevent double-counting across pools.
+    - **Fee Distribution**: Native ETH fees are properly tracked and distributed through the centralized fee routing system.
+
 ---
 
-**Document Version:** 1.1
+**Document Version:** 2.0 (Updated for native ETH support)
 **Last Updated:** January 2026
 
-*Changes in 1.1: Updated to reflect centralized encumbrance system (LibEncumbrance), centralized fee routing (LibFeeRouter with ACI/FI/Treasury split), expanded fee configuration with custom fees support, and Active Credit Index integration.*
+*Changes in 2.0: Added native ETH support documentation. Updated to reflect centralized encumbrance system (LibEncumbrance), centralized fee routing (LibFeeRouter with ACI/FI/Treasury split), expanded fee configuration with custom fees support, and Active Credit Index integration.*

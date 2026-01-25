@@ -1,7 +1,6 @@
 # EqualX Atomic Desks Design Document
 
 **Version:** 1.0
-**Status:** Early-stage research (not production-ready)
 
 ## 1. Overview
 
@@ -12,14 +11,14 @@ Atomic Desks enable trustless cross-chain atomic swaps between EVM-based assets 
 - **Atomicity**: Either both legs of the swap complete, or neither does
 - **Privacy**: Monero transaction details remain private through ring signatures
 - **Trustlessness**: No trusted third parties required for successful swaps
-- **Collateralization**: All EVM-side assets are fully collateralized in DeskVault
+- **Collateralization**: EVM assets are fully collateralized by Position NFT principal and encumbrance
 - **Settlement Authority**: Only authorized parties (desk makers or committee) can settle swaps
 
 ### 1.2 Key Components
 
 1. **AtomicDesk**: Main entry point for creating and managing atomic swap reservations
 2. **SettlementEscrow**: Holds collateral and manages settlement/refund logic
-3. **DeskVault**: Underlying inventory management and collateral source
+3. **Position NFT + Encumbrance**: Pool-level principal accounting and collateral locks
 4. **Mailbox**: Encrypted communication channel for adaptor signature exchange
 5. **CLSAG Adaptor**: Cryptographic protocol binding EVM and Monero transactions
 
@@ -30,10 +29,10 @@ Atomic Desks enable trustless cross-chain atomic swaps between EVM-based assets 
 ### 2.1 System Components
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   AtomicDesk    │────│ SettlementEscrow │────│   DeskVault     │
-│   (Entry Point) │    │  (Collateral)    │    │  (Inventory)    │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+┌─────────────────┐    ┌──────────────────┐    ┌───────────────────────┐
+│   AtomicDesk    │────│ SettlementEscrow │────│ Position NFT + Pools  │
+│   (Entry Point) │    │  (Collateral)    │    │   (Encumbrance)       │
+└─────────────────┘    └──────────────────┘    └───────────────────────┘
          │                       │                       │
          │              ┌─────────────────┐              │
          └──────────────│     Mailbox     │──────────────┘
@@ -66,11 +65,15 @@ The AtomicDesk contract serves as the primary interface for atomic swap operatio
 #### Key Functions
 
 ```solidity
-function registerDesk(address tokenA, address tokenB, bool baseIsA) 
-    external returns (bytes32 deskId)
+function registerDesk(
+    uint256 positionId,
+    uint256 poolIdA,
+    uint256 poolIdB,
+    bool baseIsA
+) external returns (bytes32 deskId)
 ```
-- Registers a new atomic desk for a token pair
-- Requires the desk to be enabled in DeskVault
+- Registers a new atomic desk for a Position NFT + pool pair
+- Requires the Position NFT owner and pool membership
 - Returns unique desk identifier
 
 ```solidity
@@ -81,24 +84,24 @@ function reserveAtomicSwap(
     uint256 amount,
     bytes32 settlementDigest,
     uint64 expiry
-) external payable returns (uint256 reservationId)
+) external payable returns (bytes32 reservationId)
 ```
 - Creates a new atomic swap reservation
-- Orchestrates collateral movement by depositing funds into DeskVault, reserving inventory, and instructing SettlementEscrow to pull the funds
+- Locks collateral via encumbrance on the base pool
 - Enforces expiry window constraints
 - Authorizes a communication slot in the Mailbox contract
 
 ```solidity
-function setHashlock(uint256 reservationId, bytes32 hashlock) external
+function setHashlock(bytes32 reservationId, bytes32 hashlock) external
 ```
 - Sets the hashlock (a commitment to the adaptor secret τ)
-- Proxied to the SettlementEscrow contract, which stores the hashlock state
+- Stored in SettlementEscrow reservation storage
 - Only callable by the desk maker
 - Can only be set once per reservation
 
 #### Access Control
 
-- **Desk Registration**: Any address can register if DeskVault permits
+- **Desk Registration**: Position NFT owner with pool membership
 - **Reservation Creation**: Only registered desk makers
 - **Hashlock Setting**: Only the desk maker for that reservation
 
@@ -106,19 +109,37 @@ function setHashlock(uint256 reservationId, bytes32 hashlock) external
 
 ```solidity
 struct DeskConfig {
-    address maker;
+    bytes32 positionKey;
+    uint256 positionId;
+    uint256 poolIdA;
+    uint256 poolIdB;
     address tokenA;
     address tokenB;
     bool baseIsA;
     bool active;
+    address maker;
 }
 
-struct ReservationMeta {
+struct Reservation {
+    bytes32 reservationId;
     bytes32 deskId;
+    bytes32 positionKey;
+    uint256 positionId;
+    address desk;
+    address taker;
+    uint256 poolIdA;
+    uint256 poolIdB;
+    address tokenA;
+    address tokenB;
+    bool baseIsA;
     address asset;
+    uint256 amount;
+    bytes32 settlementDigest;
+    bytes32 hashlock;
+    uint256 counter;
     uint64 expiry;
-    bool initialized;
-    bool active;
+    uint64 createdAt;
+    ReservationStatus status;
 }
 ```
 
@@ -129,23 +150,8 @@ Manages collateral holding and settlement logic. It is a protocol-wide component
 #### Key Functions
 
 ```solidity
-function reserve(
-    address taker,
-    address desk,
-    address tokenA,
-    address tokenB,
-    bool baseIsA,
-    uint256 amount,
-    bytes32 settlementDigest,
-    uint256 auctionId
-) external returns (uint256 reservationId)
-```
-- Creates escrow reservation (called by AtomicDesk)
-- Pulls collateral from DeskVault
-- Authorizes mailbox slot
-
-```solidity
-function settle(uint256 reservationId, bytes32 tau) external
+function setHashlock(bytes32 reservationId, bytes32 hashlock) external
+function settle(bytes32 reservationId, bytes32 tau) external
 ```
 - Settles reservation by revealing adaptor secret
 - Validates hashlock: `keccak256(tau) == hashlock`
@@ -153,11 +159,12 @@ function settle(uint256 reservationId, bytes32 tau) external
 - Only callable by desk maker or committee
 
 ```solidity
-function refund(uint256 reservationId, bytes32 noSpendEvidence) external
+function refund(bytes32 reservationId, bytes32 noSpendEvidence) external
+function getReservation(bytes32 reservationId) external view returns (Reservation)
 ```
 - Emergency refund after safety window expires
 - Only callable by committee members
-- Returns collateral to maker via DeskVault
+- Unlocks collateral without moving assets
 
 #### Security Model
 
@@ -166,30 +173,19 @@ function refund(uint256 reservationId, bytes32 noSpendEvidence) external
 - **Time Locks**: Safety window prevents premature refunds
 - **Committee Oversight**: Multi-signature committee can intervene
 
-### 3.3 DeskVault Integration
+### 3.3 Position NFT + Encumbrance Integration
 
-Atomic Desks integrate with the existing DeskVault system, which is a shared, protocol-wide component responsible for all inventory management.
-
-#### Atomic Desk Flag
-
-```solidity
-mapping(bytes32 => bool) public atomicDeskEnabled;
-
-function configureAtomicDesk(address tokenA, address tokenB, bool enabled) external
-```
-- Makers must explicitly enable atomic functionality
-- Prevents accidental exposure to cross-chain risks
-- Can be toggled on/off as needed
+Atomic Desk integrates with Position NFT collateral and the encumbrance system.
 
 #### Collateral Flow
 
-The collateral flow is a multi-step process orchestrated by AtomicDesk:
-
-1. **Deposit (if needed)**: AtomicDesk can act as a trusted agent to deposit collateral into DeskVault on the maker's behalf using `depositAFor`/`depositBFor`. More commonly, the maker pre-funds their vault balance.
-2. **Inventory Reservation**: AtomicDesk calls `DeskVault.reserveAtomicInventory()` to move funds from the maker's free balance to a reserved state.
-3. **Escrow Pull**: AtomicDesk then calls `SettlementEscrow.reserve()`, which in turn calls `DeskVault.pullFromDeskForEscrow()` to pull the reserved funds into the SettlementEscrow contract.
-4. **Settlement**: Upon successful settlement, the SettlementEscrow contract transfers the collateral directly to the taker.
-5. **Refund**: In a refund scenario, SettlementEscrow calls `DeskVault.returnEscrowCollateral()` to return the funds to the maker's free balance in the vault.
+1. **Reserve**: `reserveAtomicSwap` locks base collateral via encumbrance.
+2. **Settle**:
+   - Unlock collateral.
+   - Settle fee and active credit indexes.
+   - Decrease principal/totalDeposits/trackedBalance by `amount`.
+   - Transfer base asset to taker.
+3. **Refund**: Unlock collateral only (no asset transfer).
 
 ---
 
@@ -219,12 +215,12 @@ The system uses CLSAG (Concise Linkable Spontaneous Anonymous Group) adaptor sig
 
 ```solidity
 settlementDigest = keccak256(abi.encodePacked(
-    auctionId,
-    deskId,
-    quoteIn,
-    baseOut,
-    takerAddr,
-    deskAddr,
+    counter,        // global reservation counter
+    positionKey,    // Position NFT binding
+    quoteToken,
+    baseToken,
+    taker,
+    desk,
     chainId
 ))
 ```
@@ -261,8 +257,8 @@ The Mailbox contract provides encrypted, authenticated communication between swa
 ```solidity
 mapping(uint256 => bool) internal slotAuthorized;
 
-function authorizeReservation(uint256 reservationId) external
-function revokeReservation(uint256 reservationId) external
+function authorizeReservation(bytes32 reservationId) external
+function revokeReservation(bytes32 reservationId) external
 ```
 
 - Slots authorized only during active reservations
@@ -290,25 +286,19 @@ sequenceDiagram
     participant T as Taker
     participant AD as AtomicDesk
     participant SE as SettlementEscrow
-    participant DV as DeskVault
+    participant P as Pools/Encumbrance
     participant MB as Mailbox
     participant M as Maker
     participant XMR as Monero Network
 
-    M->>AD: registerDesk(tokenA, tokenB, baseIsA)
-    M->>DV: configureAtomicDesk(tokenA, tokenB, true)
-    M->>DV: depositA(tokenA, tokenB, amount)
+    M->>AD: registerDesk(positionId, poolIdA, poolIdB, baseIsA)
     
     M->>AD: reserveAtomicSwap(deskId, taker, asset, amount, digest, expiry)
     Note right of AD: Orchestrates collateral reservation
-    AD->>DV: reserveAtomicInventory(deskId, baseIsA, amount)
-    AD->>SE: reserve(taker, maker, tokenA, tokenB, baseIsA, amount, digest, 0)
-    SE->>DV: pullFromDeskForEscrow(maker, tokenA, tokenB, baseIsA, amount)
+    AD->>P: lockCollateral(positionKey, basePoolId, amount)
     SE->>MB: authorizeReservation(reservationId)
     
-    M->>AD: setHashlock(reservationId, H(τ))
-    Note right of AD: Proxies call to SettlementEscrow
-    AD->>SE: setHashlock(reservationId, H(τ))
+    M->>SE: setHashlock(reservationId, H(τ))
     
     T->>MB: publishContext(reservationId, encryptedContext)
     M->>MB: publishPreSig(reservationId, encryptedPresig)
@@ -317,7 +307,8 @@ sequenceDiagram
     T->>XMR: broadcastTransaction(completedCLSAG)
     
     M->>SE: settle(reservationId, τ)
-    SE-->>T: call{value: amount} for ETH (safeTransfer for ERC20)
+    SE->>P: unlockCollateral(positionKey, basePoolId, amount)
+    SE-->>T: transfer(amount)
 ```
 
 ### 6.2 Refund Path: Failed Swap
@@ -326,15 +317,14 @@ sequenceDiagram
 sequenceDiagram
     participant C as Committee
     participant SE as SettlementEscrow
-    participant DV as DeskVault
+    participant P as Pools/Encumbrance
     participant M as Maker
     participant XMR as Monero Network
 
     Note over C: Wait for safety window
     C->>XMR: verifyNoSpend(expectedTxId)
     C->>SE: refund(reservationId, noSpendEvidence)
-    SE->>DV: returnEscrowCollateral(maker, tokenA, tokenB, baseIsA, amount)
-    SE-->>M: collateral returned to DeskVault
+    SE->>P: unlockCollateral(positionKey, basePoolId, amount)
 ```
 
 ### 6.3 Error Handling
@@ -391,7 +381,7 @@ sequenceDiagram
 ### 7.3 Economic Security
 
 #### Collateralization
-- All EVM assets fully collateralized in DeskVault
+- All EVM assets fully collateralized by Position NFT principal and encumbrance
 - No fractional reserves or lending
 - Atomic settlement prevents partial execution
 
@@ -413,24 +403,20 @@ sequenceDiagram
 
 ```solidity
 // 1. Setup desk
-vault.configureAtomicDesk(tokenA, tokenB, true);
-atomicDesk.registerDesk(tokenA, tokenB, baseIsA);
+atomicDesk.registerDesk(positionId, poolIdA, poolIdB, baseIsA);
 
-// 2. Deposit inventory
-vault.depositA(tokenA, tokenB, amount);
-
-// 3. Create reservation
-uint256 reservationId = atomicDesk.reserveAtomicSwap(
+// 2. Create reservation
+bytes32 reservationId = atomicDesk.reserveAtomicSwap(
     deskId, taker, asset, amount, settlementDigest, expiry
 );
 
-// 4. Set hashlock
-atomicDesk.setHashlock(reservationId, keccak256(abi.encodePacked(tau)));
+// 3. Set hashlock
+escrow.setHashlock(reservationId, keccak256(abi.encodePacked(tau)));
 
-// 5. Handle mailbox messages
+// 4. Handle mailbox messages
 mailbox.publishPreSig(reservationId, encryptedPresig);
 
-// 6. Settle when ready
+// 5. Settle when ready
 escrow.settle(reservationId, tau);
 ```
 
@@ -438,7 +424,7 @@ escrow.settle(reservationId, tau);
 
 ```solidity
 // 1. Verify reservation exists
-AtomicDesk.Reservation memory reservation = atomicDesk.getReservation(reservationId);
+AtomicTypes.Reservation memory reservation = atomicDesk.getReservation(reservationId);
 
 // 2. Send Monero context
 mailbox.publishContext(reservationId, encryptedContext);
@@ -476,17 +462,16 @@ function monitorReservations() external {
 
 ```solidity
 // Deployment order
-1. DeskVault
-2. SettlementEscrow(vault, router, governor, safetyWindow)
-3. AtomicDesk(vault, escrow)
-4. Mailbox(escrow)
+1. PositionNFT
+2. Diamond (AtomicDeskFacet + SettlementEscrowFacet)
+3. Mailbox(escrow = diamond)
+4. EncPubRegistry
 
 // Configuration
-vault.configureSettlementEscrow(escrow);
-vault.configureAtomicDeskController(atomicDesk);
-vault.setTrustedDeskAgent(atomicDesk, true);
-escrow.configureAtomicDesk(atomicDesk);
 escrow.configureMailbox(mailbox);
+escrow.configureAtomicDesk(diamond); // optional override
+escrow.setRefundSafetyWindow(3 days);
+escrow.setCommittee(member, true);
 ```
 
 ### 9.2 Parameters
@@ -512,18 +497,18 @@ uint256 public constant MAX_ENVELOPE_BYTES = 4096;     // Mailbox
 
 ```solidity
 // AtomicDesk
-event ReservationCreated(uint256 indexed reservationId, bytes32 indexed deskId, ...);
-event HashlockSet(uint256 indexed reservationId, bytes32 hashlock);
+event ReservationCreated(bytes32 indexed reservationId, bytes32 indexed deskId, ...);
+event HashlockSet(bytes32 indexed reservationId, bytes32 hashlock);
 event DeskRegistered(bytes32 indexed deskId, address indexed maker, bool baseIsA);
 
 // SettlementEscrow  
-event ReservationSettled(uint256 indexed reservationId, bytes32 tau);
-event ReservationRefunded(uint256 indexed reservationId, bytes32 evidence);
+event ReservationSettled(bytes32 indexed reservationId, bytes32 tau);
+event ReservationRefunded(bytes32 indexed reservationId, bytes32 evidence);
 
 // Mailbox
-event ContextPublished(uint256 indexed reservationId, address indexed taker, bytes envelope);
-event PreSigPublished(uint256 indexed reservationId, address indexed desk, bytes envelope);
-event FinalSigPublished(uint256 indexed reservationId, address indexed poster, bytes envelope);
+event ContextPublished(bytes32 indexed reservationId, address indexed taker, bytes envelope);
+event PreSigPublished(bytes32 indexed reservationId, address indexed desk, bytes envelope);
+event FinalSigPublished(bytes32 indexed reservationId, address indexed poster, bytes envelope);
 ```
 
 ### 10.2 Health Metrics
@@ -574,5 +559,5 @@ Key benefits:
 - **Trustless Operation**: No intermediaries or custodians required
 - **Privacy Preservation**: Monero transaction details remain confidential  
 - **Full Collateralization**: All EVM assets backed by real inventory
-- **Flexible Integration**: Compatible with existing DeskVault infrastructure
+- **Flexible Integration**: Compatible with Position NFT + encumbrance accounting
 - **Committee Oversight**: Safety mechanisms for edge cases

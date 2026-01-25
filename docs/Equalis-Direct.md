@@ -1,6 +1,6 @@
 # Equalis Direct - P2P Lending Design Document
 
-**Version:** 3.1 (Updated for centralized encumbrance and fee index systems)  
+**Version:** 4.0 (Updated for native ETH support and centralized encumbrance/fee index systems)  
 
 ---
 
@@ -35,6 +35,7 @@ Equalis Direct is a P2P lending system that enables bilateral loans between Posi
 - **Per-pool isolation**: Each pool maintains independent Direct exposure tracking
 - **Upfront fee realization**: Predictable, fixed-cost lending semantics
 - APR-based interest calculation with simple interest model
+- **Native ETH support**: Full support for native ETH as borrow or collateral asset via `LibCurrency`
 
 ### Loan Type Comparison
 
@@ -570,7 +571,7 @@ struct DirectRollingConfig {
     uint16 minRollingApyBps;          // e.g., 1 (0.01%)
     uint16 maxRollingApyBps;          // e.g., 10000 (100%)
     uint16 defaultPenaltyBps;         // Penalty rate for defaults
-    uint64 minPaymentWei;             // Minimum payment to avoid dust
+    uint16 minPaymentBps;             // Minimum payment as bps of outstanding principal
 }
 ```
 
@@ -866,7 +867,7 @@ struct DirectRollingConfig {
     uint16 minRollingApyBps;
     uint16 maxRollingApyBps;
     uint16 defaultPenaltyBps;
-    uint64 minPaymentWei;
+    uint16 minPaymentBps;
 }
 ```
 
@@ -1586,6 +1587,77 @@ Payments apply to arrears first, then current interest, then principal (if allow
 ### Property 15: Active Credit Time Gate
 Active Credit rewards only accrue after 24-hour maturity with weighted dilution.
 
+### Property 16: Native ETH Handling
+Native ETH operations correctly update `nativeTrackedTotal` and use `LibCurrency` for all transfers.
+
 ---
 
-**Document Version:** 6.0
+## Native ETH Support
+
+Equalis Direct fully supports native ETH (represented as `address(0)`) as either the borrow asset or collateral asset via the `LibCurrency` library.
+
+### How Native ETH Works
+
+**Representation**: Native ETH pools use `underlying = address(0)`. The `LibCurrency.isNative(token)` function returns `true` for `address(0)`.
+
+**Tracked Balance Accounting**: The protocol maintains a global `nativeTrackedTotal` that tracks all native ETH obligations across pools. This prevents double-counting and ensures accurate balance calculations.
+
+### Term Loan Operations with Native ETH
+
+**Accepting Offers (Borrower receives native ETH)**:
+- When the borrow asset is native ETH, the principal is transferred via `LibCurrency.transfer()`
+- `nativeTrackedTotal` is decremented before the transfer
+- Failed transfers revert with `NativeTransferFailed`
+
+**Repaying Loans (Borrower pays native ETH)**:
+- When repaying a loan where the borrow asset is native ETH, users send ETH via `msg.value`
+- `LibCurrency.assertMsgValue()` validates the exact amount
+- `LibCurrency.pull()` handles the native ETH receipt and updates `nativeTrackedTotal`
+
+**Collateral Transfers**:
+- Native ETH collateral is transferred via `LibCurrency.transfer()` using a low-level call
+- All transfers occur after state updates to prevent reentrancy issues
+
+### Rolling Loan Operations with Native ETH
+
+**Making Payments**:
+- When the borrow asset is native ETH, users send ETH via `msg.value`
+- The facet validates the exact amount using `LibCurrency.assertMsgValue()`
+- Payments are transferred to the lender via `LibCurrency.transfer()`
+
+**Full Repayment**:
+- Same mechanics as term loan repayment
+- `nativeTrackedTotal` is properly updated for all transfers
+
+### Security Properties
+
+1. **No Double Counting**: `nativeTrackedTotal` prevents the same ETH from being counted in multiple pools
+2. **Exact Value Enforcement**: `msg.value` must exactly match expected amounts
+3. **Reentrancy Protection**: All native ETH transfers occur after state updates
+4. **Balance Isolation**: Each pool's `trackedBalance` is independent
+5. **Overflow Protection**: Solidity 0.8+ arithmetic checks apply
+
+### Example: Native ETH Term Loan
+
+```solidity
+// Lender posts offer to lend native ETH
+DirectOfferParams({
+    lenderPoolId: nativeEthPoolId,      // Pool with underlying = address(0)
+    collateralPoolId: usdcPoolId,
+    borrowAsset: address(0),            // Native ETH
+    collateralAsset: usdc,
+    principal: 10 ether,
+    collateralLockAmount: 25000e6,      // 25,000 USDC
+    ...
+});
+
+// Borrower accepts - receives 10 ETH (minus fees)
+// Borrower's USDC is locked as collateral
+
+// At repayment - borrower sends ETH via msg.value
+repay{value: 10 ether}(agreementId);
+```
+
+---
+
+**Document Version:** 4.0 (Updated for native ETH support)

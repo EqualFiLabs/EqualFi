@@ -4,12 +4,13 @@
 
 Equalis Isolated Prediction Markets V1 introduces permissionless binary outcome markets as an isolated spoke that draws capacity from Equalis single-asset pools without exposing passive depositors to prediction market risk. The system leverages the existing Position NFT infrastructure, pool system, and encumbrance mechanisms to create isolated prediction markets where LPs explicitly underwrite outcome payouts.
 
-The prediction market is fundamentally a temporary settlement domain: it sells outcome claims via MAM curves, settles once via UMA's optimistic oracle, then closes forever. No rolling risk, no rehypothecation, no contagion to passive depositors.
+The prediction market is fundamentally a temporary settlement domain: it sells outcome claims via MAM curves, settles once via OBR (bonded assertions + dispute vote), then closes forever. No rolling risk, no rehypothecation, no contagion to passive depositors.
 
 Key design principles:
 - **Isolation by encumbrance**: LP capital uses `LibEncumbrance.position(positionKey, poolId).directLent` and trader stakes use `LibEncumbrance.position(positionKey, poolId).directLocked`
 - **MAM curve pricing**: YES and NO outcomes priced via time-weighted curves with shared liability cap
-- **UMA oracle resolution**: Optimistic oracle with dispute mechanism for fair outcome determination
+- **OBR resolution**: Per-market domain with bonded assertions and dispute vote
+- **Per-market bonding**: Each market configures its own bond asset and bonding parameters
 - **Stablecoin settlement**: V1 requires collateral pool to be a stablecoin for direct USD accounting
 - **No early redemption**: LPs and traders cannot redeem before settlement; Position NFTs can be transferred and partially split
 
@@ -35,7 +36,7 @@ graph TB
     
     subgraph "External Dependencies"
         PNFT[PositionNFT]
-        UMA[UMA Oracle]
+        OBR[OBR ResolutionCore]
         FI[FeeIndex]
         TR[Treasury]
     end
@@ -44,7 +45,7 @@ graph TB
     PTF --> LPS
     PTF --> LMM
     PSF --> LPS
-    PSF --> UMA
+    PSF --> OBR
     PVF --> LPS
     
     PTF --> FI
@@ -62,9 +63,9 @@ sequenceDiagram
     participant Storage
     participant Pool
     participant MamCurve
-    participant UMA
+    participant OBR
     
-    Note over User,UMA: LP Encumbrance Flow
+    Note over User,OBR: LP Encumbrance Flow
     User->>PredFacet: lpEncumber(positionId, predMarketId, amount)
     PredFacet->>Pool: getUserPrincipal(positionKey)
     PredFacet->>Storage: getLockedAmounts(positionKey)
@@ -72,7 +73,7 @@ sequenceDiagram
     PredFacet->>Storage: increase directLent encumbrance (positionKey, poolId)
     PredFacet->>Storage: updateEncumberedLP(+amount)
     
-    Note over User,UMA: Buy YES Flow
+    Note over User,OBR: Buy YES Flow
     User->>PredFacet: buyYes(positionId, predMarketId, collateralAmount)
     PredFacet->>Storage: verifyState(Created)
     PredFacet->>MamCurve: calculateYesSharesOut(collateralAmount)
@@ -82,15 +83,15 @@ sequenceDiagram
     PredFacet->>Storage: updatePositionShares()
     PredFacet->>FI: routeFees()
     
-    Note over User,UMA: Resolution Flow
-    User->>PredFacet: requestResolution(predMarketId)
+    Note over User,OBR: Resolution Flow
+    User->>PredFacet: assertOutcome(predMarketId, outcome, bondInput)
     PredFacet->>Storage: verifyState(TradingHalted)
-    PredFacet->>UMA: submitQuestion(resolutionCriteria)
+    PredFacet->>OBR: assertOutcome(domainId, claimId, outcome, bondInput)
     PredFacet->>Storage: setState(Resolving)
-    UMA-->>PredFacet: callback(outcome)
-    PredFacet->>Storage: setState(Resolved/Invalid)
+    OBR-->>PredFacet: onClaimFinalized(outcome)
+    PredFacet->>Storage: setState(Resolved/NoSettle)
     
-    Note over User,UMA: Settlement Flow
+    Note over User,OBR: Settlement Flow
     User->>PredFacet: redeemShares(positionId, predMarketId)
     PredFacet->>Storage: verifyState(Resolved)
     PredFacet->>PredFacet: calculatePayout()
@@ -105,11 +106,11 @@ stateDiagram-v2
     [*] --> Created: createPredictionMarket()
     Created --> Created: lpEncumber(), buyYes(), buyNo()
     Created --> TradingHalted: block.timestamp >= resolutionTime (lazy on next interaction)
-    TradingHalted --> Resolving: requestResolution()
-    Resolving --> Resolved: UMA returns YES/NO
-    Resolving --> Invalid: UMA returns INVALID
+    TradingHalted --> Resolving: assertOutcome()
+    Resolving --> Resolved: OBR finalizes YES/NO
+    Resolving --> NoSettle: OBR finalizes NO_SETTLE
     Resolved --> [*]: all settlements complete
-    Invalid --> [*]: all refunds complete
+    NoSettle --> [*]: all refunds complete
 ```
 
 ## Components and Interfaces
@@ -120,25 +121,38 @@ Handles market creation and LP operations.
 
 ```solidity
 interface IPredictionMarketFacet {
-    function createPredictionMarket(PredictionMarketParams calldata params) external returns (uint256 predMarketId);
+    function createPredictionMarket(PredictionMarketParams calldata params)
+        external
+        returns (uint256 predMarketId, uint256 domainId);
     function lpEncumber(uint256 positionId, uint256 predMarketId, uint256 amount) external;
-    function setOracleAllowlist(address oracleAdapter, bool allowed) external;
-    function setOracleAdapter(address oracleAdapter) external;
     function setMarketBounds(PredictionMarketBounds calldata bounds) external;
 }
 
-V1 uses a single global UMA adapter set via `setOracleAdapter`; markets do not select an adapter per-market.
+Each market registers its own OBR domain (outcomeCount = 3, callback = PredictionSettlementFacet).
 
 struct PredictionMarketParams {
     uint256 collateralPoolId;
     string question;
     bytes resolutionCriteria;
     uint64 resolutionTime;
-    uint32 disputeWindow;
     PredictionFeeConfig feeConfig;
     MamCurveConfig mamConfigYES;
     MamCurveConfig mamConfigNO;
     uint256 maxNotionalCap;
+    PredictionObrConfig obrConfig;
+}
+
+struct PredictionObrConfig {
+    address bondAsset;
+    uint64 assertLiveness;
+    uint64 commitDuration;
+    uint64 revealDuration;
+    uint256 minAssertBond;
+    uint256 minDisputeBond;
+    uint256 minVoteBond;
+    uint16 voterRewardBps;
+    uint16 treasuryFeeBps;
+    address treasury;
 }
 
 struct MamCurveConfig {
@@ -174,20 +188,27 @@ Handles resolution and settlement operations.
 
 ```solidity
 interface IPredictionSettlementFacet {
-    function requestResolution(uint256 predMarketId) external;
-    function settleResolution(uint256 predMarketId, PredictionOutcome outcome) external;
+    function assertOutcome(
+        uint256 predMarketId,
+        PredictionOutcome outcome,
+        bytes calldata data,
+        BondInput calldata bondInput
+    ) external;
+    function disputeOutcome(uint256 predMarketId, BondInput calldata bondInput) external;
+    function finalizeOutcome(uint256 predMarketId) external;
     function redeemShares(uint256 positionId, uint256 predMarketId) external returns (uint256 payout);
     function refundTrader(uint256 positionId, uint256 predMarketId) external returns (uint256 refund);
     function settleLp(uint256 positionId, uint256 predMarketId) external returns (uint256 returned);
 }
 
 enum PredictionOutcome {
-    Pending,
+    NoSettle,
     Yes,
-    No,
-    Invalid
+    No
 }
 ```
+
+`NoSettle` triggers the refund path: users can call `refundTrader` for their position, and LPs can call `settleLp` to unlock encumbrance.
 
 ### PredictionViewFacet
 
@@ -207,13 +228,16 @@ interface IPredictionViewFacet {
 }
 ```
 
-### UMA Oracle Adapter Interface
+### OBR Callback Interface
 
 ```solidity
-interface IUmaOracleAdapter {
-    function submitQuestion(bytes calldata resolutionCriteria, uint256 bondAmount) external returns (bytes32 questionId);
-    function getOutcome(bytes32 questionId) external view returns (PredictionOutcome outcome, bool finalized);
-    function isAllowlisted() external view returns (bool);
+interface IResolutionDomainCallback {
+    function onClaimFinalized(
+        uint256 domainId,
+        bytes32 claimId,
+        uint8 outcome,
+        bytes calldata data
+    ) external;
 }
 ```
 
@@ -230,7 +254,7 @@ library PredictionTypes {
         TradingHalted,
         Resolving,
         Resolved,
-        Invalid
+        NoSettle
     }
     
     struct PredictionMarket {
@@ -239,17 +263,16 @@ library PredictionTypes {
         string question;
         bytes resolutionCriteria;
         uint64 resolutionTime;
-        uint32 disputeWindow;
+        uint256 obrDomainId;
+        bytes32 obrClaimId;
         PredictionFeeConfig feeConfig;
         MamCurveConfig mamConfigYES;
         MamCurveConfig mamConfigNO;
         uint256 maxNotionalCap;
-        address oracleAdapter; // global adapter used for V1
         
         // Market state
         PredictionState state;
         PredictionOutcome outcome;
-        bytes32 umaQuestionId;
         
         // Totals
         uint256 totalYesShares;
@@ -293,7 +316,6 @@ library LibPredictionStorage {
     
     struct PredictionStorage {
         // Configuration
-        mapping(address => bool) allowedOracles;
         PredictionMarketBounds bounds;
         
         // Markets
@@ -311,8 +333,12 @@ library LibPredictionStorage {
     }
     
     struct PredictionMarketBounds {
-        uint32 minDisputeWindow;
-        uint32 maxDisputeWindow;
+        uint64 minAssertLiveness;
+        uint64 maxAssertLiveness;
+        uint64 minCommitDuration;
+        uint64 maxCommitDuration;
+        uint64 minRevealDuration;
+        uint64 maxRevealDuration;
         uint16 maxTradingFeeBps;
         uint16 maxResolutionFeeBps;
         uint256 minResolutionTimeBuffer;  // min time from now to resolutionTime
@@ -459,7 +485,7 @@ library LibPredictionCurve {
 
 ### Property 2: Market Creation Validation
 
-*For any* market creation attempt with invalid parameters (non-stablecoin collateral pool, past resolution time, or out-of-bounds dispute window), the Prediction_Market_Factory shall revert with the appropriate error.
+*For any* market creation attempt with invalid parameters (non-stablecoin collateral pool, past resolution time, or out-of-bounds OBR config), the Prediction_Market_Factory shall revert with the appropriate error.
 
 **Validates: Requirements 1.3, 1.4, 1.5**
 
@@ -552,9 +578,9 @@ This cap is shared across both curves.
 
 *For any* market:
 - Created → TradingHalted: when block.timestamp >= resolutionTime
-- TradingHalted → Resolving: when requestResolution() is called
-- Resolving → Resolved: when UMA returns YES or NO
-- Resolving → Invalid: when UMA returns INVALID
+- TradingHalted → Resolving: when assertOutcome() is called
+- Resolving → Resolved: when OBR finalizes YES or NO
+- Resolving → NoSettle: when OBR finalizes NO_SETTLE
 
 No other state transitions are valid.
 
@@ -564,10 +590,10 @@ No other state transitions are valid.
 
 *For any* market:
 - In Created state: lpEncumber, buyYes, buyNo are allowed
-- In TradingHalted state: only requestResolution is allowed
-- In Resolving state: no user actions allowed (waiting for oracle)
+- In TradingHalted state: only assertOutcome is allowed
+- In Resolving state: no user actions allowed (waiting for OBR)
 - In Resolved state: only redeemShares and settleLp are allowed
-- In Invalid state: only refundTrader and settleLp are allowed
+- In NoSettle state: only refundTrader and settleLp are allowed
 
 **Validates: Requirements 6.3, 7.1, 7.6**
 
@@ -589,9 +615,9 @@ No other state transitions are valid.
 
 **Validates: Requirements 9.4, 9.5, 10.4, 10.5, 11.3, 11.4, 12.3**
 
-### Property 17: Invalid Refund Calculation
+### Property 17: NoSettle Refund Calculation
 
-*For any* trader refund in Invalid state:
+*For any* trader refund in NoSettle state:
 refund = costBasis - (costBasis * proportionalFeesAlreadyPaid / totalTraderPremiums)
 
 The refund returns the trader's cost basis minus their proportional share of fees already paid.
@@ -634,8 +660,7 @@ The refund returns the trader's cost basis minus their proportional share of fee
 // Market Creation Errors
 error Pred_InvalidCollateralPool(uint256 poolId);
 error Pred_InvalidResolutionTime(uint64 resolutionTime, uint64 currentTime);
-error Pred_InvalidDisputeWindow(uint32 disputeWindow, uint32 minWindow, uint32 maxWindow);
-error Pred_OracleNotAllowed(address oracleAdapter);
+error Pred_InvalidObrConfig();
 error Pred_MarketNotFound(uint256 predMarketId);
 
 // LP Errors
@@ -652,7 +677,7 @@ error Pred_ZeroAmount();
 // Resolution Errors
 error Pred_ResolutionNotReady(uint256 predMarketId, uint64 resolutionTime);
 error Pred_AlreadyResolved(uint256 predMarketId);
-error Pred_OracleNotFinalized(bytes32 questionId);
+error Pred_ClaimNotFinalized(bytes32 claimId);
 
 // Settlement Errors
 error Pred_NotResolved(uint256 predMarketId);
@@ -684,7 +709,7 @@ Unit tests will cover:
 - MAM curve price calculations at various time points
 - Liability bound calculations with various market states
 - State transitions and action restrictions
-- Settlement calculations for YES wins, NO wins, and Invalid
+- Settlement calculations for YES wins, NO wins, and NoSettle
 - Fee routing calculations
 
 ### Property-Based Tests
@@ -709,7 +734,7 @@ Integration tests will cover:
 - Full market lifecycle (create → trade → resolve → settle)
 - Multi-trader scenarios with YES and NO positions
 - LP economics (encumber → earn fees → settle)
-- Invalid resolution and refund flow
+- NoSettle resolution and refund flow
 - Position split with prediction market exposures
 - Multi-market isolation verification
 
@@ -719,4 +744,4 @@ Integration tests will cover:
 - **Property Testing**: Foundry's built-in fuzzing
 - **Coverage Target**: 90%+ line coverage for core logic
 - **Gas Benchmarks**: Track gas costs for all user-facing operations
-- **UMA Mocking**: Mock UMA oracle for deterministic testing
+- **OBR Mocking**: Mock OBR core for deterministic testing

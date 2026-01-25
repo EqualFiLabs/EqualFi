@@ -1,6 +1,6 @@
 # Self-Secured Credit - Design Document
 
-**Version:** 1.1 (Updated for centralized fee index and encumbrance systems)
+**Version:** 2.0 (Updated for native ETH support and centralized fee index/encumbrance systems)
 
 ---
 
@@ -40,6 +40,7 @@ Self-Secured Credit is a deterministic lending system where users borrow against
 | **No Liquidation Auctions** | Defaults resolve via penalty seizure, not market sales |
 | **Fee Base Normalization** | Borrowing reduces fee accrual weight to prevent farming |
 | **Position NFT Ownership** | All state tied to transferable ERC-721 tokens |
+| **Native ETH Support** | Full support for native ETH pools via `LibCurrency` |
 
 ### System Participants
 
@@ -1255,6 +1256,35 @@ missedEpochs = (now - lastPayment) / paymentInterval
 
 No reliance on external triggers or keepers.
 
+### 11. Native ETH Support
+
+Self-Secured Credit fully supports native ETH (represented as `address(0)`) pools via `LibCurrency`:
+
+**Deposits with Native ETH**:
+- Users send ETH via `msg.value` when depositing to native ETH pools
+- `LibCurrency.assertMsgValue()` validates the exact amount
+- `nativeTrackedTotal` is incremented to track protocol-held ETH
+
+**Withdrawals with Native ETH**:
+- Native ETH is transferred via `LibCurrency.transfer()` using a low-level call
+- `nativeTrackedTotal` is decremented before transfer
+- Failed transfers revert with `NativeTransferFailed`
+
+**Borrowing/Repaying Native ETH**:
+- Borrowed native ETH is transferred to the borrower
+- Repayments can be made via `msg.value`
+- All balance tracking uses `nativeTrackedTotal`
+
+**Flash Loans with Native ETH**:
+- Native ETH pools support flash loans
+- Repayment is verified by checking contract balance increase
+- Fee tracking updates `nativeTrackedTotal` appropriately
+
+**Security Properties**:
+- `LibCurrency.assertZeroMsgValue()` prevents accidental ETH sends on non-native operations
+- All native ETH transfers occur after state updates to prevent reentrancy issues
+- `nativeTrackedTotal` prevents double-counting across pools
+
 ---
 
 ## Appendix: Correctness Properties
@@ -1318,4 +1348,4 @@ LibEncumbrance.total(positionKey, poolId) ≤ userPrincipal[positionKey]
 
 ---
 
-**Document Version:** 1.1 (Updated for centralized fee index and encumbrance systems)
+**Document Version:** 2.0 (Updated for native ETH support and centralized fee index/encumbrance systems)

@@ -1,7 +1,6 @@
 # CLSAG Adaptor Signature Specification
 
 **Version:** 1.0
-**Status:** Early-stage research (not production-ready)
 
 ---
 
@@ -95,13 +94,13 @@ Transcript T binds the following:
 ```
 T = Transcript(
     namespace,
-    ring_hash,            // H(ring public keys)
+    ring_hash,            // Sha3_256(ring public keys)
     key_image,            // 32B
-    m,                    // CLSAG message hash
+    m,                    // Sha3_256(CLSAG message bytes)
     j,                    // response index
     swapId,               // uint256 reservationId from SettlementEscrow
     chain_tag,            // binding (e.g. "evm:31337")
-    board_id,             // binding (bytes)
+    position_key,         // binding (bytes32)
     settlementDigest,     // 32B digest built by AtomicDesk/SDK for this reservation
     backendId=0x01        // CLSAG backend
 )
@@ -147,7 +146,7 @@ j = HashToInt(
     ) mod n
 ```
 
-where `settlement_hash` is a hash of the settlement context binding (chain_tag, board_id, settlementDigest).
+where `settlement_hash = Sha3_256(chain_tag || 0x00 || position_key || settlementDigest)`.
 
 ---
 
@@ -164,7 +163,7 @@ struct PreSig {
     D_tilde: point                    // CLSAG D point
     pseudo_out: point                 // pseudo-output commitment for the input
     j: u32                            // biased response index
-    settlement_ctx: { chain_tag, board_id, settle_digest }
+    settlement_ctx: { chain_tag, position_key, settle_digest }
     pre_hash: bytes32                 // binding hash used for consistency checks
 }
 ```
@@ -173,7 +172,7 @@ struct PreSig {
 
 - All scalars mod ℓ
 - Points canonical (compressed Ed25519 form)
-- `pre_hash` is the Sha3_256 digest of the concatenated preimage: `ring_hash || message_hash || j_bytes || swap_id || settle_digest`. This deterministically binds the CLSAG pre-signature to the swap context.
+- `pre_hash` is the Sha3_256 digest of the concatenated preimage: `ring_hash || message_hash || j_bytes || swap_id || settlement_hash`. This deterministically binds the CLSAG pre-signature to the swap context.
 - `sTilde_j` = s[j] + τ mod ℓ
 - Mailbox payloads are size-constrained; implementations should remain within mailbox limits.
 

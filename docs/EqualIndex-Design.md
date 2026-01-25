@@ -1,6 +1,6 @@
 # EqualIndex - Design Document
 
-**Version:** 3.0
+**Version:** 4.0 (Updated for native ETH support)
 
 ---
 
@@ -42,6 +42,7 @@ EqualIndex is a tokenized asset basket system that enables users to create, mana
 | **Position Integration** | Mint/burn using Position NFT collateral (centralized encumbrance system) |
 | **Pool Fee Routing** | Configurable portion of fees routed to underlying asset pool depositors |
 | **No External Oracles** | Deterministic pricing based on bundle composition |
+| **Native ETH Support** | Full support for native ETH as a basket component via `LibCurrency` |
 
 
 ### System Participants
@@ -164,10 +165,9 @@ struct EqualIndexStorage {
     mapping(uint256 => Index) indexes;                               // Index configurations
     mapping(uint256 => mapping(address => uint256)) vaultBalances;   // NAV per asset
     mapping(uint256 => mapping(address => uint256)) feePots;         // Accumulated fees per asset
-    mapping(address => uint256) protocolBalances;                    // Legacy (fees now transfer directly)
     mapping(uint256 => uint256) indexToPoolId;                       // Index token pool mapping
-    uint16 poolFeeShareBps;                                          // Share routed to pool fee index (flash loans)
-    uint16 mintBurnFeeIndexShareBps;                                 // Share routed to pool fee index (mint/burn)
+    uint16 poolFeeShareBps;                                          // Share routed through pool fee router (flash loans)
+    uint16 mintBurnFeeIndexShareBps;                                 // Share routed through pool fee router (mint/burn)
 }
 ```
 
@@ -177,7 +177,6 @@ struct EqualIndexStorage {
 |------|---------|------------|
 | **Vault Balances** | Core NAV backing tokens | Mint (increase), Burn (decrease), Flash (temporary) |
 | **Fee Pots** | Holder rewards | Mint fees, Burn fees, Flash fees |
-| **Protocol Balances** | Legacy tracking | Deprecated - fees transfer directly to treasury |
 
 ---
 
@@ -221,7 +220,6 @@ struct CreateIndexParams {
     uint16[] mintFeeBps;      // Per-asset mint fee (basis points)
     uint16[] burnFeeBps;      // Per-asset burn fee (basis points)
     uint16 flashFeeBps;       // Flash loan fee (basis points)
-    uint16 protocolCutBps;    // Protocol share of fees (basis points)
 }
 ```
 
@@ -232,7 +230,6 @@ struct CreateIndexParams {
 | Mint fee per asset | 1000 bps (10%) | Prevent excessive entry costs |
 | Burn fee per asset | 1000 bps (10%) | Prevent excessive exit costs |
 | Flash fee | 1000 bps (10%) | Competitive with other flash providers |
-| Protocol cut | 5000 bps (50%) | Ensure holders receive majority of fees |
 
 ### Pool Requirement
 
@@ -385,9 +382,8 @@ Flash loan fees are distributed through the centralized fee mechanism:
 
 | Recipient | Share | Purpose |
 |-----------|-------|---------|
-| **Fee Index (Pool Depositors)** | `poolFeeShareBps` (default 10%) | Rewards underlying pool depositors |
-| **Fee Pot** | Remainder after protocol | Distributed to index holders |
-| **Protocol (ACI/FI/Treasury)** | `protocolCutBps` of remainder | Protocol revenue via LibFeeRouter |
+| **Pool Share** | `poolFeeShareBps` (default 10%) | Routed through fee router (FI/ACI/Treasury) |
+| **Fee Pot** | Remainder after pool share | Distributed to index holders |
 
 ---
 
@@ -503,7 +499,7 @@ event EncumbranceDecreased(
 
 ### Fee Distribution Architecture
 
-All index fees are distributed through a centralized 3-way split mechanism:
+All index fees are distributed through a centralized 2-way split:
 
 ```solidity
 function _distributeIndexFee(
@@ -513,20 +509,13 @@ function _distributeIndexFee(
     uint256 fee,
     uint16 feeIndexShareBps
 ) internal {
-    // 1. Fee Index share (to underlying asset pool depositors)
+    // 1. Pool share routed through fee router (FI/ACI/Treasury)
     uint256 poolShare = fee × feeIndexShareBps / 10_000;
-    LibFeeIndex.accrueWithSourceUsingBacking(poolId, poolShare, INDEX_FEE_SOURCE, poolShare);
-    
-    // 2. Split remainder between Fee Pot and Protocol routing
-    uint256 remainder = fee - poolShare;
-    uint256 potFee = remainder × (10_000 - protocolCutBps) / 10_000;
-    uint256 protocolFee = remainder - potFee;
+    LibFeeRouter.routeSamePool(poolId, poolShare, INDEX_FEE_SOURCE, true, 0);
     
     // Fee Pot: distributed to index holders on redemption
+    uint256 potFee = fee - poolShare;
     feePots[indexId][asset] += potFee;
-    
-    // Protocol: routed through LibFeeRouter (ACI/FI/Treasury split)
-    LibFeeRouter.routeSamePool(poolId, protocolFee, INDEX_FEE_SOURCE, true, protocolFee);
 }
 ```
 
@@ -537,9 +526,9 @@ function _distributeIndexFee(
 | `poolFeeShareBps` | 1000 (10%) | Fee Index share for flash loan fees |
 | `mintBurnFeeIndexShareBps` | 4000 (40%) | Fee Index share for mint/burn fees |
 
-### Protocol Fee Routing
+### Pool Share Routing
 
-Protocol fees are routed through `LibFeeRouter.routeSamePool`, which splits fees between:
+Pool share amounts are routed through `LibFeeRouter.routeSamePool`, which splits fees between:
 
 | Recipient | Configuration | Purpose |
 |-----------|---------------|---------|
@@ -568,8 +557,8 @@ Holders receive their proportional share of accumulated fees on redemption:
 
 | Treasury State | Behavior |
 |----------------|----------|
-| **Configured** | Protocol share routed through `LibFeeRouter` (ACI/FI/Treasury split) |
-| **Not configured** | Full fee goes to fee pot (no protocol accumulation) |
+| **Treasury configured** | Pool share routed through `LibFeeRouter` (Treasury/ACI/FI split) |
+| **Treasury not configured** | Treasury share is zero; pool share split between ACI/FI only |
 
 ### Administrative Functions
 
@@ -579,8 +568,7 @@ function setIndexFees(
     uint256 indexId,
     uint16[] calldata mintFeeBps,
     uint16[] calldata burnFeeBps,
-    uint16 flashFeeBps,
-    uint16 protocolCutBps
+    uint16 flashFeeBps
 ) external;
 
 // Pause/unpause index (timelock only)
@@ -703,7 +691,6 @@ struct Index {
     uint16[] mintFeeBps;      // Per-asset mint fee
     uint16[] burnFeeBps;      // Per-asset burn fee
     uint16 flashFeeBps;       // Flash loan fee
-    uint16 protocolCutBps;    // Protocol share of fees
     uint256 totalUnits;       // Total supply
     address token;            // IndexToken contract address
     bool paused;              // Pause state
@@ -719,7 +706,6 @@ struct IndexView {
     uint16[] mintFeeBps;
     uint16[] burnFeeBps;
     uint16 flashFeeBps;
-    uint16 protocolCutBps;
     uint256 totalUnits;
     address token;
     bool paused;
@@ -759,8 +745,6 @@ function getVaultBalance(uint256 indexId, address asset) external view returns (
 // Get fee pot balance for specific asset
 function getFeePot(uint256 indexId, address asset) external view returns (uint256);
 
-// Get protocol balance for specific asset (legacy - always zero)
-function getProtocolBalance(address asset) external view returns (uint256);
 ```
 
 ---
@@ -779,8 +763,7 @@ EqualIndexBaseV3.CreateIndexParams memory params = EqualIndexBaseV3.CreateIndexP
     bundleAmounts: [0.5e18, 0.01e8, 10e18],  // 0.5 ETH, 0.01 BTC, 10 LINK per unit
     mintFeeBps: [50, 50, 50],                 // 0.5% mint fee each
     burnFeeBps: [50, 50, 50],                 // 0.5% burn fee each
-    flashFeeBps: 30,                          // 0.3% flash fee
-    protocolCutBps: 2000                      // 20% to protocol
+    flashFeeBps: 30                           // 0.3% flash fee
 });
 
 (uint256 indexId, address token) = adminFacet.createIndex(params);
@@ -1197,8 +1180,7 @@ CreateIndexParams({
     bundleAmounts: [0.5e18, 1000e6],  // 0.5 ETH + 1000 USDC per unit
     mintFeeBps: [100, 100],            // 1% mint fee
     burnFeeBps: [100, 100],            // 1% burn fee
-    flashFeeBps: 50,                   // 0.5% flash fee
-    protocolCutBps: 2000               // 20% to protocol
+    flashFeeBps: 50                    // 0.5% flash fee
 });
 ```
 
@@ -1217,11 +1199,13 @@ Minted: 100 index units (100e18)
 
 **Step 3: Fee Distribution**
 ```
-ETH Fee (0.5 ETH):
-  - Fee Pot: 0.5 × 80% = 0.4 ETH
-  - Protocol: 0.5 × 20% = 0.1 ETH
+ETH Fee (0.5 ETH) with 40% pool share:
+  - Pool share (fee router): 0.2 ETH
+  - Fee Pot: 0.3 ETH
 
-USDC Fee (1,000 USDC):
+USDC Fee (1,000 USDC) with 40% pool share:
+  - Pool share (fee router): 400 USDC
+  - Fee Pot: 600 USDC
   - Fee Pot: 1,000 × 80% = 800 USDC
   - Protocol: 1,000 × 20% = 200 USDC
 ```
@@ -1337,8 +1321,7 @@ CreateIndexParams({
     bundleAmounts: [1e18, 0.05e8, 50e18, 100e18],
     mintFeeBps: [25, 50, 75, 100],   // 0.25%, 0.5%, 0.75%, 1%
     burnFeeBps: [25, 50, 75, 100],   // Same tiers
-    flashFeeBps: 30,
-    protocolCutBps: 1500             // 15% to protocol
+    flashFeeBps: 30
 });
 ```
 
@@ -1356,7 +1339,7 @@ CreateIndexParams({
 | Error | Cause |
 |-------|-------|
 | `InvalidArrayLength()` | Mismatched array lengths in parameters |
-| `InvalidParameterRange(string)` | Fee or protocol cut exceeds limits |
+| `InvalidParameterRange(string)` | Fee exceeds limits |
 | `InvalidUnits()` | Units not multiple of INDEX_SCALE, exceeds supply, or insufficient balance |
 | `InvalidBundleDefinition()` | Zero bundle amounts, duplicate assets, or transfer amount mismatch |
 
@@ -1539,6 +1522,30 @@ Paused indexes reject mint/burn/flash operations while view functions remain acc
 
 Bundle composition (assets and amounts) is fixed at creation. Only fee parameters can be updated by governance.
 
+### 11. Native ETH Support
+
+EqualIndex fully supports native ETH (represented as `address(0)`) as a basket component:
+
+**Minting with Native ETH**:
+- When an index contains native ETH, users must send the exact required ETH amount via `msg.value`
+- The facet validates `msg.value` matches the expected native ETH total
+- Native ETH is tracked via `nativeTrackedTotal` to prevent double-counting
+
+**Burning with Native ETH**:
+- Native ETH payouts are transferred via low-level `call{value: amount}("")`
+- `nativeTrackedTotal` is decremented before transfer
+- Failed transfers revert with `NativeTransferFailed`
+
+**Flash Loans with Native ETH**:
+- Native ETH can be borrowed as part of flash loan bundles
+- Repayment must include the exact fee amount
+- Fee tracking updates `nativeTrackedTotal` appropriately
+
+**Security Properties**:
+- `LibCurrency.assertZeroMsgValue()` prevents accidental ETH sends on non-native operations
+- `LibCurrency.assertMsgValue()` enforces exact ETH amounts for native operations
+- All native ETH transfers occur after state updates to prevent reentrancy issues
+
 ---
 
 ## Appendix: Correctness Properties
@@ -1547,7 +1554,7 @@ Bundle composition (assets and amounts) is fixed at creation. Only fee parameter
 For any creation parameters, a valid index is created iff all parameters meet validation criteria and all assets have pools.
 
 ### Property 2: Fee Splitting Consistency
-For any fee amount: `feeIndexShare + potShare + protocolShare = totalFee`, where `feeIndexShare = fee × feeIndexShareBps / 10_000` and `protocolShare = (fee - feeIndexShare) × protocolCutBps / 10_000`.
+For any fee amount: `poolShare + potShare = totalFee`, where `poolShare = fee × feeIndexShareBps / 10_000` and `potShare = fee - poolShare`.
 
 ### Property 3: Minting Proportionality
 For indexes with existing supply, minting preserves proportional ownership across all holders.
@@ -1575,7 +1582,7 @@ Administrative functions succeed iff caller is timelock.
 
 ---
 
-**Document Version:** 3.1
+**Document Version:** 4.0
 **Last Updated:** January 2026
 
-*Changes in 3.1: Updated to reflect centralized encumbrance system (LibEncumbrance), centralized fee routing (LibFeeRouter with ACI/FI/Treasury split), and new mintBurnFeeIndexShareBps parameter.*
+*Changes in 4.0: Added native ETH support documentation. Updated to reflect centralized encumbrance system (LibEncumbrance), centralized fee routing (LibFeeRouter with ACI/FI/Treasury split), and new mintBurnFeeIndexShareBps parameter.*
