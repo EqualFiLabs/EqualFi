@@ -1,0 +1,21 @@
+# Foundry
+cache/
+out/
+/lib/
+
+# Starknet (Scarb)
+starknet/target/
+
+# Node / tooling
+node_modules/
+
+# Env
+.env
+.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Misc
+.DS_Store
