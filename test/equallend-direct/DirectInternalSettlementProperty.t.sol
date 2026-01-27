@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+/// forge-config: default.optimizer = false
 
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
@@ -14,6 +15,13 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
     MockERC20 internal asset;
     address internal lender = address(0xA11CE);
     address internal borrower = address(0xB0B);
+
+    struct PositionContext {
+        uint256 lenderPos;
+        uint256 borrowerPos;
+        bytes32 lenderKey;
+        bytes32 borrowerKey;
+    }
 
     function setUp() public {
         setUpDiamond();
@@ -31,15 +39,15 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
 
     function _mintPositions(uint256 lenderPrincipal, uint256 borrowerPrincipal)
         internal
-        returns (uint256 lenderPos, uint256 borrowerPos, bytes32 lenderKey, bytes32 borrowerKey)
+        returns (PositionContext memory ctx)
     {
-        lenderPos = nft.mint(lender, 1);
-        borrowerPos = nft.mint(borrower, 1);
+        ctx.lenderPos = nft.mint(lender, 1);
+        ctx.borrowerPos = nft.mint(borrower, 1);
         finalizePositionNFT();
-        lenderKey = nft.getPositionKey(lenderPos);
-        borrowerKey = nft.getPositionKey(borrowerPos);
-        harness.addPoolMember(1, address(asset), lenderKey, lenderPrincipal, true);
-        harness.addPoolMember(1, address(asset), borrowerKey, borrowerPrincipal, true);
+        ctx.lenderKey = nft.getPositionKey(ctx.lenderPos);
+        ctx.borrowerKey = nft.getPositionKey(ctx.borrowerPos);
+        harness.addPoolMember(1, address(asset), ctx.lenderKey, lenderPrincipal, true);
+        harness.addPoolMember(1, address(asset), ctx.borrowerKey, borrowerPrincipal, true);
     }
 
     function testProperty_DirectAgreementSolvencyPreserved() public {
@@ -47,36 +55,39 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
         uint256 borrowerPrincipal = 500 ether;
         uint256 principal = 200 ether;
 
-        (uint256 lenderPos, uint256 borrowerPos, bytes32 lenderKey, bytes32 borrowerKey) =
-            _mintPositions(lenderPrincipal, borrowerPrincipal);
-        (uint256 lenderPrincipalSeed,, , ,) = views.poolState(1, lenderKey);
-        (uint256 borrowerPrincipalSeed,, , ,) = views.poolState(1, borrowerKey);
-        assertEq(lenderPrincipalSeed, lenderPrincipal, "seed lender principal");
-        assertEq(borrowerPrincipalSeed, borrowerPrincipal, "seed borrower principal");
+        PositionContext memory ctx = _mintPositions(lenderPrincipal, borrowerPrincipal);
+        {
+            (uint256 lenderPrincipalSeed,, , ,) = views.poolState(1, ctx.lenderKey);
+            (uint256 borrowerPrincipalSeed,, , ,) = views.poolState(1, ctx.borrowerKey);
+            assertEq(lenderPrincipalSeed, lenderPrincipal, "seed lender principal");
+            assertEq(borrowerPrincipalSeed, borrowerPrincipal, "seed borrower principal");
+        }
 
-        DirectTypes.DirectOfferParams memory offer = DirectTypes.DirectOfferParams({
-            lenderPositionId: lenderPos,
-            lenderPoolId: 1,
-            collateralPoolId: 1,
-            collateralAsset: address(asset),
-            borrowAsset: address(asset),
-            principal: principal,
-            aprBps: 0,
-            durationSeconds: 1 days,
-            collateralLockAmount: principal / 2,
-            allowEarlyRepay: false,
-            allowEarlyExercise: false,
-            allowLenderCall: false});
+        DirectTypes.DirectOfferParams memory offer;
+        offer.lenderPositionId = ctx.lenderPos;
+        offer.lenderPoolId = 1;
+        offer.collateralPoolId = 1;
+        offer.collateralAsset = address(asset);
+        offer.borrowAsset = address(asset);
+        offer.principal = principal;
+        offer.aprBps = 0;
+        offer.durationSeconds = 1 days;
+        offer.collateralLockAmount = principal / 2;
+        offer.allowEarlyRepay = false;
+        offer.allowEarlyExercise = false;
+        offer.allowLenderCall = false;
 
         vm.prank(lender);
         uint256 offerId = offers.postOffer(offer);
         vm.prank(borrower);
-        uint256 agreementId = agreements.acceptOffer(offerId, borrowerPos);
+        uint256 agreementId = agreements.acceptOffer(offerId, ctx.borrowerPos);
 
         // Ledger-based settlement: lender liquidity debited, borrower principal unchanged
-        (uint256 borrowerAfter,, uint256 trackedAfterAccept,,) = views.poolState(1, borrowerKey);
-        assertEq(borrowerAfter, borrowerPrincipal, "borrower principal unchanged");
-        assertEq(trackedAfterAccept, lenderPrincipal + borrowerPrincipal - principal, "tracked balance debited");
+        {
+            (uint256 borrowerAfter,, uint256 trackedAfterAccept,,) = views.poolState(1, ctx.borrowerKey);
+            assertEq(borrowerAfter, borrowerPrincipal, "borrower principal unchanged");
+            assertEq(trackedAfterAccept, lenderPrincipal + borrowerPrincipal - principal, "tracked balance debited");
+        }
 
         // Repay internally
         vm.prank(borrower);
@@ -84,12 +95,14 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
         vm.prank(borrower);
         lifecycle.repay(agreementId);
 
-        (uint256 borrowerFinal, uint256 totalFinal, uint256 trackedFinal,,) = views.poolState(1, borrowerKey);
-        (uint256 lenderFinal,, , ,) = views.poolState(1, lenderKey);
-        // Principals unchanged; tracked restored
-        assertEq(borrowerFinal, borrowerPrincipal, "borrower principal restored");
-        assertEq(lenderFinal, lenderPrincipal, "lender principal unchanged");
-        assertEq(trackedFinal, totalFinal, "tracked aligns after repayment");
+        {
+            (uint256 borrowerFinal, uint256 totalFinal, uint256 trackedFinal,,) = views.poolState(1, ctx.borrowerKey);
+            (uint256 lenderFinal,, , ,) = views.poolState(1, ctx.lenderKey);
+            // Principals unchanged; tracked restored
+            assertEq(borrowerFinal, borrowerPrincipal, "borrower principal restored");
+            assertEq(lenderFinal, lenderPrincipal, "lender principal unchanged");
+            assertEq(trackedFinal, totalFinal, "tracked aligns after repayment");
+        }
     }
 }
 
@@ -100,6 +113,13 @@ contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
     address internal lender = address(0xA11CE);
     address internal borrower = address(0xB0B);
     address internal treasury = address(0xBEEF);
+
+    struct PositionContext {
+        uint256 lenderPos;
+        uint256 borrowerPos;
+        bytes32 lenderKey;
+        bytes32 borrowerKey;
+    }
 
     function setUp() public {
         setUpDiamond();
@@ -119,15 +139,15 @@ contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
 
     function _mintPositions(uint256 lenderPrincipal, uint256 borrowerPrincipal)
         internal
-        returns (uint256 lenderPos, uint256 borrowerPos, bytes32 lenderKey, bytes32 borrowerKey)
+        returns (PositionContext memory ctx)
     {
-        lenderPos = nft.mint(lender, 1);
-        borrowerPos = nft.mint(borrower, 1);
+        ctx.lenderPos = nft.mint(lender, 1);
+        ctx.borrowerPos = nft.mint(borrower, 1);
         finalizePositionNFT();
-        lenderKey = nft.getPositionKey(lenderPos);
-        borrowerKey = nft.getPositionKey(borrowerPos);
-        harness.addPoolMember(1, address(asset), lenderKey, lenderPrincipal, true);
-        harness.addPoolMember(1, address(asset), borrowerKey, borrowerPrincipal, true);
+        ctx.lenderKey = nft.getPositionKey(ctx.lenderPos);
+        ctx.borrowerKey = nft.getPositionKey(ctx.borrowerPos);
+        harness.addPoolMember(1, address(asset), ctx.lenderKey, lenderPrincipal, true);
+        harness.addPoolMember(1, address(asset), ctx.borrowerKey, borrowerPrincipal, true);
     }
 
     function testProperty_DefaultDistributionHierarchy() public {
@@ -136,43 +156,44 @@ contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
         uint256 principal = 100 ether;
         uint256 collateralLock = 50 ether;
 
-        (uint256 lenderPos, uint256 borrowerPos, bytes32 lenderKey, bytes32 borrowerKey) =
-            _mintPositions(lenderPrincipal, borrowerPrincipal);
+        PositionContext memory ctx = _mintPositions(lenderPrincipal, borrowerPrincipal);
 
-        DirectTypes.DirectOfferParams memory offer = DirectTypes.DirectOfferParams({
-            lenderPositionId: lenderPos,
-            lenderPoolId: 1,
-            collateralPoolId: 1,
-            collateralAsset: address(asset),
-            borrowAsset: address(asset),
-            principal: principal,
-            aprBps: 0,
-            durationSeconds: 1 days,
-            collateralLockAmount: collateralLock,
-            allowEarlyRepay: false,
-            allowEarlyExercise: false,
-            allowLenderCall: false});
+        DirectTypes.DirectOfferParams memory offer;
+        offer.lenderPositionId = ctx.lenderPos;
+        offer.lenderPoolId = 1;
+        offer.collateralPoolId = 1;
+        offer.collateralAsset = address(asset);
+        offer.borrowAsset = address(asset);
+        offer.principal = principal;
+        offer.aprBps = 0;
+        offer.durationSeconds = 1 days;
+        offer.collateralLockAmount = collateralLock;
+        offer.allowEarlyRepay = false;
+        offer.allowEarlyExercise = false;
+        offer.allowLenderCall = false;
 
         vm.prank(lender);
         uint256 offerId = offers.postOffer(offer);
         vm.prank(borrower);
-        uint256 agreementId = agreements.acceptOffer(offerId, borrowerPos);
+        uint256 agreementId = agreements.acceptOffer(offerId, ctx.borrowerPos);
 
         vm.warp(block.timestamp + 2 days);
         lifecycle.recover(agreementId);
 
-        (uint256 lenderAfter,, , ,) = views.poolState(1, lenderKey);
-        (uint256 borrowerAfter,, , ,) = views.poolState(1, borrowerKey);
-        (uint256 protocolAfter,, , ,) = views.poolState(1, LibPositionHelpers.systemPositionKey(treasury));
+        {
+            (uint256 lenderAfter,, , ,) = views.poolState(1, ctx.lenderKey);
+            (uint256 borrowerAfter,, , ,) = views.poolState(1, ctx.borrowerKey);
+            (uint256 protocolAfter,, , ,) = views.poolState(1, LibPositionHelpers.systemPositionKey(treasury));
 
-        uint256 lenderShare = (collateralLock * 1000) / 10_000;
-        uint256 remainder = collateralLock - lenderShare;
-        (uint256 protocolShare,,) = DirectTestUtils.previewSplit(remainder, 6667, 0, true);
+            uint256 lenderShare = (collateralLock * 1000) / 10_000;
+            uint256 remainder = collateralLock - lenderShare;
+            (uint256 protocolShare,,) = DirectTestUtils.previewSplit(remainder, 6667, 0, true);
 
-        // Collateral distribution priority: protocol -> fee index -> lender; lender absorbs shortfall
-        assertEq(protocolAfter, protocolShare, "protocol receives first share");
-        assertEq(lenderAfter, lenderPrincipal - principal + lenderShare, "lender recovers share after principal reduction");
-        assertEq(borrowerAfter, borrowerPrincipal - collateralLock, "borrower collateral applied");
+            // Collateral distribution priority: protocol -> fee index -> lender; lender absorbs shortfall
+            assertEq(protocolAfter, protocolShare, "protocol receives first share");
+            assertEq(lenderAfter, lenderPrincipal - principal + lenderShare, "lender recovers share after principal reduction");
+            assertEq(borrowerAfter, borrowerPrincipal - collateralLock, "borrower collateral applied");
+        }
 
         DirectTypes.DirectAgreement memory agreement = views.getAgreement(agreementId);
         assertEq(uint8(agreement.status), uint8(DirectTypes.DirectStatus.Defaulted), "agreement defaulted");

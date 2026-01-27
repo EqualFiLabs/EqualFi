@@ -22,7 +22,7 @@ contract OwnershipFacetTest is Test {
         diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: OWNER}));
     }
 
-    function test_owner_reportsDiamondOwner() public view {
+    function test_owner_reportsDiamondOwner() public {
         assertEq(OwnershipFacet(address(diamond)).owner(), OWNER);
     }
 

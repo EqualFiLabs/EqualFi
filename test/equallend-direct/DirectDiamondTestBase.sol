@@ -232,46 +232,28 @@ abstract contract DirectDiamondTestBase is Test {
     IDirectRollingView internal rollingViews;
 
     function setUpDiamond() internal {
-        // Deploy core diamond facets
-        DiamondCutFacet cutFacet = new DiamondCutFacet();
-        DiamondLoupeFacet loupeFacet = new DiamondLoupeFacet();
-        OwnershipFacet ownershipFacet = new OwnershipFacet();
+        CoreFacets memory core = _deployCoreFacets();
+        DirectFacets memory direct = _deployDirectFacets();
+        RollingFacets memory rolling = _deployRollingFacets();
+        HarnessFacets memory harnessFacets = _deployHarnessFacets();
 
-        // Deploy production facets
-        EqualLendDirectOfferFacet offerFacet = new EqualLendDirectOfferFacet();
-        EqualLendDirectAgreementFacet agreementFacet = new EqualLendDirectAgreementFacet();
-        EqualLendDirectLifecycleFacet lifecycleFacet = new EqualLendDirectLifecycleFacet();
-        EqualLendDirectRollingOfferFacet rollingOfferFacet = new EqualLendDirectRollingOfferFacet();
-        EqualLendDirectRollingAgreementFacet rollingAgreementFacet = new EqualLendDirectRollingAgreementFacet();
-        EqualLendDirectRollingLifecycleFacet rollingLifecycleFacet = new EqualLendDirectRollingLifecycleFacet();
-        EqualLendDirectRollingPaymentFacet rollingPaymentFacet = new EqualLendDirectRollingPaymentFacet();
-        EqualLendDirectRollingViewFacet rollingViewFacet = new EqualLendDirectRollingViewFacet();
-
-        // Deploy test harness facets
-        DirectTestHarnessFacet harnessFacet = new DirectTestHarnessFacet();
-        DirectTestViewFacet viewFacet = new DirectTestViewFacet();
-
-        // Build initial cuts for diamond deployment
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](3);
-        cuts[0] = _cut(address(cutFacet), _selectorsCut());
-        cuts[1] = _cut(address(loupeFacet), _selectorsLoupe());
-        cuts[2] = _cut(address(ownershipFacet), _selectorsOwnership());
-
-        // Deploy diamond
+        cuts[0] = _cut(core.cutFacet, _selectorsCut());
+        cuts[1] = _cut(core.loupeFacet, _selectorsLoupe());
+        cuts[2] = _cut(core.ownershipFacet, _selectorsOwnership());
         diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: address(this)}));
 
-        // Add remaining facets via diamondCut
         IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](10);
-        addCuts[0] = _cut(address(offerFacet), _selectorsOffer());
-        addCuts[1] = _cut(address(agreementFacet), _selectorsAgreement());
-        addCuts[2] = _cut(address(lifecycleFacet), _selectorsLifecycle());
-        addCuts[3] = _cut(address(harnessFacet), _selectorsHarness());
-        addCuts[4] = _cut(address(viewFacet), _selectorsView());
-        addCuts[5] = _cut(address(rollingOfferFacet), _selectorsRollingOffer());
-        addCuts[6] = _cut(address(rollingAgreementFacet), _selectorsRollingAgreement());
-        addCuts[7] = _cut(address(rollingLifecycleFacet), _selectorsRollingLifecycle());
-        addCuts[8] = _cut(address(rollingPaymentFacet), _selectorsRollingPayment());
-        addCuts[9] = _cut(address(rollingViewFacet), _selectorsRollingView());
+        addCuts[0] = _cut(direct.offerFacet, _selectorsOffer());
+        addCuts[1] = _cut(direct.agreementFacet, _selectorsAgreement());
+        addCuts[2] = _cut(direct.lifecycleFacet, _selectorsLifecycle());
+        addCuts[3] = _cut(harnessFacets.harnessFacet, _selectorsHarness());
+        addCuts[4] = _cut(harnessFacets.viewFacet, _selectorsView());
+        addCuts[5] = _cut(rolling.rollingOfferFacet, _selectorsRollingOffer());
+        addCuts[6] = _cut(rolling.rollingAgreementFacet, _selectorsRollingAgreement());
+        addCuts[7] = _cut(rolling.rollingLifecycleFacet, _selectorsRollingLifecycle());
+        addCuts[8] = _cut(rolling.rollingPaymentFacet, _selectorsRollingPayment());
+        addCuts[9] = _cut(rolling.rollingViewFacet, _selectorsRollingView());
         IDiamondCut(address(diamond)).diamondCut(addCuts, address(0), "");
 
         // Set up typed interfaces
@@ -296,6 +278,56 @@ abstract contract DirectDiamondTestBase is Test {
     function finalizePositionNFT() internal {
         nft.setDiamond(address(diamond));
         nft.setMinter(address(diamond));
+    }
+
+    struct CoreFacets {
+        address cutFacet;
+        address loupeFacet;
+        address ownershipFacet;
+    }
+
+    struct DirectFacets {
+        address offerFacet;
+        address agreementFacet;
+        address lifecycleFacet;
+    }
+
+    struct RollingFacets {
+        address rollingOfferFacet;
+        address rollingAgreementFacet;
+        address rollingLifecycleFacet;
+        address rollingPaymentFacet;
+        address rollingViewFacet;
+    }
+
+    struct HarnessFacets {
+        address harnessFacet;
+        address viewFacet;
+    }
+
+    function _deployCoreFacets() internal returns (CoreFacets memory core) {
+        core.cutFacet = address(new DiamondCutFacet());
+        core.loupeFacet = address(new DiamondLoupeFacet());
+        core.ownershipFacet = address(new OwnershipFacet());
+    }
+
+    function _deployDirectFacets() internal returns (DirectFacets memory direct) {
+        direct.offerFacet = address(new EqualLendDirectOfferFacet());
+        direct.agreementFacet = address(new EqualLendDirectAgreementFacet());
+        direct.lifecycleFacet = address(new EqualLendDirectLifecycleFacet());
+    }
+
+    function _deployRollingFacets() internal returns (RollingFacets memory rolling) {
+        rolling.rollingOfferFacet = address(new EqualLendDirectRollingOfferFacet());
+        rolling.rollingAgreementFacet = address(new EqualLendDirectRollingAgreementFacet());
+        rolling.rollingLifecycleFacet = address(new EqualLendDirectRollingLifecycleFacet());
+        rolling.rollingPaymentFacet = address(new EqualLendDirectRollingPaymentFacet());
+        rolling.rollingViewFacet = address(new EqualLendDirectRollingViewFacet());
+    }
+
+    function _deployHarnessFacets() internal returns (HarnessFacets memory harnessFacets) {
+        harnessFacets.harnessFacet = address(new DirectTestHarnessFacet());
+        harnessFacets.viewFacet = address(new DirectTestViewFacet());
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

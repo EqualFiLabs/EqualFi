@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+/// forge-config: default.optimizer = false
 
 import {PositionManagementFacet} from "../../src/equallend/PositionManagementFacet.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
@@ -24,6 +25,12 @@ contract DirectDebtIntegrationPropertyTest is DirectDiamondTestBase {
     uint256 constant INITIAL_SUPPLY = 1_000_000 ether;
     uint16 constant LTV_BPS = 8000;
 
+    struct DebtContext {
+        uint256 tokenId;
+        bytes32 key;
+        uint256 principal;
+    }
+
     function setUp() public {
         setUpDiamond();
         _addPositionManagementFacet();
@@ -44,39 +51,10 @@ contract DirectDebtIntegrationPropertyTest is DirectDiamondTestBase {
         uint256 directBorrowed,
         uint256 withdrawAmount
     ) public {
-        depositAmount = bound(depositAmount, 10 ether, 200_000 ether);
-        vm.startPrank(user);
-        uint256 tokenId = pm.mintPositionWithDeposit(PID, depositAmount);
-        bytes32 key = nft.getPositionKey(tokenId);
-        vm.stopPrank();
-
-        // Apply direct locks/borrowed
-        uint256 principal = views.getUserPrincipal(PID, key);
-        directLocked = bound(directLocked, 0, principal);
-        uint256 maxBorrowable = (principal * LTV_BPS) / 10_000;
-        directBorrowed = bound(directBorrowed, 0, maxBorrowable);
-        harness.setDirectState(key, PID, directLocked, 0, directBorrowed);
-        (uint256 locked, uint256 lent, uint256 borrowed) = views.directBalances(key, PID);
-        assertEq(locked, directLocked, "locked not set");
-        assertEq(borrowed, directBorrowed, "borrowed not set");
-
-        uint256 withdrawable = views.getWithdrawablePrincipal(PID, key);
-        withdrawAmount = bound(withdrawAmount, 0, withdrawable);
-
-        if (withdrawAmount > 0) {
-            vm.startPrank(user);
-            try pm.withdrawFromPosition(tokenId, PID, withdrawAmount) {
-                vm.stopPrank();
-            } catch {
-                vm.stopPrank();
-                return;
-            }
-        }
-
-        uint256 debt = views.getTotalDebt(PID, key);
-        uint256 updatedPrincipal = views.getUserPrincipal(PID, key);
-        uint256 updatedMaxBorrowable = (updatedPrincipal * LTV_BPS) / 10_000;
-        assertLe(debt, updatedMaxBorrowable, "direct debt broke solvency");
+        DebtContext memory ctx = _mintPosition(bound(depositAmount, 10 ether, 200_000 ether));
+        directLocked = _applyDirectState(ctx, directLocked, directBorrowed);
+        _tryWithdraw(ctx, withdrawAmount);
+        _assertSolvency(ctx);
     }
 
     function test_DirectBorrowedCountsAsDebt() public {
@@ -90,6 +68,47 @@ contract DirectDebtIntegrationPropertyTest is DirectDiamondTestBase {
 
         uint256 totalDebt = views.getTotalDebt(PID, key);
         assertEq(totalDebt, 50 ether, "direct borrowed principal treated as debt");
+    }
+
+    function _mintPosition(uint256 depositAmount) internal returns (DebtContext memory ctx) {
+        vm.startPrank(user);
+        ctx.tokenId = pm.mintPositionWithDeposit(PID, depositAmount);
+        ctx.key = nft.getPositionKey(ctx.tokenId);
+        vm.stopPrank();
+        ctx.principal = views.getUserPrincipal(PID, ctx.key);
+    }
+
+    function _applyDirectState(DebtContext memory ctx, uint256 directLocked, uint256 directBorrowed)
+        internal
+        returns (uint256 normalizedLocked)
+    {
+        normalizedLocked = bound(directLocked, 0, ctx.principal);
+        uint256 maxBorrowable = (ctx.principal * LTV_BPS) / 10_000;
+        uint256 normalizedBorrowed = bound(directBorrowed, 0, maxBorrowable);
+        harness.setDirectState(ctx.key, PID, normalizedLocked, 0, normalizedBorrowed);
+        (uint256 locked,, uint256 borrowed) = views.directBalances(ctx.key, PID);
+        assertEq(locked, normalizedLocked, "locked not set");
+        assertEq(borrowed, normalizedBorrowed, "borrowed not set");
+    }
+
+    function _tryWithdraw(DebtContext memory ctx, uint256 withdrawAmount) internal {
+        uint256 withdrawable = views.getWithdrawablePrincipal(PID, ctx.key);
+        uint256 boundedWithdraw = bound(withdrawAmount, 0, withdrawable);
+        if (boundedWithdraw == 0) return;
+
+        vm.startPrank(user);
+        try pm.withdrawFromPosition(ctx.tokenId, PID, boundedWithdraw) {
+            vm.stopPrank();
+        } catch {
+            vm.stopPrank();
+        }
+    }
+
+    function _assertSolvency(DebtContext memory ctx) internal {
+        uint256 debt = views.getTotalDebt(PID, ctx.key);
+        uint256 updatedPrincipal = views.getUserPrincipal(PID, ctx.key);
+        uint256 updatedMaxBorrowable = (updatedPrincipal * LTV_BPS) / 10_000;
+        assertLe(debt, updatedMaxBorrowable, "direct debt broke solvency");
     }
 
     function _addPositionManagementFacet() internal {
