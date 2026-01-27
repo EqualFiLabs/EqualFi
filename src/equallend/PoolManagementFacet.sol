@@ -48,7 +48,7 @@ contract PoolManagementFacet {
     ) external payable {
         LibAccess.enforceOwnerOrTimelock();
         Types.PoolConfig memory localConfig = config;
-        _initPoolInternal(pid, underlying, localConfig, actionFees);
+        _initPoolInternal(pid, underlying, localConfig, actionFees, false);
     }
 
     /// @notice Initialize a new pool with immutable configuration (backward compatibility)
@@ -63,7 +63,7 @@ contract PoolManagementFacet {
         LibAccess.enforceOwnerOrTimelock();
         Types.ActionFeeSet memory emptyFees; // All fees disabled by default
         Types.PoolConfig memory localConfig = config;
-        _initPoolInternal(pid, underlying, localConfig, emptyFees);
+        _initPoolInternal(pid, underlying, localConfig, emptyFees, false);
     }
 
     /// @notice Initialize a new pool using global defaults (permissionless path).
@@ -81,7 +81,7 @@ contract PoolManagementFacet {
         pid = _nextPoolId(store);
         (Types.PoolConfig memory config, Types.ActionFeeSet memory fees) =
             _defaultPoolConfig(store);
-        _initPoolInternal(pid, underlying, config, fees);
+        _initPoolInternal(pid, underlying, config, fees, false);
     }
 
     /// @notice Internal pool initialization with action fees
@@ -89,29 +89,35 @@ contract PoolManagementFacet {
         uint256 pid,
         address underlying,
         Types.PoolConfig memory config,
-        Types.ActionFeeSet memory actionFees
+        Types.ActionFeeSet memory actionFees,
+        bool bypassFee
     ) private {
         LibAppStorage.AppStorage storage store = LibAppStorage.s();
 
         // Handle fee payment (admin vs non-admin)
         bool isGov = LibAccess.isOwnerOrTimelock(msg.sender);
-        if (isGov) {
-            if (msg.value != 0) revert InsufficientPoolCreationFee(0, msg.value);
+        bool registerPermissionless = !isGov;
+        if (!bypassFee) {
+            if (isGov) {
+                if (msg.value != 0) revert InsufficientPoolCreationFee(0, msg.value);
+            } else {
+                uint256 fee = store.poolCreationFee;
+                if (fee == 0) revert InsufficientPoolCreationFee(1, 0); // Permissionless creation disabled
+                if (msg.value != fee) revert InsufficientPoolCreationFee(fee, msg.value);
+                address treasury = LibAppStorage.treasuryAddress(store);
+                if (treasury == address(0)) revert TreasuryNotSet();
+                (bool sent,) = treasury.call{value: fee}("");
+                if (!sent) revert PoolCreationFeeTransferFailed();
+            }
         } else {
-            uint256 fee = store.poolCreationFee;
-            if (fee == 0) revert InsufficientPoolCreationFee(1, 0); // Permissionless creation disabled
-            if (msg.value != fee) revert InsufficientPoolCreationFee(fee, msg.value);
-            address treasury = LibAppStorage.treasuryAddress(store);
-            if (treasury == address(0)) revert TreasuryNotSet();
-            (bool sent,) = treasury.call{value: fee}("");
-            if (!sent) revert PoolCreationFeeTransferFailed();
+            registerPermissionless = true;
         }
 
         // Validate pool doesn't already exist
         Types.PoolData storage p = store.pools[pid];
         if (p.initialized) revert PoolAlreadyExists(pid);
 
-        if (!isGov) {
+        if (registerPermissionless) {
             uint256 existingPid = store.permissionlessPoolForToken[underlying];
             if (existingPid != 0) {
                 revert PermissionlessPoolAlreadyInitialized(underlying, existingPid);
@@ -162,7 +168,7 @@ contract PoolManagementFacet {
         p.underlying = underlying;
         p.initialized = true;
         store.assetToPoolId[underlying] = pid;
-        if (!isGov) {
+        if (registerPermissionless) {
             store.permissionlessPoolForToken[underlying] = pid;
         }
 
@@ -265,6 +271,11 @@ contract PoolManagementFacet {
         Types.ManagedPoolConfig calldata config
     ) external payable {
         LibAppStorage.AppStorage storage store = LibAppStorage.s();
+
+        if (store.assetToPoolId[underlying] == 0) {
+            if (!store.defaultPoolConfigSet) revert DefaultPoolConfigNotSet();
+            _autoCreateBasePool(store, underlying);
+        }
 
         // Managed pool creation always requires the managedPoolCreationFee
         uint256 fee = store.managedPoolCreationFee;
@@ -375,6 +386,15 @@ contract PoolManagementFacet {
         emittedConfig.whitelistEnabled = true;
 
         emit PoolInitializedManaged(pid, underlying, msg.sender, emittedConfig);
+    }
+
+    function _autoCreateBasePool(LibAppStorage.AppStorage storage store, address underlying)
+        private
+        returns (uint256 pid)
+    {
+        pid = _nextPoolId(store);
+        (Types.PoolConfig memory config, Types.ActionFeeSet memory fees) = _defaultPoolConfig(store);
+        _initPoolInternal(pid, underlying, config, fees, true);
     }
 
     // ─── Managed pool config setters ──────────────────────

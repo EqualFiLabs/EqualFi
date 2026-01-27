@@ -43,6 +43,33 @@ contract ManagedPoolSetterHarness is PoolManagementFacet {
         LibAppStorage.s().maxMaintenanceRateBps = rate;
     }
 
+    function setDefaultPoolConfig(Types.PoolConfig memory config) external {
+        Types.PoolConfig storage target = LibAppStorage.s().defaultPoolConfig;
+        target.rollingApyBps = config.rollingApyBps;
+        target.depositorLTVBps = config.depositorLTVBps;
+        target.maintenanceRateBps = config.maintenanceRateBps;
+        target.flashLoanFeeBps = config.flashLoanFeeBps;
+        target.flashLoanAntiSplit = config.flashLoanAntiSplit;
+        target.minDepositAmount = config.minDepositAmount;
+        target.minLoanAmount = config.minLoanAmount;
+        target.minTopupAmount = config.minTopupAmount;
+        target.isCapped = config.isCapped;
+        target.depositCap = config.depositCap;
+        target.maxUserCount = config.maxUserCount;
+        target.aumFeeMinBps = config.aumFeeMinBps;
+        target.aumFeeMaxBps = config.aumFeeMaxBps;
+        target.borrowFee = config.borrowFee;
+        target.repayFee = config.repayFee;
+        target.withdrawFee = config.withdrawFee;
+        target.flashFee = config.flashFee;
+        target.closeRollingFee = config.closeRollingFee;
+        delete target.fixedTermConfigs;
+        for (uint256 i = 0; i < config.fixedTermConfigs.length; i++) {
+            target.fixedTermConfigs.push(config.fixedTermConfigs[i]);
+        }
+        LibAppStorage.s().defaultPoolConfigSet = true;
+    }
+
     function managedConfig(uint256 pid) external view returns (Types.ManagedPoolConfig memory) {
         return LibAppStorage.s().pools[pid].managedConfig;
     }
@@ -60,6 +87,7 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
     address internal treasury = address(0xBEEF);
     address internal manager = address(0xA11CE);
     address internal nonManager = address(0xB0B);
+    uint256 internal constant MANAGED_PID = 2;
 
     function setUp() public {
         facet = new ManagedPoolSetterHarness();
@@ -67,6 +95,7 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
         facet.setManagedPoolCreationFee(0.1 ether);
         facet.setTreasury(treasury);
         facet.setOwner(address(this));
+        facet.setDefaultPoolConfig(_defaultPoolConfig());
     }
 
     function _managedConfig(uint256 depositCap) internal view returns (Types.ManagedPoolConfig memory cfg) {
@@ -112,7 +141,7 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
         uint256 newMaxUsers,
         uint128 newBorrowFee
     ) public {
-        _initManagedPool(1, 100 ether);
+        _initManagedPool(MANAGED_PID, 100 ether);
 
         newRollingApy = uint16(bound(newRollingApy, 0, 10_000));
         newLtv = uint16(bound(newLtv, 1, 10_000));
@@ -126,32 +155,32 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
         newBorrowFee = uint128(bound(newBorrowFee, 0, 1e18));
 
         vm.prank(manager);
-        facet.setRollingApy(1, newRollingApy);
+        facet.setRollingApy(MANAGED_PID, newRollingApy);
         vm.prank(manager);
-        facet.setDepositorLTV(1, newLtv);
+        facet.setDepositorLTV(MANAGED_PID, newLtv);
         vm.prank(manager);
-        facet.setMinDepositAmount(1, newMinDeposit);
+        facet.setMinDepositAmount(MANAGED_PID, newMinDeposit);
         vm.prank(manager);
-        facet.setMinLoanAmount(1, newMinLoan);
+        facet.setMinLoanAmount(MANAGED_PID, newMinLoan);
         vm.prank(manager);
-        facet.setMinTopupAmount(1, newMinTopup);
+        facet.setMinTopupAmount(MANAGED_PID, newMinTopup);
         vm.prank(manager);
-        facet.setDepositCap(1, newDepositCap);
+        facet.setDepositCap(MANAGED_PID, newDepositCap);
         vm.prank(manager);
-        facet.setIsCapped(1, true);
+        facet.setIsCapped(MANAGED_PID, true);
         vm.prank(manager);
-        facet.setMaxUserCount(1, newMaxUsers);
+        facet.setMaxUserCount(MANAGED_PID, newMaxUsers);
         vm.prank(manager);
-        facet.setMaintenanceRate(1, newMaintenance);
+        facet.setMaintenanceRate(MANAGED_PID, newMaintenance);
         vm.prank(manager);
-        facet.setFlashLoanFee(1, newFlashFee);
+        facet.setFlashLoanFee(MANAGED_PID, newFlashFee);
 
         Types.ActionFeeSet memory newFees;
         newFees.borrowFee = Types.ActionFeeConfig({amount: newBorrowFee, enabled: true});
         vm.prank(manager);
-        facet.setActionFees(1, newFees);
+        facet.setActionFees(MANAGED_PID, newFees);
 
-        Types.ManagedPoolConfig memory stored = facet.managedConfig(1);
+        Types.ManagedPoolConfig memory stored = facet.managedConfig(MANAGED_PID);
         assertEq(stored.rollingApyBps, newRollingApy, "rolling apy updated");
         assertEq(stored.depositorLTVBps, newLtv, "ltv updated");
         assertEq(stored.minDepositAmount, newMinDeposit, "min deposit updated");
@@ -166,7 +195,23 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(NotPoolManager.selector, nonManager, manager));
         vm.prank(nonManager);
-        facet.setRollingApy(1, newRollingApy);
+        facet.setRollingApy(MANAGED_PID, newRollingApy);
+    }
+
+    function _defaultPoolConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg.rollingApyBps = 500;
+        cfg.depositorLTVBps = 8000;
+        cfg.maintenanceRateBps = 50;
+        cfg.flashLoanFeeBps = 10;
+        cfg.flashLoanAntiSplit = false;
+        cfg.minDepositAmount = 1 ether;
+        cfg.minLoanAmount = 1 ether;
+        cfg.minTopupAmount = 0.1 ether;
+        cfg.isCapped = false;
+        cfg.depositCap = 0;
+        cfg.maxUserCount = 0;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
     }
 }
 
@@ -177,6 +222,7 @@ contract ManagedPoolParameterBoundsPropertyTest is Test {
     MockERC20 internal underlying;
     address internal treasury = address(0xCAFE);
     address internal manager = address(0xA11CE);
+    uint256 internal constant MANAGED_PID = 2;
 
     function setUp() public {
         facet = new ManagedPoolSetterHarness();
@@ -185,6 +231,7 @@ contract ManagedPoolParameterBoundsPropertyTest is Test {
         facet.setTreasury(treasury);
         facet.setOwner(address(this));
         facet.setMaxMaintenanceRate(100); // 1% cap for tests
+        facet.setDefaultPoolConfig(_defaultPoolConfig());
         _initManagedPool();
     }
 
@@ -205,62 +252,62 @@ contract ManagedPoolParameterBoundsPropertyTest is Test {
         cfg.manager = manager;
         vm.deal(manager, 1 ether);
         vm.prank(manager);
-        facet.initManagedPool{value: 0.05 ether}(1, address(underlying), cfg);
+        facet.initManagedPool{value: 0.05 ether}(MANAGED_PID, address(underlying), cfg);
     }
 
     function testRollingApyBound() public {
         vm.expectRevert(abi.encodeWithSelector(InvalidAPYRate.selector, "rollingApyBps > 100%"));
         vm.prank(manager);
-        facet.setRollingApy(1, 10_001);
+        facet.setRollingApy(MANAGED_PID, 10_001);
     }
 
     function testLtvBound() public {
         vm.expectRevert(InvalidLTVRatio.selector);
         vm.prank(manager);
-        facet.setDepositorLTV(1, 0);
+        facet.setDepositorLTV(MANAGED_PID, 0);
 
         vm.expectRevert(InvalidLTVRatio.selector);
         vm.prank(manager);
-        facet.setDepositorLTV(1, 10_001);
+        facet.setDepositorLTV(MANAGED_PID, 10_001);
     }
 
 
     function testMinThresholdsBound() public {
         vm.expectRevert(abi.encodeWithSelector(InvalidMinimumThreshold.selector, "minDepositAmount must be > 0"));
         vm.prank(manager);
-        facet.setMinDepositAmount(1, 0);
+        facet.setMinDepositAmount(MANAGED_PID, 0);
 
         vm.expectRevert(abi.encodeWithSelector(InvalidMinimumThreshold.selector, "minLoanAmount must be > 0"));
         vm.prank(manager);
-        facet.setMinLoanAmount(1, 0);
+        facet.setMinLoanAmount(MANAGED_PID, 0);
 
         vm.expectRevert(abi.encodeWithSelector(InvalidMinimumThreshold.selector, "minTopupAmount must be > 0"));
         vm.prank(manager);
-        facet.setMinTopupAmount(1, 0);
+        facet.setMinTopupAmount(MANAGED_PID, 0);
     }
 
     function testDepositCapValidation() public {
         vm.expectRevert(InvalidDepositCap.selector);
         vm.prank(manager);
-        facet.setDepositCap(1, 0);
+        facet.setDepositCap(MANAGED_PID, 0);
 
         // force deposit cap to zero and ensure capped cannot be enabled
-        facet.forceDepositCap(1, 0);
+        facet.forceDepositCap(MANAGED_PID, 0);
         vm.expectRevert(InvalidDepositCap.selector);
         vm.prank(manager);
-        facet.setIsCapped(1, true);
+        facet.setIsCapped(MANAGED_PID, true);
     }
 
     function testMaintenanceRateBound() public {
         vm.expectRevert(InvalidMaintenanceRate.selector);
         vm.prank(manager);
-        facet.setMaintenanceRate(1, 101);
+        facet.setMaintenanceRate(MANAGED_PID, 101);
     }
 
     function testFlashLoanFeeBound() public {
         vm.expectRevert(InvalidFlashLoanFee.selector);
         vm.prank(manager);
-        facet.setFlashLoanFee(1, 10_001);
+        facet.setFlashLoanFee(MANAGED_PID, 10_001);
     }
 
     function testActionFeeBounds() public {
@@ -269,6 +316,22 @@ contract ManagedPoolParameterBoundsPropertyTest is Test {
         fees.borrowFee = Types.ActionFeeConfig({amount: 0, enabled: true});
         vm.expectRevert(abi.encodeWithSelector(ActionFeeBoundsViolation.selector, uint128(0), uint128(1), uint128(5)));
         vm.prank(manager);
-        facet.setActionFees(1, fees);
+        facet.setActionFees(MANAGED_PID, fees);
+    }
+
+    function _defaultPoolConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg.rollingApyBps = 500;
+        cfg.depositorLTVBps = 8000;
+        cfg.maintenanceRateBps = 50;
+        cfg.flashLoanFeeBps = 10;
+        cfg.flashLoanAntiSplit = false;
+        cfg.minDepositAmount = 1 ether;
+        cfg.minLoanAmount = 1 ether;
+        cfg.minTopupAmount = 0.1 ether;
+        cfg.isCapped = false;
+        cfg.depositCap = 0;
+        cfg.maxUserCount = 0;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
     }
 }

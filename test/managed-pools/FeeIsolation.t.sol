@@ -64,6 +64,7 @@ contract FeeIsolationPropertyTest is Test {
     FeeIsolationHarness internal harness;
     MockERC20 internal underlying;
     address internal treasury = address(0xFEe5);
+    uint256 internal constant MANAGED_PID = 2;
 
     function setUp() public {
         harness = new FeeIsolationHarness();
@@ -115,7 +116,9 @@ contract FeeIsolationPropertyTest is Test {
             address(uint160(bound(uint256(uint160(unmanagedCreator)), 1, type(uint160).max - 1)));
         vm.assume(managedCreator != treasury);
         vm.assume(unmanagedCreator != treasury);
+        vm.assume(unmanagedCreator != address(this));
 
+        MockERC20 otherUnderlying = new MockERC20("Underlying2", "UND2", 18, 0);
         uint256 managedFee = 0.2 ether;
         uint256 unmanagedFee = 0.05 ether;
         harness.setManagedPoolCreationFee(managedFee);
@@ -130,13 +133,13 @@ contract FeeIsolationPropertyTest is Test {
         // Managed pools must use managedPoolCreationFee, not poolCreationFee
         vm.prank(managedCreator);
         vm.expectRevert(abi.encodeWithSelector(InsufficientManagedPoolCreationFee.selector, managedFee, unmanagedFee));
-        harness.initManagedPool{value: unmanagedFee}(1, address(underlying), mCfg);
+        harness.initManagedPool{value: unmanagedFee}(MANAGED_PID, address(underlying), mCfg);
 
         vm.prank(managedCreator);
-        harness.initManagedPool{value: managedFee}(1, address(underlying), mCfg);
+        harness.initManagedPool{value: managedFee}(MANAGED_PID, address(underlying), mCfg);
 
         assertEq(treasury.balance - balBefore, managedFee, "managed fee routed");
-        assertTrue(harness.isManaged(1), "managed pool flagged");
+        assertTrue(harness.isManaged(MANAGED_PID), "managed pool flagged");
 
         vm.deal(unmanagedCreator, 1 ether);
         uint256 balMid = treasury.balance;
@@ -144,10 +147,10 @@ contract FeeIsolationPropertyTest is Test {
         // Unmanaged pools must use poolCreationFee, not managedPoolCreationFee
         vm.prank(unmanagedCreator);
         vm.expectRevert(abi.encodeWithSelector(InsufficientPoolCreationFee.selector, unmanagedFee, managedFee));
-        harness.initPool{value: managedFee}(address(underlying));
+        harness.initPool{value: managedFee}(address(otherUnderlying));
 
         vm.prank(unmanagedCreator);
-        uint256 unmanagedPid = harness.initPool{value: unmanagedFee}(address(underlying));
+        uint256 unmanagedPid = harness.initPool{value: unmanagedFee}(address(otherUnderlying));
 
         assertEq(treasury.balance - balMid, unmanagedFee, "unmanaged fee routed");
         assertFalse(harness.isManaged(unmanagedPid), "unmanaged pool flagged");
