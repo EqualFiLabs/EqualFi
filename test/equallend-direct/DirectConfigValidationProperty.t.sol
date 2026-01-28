@@ -16,7 +16,7 @@ contract DirectConfigValidationPropertyTest is DirectDiamondTestBase {
         harness.setTimelock(timelock);
     }
 
-    function _validConfig() internal view returns (DirectTypes.DirectConfig memory) {
+    function _validConfig() internal pure returns (DirectTypes.DirectConfig memory) {
         return DirectTypes.DirectConfig({
             platformFeeBps: 500,
             interestLenderBps: 10_000,

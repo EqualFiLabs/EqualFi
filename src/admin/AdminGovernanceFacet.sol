@@ -19,6 +19,7 @@ contract AdminGovernanceFacet {
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event TreasuryShareUpdated(uint16 oldShareBps, uint16 newShareBps);
     event ActiveCreditShareUpdated(uint16 oldShareBps, uint16 newShareBps);
+    event ManagedPoolSystemShareUpdated(uint16 oldShareBps, uint16 newShareBps);
     event IndexCreationFeeUpdated(uint256 oldFee, uint256 newFee);
     event PoolCreationFeeUpdated(uint256 oldFee, uint256 newFee);
     event PositionMintFeeUpdated(address indexed oldToken, address indexed newToken, uint256 oldAmount, uint256 newAmount);
@@ -296,6 +297,17 @@ contract AdminGovernanceFacet {
         store.activeCreditShareBps = shareBps;
         store.activeCreditShareConfigured = true;
         emit ActiveCreditShareUpdated(oldShare, shareBps);
+    }
+
+    /// @notice Configure the system share (in basis points) of managed pool fees routed to the base pool.
+    function setManagedPoolSystemShareBps(uint16 shareBps) external {
+        LibAccess.enforceOwnerOrTimelock();
+        require(shareBps <= 10_000, "EqualFi: share>100%");
+        LibAppStorage.AppStorage storage store = s();
+        uint16 oldShare = LibAppStorage.managedPoolSystemShareBps(store);
+        store.managedPoolSystemShareBps = shareBps;
+        store.managedPoolSystemShareConfigured = true;
+        emit ManagedPoolSystemShareUpdated(oldShare, shareBps);
     }
 
     /// @notice Configure global min/max bounds for per-action flat fees.

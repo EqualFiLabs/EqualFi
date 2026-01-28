@@ -86,7 +86,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
                     s().feePots[indexId][asset] += potShare;
                 }
                 if (poolShare > 0) {
-                    LibFeeRouter.routeSamePool(poolId, poolShare, INDEX_FEE_SOURCE, true, 0);
+                    LibFeeRouter.routeManagedShare(poolId, poolShare, INDEX_FEE_SOURCE, true, 0);
                 }
             }
         }
@@ -199,7 +199,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             s().feePots[indexId][asset] = potBalance - potShare + potFee;
             if (poolShare > 0) {
                 pool.trackedBalance += poolShare;
-                LibFeeRouter.routeSamePool(poolId, poolShare, INDEX_FEE_SOURCE, true, 0);
+                LibFeeRouter.routeManagedShare(poolId, poolShare, INDEX_FEE_SOURCE, true, 0);
             }
 
             uint256 payout = gross - burnFee;

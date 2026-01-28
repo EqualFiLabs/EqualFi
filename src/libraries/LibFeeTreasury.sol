@@ -39,6 +39,6 @@ library LibFeeTreasury {
         bool pullFromTracked
     ) private returns (uint256 toTreasury, uint256 toActiveCredit, uint256 toIndex) {
         p;
-        return LibFeeRouter.routeSamePool(pid, amount, source, pullFromTracked, 0);
+        return LibFeeRouter.routeManagedShare(pid, amount, source, pullFromTracked, 0);
     }
 }

@@ -174,7 +174,7 @@ contract DirectBorrowerAgreementIndexPropertyTest is DirectDiamondTestBase {
         }
     }
 
-    function _assertAlignment(uint256[] memory expected, uint256 expectedLen) internal view {
+    function _assertAlignment(uint256[] memory expected, uint256 expectedLen) internal {
         uint256[] memory stored = indexHarness.list(BORROWER_KEY);
         assertEq(stored.length, expectedLen, "stored length matches expected");
         for (uint256 i; i < expectedLen; i++) {
