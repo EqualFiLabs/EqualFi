@@ -34,6 +34,12 @@ contract PoolManagementGasHarness is PoolManagementFacet {
         store.actionFeeBoundsSet = true;
     }
 
+    function setDefaultPoolConfig(Types.PoolConfig memory config) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.defaultPoolConfig = config;
+        store.defaultPoolConfigSet = true;
+    }
+
     function setMaxMaintenanceRate(uint16 rate) external {
         LibAppStorage.s().maxMaintenanceRateBps = rate;
     }
@@ -50,6 +56,7 @@ contract PoolManagementGasTest is Test {
 
     address internal treasury = address(0xBEEF);
     address internal manager = address(0xA11CE);
+    uint256 internal constant MANAGED_PID = 2;
 
     function setUp() public {
         facet = new PoolManagementGasHarness();
@@ -63,6 +70,8 @@ contract PoolManagementGasTest is Test {
         facet.setActionFeeBounds(0, type(uint128).max);
         facet.setMaxMaintenanceRate(1000);
         facet.setPositionNFT(address(nft));
+
+        facet.setDefaultPoolConfig(_poolConfig());
 
         nft.setMinter(address(this));
     }
@@ -129,7 +138,7 @@ contract PoolManagementGasTest is Test {
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.initManagedPool{value: 0.1 ether}(1, address(token), cfg);
+        facet.initManagedPool{value: 0.1 ether}(MANAGED_PID, address(token), cfg);
     }
 
     function _initManagedPool(uint256 pid) internal {
@@ -141,151 +150,151 @@ contract PoolManagementGasTest is Test {
 
     function test_gas_SetRollingApy() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setRollingApy(1, 600);
+        facet.setRollingApy(MANAGED_PID, 600);
     }
 
     function test_gas_SetDepositorLTV() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setDepositorLTV(1, 7500);
+        facet.setDepositorLTV(MANAGED_PID, 7500);
     }
 
     function test_gas_SetMinDepositAmount() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setMinDepositAmount(1, 2 ether);
+        facet.setMinDepositAmount(MANAGED_PID, 2 ether);
     }
 
     function test_gas_SetMinLoanAmount() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setMinLoanAmount(1, 2 ether);
+        facet.setMinLoanAmount(MANAGED_PID, 2 ether);
     }
 
     function test_gas_SetMinTopupAmount() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setMinTopupAmount(1, 0.2 ether);
+        facet.setMinTopupAmount(MANAGED_PID, 0.2 ether);
     }
 
     function test_gas_SetDepositCap() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setDepositCap(1, 200 ether);
+        facet.setDepositCap(MANAGED_PID, 200 ether);
     }
 
     function test_gas_SetIsCapped() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setIsCapped(1, true);
+        facet.setIsCapped(MANAGED_PID, true);
     }
 
     function test_gas_SetMaxUserCount() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setMaxUserCount(1, 50);
+        facet.setMaxUserCount(MANAGED_PID, 50);
     }
 
     function test_gas_SetMaintenanceRate() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setMaintenanceRate(1, 100);
+        facet.setMaintenanceRate(MANAGED_PID, 100);
     }
 
     function test_gas_SetFlashLoanFee() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setFlashLoanFee(1, 20);
+        facet.setFlashLoanFee(MANAGED_PID, 20);
     }
 
     function test_gas_SetActionFees() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
         Types.ActionFeeSet memory fees;
         fees.borrowFee = Types.ActionFeeConfig({amount: 1 ether, enabled: true});
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setActionFees(1, fees);
+        facet.setActionFees(MANAGED_PID, fees);
     }
 
     function test_gas_AddToWhitelist() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
-        uint256 tokenId = nft.mint(manager, 1);
+        _initManagedPool(MANAGED_PID);
+        uint256 tokenId = nft.mint(manager, MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.addToWhitelist(1, tokenId);
+        facet.addToWhitelist(MANAGED_PID, tokenId);
     }
 
     function test_gas_RemoveFromWhitelist() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
-        uint256 tokenId = nft.mint(manager, 1);
+        _initManagedPool(MANAGED_PID);
+        uint256 tokenId = nft.mint(manager, MANAGED_PID);
         vm.prank(manager);
-        facet.addToWhitelist(1, tokenId);
+        facet.addToWhitelist(MANAGED_PID, tokenId);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.removeFromWhitelist(1, tokenId);
+        facet.removeFromWhitelist(MANAGED_PID, tokenId);
     }
 
     function test_gas_SetWhitelistEnabled() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.setWhitelistEnabled(1, false);
+        facet.setWhitelistEnabled(MANAGED_PID, false);
     }
 
     function test_gas_TransferManager() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.transferManager(1, address(0xB0B));
+        facet.transferManager(MANAGED_PID, address(0xB0B));
     }
 
     function test_gas_RenounceManager() public {
         vm.pauseGasMetering();
-        _initManagedPool(1);
+        _initManagedPool(MANAGED_PID);
 
         vm.prank(manager);
         vm.resumeGasMetering();
-        facet.renounceManager(1);
+        facet.renounceManager(MANAGED_PID);
     }
 }

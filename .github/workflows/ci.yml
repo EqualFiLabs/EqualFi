@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Install dependencies
+        run: |
+          git submodule update --init --recursive
+          if [ ! -d lib/forge-std ]; then
+            forge install foundry-rs/forge-std@v1.7.6 
+          fi
+          if [ ! -d lib/openzeppelin-contracts ]; then
+            forge install OpenZeppelin/openzeppelin-contracts@v5.5.0 
+          fi
+      - name: Run tests
+        run: |
+          forge test --match-path "test/admin/*t.sol"
+          forge test --match-path "test/equallend-direct/*t.sol"
+          forge test --match-path "test/facets/*t.sol"
+          forge test --match-path "test/libraries/*t.sol"
+          forge test --match-path "test/maintenance/*t.sol"
+          forge test --match-path "test/managed-pools/*t.sol"
+          forge test --match-path "test/mocks/*t.sol"
+          forge test --match-path "test/penalty/*t.sol"
+          forge test --match-path "test/root/*t.sol"
+          forge test --match-path "test/treasury/*t.sol"
+          forge test --match-path "test/views/*t.sol"
+          forge test --match-path "test/invariants/*t.sol"
+          forge test --match-path "test/compete/*t.sol"

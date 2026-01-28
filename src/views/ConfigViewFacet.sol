@@ -270,6 +270,11 @@ contract ConfigViewFacet {
         }
     }
 
+    /// @notice Get the managed pool system share in basis points.
+    function getManagedPoolSystemShareBps() external view returns (uint16 bps) {
+        bps = LibAppStorage.managedPoolSystemShareBps(LibAppStorage.s());
+    }
+
     function _positionKeyForToken(uint256 pid, uint256 tokenId) internal view virtual returns (bytes32 positionKey) {
         address nftAddr = LibPositionNFT.s().positionNFTContract;
         if (nftAddr == address(0)) {
@@ -289,7 +294,7 @@ contract ConfigViewFacet {
     }
 
     function selectors() external pure returns (bytes4[] memory selectorsArr) {
-        selectorsArr = new bytes4[](21);
+        selectorsArr = new bytes4[](22);
         selectorsArr[0] = ConfigViewFacet.getPoolConfigSummary.selector;
         selectorsArr[1] = ConfigViewFacet.getPoolCaps.selector;
         selectorsArr[2] = ConfigViewFacet.getMaintenanceState.selector;
@@ -311,5 +316,6 @@ contract ConfigViewFacet {
         selectorsArr[18] = ConfigViewFacet.isWhitelistEnabled.selector;
         selectorsArr[19] = ConfigViewFacet.isWhitelisted.selector;
         selectorsArr[20] = ConfigViewFacet.getManagedPoolConfig.selector;
+        selectorsArr[21] = ConfigViewFacet.getManagedPoolSystemShareBps.selector;
     }
 }

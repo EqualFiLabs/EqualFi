@@ -46,7 +46,7 @@ contract DirectDiamondSmokeTest is DirectDiamondTestBase {
         harness.setConfig(cfg);
     }
 
-    function test_DiamondSetupWorks() public view {
+    function test_DiamondSetupWorks() public {
         // Verify NFT setup
         assertEq(nft.ownerOf(lenderPositionId), lenderOwner);
         assertEq(nft.ownerOf(borrowerPositionId), borrowerOwner);

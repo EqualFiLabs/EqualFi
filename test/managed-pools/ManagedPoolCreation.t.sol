@@ -87,6 +87,7 @@ contract ManagedPoolCreationPropertyTest is Test {
     MockERC20 internal underlying;
     MockERC20 internal otherUnderlying;
     address internal treasury = address(0xBEEF);
+    uint256 internal constant MANAGED_PID = 2;
 
     function setUp() public {
         facet = new ManagedPoolManagementHarness();
@@ -94,6 +95,7 @@ contract ManagedPoolCreationPropertyTest is Test {
         otherUnderlying = new MockERC20("UnderlyingB", "UNDB", 18, 0);
         facet.setTreasury(treasury);
         facet.setManagedPoolCreationFee(0.1 ether);
+        facet.setDefaultPoolConfig(_defaultPoolConfig());
         facet.setOwner(address(this)); // owner set for completeness; fee still required
     }
 
@@ -190,12 +192,15 @@ contract ManagedPoolCreationPropertyTest is Test {
 
         vm.deal(creator, 1 ether);
         vm.prank(creator);
+        vm.expectEmit(true, true, false, false);
+        emit PoolManagementFacet.PoolInitialized(1, address(underlying), _defaultPoolConfig());
         vm.expectEmit(true, true, true, false);
-        emit PoolManagementFacet.PoolInitializedManaged(1, address(underlying), creator, cfg);
-        facet.initManagedPool{value: 0.1 ether}(1, address(underlying), cfg);
+        emit PoolManagementFacet.PoolInitializedManaged(MANAGED_PID, address(underlying), creator, cfg);
+        facet.initManagedPool{value: 0.1 ether}(MANAGED_PID, address(underlying), cfg);
 
-        (bool isManagedPool, address manager, bool whitelistEnabled, address storedUnderlying) = facet.poolInfo(1);
-        Types.ManagedPoolConfig memory storedConfig = facet.managedConfig(1);
+        (bool isManagedPool, address manager, bool whitelistEnabled, address storedUnderlying) =
+            facet.poolInfo(MANAGED_PID);
+        Types.ManagedPoolConfig memory storedConfig = facet.managedConfig(MANAGED_PID);
 
         assertTrue(isManagedPool, "managed flag set");
         assertEq(manager, creator, "manager stored");
@@ -247,10 +252,26 @@ contract ManagedPoolCreationPropertyTest is Test {
         cfg.whitelistEnabled = true;
         vm.deal(creator, 1 ether);
         vm.prank(creator);
-        facet.initManagedPool{value: 0.1 ether}(2, address(otherUnderlying), cfg);
-        (bool isManagedPool,, , address storedUnderlying) = facet.poolInfo(2);
+        facet.initManagedPool{value: 0.1 ether}(MANAGED_PID, address(otherUnderlying), cfg);
+        (bool isManagedPool,, , address storedUnderlying) = facet.poolInfo(MANAGED_PID);
         assertTrue(isManagedPool, "managed pool created");
         assertEq(storedUnderlying, address(otherUnderlying), "managed pool uses same token");
+    }
+
+    function _defaultPoolConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg.rollingApyBps = 500;
+        cfg.depositorLTVBps = 8000;
+        cfg.maintenanceRateBps = 50;
+        cfg.flashLoanFeeBps = 10;
+        cfg.flashLoanAntiSplit = false;
+        cfg.minDepositAmount = 1 ether;
+        cfg.minLoanAmount = 1 ether;
+        cfg.minTopupAmount = 0.1 ether;
+        cfg.isCapped = false;
+        cfg.depositCap = 0;
+        cfg.maxUserCount = 0;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
     }
 }
 
@@ -266,6 +287,7 @@ contract ManagedPoolCreationFeePropertyTest is Test {
         underlying = new MockERC20("Underlying", "UND", 18, 0);
         facet.setTreasury(treasury);
         facet.setManagedPoolCreationFee(0.2 ether);
+        facet.setDefaultPoolConfig(_defaultPoolConfig());
     }
 
     function testProperty_FeeCollectionAndRouting(address creator) public {
@@ -311,6 +333,22 @@ contract ManagedPoolCreationFeePropertyTest is Test {
         assertTrue(whitelistEnabled, "whitelist enabled");
         assertEq(storedUnderlying, address(underlying), "underlying set");
     }
+
+    function _defaultPoolConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg.rollingApyBps = 500;
+        cfg.depositorLTVBps = 8000;
+        cfg.maintenanceRateBps = 50;
+        cfg.flashLoanFeeBps = 10;
+        cfg.flashLoanAntiSplit = false;
+        cfg.minDepositAmount = 1 ether;
+        cfg.minLoanAmount = 1 ether;
+        cfg.minTopupAmount = 0.1 ether;
+        cfg.isCapped = false;
+        cfg.depositCap = 0;
+        cfg.maxUserCount = 0;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
+    }
 }
 
 contract ManagedPoolCreationErrorTests is Test {
@@ -321,6 +359,7 @@ contract ManagedPoolCreationErrorTests is Test {
     function setUp() public {
         facet = new ManagedPoolManagementHarness();
         underlying = new MockERC20("Underlying", "UND", 18, 0);
+        facet.setDefaultPoolConfig(_defaultPoolConfig());
     }
 
     /// **Feature: managed-pools, Property 4: Fee validation and error handling**
@@ -411,5 +450,21 @@ contract ManagedPoolCreationErrorTests is Test {
         vm.deal(address(this), 1 ether);
         vm.expectRevert(InvalidTreasuryAddress.selector);
         facet.initManagedPool{value: 0.5 ether}(10, address(underlying), cfg);
+    }
+
+    function _defaultPoolConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg.rollingApyBps = 500;
+        cfg.depositorLTVBps = 8000;
+        cfg.maintenanceRateBps = 50;
+        cfg.flashLoanFeeBps = 10;
+        cfg.flashLoanAntiSplit = false;
+        cfg.minDepositAmount = 1 ether;
+        cfg.minLoanAmount = 1 ether;
+        cfg.minTopupAmount = 0.1 ether;
+        cfg.isCapped = false;
+        cfg.depositCap = 0;
+        cfg.maxUserCount = 0;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
     }
 }

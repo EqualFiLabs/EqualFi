@@ -68,6 +68,7 @@ contract ManagedPoolErrorsTest is Test {
     MockERC20 internal underlying;
     address internal treasury = address(0x1111);
     address internal creator = address(0xBEEF);
+    uint256 internal constant MANAGED_PID = 2;
 
     function setUp() public {
         harness = new ManagedPoolErrorHarness();
@@ -124,7 +125,7 @@ contract ManagedPoolErrorsTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(InvalidManagedPoolConfig.selector, "manager must be msg.sender or zero")
         );
-        harness.initManagedPool{value: 0.1 ether}(1, address(underlying), cfg);
+        harness.initManagedPool{value: 0.1 ether}(MANAGED_PID, address(underlying), cfg);
     }
 
     function testInvalidManagedPoolConfigWhitelistDisabled() public {
@@ -136,7 +137,7 @@ contract ManagedPoolErrorsTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(InvalidManagedPoolConfig.selector, "whitelistEnabled must be true")
         );
-        harness.initManagedPool{value: 0.1 ether}(1, address(underlying), cfg);
+        harness.initManagedPool{value: 0.1 ether}(MANAGED_PID, address(underlying), cfg);
     }
 
     function testPoolNotManagedOnManagedSetter() public {

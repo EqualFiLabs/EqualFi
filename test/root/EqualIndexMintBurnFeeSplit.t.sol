@@ -164,7 +164,7 @@ contract EqualIndexMintBurnFeeSplitTest is Test {
         toIndex = amount - toTreasury - toActive;
     }
 
-    function test_defaultMintBurnFeeIndexShareBps() public view {
+    function test_defaultMintBurnFeeIndexShareBps() public {
         // Default should be 4000 (40%)
         assertEq(facet.getMintBurnFeeIndexShareBps(), 4000, "default mintBurnFeeIndexShareBps should be 4000");
     }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-// forge-config: default.via_ir = true
+// forge-config: default.via_ir = false
+// forge-config: default.optimizer = false
 // forge-config: default.fuzz.runs = 100
 pragma solidity ^0.8.20;
 
@@ -42,6 +43,12 @@ contract ImmutablePoolParametersPropertyTest is Test {
     
     uint256 constant PID = 1;
     address constant TIMELOCK = address(0x1234);
+
+    struct ValidationParams {
+        uint256 pid;
+        address underlying;
+        Types.PoolConfig config;
+    }
     
     function setUp() public {
         helper = new ImmutablePoolHelper();
@@ -117,9 +124,9 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint8 operationCount
     ) public {
         // Bound inputs to reasonable ranges
-        timeElapsed = bound(timeElapsed, 0, 365 days);
-        depositAmount = bound(depositAmount, 1 ether, 100 ether);
-        operationCount = uint8(bound(operationCount, 0, 10));
+        timeElapsed = _boundU256(timeElapsed, 0, 365 days);
+        depositAmount = _boundU256(depositAmount, 1 ether, 100 ether);
+        operationCount = uint8(_boundU256(operationCount, 0, 10));
         
         // Get initial immutable config
         Types.PoolConfig memory initialConfig = helper.getPoolConfig(PID);
@@ -188,8 +195,8 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint8 operationCount
     ) public {
         // Bound inputs
-        timeElapsed = bound(timeElapsed, 0, 365 days);
-        operationCount = uint8(bound(operationCount, 1, 20));
+        timeElapsed = _boundU256(timeElapsed, 0, 365 days);
+        operationCount = uint8(_boundU256(operationCount, 1, 20));
         
         // Get initial immutable config
         Types.PoolConfig memory initialConfig = helper.getPoolConfig(PID);
@@ -246,127 +253,47 @@ contract ImmutablePoolParametersPropertyTest is Test {
     /// @notice **Feature: immutable-pool-parameters, Property 7: Pool initialization with parameters**
     /// @notice For any valid set of immutable parameters, initializing a pool should succeed and the pool should be queryable with those exact parameters
     /// @notice **Validates: Requirements 4.1**
-    function testProperty_PoolInitializationWithParameters(
-        uint256 pid,
-        uint16 rollingApyBps,
-        uint16 depositorLTVBps,
-        uint16 maintenanceRateBps,
-        uint16 flashLoanFeeBps,
-        bool flashLoanAntiSplit,
-        uint256 minDepositAmount,
-        uint256 minLoanAmount,
-        uint256 minTopupAmount,
-        bool isCapped,
-        uint256 depositCap,
-        uint256 maxUserCount,
-        uint16 aumFeeMinBps,
-        uint16 aumFeeMaxBps
-    ) public {
-        uint256 boundedPid;
-        Types.PoolConfig memory config;
-        {
-            // Bound inputs to valid ranges inside a scoped block to limit stack pressure
-            boundedPid = bound(pid, 100, 10000); // Use high range to avoid conflicts with existing pools
-            uint16 boundedRolling = uint16(bound(rollingApyBps, 0, 10_000));
-            uint16 boundedLtv = uint16(bound(depositorLTVBps, 1, 10_000));
-            uint16 boundedMaintenance = uint16(bound(maintenanceRateBps, 0, 100));
-            uint16 boundedFlashLoan = uint16(bound(flashLoanFeeBps, 0, 10_000));
-            uint256 boundedMinDeposit = bound(minDepositAmount, 1, 1000 ether);
-            uint256 boundedMinLoan = bound(minLoanAmount, 1, 1000 ether);
-            uint256 boundedMinTopup = bound(minTopupAmount, 0, 1000 ether);
-            uint256 boundedMaxUsers = bound(maxUserCount, 0, 1_000_000);
-            uint16 boundedAumMin = uint16(bound(aumFeeMinBps, 0, 10_000));
-            uint16 boundedAumMax = uint16(bound(aumFeeMaxBps, boundedAumMin, 10_000));
-            uint256 boundedDepositCap = isCapped ? bound(depositCap, 1, type(uint128).max) : 0;
+    function testProperty_PoolInitializationWithParameters(uint256 pid, Types.PoolConfig memory config) public {
+        uint256 boundedPid = _boundPid(pid, 100, 10000);
+        Types.PoolConfig memory boundedConfig = _boundConfig(config, true);
 
-            // Create config with all parameters
-            config.rollingApyBps = boundedRolling;
-            config.depositorLTVBps = boundedLtv;
-            config.maintenanceRateBps = boundedMaintenance;
-            config.flashLoanFeeBps = boundedFlashLoan;
-            config.flashLoanAntiSplit = flashLoanAntiSplit;
-            config.minDepositAmount = boundedMinDeposit;
-            config.minLoanAmount = boundedMinLoan;
-            config.minTopupAmount = boundedMinTopup;
-            config.isCapped = isCapped;
-            config.depositCap = boundedDepositCap;
-            config.maxUserCount = boundedMaxUsers;
-            config.aumFeeMinBps = boundedAumMin;
-            config.aumFeeMaxBps = boundedAumMax;
-        }
-        
         // Initialize pool
         vm.prank(TIMELOCK);
-        helper.initPool(boundedPid, address(token), config);
-        
+        helper.initPool(boundedPid, address(token), boundedConfig);
+
         // Query the pool configuration
         Types.PoolConfig memory storedConfig = helper.getPoolConfig(boundedPid);
-        
+
         // Verify all parameters match exactly
-        assertEq(storedConfig.rollingApyBps, config.rollingApyBps, "rollingApyBps mismatch");
-        assertEq(storedConfig.depositorLTVBps, config.depositorLTVBps, "depositorLTVBps mismatch");
+        assertEq(storedConfig.rollingApyBps, boundedConfig.rollingApyBps, "rollingApyBps mismatch");
+        assertEq(storedConfig.depositorLTVBps, boundedConfig.depositorLTVBps, "depositorLTVBps mismatch");
         
         // maintenanceRateBps has special handling: if 0, uses default (which is 100 if not set)
-        if (config.maintenanceRateBps == 0) {
+        if (boundedConfig.maintenanceRateBps == 0) {
             // When 0, initPool uses defaultMaintenanceRateBps or maxMaintenanceRateBps (100)
             assertTrue(storedConfig.maintenanceRateBps > 0, "maintenanceRateBps should be set to default");
         } else {
-            assertEq(storedConfig.maintenanceRateBps, config.maintenanceRateBps, "maintenanceRateBps mismatch");
+            assertEq(storedConfig.maintenanceRateBps, boundedConfig.maintenanceRateBps, "maintenanceRateBps mismatch");
         }
-        
-        assertEq(storedConfig.flashLoanFeeBps, config.flashLoanFeeBps, "flashLoanFeeBps mismatch");
-        assertEq(storedConfig.flashLoanAntiSplit, flashLoanAntiSplit, "flashLoanAntiSplit mismatch");
-        assertEq(storedConfig.minDepositAmount, config.minDepositAmount, "minDepositAmount mismatch");
-        assertEq(storedConfig.minLoanAmount, config.minLoanAmount, "minLoanAmount mismatch");
-        assertEq(storedConfig.minTopupAmount, config.minTopupAmount, "minTopupAmount mismatch");
-        assertEq(storedConfig.isCapped, isCapped, "isCapped mismatch");
-        assertEq(storedConfig.depositCap, config.depositCap, "depositCap mismatch");
-        assertEq(storedConfig.maxUserCount, config.maxUserCount, "maxUserCount mismatch");
-        assertEq(storedConfig.aumFeeMinBps, config.aumFeeMinBps, "aumFeeMinBps mismatch");
-        assertEq(storedConfig.aumFeeMaxBps, config.aumFeeMaxBps, "aumFeeMaxBps mismatch");
+
+        assertEq(storedConfig.flashLoanFeeBps, boundedConfig.flashLoanFeeBps, "flashLoanFeeBps mismatch");
+        assertEq(storedConfig.flashLoanAntiSplit, boundedConfig.flashLoanAntiSplit, "flashLoanAntiSplit mismatch");
+        assertEq(storedConfig.minDepositAmount, boundedConfig.minDepositAmount, "minDepositAmount mismatch");
+        assertEq(storedConfig.minLoanAmount, boundedConfig.minLoanAmount, "minLoanAmount mismatch");
+        assertEq(storedConfig.minTopupAmount, boundedConfig.minTopupAmount, "minTopupAmount mismatch");
+        assertEq(storedConfig.isCapped, boundedConfig.isCapped, "isCapped mismatch");
+        assertEq(storedConfig.depositCap, boundedConfig.depositCap, "depositCap mismatch");
+        assertEq(storedConfig.maxUserCount, boundedConfig.maxUserCount, "maxUserCount mismatch");
+        assertEq(storedConfig.aumFeeMinBps, boundedConfig.aumFeeMinBps, "aumFeeMinBps mismatch");
+        assertEq(storedConfig.aumFeeMaxBps, boundedConfig.aumFeeMaxBps, "aumFeeMaxBps mismatch");
     }
     
     /// @notice **Feature: immutable-pool-parameters, Property 14: Input validation**
     /// @notice For any pool initialization with invalid parameters (missing required fields, zero thresholds, invalid addresses), the initialization should revert
     /// @notice **Validates: Requirements 8.2, 8.5**
-    function testProperty_InputValidation(
-        uint256 pid,
-        address underlying,
-        uint256 minDepositAmount,
-        uint256 minLoanAmount,
-        uint16 aumFeeMinBps,
-        uint16 aumFeeMaxBps,
-        uint16 depositorLTVBps,
-        uint16 flashLoanFeeBps,
-        uint16 rollingApyBps,
-        bool isCapped,
-        uint256 depositCap
-    ) public {
-        Types.PoolConfig memory config;
-        {
-            // Bound inputs inside a scope to reduce live stack variables
-            pid = bound(pid, 200, 20000);
-            minDepositAmount = bound(minDepositAmount, 0, 1000 ether);
-            minLoanAmount = bound(minLoanAmount, 0, 1000 ether);
-            aumFeeMinBps = uint16(bound(aumFeeMinBps, 0, 15_000));
-            aumFeeMaxBps = uint16(bound(aumFeeMaxBps, 0, 15_000));
-            depositorLTVBps = uint16(bound(depositorLTVBps, 0, 15_000));
-            flashLoanFeeBps = uint16(bound(flashLoanFeeBps, 0, 15_000));
-            rollingApyBps = uint16(bound(rollingApyBps, 0, 15_000));
-            uint256 cappedDepositCap = isCapped ? depositCap : 0;
+    function testProperty_InputValidation(uint256 pid, address underlying, Types.PoolConfig memory config) public {
+        ValidationParams memory params = _boundValidationParams(pid, underlying, config);
 
-            // Create config
-            config.minDepositAmount = minDepositAmount;
-            config.minLoanAmount = minLoanAmount;
-            config.aumFeeMinBps = aumFeeMinBps;
-            config.aumFeeMaxBps = aumFeeMaxBps;
-            config.depositorLTVBps = depositorLTVBps;
-            config.flashLoanFeeBps = flashLoanFeeBps;
-            config.rollingApyBps = rollingApyBps;
-            config.isCapped = isCapped;
-            config.depositCap = cappedDepositCap;
-        }
-        
         vm.prank(TIMELOCK);
         
         // Check for various invalid conditions
@@ -374,7 +301,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
         bool shouldRevert = false;
         
         // Zero minDepositAmount (checked first)
-        if (minDepositAmount == 0) {
+        if (params.config.minDepositAmount == 0) {
             shouldRevert = true;
             vm.expectRevert(
                 abi.encodeWithSelector(
@@ -384,7 +311,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
             );
         }
         // Zero minLoanAmount (checked second)
-        else if (minLoanAmount == 0) {
+        else if (params.config.minLoanAmount == 0) {
             shouldRevert = true;
             vm.expectRevert(
                 abi.encodeWithSelector(
@@ -394,7 +321,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
             );
         }
         // Capped but cap is zero (checked fourth)
-        else if (isCapped && depositCap == 0) {
+        else if (params.config.isCapped && params.config.depositCap == 0) {
             shouldRevert = true;
             vm.expectRevert(
                 abi.encodeWithSelector(
@@ -403,7 +330,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
             );
         }
         // Invalid AUM bounds (min > max)
-        else if (aumFeeMinBps > aumFeeMaxBps) {
+        else if (params.config.aumFeeMinBps > params.config.aumFeeMaxBps) {
             shouldRevert = true;
             vm.expectRevert(
                 abi.encodeWithSelector(
@@ -412,7 +339,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
             );
         }
         // AUM max > 100%
-        else if (aumFeeMaxBps > 10_000) {
+        else if (params.config.aumFeeMaxBps > 10_000) {
             shouldRevert = true;
             vm.expectRevert(
                 abi.encodeWithSelector(
@@ -422,7 +349,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
             );
         }
         // LTV > 100%
-        else if (depositorLTVBps == 0 || depositorLTVBps > 10_000) {
+        else if (params.config.depositorLTVBps == 0 || params.config.depositorLTVBps > 10_000) {
             shouldRevert = true;
             vm.expectRevert(
                 abi.encodeWithSelector(
@@ -431,7 +358,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
             );
         }
         // Flash loan fee > 100%
-        else if (flashLoanFeeBps > 10_000) {
+        else if (params.config.flashLoanFeeBps > 10_000) {
             shouldRevert = true;
             vm.expectRevert(
                 abi.encodeWithSelector(
@@ -440,7 +367,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
             );
         }
         // Rolling APY > 100%
-        else if (rollingApyBps > 10_000) {
+        else if (params.config.rollingApyBps > 10_000) {
             shouldRevert = true;
             vm.expectRevert(
                 abi.encodeWithSelector(
@@ -451,74 +378,78 @@ contract ImmutablePoolParametersPropertyTest is Test {
         }
         
         // Attempt to initialize pool
-        helper.initPool(pid, underlying, config);
+        helper.initPool(params.pid, params.underlying, params.config);
         
         // If we didn't expect a revert, verify the pool was created
         if (!shouldRevert) {
-            Types.PoolConfig memory storedConfig = helper.getPoolConfig(pid);
-            assertEq(storedConfig.minDepositAmount, minDepositAmount, "Pool should be created with valid params");
+            Types.PoolConfig memory storedConfig = helper.getPoolConfig(params.pid);
+            assertEq(
+                storedConfig.minDepositAmount,
+                params.config.minDepositAmount,
+                "Pool should be created with valid params"
+            );
         }
     }
     
     /// @notice **Feature: immutable-pool-parameters, Property 15: Initialization event emission**
     /// @notice For any successful pool initialization, the system should emit an event containing all immutable parameter values
     /// @notice **Validates: Requirements 8.3, 10.1**
-    function testProperty_InitializationEventEmission(
-        uint256 pid,
-        uint16 rollingApyBps,
-        uint16 depositorLTVBps,
-        uint16 maintenanceRateBps,
-        uint16 flashLoanFeeBps,
-        bool flashLoanAntiSplit,
-        uint256 minDepositAmount,
-        uint256 minLoanAmount,
-        uint256 minTopupAmount,
-        bool isCapped,
-        uint256 depositCap,
-        uint256 maxUserCount,
-        uint16 aumFeeMinBps,
-        uint16 aumFeeMaxBps
-    ) public {
-        uint256 boundedPid;
-        Types.PoolConfig memory config;
-        {
-            // Bound inputs within a scoped block to limit stack usage
-            boundedPid = bound(pid, 300, 30000);
-            uint16 boundedRolling = uint16(bound(rollingApyBps, 0, 10_000));
-            uint16 boundedLtv = uint16(bound(depositorLTVBps, 1, 10_000));
-            uint16 boundedMaintenance = uint16(bound(maintenanceRateBps, 1, 100)); // Non-zero to avoid default handling
-            uint16 boundedFlashLoan = uint16(bound(flashLoanFeeBps, 0, 10_000));
-            uint256 boundedMinDeposit = bound(minDepositAmount, 1, 1000 ether);
-            uint256 boundedMinLoan = bound(minLoanAmount, 1, 1000 ether);
-            uint256 boundedMinTopup = bound(minTopupAmount, 0, 1000 ether);
-            uint256 boundedMaxUsers = bound(maxUserCount, 0, 1_000_000);
-            uint16 boundedAumMin = uint16(bound(aumFeeMinBps, 0, 10_000));
-            uint16 boundedAumMax = uint16(bound(aumFeeMaxBps, boundedAumMin, 10_000));
-            uint256 boundedDepositCap = isCapped ? bound(depositCap, 1, type(uint128).max) : 0;
+    function testProperty_InitializationEventEmission(uint256 pid, Types.PoolConfig memory config) public {
+        uint256 boundedPid = _boundPid(pid, 300, 30000);
+        Types.PoolConfig memory boundedConfig = _boundConfig(config, false);
 
-            // Create config with all parameters
-            config.rollingApyBps = boundedRolling;
-            config.depositorLTVBps = boundedLtv;
-            config.maintenanceRateBps = boundedMaintenance;
-            config.flashLoanFeeBps = boundedFlashLoan;
-            config.flashLoanAntiSplit = flashLoanAntiSplit;
-            config.minDepositAmount = boundedMinDeposit;
-            config.minLoanAmount = boundedMinLoan;
-            config.minTopupAmount = boundedMinTopup;
-            config.isCapped = isCapped;
-            config.depositCap = boundedDepositCap;
-            config.maxUserCount = boundedMaxUsers;
-            config.aumFeeMinBps = boundedAumMin;
-            config.aumFeeMaxBps = boundedAumMax;
-        }
-        
         // Expect the PoolInitialized event to be emitted
         vm.expectEmit(true, true, false, false);
-        emit PoolManagementFacet.PoolInitialized(boundedPid, address(token), config);
-        
+        emit PoolManagementFacet.PoolInitialized(boundedPid, address(token), boundedConfig);
+
         // Initialize pool
         vm.prank(TIMELOCK);
-        helper.initPool(boundedPid, address(token), config);
+        helper.initPool(boundedPid, address(token), boundedConfig);
+    }
+
+    function _boundValidationParams(uint256 pid, address underlying, Types.PoolConfig memory config)
+        internal
+        pure
+        returns (ValidationParams memory params)
+    {
+        params.pid = _boundPid(pid, 200, 20000);
+        params.underlying = underlying;
+        params.config = _boundConfig(config, false);
+    }
+
+    function _boundConfig(Types.PoolConfig memory config, bool includeTopup) internal pure returns (Types.PoolConfig memory bounded) {
+        bounded.rollingApyBps = _boundU16(config.rollingApyBps, 0, 10_000);
+        bounded.depositorLTVBps = _boundU16(config.depositorLTVBps, 1, 10_000);
+        bounded.maintenanceRateBps = _boundU16(config.maintenanceRateBps, 0, 100);
+        bounded.flashLoanFeeBps = _boundU16(config.flashLoanFeeBps, 0, 10_000);
+        bounded.flashLoanAntiSplit = config.flashLoanAntiSplit;
+        bounded.minDepositAmount = _boundU256(config.minDepositAmount, 1, 1000 ether);
+        bounded.minLoanAmount = _boundU256(config.minLoanAmount, 1, 1000 ether);
+        bounded.minTopupAmount = includeTopup ? _boundU256(config.minTopupAmount, 0, 1000 ether) : config.minTopupAmount;
+        bounded.isCapped = config.isCapped;
+        bounded.depositCap = config.isCapped ? _boundU256(config.depositCap, 1, type(uint128).max) : 0;
+        bounded.maxUserCount = _boundU256(config.maxUserCount, 0, 1_000_000);
+        bounded.aumFeeMinBps = _boundU16(config.aumFeeMinBps, 0, 10_000);
+        bounded.aumFeeMaxBps = _boundU16(config.aumFeeMaxBps, bounded.aumFeeMinBps, 10_000);
+        bounded.fixedTermConfigs = new Types.FixedTermConfig[](0);
+    }
+
+    function _boundPid(uint256 value, uint256 minValue, uint256 maxValue) internal pure returns (uint256) {
+        if (value < minValue) return minValue;
+        if (value > maxValue) return maxValue;
+        return value;
+    }
+
+    function _boundU16(uint16 value, uint16 minValue, uint16 maxValue) internal pure returns (uint16) {
+        if (value < minValue) return minValue;
+        if (value > maxValue) return maxValue;
+        return value;
+    }
+
+    function _boundU256(uint256 value, uint256 minValue, uint256 maxValue) internal pure returns (uint256) {
+        if (value < minValue) return minValue;
+        if (value > maxValue) return maxValue;
+        return value;
     }
     
     /// @notice **Feature: immutable-pool-parameters, Property 5: AUM fee bounds enforcement**
@@ -530,9 +461,9 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint16 attemptedFeeBps
     ) public {
         // Ensure bounds are valid
-        aumFeeMinBps = uint16(bound(aumFeeMinBps, 0, 10_000));
-        aumFeeMaxBps = uint16(bound(aumFeeMaxBps, aumFeeMinBps, 10_000));
-        attemptedFeeBps = uint16(bound(attemptedFeeBps, 0, 15_000)); // Allow out-of-bounds values
+        aumFeeMinBps = _boundU16(aumFeeMinBps, 0, 10_000);
+        aumFeeMaxBps = _boundU16(aumFeeMaxBps, aumFeeMinBps, 10_000);
+        attemptedFeeBps = _boundU16(attemptedFeeBps, 0, 15_000); // Allow out-of-bounds values
         
         // Create a new pool with specific AUM bounds
         uint256 testPid = 50000;
@@ -577,11 +508,11 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint16 newFeeBps
     ) public {
         // Ensure bounds are valid
-        aumFeeMinBps = uint16(bound(aumFeeMinBps, 0, 10_000));
-        aumFeeMaxBps = uint16(bound(aumFeeMaxBps, aumFeeMinBps, 10_000));
+        aumFeeMinBps = _boundU16(aumFeeMinBps, 0, 10_000);
+        aumFeeMaxBps = _boundU16(aumFeeMaxBps, aumFeeMinBps, 10_000);
         
         // Ensure new fee is within bounds
-        newFeeBps = uint16(bound(newFeeBps, aumFeeMinBps, aumFeeMaxBps));
+        newFeeBps = _boundU16(newFeeBps, aumFeeMinBps, aumFeeMaxBps);
         
         // Create a new pool with specific AUM bounds
         uint256 testPid = 60000;
@@ -623,25 +554,25 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint16 newAumFee1
     ) public {
         // Bound inputs to valid ranges
-        pid1 = bound(pid1, 70000, 75000);
-        pid2 = bound(pid2, 75001, 80000); // Ensure different from pid1
+        pid1 = _boundU256(pid1, 70000, 75000);
+        pid2 = _boundU256(pid2, 75001, 80000); // Ensure different from pid1
         
-        rollingApyBps1 = uint16(bound(rollingApyBps1, 0, 10_000));
-        rollingApyBps2 = uint16(bound(rollingApyBps2, 0, 10_000));
+        rollingApyBps1 = _boundU16(rollingApyBps1, 0, 10_000);
+        rollingApyBps2 = _boundU16(rollingApyBps2, 0, 10_000);
         
-        depositorLTVBps1 = uint16(bound(depositorLTVBps1, 1, 10_000));
-        depositorLTVBps2 = uint16(bound(depositorLTVBps2, 1, 10_000));
+        depositorLTVBps1 = _boundU16(depositorLTVBps1, 1, 10_000);
+        depositorLTVBps2 = _boundU16(depositorLTVBps2, 1, 10_000);
         
-        minDepositAmount1 = bound(minDepositAmount1, 1, 1000 ether);
-        minDepositAmount2 = bound(minDepositAmount2, 1, 1000 ether);
+        minDepositAmount1 = _boundU256(minDepositAmount1, 1, 1000 ether);
+        minDepositAmount2 = _boundU256(minDepositAmount2, 1, 1000 ether);
         
-        aumFeeMinBps1 = uint16(bound(aumFeeMinBps1, 0, 10_000));
-        aumFeeMaxBps1 = uint16(bound(aumFeeMaxBps1, aumFeeMinBps1, 10_000));
+        aumFeeMinBps1 = _boundU16(aumFeeMinBps1, 0, 10_000);
+        aumFeeMaxBps1 = _boundU16(aumFeeMaxBps1, aumFeeMinBps1, 10_000);
         
-        aumFeeMinBps2 = uint16(bound(aumFeeMinBps2, 0, 10_000));
-        aumFeeMaxBps2 = uint16(bound(aumFeeMaxBps2, aumFeeMinBps2, 10_000));
+        aumFeeMinBps2 = _boundU16(aumFeeMinBps2, 0, 10_000);
+        aumFeeMaxBps2 = _boundU16(aumFeeMaxBps2, aumFeeMinBps2, 10_000);
         
-        newAumFee1 = uint16(bound(newAumFee1, aumFeeMinBps1, aumFeeMaxBps1));
+        newAumFee1 = _boundU16(newAumFee1, aumFeeMinBps1, aumFeeMaxBps1);
         
         // Create first pool with specific parameters
         Types.PoolConfig memory config1 = _defaultConfig();
@@ -723,17 +654,17 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint256 minDepositAmount3
     ) public {
         // Bound inputs to valid ranges
-        pid1 = bound(pid1, 80000, 82000);
-        pid2 = bound(pid2, 82001, 84000);
-        pid3 = bound(pid3, 84001, 86000);
+        pid1 = _boundU256(pid1, 80000, 82000);
+        pid2 = _boundU256(pid2, 82001, 84000);
+        pid3 = _boundU256(pid3, 84001, 86000);
         
-        rollingApyBps1 = uint16(bound(rollingApyBps1, 0, 10_000));
-        rollingApyBps2 = uint16(bound(rollingApyBps2, 0, 10_000));
-        rollingApyBps3 = uint16(bound(rollingApyBps3, 0, 10_000));
+        rollingApyBps1 = _boundU16(rollingApyBps1, 0, 10_000);
+        rollingApyBps2 = _boundU16(rollingApyBps2, 0, 10_000);
+        rollingApyBps3 = _boundU16(rollingApyBps3, 0, 10_000);
         
-        minDepositAmount1 = bound(minDepositAmount1, 1, 100 ether);
-        minDepositAmount2 = bound(minDepositAmount2, 1, 100 ether);
-        minDepositAmount3 = bound(minDepositAmount3, 1, 100 ether);
+        minDepositAmount1 = _boundU256(minDepositAmount1, 1, 100 ether);
+        minDepositAmount2 = _boundU256(minDepositAmount2, 1, 100 ether);
+        minDepositAmount3 = _boundU256(minDepositAmount3, 1, 100 ether);
         
         // Create three pools with different parameters
         Types.PoolConfig memory config1 = _defaultConfig();
@@ -819,20 +750,20 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint16 newAumFeeMaxBps
     ) public {
         // Bound inputs to valid ranges
-        existingPid = bound(existingPid, 90000, 92000);
-        newPid = bound(newPid, 92001, 94000); // Ensure different from existingPid
+        existingPid = _boundU256(existingPid, 90000, 92000);
+        newPid = _boundU256(newPid, 92001, 94000); // Ensure different from existingPid
         
-        existingRollingApyBps = uint16(bound(existingRollingApyBps, 0, 10_000));
-        existingDepositorLTVBps = uint16(bound(existingDepositorLTVBps, 1, 10_000));
-        existingMinDepositAmount = bound(existingMinDepositAmount, 1, 1000 ether);
-        existingAumFeeMinBps = uint16(bound(existingAumFeeMinBps, 0, 10_000));
-        existingAumFeeMaxBps = uint16(bound(existingAumFeeMaxBps, existingAumFeeMinBps, 10_000));
+        existingRollingApyBps = _boundU16(existingRollingApyBps, 0, 10_000);
+        existingDepositorLTVBps = _boundU16(existingDepositorLTVBps, 1, 10_000);
+        existingMinDepositAmount = _boundU256(existingMinDepositAmount, 1, 1000 ether);
+        existingAumFeeMinBps = _boundU16(existingAumFeeMinBps, 0, 10_000);
+        existingAumFeeMaxBps = _boundU16(existingAumFeeMaxBps, existingAumFeeMinBps, 10_000);
         
-        newRollingApyBps = uint16(bound(newRollingApyBps, 0, 10_000));
-        newDepositorLTVBps = uint16(bound(newDepositorLTVBps, 1, 10_000));
-        newMinDepositAmount = bound(newMinDepositAmount, 1, 1000 ether);
-        newAumFeeMinBps = uint16(bound(newAumFeeMinBps, 0, 10_000));
-        newAumFeeMaxBps = uint16(bound(newAumFeeMaxBps, newAumFeeMinBps, 10_000));
+        newRollingApyBps = _boundU16(newRollingApyBps, 0, 10_000);
+        newDepositorLTVBps = _boundU16(newDepositorLTVBps, 1, 10_000);
+        newMinDepositAmount = _boundU256(newMinDepositAmount, 1, 1000 ether);
+        newAumFeeMinBps = _boundU16(newAumFeeMinBps, 0, 10_000);
+        newAumFeeMaxBps = _boundU16(newAumFeeMaxBps, newAumFeeMinBps, 10_000);
         
         // Create existing pool
         Types.PoolConfig memory existingConfig = _defaultConfig();
@@ -901,13 +832,13 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint256 poolCreationFee
     ) public {
         // Bound inputs to valid ranges
-        pid = bound(pid, 100000, 110000);
-        rollingApyBps = uint16(bound(rollingApyBps, 0, 10_000));
-        minDepositAmount = bound(minDepositAmount, 1, 1000 ether);
-        minLoanAmount = bound(minLoanAmount, 1, 1000 ether);
-        aumFeeMinBps = uint16(bound(aumFeeMinBps, 0, 10_000));
-        aumFeeMaxBps = uint16(bound(aumFeeMaxBps, aumFeeMinBps, 10_000));
-        poolCreationFee = bound(poolCreationFee, 0.01 ether, 100 ether);
+        pid = _boundU256(pid, 100000, 110000);
+        rollingApyBps = _boundU16(rollingApyBps, 0, 10_000);
+        minDepositAmount = _boundU256(minDepositAmount, 1, 1000 ether);
+        minLoanAmount = _boundU256(minLoanAmount, 1, 1000 ether);
+        aumFeeMinBps = _boundU16(aumFeeMinBps, 0, 10_000);
+        aumFeeMaxBps = _boundU16(aumFeeMaxBps, aumFeeMinBps, 10_000);
+        poolCreationFee = _boundU256(poolCreationFee, 0.01 ether, 100 ether);
         
         // Set pool creation fee
         vm.prank(TIMELOCK);
@@ -954,13 +885,13 @@ contract ImmutablePoolParametersPropertyTest is Test {
         vm.assume(nonAdmin != TIMELOCK);
         vm.assume(nonAdmin != address(this)); // Avoid treasury address
         
-        rollingApyBps = uint16(bound(rollingApyBps, 0, 10_000));
-        minDepositAmount = bound(minDepositAmount, 1, 1000 ether);
-        minLoanAmount = bound(minLoanAmount, 1, 1000 ether);
-        aumFeeMinBps = uint16(bound(aumFeeMinBps, 0, 10_000));
-        uint16 aumFeeMaxBps = uint16(bound(aumFeeMinBps, aumFeeMinBps, 10_000));
-        poolCreationFee = bound(poolCreationFee, 0.01 ether, 100 ether);
-        sentValue = bound(sentValue, 0, 200 ether);
+        rollingApyBps = _boundU16(rollingApyBps, 0, 10_000);
+        minDepositAmount = _boundU256(minDepositAmount, 1, 1000 ether);
+        minLoanAmount = _boundU256(minLoanAmount, 1, 1000 ether);
+        aumFeeMinBps = _boundU16(aumFeeMinBps, 0, 10_000);
+        uint16 aumFeeMaxBps = _boundU16(aumFeeMinBps, aumFeeMinBps, 10_000);
+        poolCreationFee = _boundU256(poolCreationFee, 0.01 ether, 100 ether);
+        sentValue = _boundU256(sentValue, 0, 200 ether);
         
         // Set pool creation fee
         vm.prank(TIMELOCK);
@@ -1006,17 +937,17 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint256 poolCreationFee
     ) public {
         // Bound inputs to valid ranges
-        pid = bound(pid, 120000, 130000);
+        pid = _boundU256(pid, 120000, 130000);
         vm.assume(nonAdmin != address(0));
         vm.assume(nonAdmin != TIMELOCK);
         vm.assume(nonAdmin != address(this)); // Avoid treasury address
         
-        rollingApyBps = uint16(bound(rollingApyBps, 0, 10_000));
-        minDepositAmount = bound(minDepositAmount, 1, 1000 ether);
-        minLoanAmount = bound(minLoanAmount, 1, 1000 ether);
-        aumFeeMinBps = uint16(bound(aumFeeMinBps, 0, 10_000));
-        aumFeeMaxBps = uint16(bound(aumFeeMaxBps, aumFeeMinBps, 10_000));
-        poolCreationFee = bound(poolCreationFee, 0.01 ether, 100 ether);
+        rollingApyBps = _boundU16(rollingApyBps, 0, 10_000);
+        minDepositAmount = _boundU256(minDepositAmount, 1, 1000 ether);
+        minLoanAmount = _boundU256(minLoanAmount, 1, 1000 ether);
+        aumFeeMinBps = _boundU16(aumFeeMinBps, 0, 10_000);
+        aumFeeMaxBps = _boundU16(aumFeeMaxBps, aumFeeMinBps, 10_000);
+        poolCreationFee = _boundU256(poolCreationFee, 0.01 ether, 100 ether);
         
         // Set pool creation fee
         vm.prank(TIMELOCK);
@@ -1042,7 +973,11 @@ contract ImmutablePoolParametersPropertyTest is Test {
         
         // Non-admin creates pool with fee
         vm.prank(nonAdmin);
-        uint256 createdPid = helper.initPool{value: poolCreationFee}(address(localToken));
+        (bool ok, bytes memory data) = address(helper).call{value: poolCreationFee}(
+            abi.encodeWithSignature("initPool(address)", address(localToken))
+        );
+        assertTrue(ok, "initPool should succeed with correct fee");
+        uint256 createdPid = abi.decode(data, (uint256));
         
         // Record treasury balance after
         uint256 treasuryBalanceAfter = address(this).balance;
@@ -1076,15 +1011,15 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint8 operationCount
     ) public {
         // Bound inputs to valid ranges
-        pid = bound(pid, 130000, 140000);
-        rollingApyBps = uint16(bound(rollingApyBps, 0, 10_000));
-        depositorLTVBps = uint16(bound(depositorLTVBps, 1, 10_000));
-        minDepositAmount = bound(minDepositAmount, 1, 1000 ether);
-        minLoanAmount = bound(minLoanAmount, 1, 1000 ether);
-        aumFeeMinBps = uint16(bound(aumFeeMinBps, 0, 10_000));
-        aumFeeMaxBps = uint16(bound(aumFeeMaxBps, aumFeeMinBps, 10_000));
-        timeElapsed = bound(timeElapsed, 0, 365 days);
-        operationCount = uint8(bound(operationCount, 0, 10));
+        pid = _boundU256(pid, 130000, 140000);
+        rollingApyBps = _boundU16(rollingApyBps, 0, 10_000);
+        depositorLTVBps = _boundU16(depositorLTVBps, 1, 10_000);
+        minDepositAmount = _boundU256(minDepositAmount, 1, 1000 ether);
+        minLoanAmount = _boundU256(minLoanAmount, 1, 1000 ether);
+        aumFeeMinBps = _boundU16(aumFeeMinBps, 0, 10_000);
+        aumFeeMaxBps = _boundU16(aumFeeMaxBps, aumFeeMinBps, 10_000);
+        timeElapsed = _boundU256(timeElapsed, 0, 365 days);
+        operationCount = uint8(_boundU256(operationCount, 0, 10));
         
         // Create pool with specific parameters
         Types.PoolConfig memory config = _defaultConfig();
@@ -1190,14 +1125,14 @@ contract ImmutablePoolParametersPropertyTest is Test {
         uint8 functionSelector
     ) public {
         // Bound inputs to valid ranges
-        pid = bound(pid, 140000, 150000);
-        rollingApyBps = uint16(bound(rollingApyBps, 0, 10_000));
-        minDepositAmount = bound(minDepositAmount, 1, 1000 ether);
-        minLoanAmount = bound(minLoanAmount, 1, 1000 ether);
-        aumFeeMinBps = uint16(bound(aumFeeMinBps, 0, 10_000));
-        aumFeeMaxBps = uint16(bound(aumFeeMaxBps, aumFeeMinBps, 10_000));
-        newAumFee = uint16(bound(newAumFee, aumFeeMinBps, aumFeeMaxBps));
-        functionSelector = uint8(bound(functionSelector, 0, 2)); // 0=setAumFee, 1=setPoolDeprecated, 2=initPool
+        pid = _boundU256(pid, 140000, 150000);
+        rollingApyBps = _boundU16(rollingApyBps, 0, 10_000);
+        minDepositAmount = _boundU256(minDepositAmount, 1, 1000 ether);
+        minLoanAmount = _boundU256(minLoanAmount, 1, 1000 ether);
+        aumFeeMinBps = _boundU16(aumFeeMinBps, 0, 10_000);
+        aumFeeMaxBps = _boundU16(aumFeeMaxBps, aumFeeMinBps, 10_000);
+        newAumFee = _boundU16(newAumFee, aumFeeMinBps, aumFeeMaxBps);
+        functionSelector = uint8(_boundU256(functionSelector, 0, 2)); // 0=setAumFee, 1=setPoolDeprecated, 2=initPool
         
         // Create initial pool
         Types.PoolConfig memory config = _defaultConfig();
@@ -1257,7 +1192,7 @@ contract ImmutablePoolParametersPropertyTest is Test {
             // Test initPool - should succeed (creating a new pool)
             uint256 newPid = pid + 1;
             Types.PoolConfig memory newConfig = _defaultConfig();
-            newConfig.rollingApyBps = uint16(bound(rollingApyBps + 100, 0, 10_000));
+            newConfig.rollingApyBps = _boundU16(rollingApyBps + 100, 0, 10_000);
             newConfig.minDepositAmount = minDepositAmount;
             newConfig.minLoanAmount = minLoanAmount;
             newConfig.aumFeeMinBps = aumFeeMinBps;

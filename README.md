@@ -1,3 +1,5 @@
+[![CI](https://github.com/EqualFiLabs/EqualFi/actions/workflows/ci.yml/badge.svg)](https://github.com/EqualFiLabs/EqualFi/actions/workflows/ci.yml)
+
 This work is inspired in part by:
 
 [https://vitalik.eth.limo/general/2025/09/21/low_risk_defi.html](https://vitalik.eth.limo/general/2025/09/21/low_risk_defi.html)
@@ -102,6 +104,40 @@ The most interesting consequence of P2P lending is that it enables perpetual lev
 This is not a promise of safety. It is a different enforcement model. Risk does not disappear, it becomes legible. Lenders decide whether they want strict collateralization, softer terms, covenants, callable structures, or even undercollateralized credit for vetted clients where real-world underwriting exists above the protocol. Borrowers choose the deal they are willing to live with. Defaults are handled as defaults, not as third-party liquidation opportunities.
 
 EqualLend is designed to serve both ends of the spectrum. It gives ordinary users a predictable way to unlock liquidity without being hunted by liquidation bots, and it gives professional lenders and market makers a credit framework that can support real structured products. And because active credit is rewarded through the Active Credit Index, the system aligns incentives around the work that actually expands what the protocol can do.
+
+
+## Perpetual Leverage Loop
+
+The below flowchart is a concrete example of how one can achieve a _**PERPETUAL LEVERAGE LOOP**_ . In this case perpetual leverage means exactly what it is.  A leverage loop that can be maintained indefinitely regardless of market conditions.
+
+```mermaid
+flowchart TB
+  subgraph Actors["Actors / Setup"]
+    A["User A - Borrower<br>Position NFT in Pool TK1<br>Initial deposit: 2 TK1<br>Goal: increase TK1 exposure"]
+    B["User B - Lender<br>Position NFT in Pool TK2<br>Deposits: 50,000 TK2<br>Posts Rolling Offers"]
+    C["User C - Maker<br>Creates AMM Auction<br>Reserves: 5 TK1 / 16,000 TK2<br>Fee: 0 bps"]
+  end
+
+  subgraph Loop["Leverage Loop - repeat N times"]
+    S1["1 Post Rolling Offer by User B<br>Lend: 2,000 TK2 per fill<br>Collateral lock: 0.5714 TK1<br>Rolling terms: 30 days, grace 1 day"]
+    S2["2 Accept Offer by User A<br>Borrow: +2,000 TK2<br>Lock collateral: +0.5714 TK1<br>directLocked += 0.5714 TK1"]
+    S3["3 Swap Borrowed TK2 to TK1<br>Swap 2,000 TK2 into TK1<br>via AMM Auction from User C"]
+    S4["4 Re-Deposit TK1<br>Deposit received TK1 back into Pool TK1<br>Principal increases"]
+  end
+
+
+
+  B --> S1
+  A --> S2
+  C --> S3
+
+  S1 -->|repeat| S2
+  S2 --> S3
+  S3 --> S4
+  S4 -->|repeat| S2
+```
+
+This is achieved using P2P Revolving loans, AMM Auction Swaps and Redeposits. This creates leverage that is immune to price changes.
 
 ## Road to Immutability
 

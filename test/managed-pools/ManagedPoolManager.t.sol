@@ -18,6 +18,33 @@ contract ManagedPoolManagerHarness is PoolManagementFacet {
         LibAppStorage.s().treasury = treasury;
     }
 
+    function setDefaultPoolConfig(Types.PoolConfig memory config) external {
+        Types.PoolConfig storage target = LibAppStorage.s().defaultPoolConfig;
+        target.rollingApyBps = config.rollingApyBps;
+        target.depositorLTVBps = config.depositorLTVBps;
+        target.maintenanceRateBps = config.maintenanceRateBps;
+        target.flashLoanFeeBps = config.flashLoanFeeBps;
+        target.flashLoanAntiSplit = config.flashLoanAntiSplit;
+        target.minDepositAmount = config.minDepositAmount;
+        target.minLoanAmount = config.minLoanAmount;
+        target.minTopupAmount = config.minTopupAmount;
+        target.isCapped = config.isCapped;
+        target.depositCap = config.depositCap;
+        target.maxUserCount = config.maxUserCount;
+        target.aumFeeMinBps = config.aumFeeMinBps;
+        target.aumFeeMaxBps = config.aumFeeMaxBps;
+        target.borrowFee = config.borrowFee;
+        target.repayFee = config.repayFee;
+        target.withdrawFee = config.withdrawFee;
+        target.flashFee = config.flashFee;
+        target.closeRollingFee = config.closeRollingFee;
+        delete target.fixedTermConfigs;
+        for (uint256 i = 0; i < config.fixedTermConfigs.length; i++) {
+            target.fixedTermConfigs.push(config.fixedTermConfigs[i]);
+        }
+        LibAppStorage.s().defaultPoolConfigSet = true;
+    }
+
     function setOwner(address owner) external {
         LibDiamond.setContractOwner(owner);
     }
@@ -35,6 +62,7 @@ contract ManagedPoolManagerPropertyTest is Test {
     address internal treasury = address(0xBEEF);
     address internal manager = address(0xA11CE);
     address internal newManager = address(0xB0B);
+    uint256 internal constant MANAGED_PID = 2;
 
     function setUp() public {
         facet = new ManagedPoolManagerHarness();
@@ -42,6 +70,7 @@ contract ManagedPoolManagerPropertyTest is Test {
         facet.setManagedPoolCreationFee(0.05 ether);
         facet.setTreasury(treasury);
         facet.setOwner(address(this));
+        facet.setDefaultPoolConfig(_defaultPoolConfig());
 
         Types.ManagedPoolConfig memory cfg;
         cfg.rollingApyBps = 500;
@@ -59,34 +88,50 @@ contract ManagedPoolManagerPropertyTest is Test {
 
         vm.deal(manager, 1 ether);
         vm.prank(manager);
-        facet.initManagedPool{value: 0.05 ether}(1, address(underlying), cfg);
+        facet.initManagedPool{value: 0.05 ether}(MANAGED_PID, address(underlying), cfg);
     }
 
     function testProperty_ManagerTransferAndRenounce() public {
         vm.expectEmit(true, true, true, true);
-        emit PoolManagementFacet.ManagerTransferred(1, manager, newManager);
+        emit PoolManagementFacet.ManagerTransferred(MANAGED_PID, manager, newManager);
         vm.prank(manager);
-        facet.transferManager(1, newManager);
-        assertEq(facet.poolManager(1), newManager, "manager updated");
+        facet.transferManager(MANAGED_PID, newManager);
+        assertEq(facet.poolManager(MANAGED_PID), newManager, "manager updated");
 
         vm.expectRevert(abi.encodeWithSelector(NotPoolManager.selector, manager, newManager));
         vm.prank(manager);
-        facet.renounceManager(1);
+        facet.renounceManager(MANAGED_PID);
 
         vm.expectEmit(true, true, true, true);
-        emit PoolManagementFacet.ManagerRenounced(1, newManager);
+        emit PoolManagementFacet.ManagerRenounced(MANAGED_PID, newManager);
         vm.prank(newManager);
-        facet.renounceManager(1);
-        assertEq(facet.poolManager(1), address(0), "manager renounced");
+        facet.renounceManager(MANAGED_PID);
+        assertEq(facet.poolManager(MANAGED_PID), address(0), "manager renounced");
 
         vm.expectRevert(ManagerAlreadyRenounced.selector);
         vm.prank(newManager);
-        facet.renounceManager(1);
+        facet.renounceManager(MANAGED_PID);
     }
 
     function testTransferManagerZeroAddressForbidden() public {
         vm.prank(manager);
         vm.expectRevert(InvalidManagerTransfer.selector);
-        facet.transferManager(1, address(0));
+        facet.transferManager(MANAGED_PID, address(0));
+    }
+
+    function _defaultPoolConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg.rollingApyBps = 500;
+        cfg.depositorLTVBps = 8000;
+        cfg.maintenanceRateBps = 50;
+        cfg.flashLoanFeeBps = 10;
+        cfg.flashLoanAntiSplit = false;
+        cfg.minDepositAmount = 1 ether;
+        cfg.minLoanAmount = 1 ether;
+        cfg.minTopupAmount = 0.1 ether;
+        cfg.isCapped = false;
+        cfg.depositCap = 0;
+        cfg.maxUserCount = 0;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
     }
 }

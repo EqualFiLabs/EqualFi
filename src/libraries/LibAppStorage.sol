@@ -9,6 +9,7 @@ library LibAppStorage {
     uint16 internal constant DEFAULT_TREASURY_SHARE_BPS = 2000; // 20%
     // Default active credit share disabled; enable explicitly via governance when needed.
     uint16 internal constant DEFAULT_ACTIVE_CREDIT_SHARE_BPS = 0;
+    uint16 internal constant DEFAULT_MANAGED_POOL_SYSTEM_SHARE_BPS = 2000; // 20%
     uint8 internal constant DEFAULT_ROLLING_DELINQUENCY_EPOCHS = 2;
     uint8 internal constant DEFAULT_ROLLING_PENALTY_EPOCHS = 3;
 
@@ -46,6 +47,8 @@ library LibAppStorage {
         uint256 managedPoolCreationFee;
         uint16 activeCreditShareBps;
         bool activeCreditShareConfigured;
+        uint16 managedPoolSystemShareBps;
+        bool managedPoolSystemShareConfigured;
         uint8 transientCacheMode; // 0=default on, 1=on, 2=off
         uint256 nativeTrackedTotal;
         address positionMintFeeToken;
@@ -110,5 +113,11 @@ library LibAppStorage {
 
     function activeCreditSplitBps(AppStorage storage store) internal view returns (uint16) {
         return store.activeCreditShareConfigured ? store.activeCreditShareBps : DEFAULT_ACTIVE_CREDIT_SHARE_BPS;
+    }
+
+    function managedPoolSystemShareBps(AppStorage storage store) internal view returns (uint16) {
+        return store.managedPoolSystemShareConfigured
+            ? store.managedPoolSystemShareBps
+            : DEFAULT_MANAGED_POOL_SYSTEM_SHARE_BPS;
     }
 }

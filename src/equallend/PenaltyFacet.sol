@@ -159,7 +159,7 @@ contract PenaltyFacet is ReentrancyGuardModifiers {
         }
 
         if (protocolAmount > 0) {
-            LibFeeRouter.routeSamePool(pid, protocolAmount, bytes32("penalty"), true, 0);
+            LibFeeRouter.routeManagedShare(pid, protocolAmount, bytes32("penalty"), true, 0);
         }
 
         if (principalRemainingBefore > 0) {
@@ -265,7 +265,7 @@ contract PenaltyFacet is ReentrancyGuardModifiers {
         }
 
         if (protocolAmount > 0) {
-            LibFeeRouter.routeSamePool(pid, protocolAmount, bytes32("penalty"), true, 0);
+            LibFeeRouter.routeManagedShare(pid, protocolAmount, bytes32("penalty"), true, 0);
         }
 
         if (principalRemainingBefore > 0) {
