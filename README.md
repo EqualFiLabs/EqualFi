@@ -1,4 +1,5 @@
 [![CI](https://github.com/EqualFiLabs/EqualFi/actions/workflows/ci.yml/badge.svg)](https://github.com/EqualFiLabs/EqualFi/actions/workflows/ci.yml)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/brsMNDux4T)
 
 This work is inspired in part by:
 

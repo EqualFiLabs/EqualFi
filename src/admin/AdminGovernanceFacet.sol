@@ -11,6 +11,8 @@ import {LibDirectRolling} from "../libraries/LibDirectRolling.sol";
 import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
 import {DirectTypes} from "../libraries/DirectTypes.sol";
 import {DerivativeTypes} from "../libraries/DerivativeTypes.sol";
+import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
+import {PositionNFT} from "../nft/PositionNFT.sol";
 import "../libraries/Errors.sol";
 import "../libraries/Errors.sol";
 
@@ -47,6 +49,7 @@ contract AdminGovernanceFacet {
         uint128 reclaimFeeFlatWad
     );
     event RollingMinPaymentBpsUpdated(uint16 oldBps, uint16 newBps);
+    event PositionNFTUpdated(address indexed oldPositionNFT, address indexed newPositionNFT, bool enabled);
     event DirectRollingConfigUpdated(
         uint32 minPaymentIntervalSeconds,
         uint16 maxPaymentCount,
@@ -201,6 +204,21 @@ contract AdminGovernanceFacet {
         uint16 oldBps = store.rollingMinPaymentBps;
         store.rollingMinPaymentBps = minPaymentBps;
         emit RollingMinPaymentBpsUpdated(oldBps, minPaymentBps);
+    }
+
+    /// @notice Update the Position NFT contract address used by the diamond.
+    /// @dev Rewires minter + diamond hooks on the new PositionNFT.
+    function setPositionNFT(address newPositionNFT) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
+        address oldPositionNFT = ns.positionNFTContract;
+        ns.positionNFTContract = newPositionNFT;
+        ns.nftModeEnabled = newPositionNFT != address(0);
+        emit PositionNFTUpdated(oldPositionNFT, newPositionNFT, ns.nftModeEnabled);
+        if (newPositionNFT != address(0)) {
+            PositionNFT(newPositionNFT).setMinter(address(this));
+            PositionNFT(newPositionNFT).setDiamond(address(this));
+        }
     }
 
     /// @notice Set rolling-direct configuration bounds for offer validation.
