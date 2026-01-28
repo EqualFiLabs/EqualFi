@@ -3,20 +3,34 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Base64.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {InvalidTokenId} from "../libraries/Errors.sol";
-
-/// @notice Interface for pool configuration queries via the Diamond
-interface IPoolUnderlying {
-    function getPoolUnderlying(uint256 poolId) external view returns (address);
-}
 
 /// @notice Interface for direct-offer hooks from the Diamond (cancellation/checks)
 interface IDirectOfferCanceller {
     function cancelOffersForPosition(bytes32 positionKey) external;
     function hasOpenOffers(bytes32 positionKey) external view returns (bool);
+}
+
+/// @notice ERC-8004 transfer callback interface
+interface IERC8004Callback {
+    function onAgentTransfer(uint256 agentId) external;
+}
+
+/// @notice ERC-8004 identity registry interface (selectors for ERC-165)
+interface IERC8004Identity {
+    struct MetadataEntry {
+        string metadataKey;
+        bytes metadataValue;
+    }
+
+    function register() external returns (uint256 agentId);
+    function register(string calldata agentURI) external returns (uint256 agentId);
+    function register(string calldata agentURI, MetadataEntry[] calldata metadata) external returns (uint256 agentId);
+    function setAgentURI(uint256 agentId, string calldata newURI) external;
+    function getMetadata(uint256 agentId, string calldata metadataKey) external view returns (bytes memory);
+    function setMetadata(uint256 agentId, string calldata metadataKey, bytes calldata metadataValue) external;
+    function setAgentWallet(uint256 agentId, address newWallet, uint256 deadline, bytes calldata signature) external;
 }
 
 /// @title PositionNFT
@@ -127,9 +141,9 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         return tokenCreationTime[tokenId];
     }
 
-    /// @notice Generate token URI with position metadata
+    /// @notice Return the ERC-8004 agent registration file URI
     /// @param tokenId The token ID
-    /// @return JSON metadata string conforming to ERC-721 standard
+    /// @return Registration file URI
     function tokenURI(uint256 tokenId) 
         public 
         view 
@@ -139,36 +153,8 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         if (!_exists(tokenId)) {
             revert InvalidTokenId(tokenId);
         }
-        uint256 poolId = tokenToPool[tokenId];
-        uint40 createdAt = tokenCreationTime[tokenId];
-        bytes32 positionKey = LibPositionNFT.getPositionKey(address(this), tokenId);
-        address underlyingAsset = _getUnderlyingAsset(poolId);
-
-        string memory json = string(
-            abi.encodePacked(
-                '{"name":"EqualLend Position #',
-                Strings.toString(tokenId),
-                '","description":"Isolated account container in EqualLend protocol. This NFT represents a position that can hold deposits, originate loans, and accrue yield. Transferring this NFT transfers all associated deposits and obligations.",',
-                '"image":"data:image/svg+xml;base64,',
-                _generateSVG(tokenId, poolId),
-                '","attributes":[',
-                '{"trait_type":"Pool ID","value":',
-                Strings.toString(poolId),
-                '},',
-                '{"trait_type":"Underlying Asset","value":"',
-                Strings.toHexString(uint160(underlyingAsset), 20),
-                '"},',
-                '{"trait_type":"Created At","value":',
-                Strings.toString(uint256(createdAt)),
-                '},',
-                '{"trait_type":"Position Key","value":"',
-                Strings.toHexString(uint256(positionKey), 32),
-                '"}',
-                ']}'
-            )
-        );
-
-        return string(abi.encodePacked("data:application/json;base64,", Base64.encode(bytes(json))));
+        bytes memory data = _diamondStaticCall(abi.encodeWithSignature("getAgentURI(uint256)", tokenId));
+        return abi.decode(data, (string));
     }
 
     /// @notice Check if a token exists
@@ -178,41 +164,66 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         return _ownerOf(tokenId) != address(0);
     }
 
-    function _getUnderlyingAsset(uint256 poolId) internal view returns (address) {
-        address diamondAddr = diamond;
-        if (diamondAddr == address(0)) {
-            return address(0);
-        }
-        try IPoolUnderlying(diamondAddr).getPoolUnderlying(poolId) returns (address asset) {
-            return asset;
-        } catch {
-            return address(0);
-        }
+    /// @notice ERC-8004 register forwarding (no metadata)
+    function register() external returns (uint256 agentId) {
+        bytes memory data = _diamondCall(abi.encodeWithSignature("register()"));
+        return abi.decode(data, (uint256));
     }
 
-    function _generateSVG(uint256 tokenId, uint256 poolId) internal pure returns (string memory) {
-        string memory svg = string(
-            abi.encodePacked(
-                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">',
-                '<defs>',
-                '<linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">',
-                '<stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />',
-                '<stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />',
-                '</linearGradient>',
-                '</defs>',
-                '<rect width="400" height="400" fill="url(#grad)"/>',
-                '<text x="200" y="150" font-family="Arial, sans-serif" font-size="24" fill="white" text-anchor="middle" font-weight="bold">EqualLend Position</text>',
-                '<text x="200" y="200" font-family="Arial, sans-serif" font-size="48" fill="white" text-anchor="middle" font-weight="bold">#',
-                Strings.toString(tokenId),
-                '</text>',
-                '<text x="200" y="250" font-family="Arial, sans-serif" font-size="18" fill="white" text-anchor="middle">Pool ',
-                Strings.toString(poolId),
-                '</text>',
-                '</svg>'
-            )
-        );
+    /// @notice ERC-8004 register forwarding with agentURI
+    function register(string calldata agentURI) external returns (uint256 agentId) {
+        bytes memory data = _diamondCall(abi.encodeWithSignature("register(string)", agentURI));
+        return abi.decode(data, (uint256));
+    }
 
-        return Base64.encode(bytes(svg));
+    /// @notice ERC-8004 register forwarding with metadata
+    function register(string calldata agentURI, IERC8004Identity.MetadataEntry[] calldata metadata)
+        external
+        returns (uint256 agentId)
+    {
+        bytes memory data = _diamondCall(abi.encodeWithSignature("register(string,(string,bytes)[])", agentURI, metadata));
+        return abi.decode(data, (uint256));
+    }
+
+    function setAgentURI(uint256 agentId, string calldata newURI) external {
+        _diamondCall(abi.encodeWithSignature("setAgentURI(uint256,string)", agentId, newURI));
+    }
+
+    function getAgentURI(uint256 agentId) external view returns (string memory) {
+        bytes memory data = _diamondStaticCall(abi.encodeWithSignature("getAgentURI(uint256)", agentId));
+        return abi.decode(data, (string));
+    }
+
+    function getMetadata(uint256 agentId, string calldata metadataKey) external view returns (bytes memory) {
+        bytes memory data = _diamondStaticCall(
+            abi.encodeWithSignature("getMetadata(uint256,string)", agentId, metadataKey)
+        );
+        return abi.decode(data, (bytes));
+    }
+
+    function setMetadata(uint256 agentId, string calldata metadataKey, bytes calldata metadataValue) external {
+        _diamondCall(abi.encodeWithSignature("setMetadata(uint256,string,bytes)", agentId, metadataKey, metadataValue));
+    }
+
+    function setAgentWallet(
+        uint256 agentId,
+        address newWallet,
+        uint256 deadline,
+        bytes calldata signature
+    ) external {
+        _diamondCall(
+            abi.encodeWithSignature("setAgentWallet(uint256,address,uint256,bytes)", agentId, newWallet, deadline, signature)
+        );
+    }
+
+    function getAgentWallet(uint256 agentId) external view returns (address) {
+        bytes memory data = _diamondStaticCall(abi.encodeWithSignature("getAgentWallet(uint256)", agentId));
+        return abi.decode(data, (address));
+    }
+
+    function getAgentNonce(uint256 agentId) external view returns (uint256) {
+        bytes memory data = _diamondStaticCall(abi.encodeWithSignature("getAgentNonce(uint256)", agentId));
+        return abi.decode(data, (uint256));
     }
 
     /// @notice Override supportsInterface to include ERC721Enumerable
@@ -225,6 +236,9 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         override 
         returns (bool) 
     {
+        if (interfaceId == type(IERC8004Identity).interfaceId) {
+            return true;
+        }
         return super.supportsInterface(interfaceId);
     }
 
@@ -262,13 +276,39 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         // deposits, loans, and yield associated with it.
         
         // Block transfers while outstanding direct offers exist (checked via the diamond, if set).
-        if (from != address(0) && from != to && diamond != address(0)) {
+        if (from != address(0) && to != address(0) && from != to && diamond != address(0)) {
             bytes32 positionKey = LibPositionNFT.getPositionKey(address(this), tokenId);
             if (IDirectOfferCanceller(diamond).hasOpenOffers(positionKey)) {
                 revert PositionNFTHasOpenOffers(positionKey);
             }
+
+            IERC8004Callback(diamond).onAgentTransfer(tokenId);
         }
         
         return from;
+    }
+
+    function _diamondCall(bytes memory callData) internal returns (bytes memory data) {
+        address diamondAddr = diamond;
+        require(diamondAddr != address(0), "PositionNFT: diamond not set");
+        (bool ok, bytes memory result) = diamondAddr.call(callData);
+        if (!ok) {
+            assembly {
+                revert(add(result, 32), mload(result))
+            }
+        }
+        return result;
+    }
+
+    function _diamondStaticCall(bytes memory callData) internal view returns (bytes memory data) {
+        address diamondAddr = diamond;
+        require(diamondAddr != address(0), "PositionNFT: diamond not set");
+        (bool ok, bytes memory result) = diamondAddr.staticcall(callData);
+        if (!ok) {
+            assembly {
+                revert(add(result, 32), mload(result))
+            }
+        }
+        return result;
     }
 }

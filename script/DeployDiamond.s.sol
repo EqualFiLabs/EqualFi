@@ -27,6 +27,9 @@ import {PoolUtilizationViewFacet} from "../src/views/PoolUtilizationViewFacet.so
 import {LoanPreviewFacet} from "../src/views/LoanPreviewFacet.sol";
 import {PositionViewFacet} from "../src/views/PositionViewFacet.sol";
 import {PositionNFTMetadataFacet} from "../src/views/PositionNFTMetadataFacet.sol";
+import {PositionNFTIdentityFacet} from "../src/erc8004/PositionNFTIdentityFacet.sol";
+import {PositionNFTWalletFacet} from "../src/erc8004/PositionNFTWalletFacet.sol";
+import {PositionNFTViewFacet} from "../src/erc8004/PositionNFTViewFacet.sol";
 import {MultiPoolPositionViewFacet} from "../src/views/MultiPoolPositionViewFacet.sol";
 import {AuctionManagementViewFacet} from "../src/views/AuctionManagementViewFacet.sol";
 import {PositionManagementFacet} from "../src/equallend/PositionManagementFacet.sol";
@@ -147,6 +150,9 @@ contract DeployDiamondScript is Script {
         LoanPreviewFacet loanPreview = new LoanPreviewFacet();
         PositionViewFacet positionView = new PositionViewFacet();
         PositionNFTMetadataFacet positionNftMetadata = new PositionNFTMetadataFacet();
+        PositionNFTIdentityFacet positionNftIdentity = new PositionNFTIdentityFacet();
+        PositionNFTWalletFacet positionNftWallet = new PositionNFTWalletFacet();
+        PositionNFTViewFacet positionNftView = new PositionNFTViewFacet();
         MultiPoolPositionViewFacet multiPoolView = new MultiPoolPositionViewFacet();
         AuctionManagementViewFacet auctionView = new AuctionManagementViewFacet();
         PositionManagementFacet positionManagement = new PositionManagementFacet();
@@ -191,7 +197,7 @@ contract DeployDiamondScript is Script {
         cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[13] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](33);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](36);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -199,32 +205,35 @@ contract DeployDiamondScript is Script {
         more[4] = _cut(address(loanPreview), _selectors(loanPreview));
         more[5] = _cut(address(positionView), _selectors(positionView));
         more[6] = _cut(address(positionNftMetadata), _selectors(positionNftMetadata));
-        more[7] = _cut(address(multiPoolView), _selectors(multiPoolView));
-        more[8] = _cut(address(auctionView), _selectors(auctionView));
-        more[9] = _cut(address(positionManagement), _selectors(positionManagement));
-        more[10] = _cut(address(lending), _selectors(lending));
-        more[11] = _cut(address(penalty), _selectors(penalty));
-        more[12] = _cut(address(directOffer), _selectors(directOffer));
-        more[13] = _cut(address(directAgreement), _selectors(directAgreement));
-        more[14] = _cut(address(directLifecycle), _selectors(directLifecycle));
-        more[15] = _cut(address(directView), _selectors(directView));
-        more[16] = _cut(address(directRollingOffer), _selectors(directRollingOffer));
-        more[17] = _cut(address(directRollingAgreement), _selectors(directRollingAgreement));
-        more[18] = _cut(address(directRollingLifecycle), _selectors(directRollingLifecycle));
-        more[19] = _cut(address(directRollingPayment), _selectors(directRollingPayment));
-        more[20] = _cut(address(directRollingView), _selectors(directRollingView));
-        more[21] = _cut(address(activeCreditView), _selectors(activeCreditView));
-        more[22] = _cut(address(ammAuction), _selectors(ammAuction));
-        more[23] = _cut(address(communityAuction), _selectors(communityAuction));
-        more[24] = _cut(address(atomicDesk), _selectors(atomicDesk));
-        more[25] = _cut(address(settlementEscrow), _selectors(settlementEscrow));
-        more[26] = _cut(address(mamCurveCreate), _selectors(mamCurveCreate));
-        more[27] = _cut(address(mamCurveManage), _selectors(mamCurveManage));
-        more[28] = _cut(address(mamCurveExec), _selectors(mamCurveExec));
-        more[29] = _cut(address(optionsFacet), _selectors(optionsFacet));
-        more[30] = _cut(address(futuresFacet), _selectors(futuresFacet));
-        more[31] = _cut(address(derivativeView), _selectors(derivativeView));
-        more[32] = _cut(address(mamCurveView), _selectors(mamCurveView));
+        more[7] = _cut(address(positionNftIdentity), _selectors(positionNftIdentity));
+        more[8] = _cut(address(positionNftWallet), _selectors(positionNftWallet));
+        more[9] = _cut(address(positionNftView), _selectors(positionNftView));
+        more[10] = _cut(address(multiPoolView), _selectors(multiPoolView));
+        more[11] = _cut(address(auctionView), _selectors(auctionView));
+        more[12] = _cut(address(positionManagement), _selectors(positionManagement));
+        more[13] = _cut(address(lending), _selectors(lending));
+        more[14] = _cut(address(penalty), _selectors(penalty));
+        more[15] = _cut(address(directOffer), _selectors(directOffer));
+        more[16] = _cut(address(directAgreement), _selectors(directAgreement));
+        more[17] = _cut(address(directLifecycle), _selectors(directLifecycle));
+        more[18] = _cut(address(directView), _selectors(directView));
+        more[19] = _cut(address(directRollingOffer), _selectors(directRollingOffer));
+        more[20] = _cut(address(directRollingAgreement), _selectors(directRollingAgreement));
+        more[21] = _cut(address(directRollingLifecycle), _selectors(directRollingLifecycle));
+        more[22] = _cut(address(directRollingPayment), _selectors(directRollingPayment));
+        more[23] = _cut(address(directRollingView), _selectors(directRollingView));
+        more[24] = _cut(address(activeCreditView), _selectors(activeCreditView));
+        more[25] = _cut(address(ammAuction), _selectors(ammAuction));
+        more[26] = _cut(address(communityAuction), _selectors(communityAuction));
+        more[27] = _cut(address(atomicDesk), _selectors(atomicDesk));
+        more[28] = _cut(address(settlementEscrow), _selectors(settlementEscrow));
+        more[29] = _cut(address(mamCurveCreate), _selectors(mamCurveCreate));
+        more[30] = _cut(address(mamCurveManage), _selectors(mamCurveManage));
+        more[31] = _cut(address(mamCurveExec), _selectors(mamCurveExec));
+        more[32] = _cut(address(optionsFacet), _selectors(optionsFacet));
+        more[33] = _cut(address(futuresFacet), _selectors(futuresFacet));
+        more[34] = _cut(address(derivativeView), _selectors(derivativeView));
+        more[35] = _cut(address(mamCurveView), _selectors(mamCurveView));
 
         // Deploy diamond
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
@@ -447,6 +456,32 @@ contract DeployDiamondScript is Script {
 
     function _selectors(PositionNFTMetadataFacet viewFacet) internal pure returns (bytes4[] memory s) {
         s = viewFacet.selectors();
+    }
+
+    function _selectors(PositionNFTIdentityFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](7);
+        s[0] = bytes4(keccak256("register()"));
+        s[1] = bytes4(keccak256("register(string)"));
+        s[2] = bytes4(keccak256("register(string,(string,bytes)[])"));
+        s[3] = PositionNFTIdentityFacet.setAgentURI.selector;
+        s[4] = PositionNFTIdentityFacet.getAgentURI.selector;
+        s[5] = PositionNFTIdentityFacet.setMetadata.selector;
+        s[6] = PositionNFTIdentityFacet.getMetadata.selector;
+    }
+
+    function _selectors(PositionNFTWalletFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](4);
+        s[0] = PositionNFTWalletFacet.setAgentWallet.selector;
+        s[1] = PositionNFTWalletFacet.onAgentTransfer.selector;
+        s[2] = PositionNFTWalletFacet.DOMAIN_SEPARATOR.selector;
+        s[3] = bytes4(keccak256("SET_AGENT_WALLET_TYPEHASH()"));
+    }
+
+    function _selectors(PositionNFTViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](3);
+        s[0] = PositionNFTViewFacet.getAgentWallet.selector;
+        s[1] = PositionNFTViewFacet.getAgentNonce.selector;
+        s[2] = PositionNFTViewFacet.getIdentityRegistry.selector;
     }
 
     function _selectors(MultiPoolPositionViewFacet viewFacet) internal pure returns (bytes4[] memory s) {

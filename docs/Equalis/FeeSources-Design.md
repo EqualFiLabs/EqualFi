@@ -33,9 +33,9 @@ Equalis generates fees from multiple sources across its protocol modules. Fees s
 | **Pools** | Flash Loan | % of loan amount | Fee Index + Treasury + Active Credit |
 | **Pools** | Maintenance | % of TVL annually | Foundation Receiver |
 | **Pools** | Action Fees | Flat amount | Fee Index + Treasury + Active Credit |
-| **Index** | Mint Fee | % per asset | Fee Index (40%) + Fee Pot + Protocol |
-| **Index** | Burn Fee | % per asset | Fee Index (40%) + Fee Pot + Protocol |
-| **Index** | Flash Fee | % of loan | Fee Index (10%) + Fee Pot + Protocol |
+| **Index** | Mint Fee | % per asset | Pool share (routed via Fee Router) + Fee Pot |
+| **Index** | Burn Fee | % per asset | Pool share (routed via Fee Router) + Fee Pot |
+| **Index** | Flash Fee | % of loan | Pool share (routed via Fee Router) + Fee Pot |
 | **Derivatives** | Create Fee | % + flat | Fee Index + Treasury + Active Credit |
 | **Derivatives** | Exercise Fee | % + flat | Fee Index + Treasury + Active Credit |
 | **Derivatives** | Reclaim Fee | % + flat | Fee Index + Treasury + Active Credit |
@@ -85,9 +85,12 @@ function accrueWithTreasury(pool, pid, amount, source) {
 
 | Recipient | Default Share | Configurable |
 |-----------|---------------|--------------|
-| Treasury | 20% (2000 bps) | Yes |
-| Active Credit | 0% (disabled) | Yes |
-| Fee Index | Remainder | Automatic |
+| Treasury | 10% (1000 bps) | Yes |
+| Active Credit | 70% (7000 bps) | Yes |
+| Fee Index | 20% (2000 bps) | Automatic |
+
+**Note:** These defaults apply only when governance has not set custom split values. If `treasuryShareBps` or
+`activeCreditShareBps` are configured, fee routing uses those values and the Fee Index receives the remainder.
 
 ---
 
@@ -117,15 +120,15 @@ Active Credit Share → Active Credit Index (via LibActiveCreditIndex)
 Remainder → Fee Index (depositors, via LibFeeIndex)
 ```
 
-**Example:**
+**Example (using default split 10% Treasury / 70% Active Credit / 20% Fee Index):**
 ```
 Loan: 100,000 USDC
 Fee Rate: 30 bps (0.3%)
 Fee: 300 USDC
 
-Treasury (20%): 60 USDC
-Active Credit (0%): 0 USDC
-Fee Index (80%): 240 USDC
+Treasury (10%): 30 USDC
+Active Credit (70%): 210 USDC
+Fee Index (20%): 60 USDC
 ```
 
 ### Maintenance Fees
@@ -163,7 +166,7 @@ Flat fees charged on specific operations.
 | `ACTION_BORROW` | Opening a loan |
 | `ACTION_REPAY` | Making a payment |
 | `ACTION_WITHDRAW` | Withdrawing principal |
-| `ACTION_FLASH` | Flash loan (additional to %) |
+| `ACTION_FLASH` | Flash loan action fee (if enabled; separate from % flash fee) |
 | `ACTION_CLOSE_ROLLING` | Closing rolling credit |
 
 **Configuration:**
@@ -322,7 +325,8 @@ FeeAsset feeAsset;          // TokenIn or TokenOut
 ```
 
 **Distribution:**
-- 100% to maker (accrued in `makerFeeAAccrued` / `makerFeeBAccrued`)
+- Maker share = `ammMakerShareBps` (accrued in `makerFeeAAccrued` / `makerFeeBAccrued`)
+- Remainder routed via fee router (Treasury + Active Credit + Fee Index) based on configured splits
 
 ### Community Auction Fees
 
@@ -330,15 +334,13 @@ Multi-maker community auctions split fees among participants.
 
 **Fee Split:**
 ```solidity
-uint16 FEE_SPLIT_MAKER_BPS = 7000;     // 70% to makers
-uint16 FEE_SPLIT_INDEX_BPS = 2000;     // 20% to fee index
-uint16 FEE_SPLIT_TREASURY_BPS = 1000;  // 10% to treasury
+uint16 communityMakerShareBps;   // Maker share (configurable)
+// Remainder routed via fee router (Treasury + Active Credit + Fee Index)
 ```
 
 **Distribution:**
 1. Maker share → Community auction fee index (pro-rata to LP shares)
-2. Index share → Pool fee index (depositors, via `LibFeeIndex`)
-3. Treasury share → Protocol treasury (via `LibFeeTreasury`)
+2. Protocol share → Routed via fee router (Treasury + Active Credit + Fee Index)
 
 ---
 
@@ -468,8 +470,8 @@ feeIndexB += (makerFeeB × INDEX_SCALE) / totalShares
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `treasuryShareBps` | 2000 (20%) | Treasury share of distributed fees |
-| `activeCreditShareBps` | 0 (disabled) | Active credit share of fees |
+| `treasuryShareBps` | 1000 (10%) | Treasury share of distributed fees |
+| `activeCreditShareBps` | 7000 (70%) | Active credit share of fees |
 | `defaultMaintenanceRateBps` | 100 (1%) | Default annual maintenance rate |
 | `maxMaintenanceRateBps` | 100 (1%) | Maximum allowed maintenance rate |
 | `actionFeeMin` | 0 | Minimum action fee amount |
@@ -479,8 +481,8 @@ feeIndexB += (makerFeeB × INDEX_SCALE) / totalShares
 
 | Parameter | Location | Mutable |
 |-----------|----------|---------|
-| `flashLoanFeeBps` | PoolConfig | No |
-| `maintenanceRateBps` | PoolConfig | No |
+| `flashLoanFeeBps` | PoolConfig | Governance (via setPoolConfig) |
+| `maintenanceRateBps` | PoolConfig | Governance (via setPoolConfig) |
 | Action fees | PoolConfig | Admin override |
 
 ### Index-Level Parameters
@@ -523,16 +525,16 @@ feeIndexB += (makerFeeB × INDEX_SCALE) / totalShares
        ├──────────────────┐
        │                  │
        ▼                  ▼
-┌─────────────┐    ┌─────────────┐
-│  Treasury   │    │  Fee Index  │
-│   60 (20%)  │    │  240 (80%)  │
-└─────────────┘    └──────┬──────┘
-                          │
-                          ▼
-                   ┌─────────────┐
-                   │ Depositors  │
-                   │ (pro-rata)  │
-                   └─────────────┘
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  Treasury   │    │ Active      │    │  Fee Index  │
+│   30 (10%)  │    │ Credit 210  │    │   60 (20%)  │
+└─────────────┘    └─────────────┘    └──────┬──────┘
+                                            │
+                                            ▼
+                                     ┌─────────────┐
+                                     │ Depositors  │
+                                     │ (pro-rata)  │
+                                     └─────────────┘
 ```
 
 ### Index Mint Fee Flow
@@ -553,10 +555,16 @@ feeIndexB += (makerFeeB × INDEX_SCALE) / totalShares
        ├──────────────────┬──────────────────┐
        │                  │                  │
        ▼                  ▼                  ▼
+┌─────────────┐    ┌─────────────┐
+│  Pool Share │    │   Fee Pot   │
+│    (40%)    │    │    (60%)    │
+└──────┬──────┘    └─────────────┘
+       │
+       ▼
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  Fee Index  │    │  Fee Pot    │    │  Protocol   │
-│   (40%)     │    │   (48%)     │    │   (12%)     │
-└──────┬──────┘    └──────┬──────┘    └─────────────┘
+│  Treasury   │    │ Active      │    │  Fee Index  │
+│   (10%)     │    │ Credit (70%)│    │   (20%)     │
+└─────────────┘    └─────────────┘    └─────────────┘
        │                  │
        ▼                  ▼
 ┌─────────────┐    ┌─────────────┐
@@ -564,11 +572,12 @@ feeIndexB += (makerFeeB × INDEX_SCALE) / totalShares
 │ Depositors  │    │ (on burn)   │
 └─────────────┘    └─────────────┘
 
-Note: With 40% Fee Index share and 20% protocol cut on remainder:
-- Fee Index: 40%
-- Remainder: 60%
-  - Protocol (20% of 60%): 12%
-  - Fee Pot (80% of 60%): 48%
+Note: With 40% pool share and default splits (10% Treasury / 70% Active Credit / 20% Fee Index):
+- Pool share: 40% total
+  - Treasury: 4%
+  - Active Credit: 28%
+  - Fee Index: 8%
+- Fee Pot: 60%
 ```
 
 ### Penalty Fee Flow
@@ -591,11 +600,11 @@ Note: With 40% Fee Index share and 20% protocol cut on remainder:
               ┌─────────────┬───────────────┼───────────────┐
               │             │               │               │
               ▼             ▼               ▼               ▼
-       ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐
-       │ Fee Index │ │ Protocol  │ │  Active   │ │           │
-       │ 63 (70%)  │ │  9 (10%)  │ │  Credit   │ │           │
-       └───────────┘ └───────────┘ │ 18 (20%)  │ │           │
-                                   └───────────┘ └───────────┘
+┌───────────┐ ┌───────────┐ ┌───────────┐
+│ Fee Index │ │ Treasury  │ │  Active   │
+│  18 (20%) │ │  9 (10%)  │ │  Credit   │
+└───────────┘ └───────────┘ │ 63 (70%)  │
+                            └───────────┘
 ```
 
 ### Community Auction Swap Fee Flow
@@ -614,10 +623,10 @@ Note: With 40% Fee Index share and 20% protocol cut on remainder:
        ├──────────────────┬──────────────────┐
        │                  │                  │
        ▼                  ▼                  ▼
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Makers    │    │  Fee Index  │    │  Treasury   │
-│  21 (70%)   │    │   6 (20%)   │    │   3 (10%)   │
-└──────┬──────┘    └─────────────┘    └─────────────┘
+┌─────────────┐    ┌─────────────┐
+│   Makers    │    │  Protocol   │
+│ (maker bps) │    │ (router)    │
+└──────┬──────┘    └─────────────┘
        │
        ▼
 ┌─────────────┐
@@ -636,13 +645,18 @@ Fees are tagged with source identifiers for tracking:
 |------------|--------|
 | `flashLoan` | Pool flash loans |
 | `penalty` | Default penalties |
-| `INDEX_FEE` | Index flash loans |
+| `INDEX_FEE` | Index mint/burn/flash pool share routing |
 | `FUTURES_CREATE_FEE` | Futures creation |
 | `FUTURES_EXERCISE_FEE` | Futures exercise |
 | `OPTIONS_CREATE_FEE` | Options creation |
 | `OPTIONS_EXERCISE_FEE` | Options exercise |
 | `OPTIONS_RECLAIM_FEE` | Options reclaim |
 | `COMMUNITY_AUCTION_FEE` | Community auction swaps |
+| `AMM_AUCTION_FEE` | AMM auction swaps |
+| `DIRECT_PLATFORM_FEE` | Direct platform fees |
+| `DIRECT_INTEREST_FEE` | Direct interest fees |
+| `DIRECT_DEFAULT` | Direct default recovery |
+| `FUTURES_RECLAIM_FEE` | Futures reclaim |
 | `ACTION_BORROW` | Borrow action fee |
 | `ACTION_REPAY` | Repay action fee |
 | `ACTION_WITHDRAW` | Withdraw action fee |

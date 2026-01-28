@@ -6,9 +6,8 @@ import {Types} from "./Types.sol";
 /// @notice Application storage anchor for EqualLend Diamond rebuild
 library LibAppStorage {
     bytes32 internal constant APP_STORAGE_POSITION = keccak256("equal.lend.app.storage");
-    uint16 internal constant DEFAULT_TREASURY_SHARE_BPS = 2000; // 20%
-    // Default active credit share disabled; enable explicitly via governance when needed.
-    uint16 internal constant DEFAULT_ACTIVE_CREDIT_SHARE_BPS = 0;
+    uint16 internal constant DEFAULT_TREASURY_SHARE_BPS = 1000; // 10%
+    uint16 internal constant DEFAULT_ACTIVE_CREDIT_SHARE_BPS = 7000; // 70%
     uint16 internal constant DEFAULT_MANAGED_POOL_SYSTEM_SHARE_BPS = 2000; // 20%
     uint8 internal constant DEFAULT_ROLLING_DELINQUENCY_EPOCHS = 2;
     uint8 internal constant DEFAULT_ROLLING_PENALTY_EPOCHS = 3;
