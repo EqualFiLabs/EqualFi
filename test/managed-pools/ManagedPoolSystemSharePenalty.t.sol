@@ -47,6 +47,18 @@ contract ManagedPenaltyHarness is PenaltyFacet {
         store.managedPoolSystemShareConfigured = true;
     }
 
+    function setTreasuryShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = bps;
+        store.treasuryShareConfigured = true;
+    }
+
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function setTreasury(address treasury) external {
         LibAppStorage.s().treasury = treasury;
     }
@@ -111,6 +123,8 @@ contract ManagedPoolSystemSharePenaltyTest is Test, IERC721Receiver {
         nft.setMinter(address(facet));
 
         facet.setTreasury(address(0));
+        facet.setTreasuryShareBps(0);
+        facet.setActiveCreditShareBps(0);
         facet.setManagedPoolSystemShareBps(2000);
         facet.setPenaltyEpochs(1, 1);
 

@@ -44,6 +44,12 @@ contract FeeFacetHarness is FeeFacet {
         store.treasuryShareBps = shareBps;
         store.treasuryShareConfigured = true;
     }
+
+    function setActiveCreditShare(uint16 shareBps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = shareBps;
+        store.activeCreditShareConfigured = true;
+    }
     
     function setPoolTotalDeposits(uint256 pid, uint256 totalDeposits) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
@@ -115,6 +121,7 @@ contract FeeFacetPropertyTest is Test {
         timelock = address(this);
         owner = address(this);
         feeFacet.initStorage(MAX_POOLS, MAX_INDEXES, timelock);
+        feeFacet.setActiveCreditShare(0);
     }
     
 

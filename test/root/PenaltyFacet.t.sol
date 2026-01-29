@@ -65,6 +65,18 @@ contract PenaltyFacetHarness is PenaltyFacet {
         LibAppStorage.s().treasury = treasury;
     }
 
+    function setTreasuryShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = bps;
+        store.treasuryShareConfigured = true;
+    }
+
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function setMaintenanceConfig(address foundation, uint16 defaultRateBps) external {
         LibAppStorage.AppStorage storage store = LibAppStorage.s();
         store.foundationReceiver = foundation;
@@ -324,6 +336,8 @@ contract PenaltyFacetUnitTest is Test {
         facet.initPool(PID, address(token), 2, 3);
 
         facet.setTreasury(treasury);
+        facet.setTreasuryShareBps(2000);
+        facet.setActiveCreditShareBps(0);
 
         token.mint(address(facet), INITIAL_SUPPLY);
 
@@ -665,6 +679,8 @@ contract PenaltyFacetPropertyTest is Test {
         nft.setMinter(address(facet));
         facet.initPool(PID, address(token), 2, 3);
         facet.setTreasury(treasury);
+        facet.setTreasuryShareBps(2000);
+        facet.setActiveCreditShareBps(0);
 
         token.mint(address(facet), INITIAL_SUPPLY);
     }

@@ -41,6 +41,7 @@ contract CommunityAuctionIndexFeeRegressionTest is Test {
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(treasury);
         harness.setMakerShareBps(7000);
+        harness.setActiveCreditShareBps(0);
     }
 
     /// @notice Verifies that yieldReserve remains properly backed after makers leave.
@@ -265,6 +266,12 @@ contract CommunityAuctionIndexFeeHarness is CommunityAuctionFacet, PositionManag
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.communityMakerShareBps = shareBps;
+    }
+
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
     }
 
     function getMakerShareBps() external view returns (uint16) {

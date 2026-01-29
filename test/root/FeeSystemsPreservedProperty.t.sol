@@ -50,6 +50,12 @@ contract FeeSystemsFlashLoanHarness is FlashLoanFacet {
         store.treasuryShareConfigured = true;
     }
 
+    function setActiveCreditShare(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function feeIndex(uint256 pid) external view returns (uint256) {
         return LibAppStorage.s().pools[pid].feeIndex;
     }
@@ -128,6 +134,7 @@ contract FeeSystemsPreservedPropertyTest is Test {
         flashFacet.initPool(1, address(flashToken), flashFeeBps, false);
         flashFacet.setTreasury(TREASURY);
         flashFacet.setTreasuryShare(treasuryShareBps);
+        flashFacet.setActiveCreditShare(0);
 
         uint256 treasuryBefore = flashToken.balanceOf(TREASURY);
         uint256 trackedBefore = flashFacet.trackedBalance(1);

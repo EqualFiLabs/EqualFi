@@ -21,6 +21,7 @@ import {EqualLendDirectRollingAgreementFacet} from "../../src/equallend-direct/E
 import {EqualLendDirectRollingLifecycleFacet} from "../../src/equallend-direct/EqualLendDirectRollingLifecycleFacet.sol";
 import {EqualLendDirectRollingPaymentFacet} from "../../src/equallend-direct/EqualLendDirectRollingPaymentFacet.sol";
 import {EqualLendDirectRollingViewFacet} from "../../src/views/EqualLendDirectRollingViewFacet.sol";
+import {PositionNFTWalletFacet} from "../../src/erc8004/PositionNFTWalletFacet.sol";
 
 // Test harness facets
 import {DirectTestHarnessFacet} from "./DirectTestHarnessFacet.sol";
@@ -233,46 +234,10 @@ abstract contract DirectDiamondTestBase is Test {
 
     function setUpDiamond() internal {
         CoreFacets memory core = _deployCoreFacets();
-        DirectFacets memory direct = _deployDirectFacets();
-        RollingFacets memory rolling = _deployRollingFacets();
-        HarnessFacets memory harnessFacets = _deployHarnessFacets();
-
-        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](3);
-        cuts[0] = _cut(core.cutFacet, _selectorsCut());
-        cuts[1] = _cut(core.loupeFacet, _selectorsLoupe());
-        cuts[2] = _cut(core.ownershipFacet, _selectorsOwnership());
-        diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: address(this)}));
-
-        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](10);
-        addCuts[0] = _cut(direct.offerFacet, _selectorsOffer());
-        addCuts[1] = _cut(direct.agreementFacet, _selectorsAgreement());
-        addCuts[2] = _cut(direct.lifecycleFacet, _selectorsLifecycle());
-        addCuts[3] = _cut(harnessFacets.harnessFacet, _selectorsHarness());
-        addCuts[4] = _cut(harnessFacets.viewFacet, _selectorsView());
-        addCuts[5] = _cut(rolling.rollingOfferFacet, _selectorsRollingOffer());
-        addCuts[6] = _cut(rolling.rollingAgreementFacet, _selectorsRollingAgreement());
-        addCuts[7] = _cut(rolling.rollingLifecycleFacet, _selectorsRollingLifecycle());
-        addCuts[8] = _cut(rolling.rollingPaymentFacet, _selectorsRollingPayment());
-        addCuts[9] = _cut(rolling.rollingViewFacet, _selectorsRollingView());
-        IDiamondCut(address(diamond)).diamondCut(addCuts, address(0), "");
-
-        // Set up typed interfaces
-        harness = IDirectTestHarness(address(diamond));
-        views = IDirectTestView(address(diamond));
-        offers = IDirectOffer(address(diamond));
-        agreements = IDirectAgreement(address(diamond));
-        lifecycle = IDirectLifecycle(address(diamond));
-        rollingOffers = IDirectRollingOffer(address(diamond));
-        rollingAgreements = IDirectRollingAgreement(address(diamond));
-        rollingLifecycle = IDirectRollingLifecycle(address(diamond));
-        rollingPayments = IDirectRollingPayment(address(diamond));
-        rollingViews = IDirectRollingView(address(diamond));
-
-        // Deploy and configure NFT - set test contract as minter first
-        nft = new PositionNFT();
-        nft.setMinter(address(this));
-        harness.setPositionNFT(address(nft));
-        harness.setOwner(address(this));
+        diamond = _deployCoreDiamond(core);
+        _addDirectFacets();
+        _wireInterfaces();
+        _deployTestNft();
     }
 
     function finalizePositionNFT() internal {
@@ -305,6 +270,54 @@ abstract contract DirectDiamondTestBase is Test {
         address viewFacet;
     }
 
+    function _deployCoreDiamond(CoreFacets memory core) internal returns (Diamond deployed) {
+        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](3);
+        cuts[0] = _cut(core.cutFacet, _selectorsCut());
+        cuts[1] = _cut(core.loupeFacet, _selectorsLoupe());
+        cuts[2] = _cut(core.ownershipFacet, _selectorsOwnership());
+        deployed = new Diamond(cuts, Diamond.DiamondArgs({owner: address(this)}));
+    }
+
+    function _addDirectFacets() internal {
+        DirectFacets memory direct = _deployDirectFacets();
+        RollingFacets memory rolling = _deployRollingFacets();
+        HarnessFacets memory harnessFacets = _deployHarnessFacets();
+
+        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](11);
+        addCuts[0] = _cut(direct.offerFacet, _selectorsOffer());
+        addCuts[1] = _cut(direct.agreementFacet, _selectorsAgreement());
+        addCuts[2] = _cut(direct.lifecycleFacet, _selectorsLifecycle());
+        addCuts[3] = _cut(harnessFacets.harnessFacet, _selectorsHarness());
+        addCuts[4] = _cut(harnessFacets.viewFacet, _selectorsView());
+        addCuts[5] = _cut(rolling.rollingOfferFacet, _selectorsRollingOffer());
+        addCuts[6] = _cut(rolling.rollingAgreementFacet, _selectorsRollingAgreement());
+        addCuts[7] = _cut(rolling.rollingLifecycleFacet, _selectorsRollingLifecycle());
+        addCuts[8] = _cut(rolling.rollingPaymentFacet, _selectorsRollingPayment());
+        addCuts[9] = _cut(rolling.rollingViewFacet, _selectorsRollingView());
+        addCuts[10] = _cut(_deployWalletFacet(), _selectorsWallet());
+        IDiamondCut(address(diamond)).diamondCut(addCuts, address(0), "");
+    }
+
+    function _wireInterfaces() internal {
+        harness = IDirectTestHarness(address(diamond));
+        views = IDirectTestView(address(diamond));
+        offers = IDirectOffer(address(diamond));
+        agreements = IDirectAgreement(address(diamond));
+        lifecycle = IDirectLifecycle(address(diamond));
+        rollingOffers = IDirectRollingOffer(address(diamond));
+        rollingAgreements = IDirectRollingAgreement(address(diamond));
+        rollingLifecycle = IDirectRollingLifecycle(address(diamond));
+        rollingPayments = IDirectRollingPayment(address(diamond));
+        rollingViews = IDirectRollingView(address(diamond));
+    }
+
+    function _deployTestNft() internal {
+        nft = new PositionNFT();
+        nft.setMinter(address(this));
+        harness.setPositionNFT(address(nft));
+        harness.setOwner(address(this));
+    }
+
     function _deployCoreFacets() internal returns (CoreFacets memory core) {
         core.cutFacet = address(new DiamondCutFacet());
         core.loupeFacet = address(new DiamondLoupeFacet());
@@ -323,6 +336,10 @@ abstract contract DirectDiamondTestBase is Test {
         rolling.rollingLifecycleFacet = address(new EqualLendDirectRollingLifecycleFacet());
         rolling.rollingPaymentFacet = address(new EqualLendDirectRollingPaymentFacet());
         rolling.rollingViewFacet = address(new EqualLendDirectRollingViewFacet());
+    }
+
+    function _deployWalletFacet() internal returns (address) {
+        return address(new PositionNFTWalletFacet());
     }
 
     function _deployHarnessFacets() internal returns (HarnessFacets memory harnessFacets) {
@@ -427,6 +444,11 @@ abstract contract DirectDiamondTestBase is Test {
         s[0] = EqualLendDirectRollingViewFacet.calculateRollingPayment.selector;
         s[1] = EqualLendDirectRollingViewFacet.getRollingStatus.selector;
         s[2] = EqualLendDirectRollingViewFacet.aggregateRollingExposure.selector;
+    }
+
+    function _selectorsWallet() internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](1);
+        s[0] = PositionNFTWalletFacet.onAgentTransfer.selector;
     }
 
     function _selectorsHarness() internal pure returns (bytes4[] memory s) {

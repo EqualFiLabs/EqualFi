@@ -4,10 +4,10 @@ pragma solidity ^0.8.20;
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {DirectError_InvalidOffer} from "../../src/libraries/Errors.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
-import {DirectDiamondTestBase} from "./DirectDiamondTestBase.sol";
+import {DirectTestBase} from "./DirectTestBase.sol";
 
 /// @notice Tests that outstanding offers are cancelled when the lender NFT transfers
-contract DirectOfferTransferCancelTest is DirectDiamondTestBase {
+contract DirectOfferTransferCancelTest is DirectTestBase {
     MockERC20 internal tokenA;
     MockERC20 internal tokenB;
 
@@ -16,10 +16,9 @@ contract DirectOfferTransferCancelTest is DirectDiamondTestBase {
     address internal newOwner = address(0xC0FFEE);
 
     function setUp() public {
-        setUpDiamond();
+        setUpBase();
         tokenA = new MockERC20("TokenA", "TKA", 18, 1_000_000 ether);
         tokenB = new MockERC20("TokenB", "TKB", 18, 1_000_000 ether);
-        harness.setOwner(address(this));
 
         DirectTypes.DirectConfig memory cfg = DirectTypes.DirectConfig({
             platformFeeBps: 0,
@@ -28,18 +27,17 @@ contract DirectOfferTransferCancelTest is DirectDiamondTestBase {
             defaultLenderBps: 10_000,
             minInterestDuration: 0
         });
-        harness.setConfig(cfg);
+        facet.setConfig(cfg);
     }
 
     function _seedPositions() internal returns (uint256 lenderPos, uint256 borrowerPos, bytes32 lenderKey, bytes32 borrowerKey) {
         lenderPos = nft.mint(lender, 1);
         borrowerPos = nft.mint(borrower, 2);
-        finalizePositionNFT();
         lenderKey = nft.getPositionKey(lenderPos);
         borrowerKey = nft.getPositionKey(borrowerPos);
 
-        harness.seedPoolWithMembership(1, address(tokenA), lenderKey, 200 ether, true);
-        harness.seedPoolWithMembership(2, address(tokenB), borrowerKey, 100 ether, true);
+        facet.seedPoolWithMembership(1, address(tokenA), lenderKey, 200 ether, true);
+        facet.seedPoolWithMembership(2, address(tokenB), borrowerKey, 100 ether, true);
     }
 
     function test_OfferCancelledOnLenderTransfer() public {
@@ -60,21 +58,21 @@ contract DirectOfferTransferCancelTest is DirectDiamondTestBase {
             allowLenderCall: false});
 
         vm.prank(lender);
-        uint256 offerId = offers.postOffer(params);
-        assertEq(views.offerEscrow(lenderKey, params.lenderPoolId), 50 ether, "escrow tracked on post");
+        uint256 offerId = facet.postOffer(params);
+        assertEq(facet.offerEscrow(lenderKey, params.lenderPoolId), 50 ether, "escrow tracked on post");
 
         // Cancel offers before transfer per PositionNFT guard, then transfer lender NFT
-        offers.cancelOffersForPosition(lenderPos);
+        facet.cancelOffersForPosition(lenderPos);
         vm.prank(lender);
         nft.transferFrom(lender, newOwner, lenderPos);
 
-        DirectTypes.DirectOffer memory offer = views.getOffer(offerId);
+        DirectTypes.DirectOffer memory offer = facet.getOffer(offerId);
         assertTrue(offer.cancelled, "offer cancelled on transfer");
-        assertEq(views.offerEscrow(lenderKey, params.lenderPoolId), 0, "escrow released on cancel");
+        assertEq(facet.offerEscrow(lenderKey, params.lenderPoolId), 0, "escrow released on cancel");
 
         vm.expectRevert(DirectError_InvalidOffer.selector);
         vm.prank(borrower);
-        agreements.acceptOffer(offerId, borrowerPos);
+        facet.acceptOffer(offerId, borrowerPos);
     }
 
     function test_MultipleOffersCancelledOnTransfer() public {
@@ -95,27 +93,27 @@ contract DirectOfferTransferCancelTest is DirectDiamondTestBase {
             allowLenderCall: false});
 
         vm.startPrank(lender);
-        uint256 offerOne = offers.postOffer(base);
+        uint256 offerOne = facet.postOffer(base);
         base.principal = 30 ether;
-        uint256 offerTwo = offers.postOffer(base);
+        uint256 offerTwo = facet.postOffer(base);
         vm.stopPrank();
 
-        assertEq(views.offerEscrow(lenderKey, base.lenderPoolId), 50 ether, "aggregate escrow tracked");
+        assertEq(facet.offerEscrow(lenderKey, base.lenderPoolId), 50 ether, "aggregate escrow tracked");
 
-        offers.cancelOffersForPosition(lenderPos);
+        facet.cancelOffersForPosition(lenderPos);
         vm.prank(lender);
         nft.transferFrom(lender, newOwner, lenderPos);
 
-        DirectTypes.DirectOffer memory o1 = views.getOffer(offerOne);
-        DirectTypes.DirectOffer memory o2 = views.getOffer(offerTwo);
+        DirectTypes.DirectOffer memory o1 = facet.getOffer(offerOne);
+        DirectTypes.DirectOffer memory o2 = facet.getOffer(offerTwo);
         assertTrue(o1.cancelled && o2.cancelled, "all offers cancelled");
-        assertEq(views.offerEscrow(lenderKey, base.lenderPoolId), 0, "escrow cleared");
+        assertEq(facet.offerEscrow(lenderKey, base.lenderPoolId), 0, "escrow cleared");
 
         vm.expectRevert(DirectError_InvalidOffer.selector);
         vm.prank(borrower);
-        agreements.acceptOffer(offerOne, borrowerPos);
+        facet.acceptOffer(offerOne, borrowerPos);
         vm.expectRevert(DirectError_InvalidOffer.selector);
         vm.prank(borrower);
-        agreements.acceptOffer(offerTwo, borrowerPos);
+        facet.acceptOffer(offerTwo, borrowerPos);
     }
 }

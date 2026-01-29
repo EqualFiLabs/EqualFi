@@ -38,6 +38,18 @@ contract PenaltyFeeIndexHarness is PenaltyFacet {
         LibAppStorage.s().treasury = treasury;
     }
 
+    function setTreasuryShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = bps;
+        store.treasuryShareConfigured = true;
+    }
+
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function setDepositor(
         uint256 pid,
         bytes32 positionKey,
@@ -151,6 +163,8 @@ contract PenaltyFeeIndexPropertyTest is Test {
         nft.setMinter(address(facet));
         facet.initPool(PID, address(token), 3);
         facet.setTreasury(TREASURY);
+        facet.setTreasuryShareBps(2000);
+        facet.setActiveCreditShareBps(0);
 
         // Ensure the facet has enough tokens to pay enforcer+treasury shares during penalty.
         token.mint(address(facet), 1_000_000 ether);

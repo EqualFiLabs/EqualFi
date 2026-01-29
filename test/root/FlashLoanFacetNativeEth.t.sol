@@ -59,6 +59,18 @@ contract FlashLoanNativeHarness is FlashLoanFacet {
         LibAppStorage.s().nativeTrackedTotal = value;
     }
 
+    function setTreasuryShare(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = bps;
+        store.treasuryShareConfigured = true;
+    }
+
+    function setActiveCreditShare(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function trackedBalance(uint256 pid) external view returns (uint256) {
         return s().pools[pid].trackedBalance;
     }
@@ -91,6 +103,8 @@ contract FlashLoanFacetNativeEthTest is Test {
         uint256 deposits = 100 ether;
 
         facet.initNativePool(PID, feeBps, false, amount, deposits);
+        facet.setTreasuryShare(0);
+        facet.setActiveCreditShare(0);
         facet.setNativeTrackedTotal(amount);
         vm.deal(address(facet), amount);
         vm.deal(address(receiver), fee);

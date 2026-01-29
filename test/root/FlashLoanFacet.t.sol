@@ -60,6 +60,12 @@ contract FlashLoanHarness is FlashLoanFacet {
         store.treasuryShareConfigured = true;
     }
 
+    function setActiveCreditShare(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function feeIndex(uint256 pid) external view returns (uint256) {
         return s().pools[pid].feeIndex;
     }
@@ -87,6 +93,8 @@ contract FlashLoanFacetTest is Test {
         token.mint(address(facet), 1_000_000 ether);
         facet.initPool(PID, address(token), 50, true);
         facet.setTreasury(TREASURY);
+        facet.setTreasuryShare(2000);
+        facet.setActiveCreditShare(0);
         receiver.setFeeBps(50);
         token.mint(address(receiver), 1_000_000 ether); // ensure receiver can repay
         token.approve(address(facet), type(uint256).max);

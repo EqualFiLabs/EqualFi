@@ -39,6 +39,8 @@ interface IDerivativeTestHarness {
     function setPositionNFT(address nft) external;
     function setTreasury(address treasury) external;
     function setMakerShares(uint16 ammShareBps, uint16 communityShareBps, uint16 mamShareBps) external;
+    function setActiveCreditShareBps(uint16 bps) external;
+    function setTreasuryShareBps(uint16 bps) external;
     function seedPool(uint256 pid, address underlying, bytes32 positionKey, uint256 principal, uint256 tracked) external;
     function addPrincipal(uint256 pid, bytes32 positionKey, uint256 principal, uint256 tracked) external;
     function joinPool(uint256 pid, bytes32 positionKey) external;
@@ -66,6 +68,18 @@ contract DerivativeTestHarnessFacet {
         ds.config.ammMakerShareBps = ammShareBps;
         ds.config.communityMakerShareBps = communityShareBps;
         ds.config.mamMakerShareBps = mamShareBps;
+    }
+
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
+    function setTreasuryShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = bps;
+        store.treasuryShareConfigured = true;
     }
 
     function seedPool(
@@ -216,6 +230,8 @@ abstract contract DerivativeDiamondTestBase is Test {
         harness.setPositionNFT(address(nft));
         harness.setTreasury(address(0xC0FFEE));
         harness.setMakerShares(7000, 7000, 7000);
+        harness.setActiveCreditShareBps(0);
+        harness.setTreasuryShareBps(2000);
 
         tokenA = new MockERC20("TokenA", "TKA", 18, 0);
         tokenB = new MockERC20("TokenB", "TKB", 6, 0);
@@ -259,19 +275,21 @@ abstract contract DerivativeDiamondTestBase is Test {
     }
 
     function _selectorsHarness() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](12);
+        s = new bytes4[](14);
         s[0] = DerivativeTestHarnessFacet.setPositionNFT.selector;
         s[1] = DerivativeTestHarnessFacet.setTreasury.selector;
         s[2] = DerivativeTestHarnessFacet.setMakerShares.selector;
-        s[3] = DerivativeTestHarnessFacet.seedPool.selector;
-        s[4] = DerivativeTestHarnessFacet.addPrincipal.selector;
-        s[5] = DerivativeTestHarnessFacet.joinPool.selector;
-        s[6] = DerivativeTestHarnessFacet.setEuropeanTolerance.selector;
-        s[7] = DerivativeTestHarnessFacet.setGracePeriod.selector;
-        s[8] = DerivativeTestHarnessFacet.getDirectLocked.selector;
-        s[9] = DerivativeTestHarnessFacet.getDirectLent.selector;
-        s[10] = DerivativeTestHarnessFacet.getPrincipal.selector;
-        s[11] = DerivativeTestHarnessFacet.getTracked.selector;
+        s[3] = DerivativeTestHarnessFacet.setActiveCreditShareBps.selector;
+        s[4] = DerivativeTestHarnessFacet.setTreasuryShareBps.selector;
+        s[5] = DerivativeTestHarnessFacet.seedPool.selector;
+        s[6] = DerivativeTestHarnessFacet.addPrincipal.selector;
+        s[7] = DerivativeTestHarnessFacet.joinPool.selector;
+        s[8] = DerivativeTestHarnessFacet.setEuropeanTolerance.selector;
+        s[9] = DerivativeTestHarnessFacet.setGracePeriod.selector;
+        s[10] = DerivativeTestHarnessFacet.getDirectLocked.selector;
+        s[11] = DerivativeTestHarnessFacet.getDirectLent.selector;
+        s[12] = DerivativeTestHarnessFacet.getPrincipal.selector;
+        s[13] = DerivativeTestHarnessFacet.getTracked.selector;
     }
 
     function _selectorsAmm() internal pure returns (bytes4[] memory s) {
