@@ -77,9 +77,10 @@ abstract contract ERC8004ViewTestBase is Test {
     }
 
     function _selectors(PositionNFTViewFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](3);
+        s = new bytes4[](4);
         s[0] = PositionNFTViewFacet.getAgentWallet.selector;
         s[1] = PositionNFTViewFacet.getAgentNonce.selector;
         s[2] = PositionNFTViewFacet.getIdentityRegistry.selector;
+        s[3] = PositionNFTViewFacet.isAgent.selector;
     }
 }

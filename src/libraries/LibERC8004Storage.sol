@@ -15,6 +15,9 @@ library LibERC8004Storage {
         // Agent URI storage (agentId => URI string)
         mapping(uint256 => string) agentURIs;
 
+        // Registration state (agentId => registered)
+        mapping(uint256 => bool) registered;
+
         // Metadata storage (agentId => keccak256(key) => value)
         mapping(uint256 => mapping(bytes32 => bytes)) metadata;
 

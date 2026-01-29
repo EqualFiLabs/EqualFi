@@ -172,6 +172,9 @@ function register(
 4. Emit `Registered` event with agentId, URI, and owner
 5. Emit `MetadataSet` events for each metadata entry
 
+**Note:** ERC-8004 allows empty `agentURI` registrations. We track explicit per-agent registration state (`registered[agentId]`) so downstream systems (e.g., reputation gating) can distinguish registered agents from unregistered PNFTs.
+
+
 ### Metadata Entry Structure
 
 ```solidity
@@ -427,7 +430,10 @@ After receiving a Position NFT, the new owner must:
 struct ERC8004Storage {
     // Agent URI storage (agentId => URI string)
     mapping(uint256 => string) agentURIs;
-    
+
+    // Registration state (agentId => registered)
+    mapping(uint256 => bool) registered;
+
     // Metadata storage (agentId => keccak256(key) => value)
     mapping(uint256 => mapping(bytes32 => bytes)) metadata;
     
@@ -458,6 +464,9 @@ function getAgentNonce(uint256 agentId) external view returns (uint256);
 
 // Get the Identity Registry address (PositionNFT contract)
 function getIdentityRegistry() external view returns (address);
+
+// Check whether an agentId has been registered
+function isAgent(uint256 agentId) external view returns (bool);
 ```
 
 ### PositionNFTIdentityFacet
@@ -556,6 +565,9 @@ address wallet = viewFacet.getAgentWallet(agentId);
 
 // Get agent URI
 string memory uri = identityFacet.getAgentURI(agentId);
+
+// Check whether an agentId has been registered
+bool isRegistered = viewFacet.isAgent(agentId);
 
 // Get custom metadata
 bytes memory description = identityFacet.getMetadata(agentId, "description");

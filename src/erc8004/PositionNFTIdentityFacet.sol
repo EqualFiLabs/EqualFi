@@ -69,6 +69,7 @@ contract PositionNFTIdentityFacet {
 
         LibERC8004Storage.ERC8004Storage storage ds = LibERC8004Storage.s();
         ds.agentURIs[agentId] = agentURI;
+        ds.registered[agentId] = true;
 
         uint256 length = metadata.length;
         for (uint256 i = 0; i < length; i++) {
