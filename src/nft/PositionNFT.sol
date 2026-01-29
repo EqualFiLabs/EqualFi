@@ -12,26 +12,6 @@ interface IDirectOfferCanceller {
     function hasOpenOffers(bytes32 positionKey) external view returns (bool);
 }
 
-/// @notice ERC-8004 transfer callback interface
-interface IERC8004Callback {
-    function onAgentTransfer(uint256 agentId) external;
-}
-
-/// @notice ERC-8004 identity registry interface (selectors for ERC-165)
-interface IERC8004Identity {
-    struct MetadataEntry {
-        string metadataKey;
-        bytes metadataValue;
-    }
-
-    function register() external returns (uint256 agentId);
-    function register(string calldata agentURI) external returns (uint256 agentId);
-    function register(string calldata agentURI, MetadataEntry[] calldata metadata) external returns (uint256 agentId);
-    function setAgentURI(uint256 agentId, string calldata newURI) external;
-    function getMetadata(uint256 agentId, string calldata metadataKey) external view returns (bytes memory);
-    function setMetadata(uint256 agentId, string calldata metadataKey, bytes calldata metadataValue) external;
-    function setAgentWallet(uint256 agentId, address newWallet, uint256 deadline, bytes calldata signature) external;
-}
 
 /// @title PositionNFT
 /// @notice ERC-721 NFT representing isolated account containers in EqualLend pools
@@ -153,8 +133,7 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         if (!_exists(tokenId)) {
             revert InvalidTokenId(tokenId);
         }
-        bytes memory data = _diamondStaticCall(abi.encodeWithSignature("getAgentURI(uint256)", tokenId));
-        return abi.decode(data, (string));
+        return super.tokenURI(tokenId);
     }
 
     /// @notice Check if a token exists
@@ -162,68 +141,6 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
     /// @return True if the token exists
     function _exists(uint256 tokenId) internal view returns (bool) {
         return _ownerOf(tokenId) != address(0);
-    }
-
-    /// @notice ERC-8004 register forwarding (no metadata)
-    function register() external returns (uint256 agentId) {
-        bytes memory data = _diamondCall(abi.encodeWithSignature("register()"));
-        return abi.decode(data, (uint256));
-    }
-
-    /// @notice ERC-8004 register forwarding with agentURI
-    function register(string calldata agentURI) external returns (uint256 agentId) {
-        bytes memory data = _diamondCall(abi.encodeWithSignature("register(string)", agentURI));
-        return abi.decode(data, (uint256));
-    }
-
-    /// @notice ERC-8004 register forwarding with metadata
-    function register(string calldata agentURI, IERC8004Identity.MetadataEntry[] calldata metadata)
-        external
-        returns (uint256 agentId)
-    {
-        bytes memory data = _diamondCall(abi.encodeWithSignature("register(string,(string,bytes)[])", agentURI, metadata));
-        return abi.decode(data, (uint256));
-    }
-
-    function setAgentURI(uint256 agentId, string calldata newURI) external {
-        _diamondCall(abi.encodeWithSignature("setAgentURI(uint256,string)", agentId, newURI));
-    }
-
-    function getAgentURI(uint256 agentId) external view returns (string memory) {
-        bytes memory data = _diamondStaticCall(abi.encodeWithSignature("getAgentURI(uint256)", agentId));
-        return abi.decode(data, (string));
-    }
-
-    function getMetadata(uint256 agentId, string calldata metadataKey) external view returns (bytes memory) {
-        bytes memory data = _diamondStaticCall(
-            abi.encodeWithSignature("getMetadata(uint256,string)", agentId, metadataKey)
-        );
-        return abi.decode(data, (bytes));
-    }
-
-    function setMetadata(uint256 agentId, string calldata metadataKey, bytes calldata metadataValue) external {
-        _diamondCall(abi.encodeWithSignature("setMetadata(uint256,string,bytes)", agentId, metadataKey, metadataValue));
-    }
-
-    function setAgentWallet(
-        uint256 agentId,
-        address newWallet,
-        uint256 deadline,
-        bytes calldata signature
-    ) external {
-        _diamondCall(
-            abi.encodeWithSignature("setAgentWallet(uint256,address,uint256,bytes)", agentId, newWallet, deadline, signature)
-        );
-    }
-
-    function getAgentWallet(uint256 agentId) external view returns (address) {
-        bytes memory data = _diamondStaticCall(abi.encodeWithSignature("getAgentWallet(uint256)", agentId));
-        return abi.decode(data, (address));
-    }
-
-    function getAgentNonce(uint256 agentId) external view returns (uint256) {
-        bytes memory data = _diamondStaticCall(abi.encodeWithSignature("getAgentNonce(uint256)", agentId));
-        return abi.decode(data, (uint256));
     }
 
     /// @notice Override supportsInterface to include ERC721Enumerable
@@ -236,9 +153,6 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         override 
         returns (bool) 
     {
-        if (interfaceId == type(IERC8004Identity).interfaceId) {
-            return true;
-        }
         return super.supportsInterface(interfaceId);
     }
 
@@ -281,34 +195,9 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
             if (IDirectOfferCanceller(diamond).hasOpenOffers(positionKey)) {
                 revert PositionNFTHasOpenOffers(positionKey);
             }
-
-            IERC8004Callback(diamond).onAgentTransfer(tokenId);
         }
         
         return from;
     }
 
-    function _diamondCall(bytes memory callData) internal returns (bytes memory data) {
-        address diamondAddr = diamond;
-        require(diamondAddr != address(0), "PositionNFT: diamond not set");
-        (bool ok, bytes memory result) = diamondAddr.call(callData);
-        if (!ok) {
-            assembly {
-                revert(add(result, 32), mload(result))
-            }
-        }
-        return result;
-    }
-
-    function _diamondStaticCall(bytes memory callData) internal view returns (bytes memory data) {
-        address diamondAddr = diamond;
-        require(diamondAddr != address(0), "PositionNFT: diamond not set");
-        (bool ok, bytes memory result) = diamondAddr.staticcall(callData);
-        if (!ok) {
-            assembly {
-                revert(add(result, 32), mload(result))
-            }
-        }
-        return result;
-    }
 }

@@ -21,7 +21,6 @@ import {EqualLendDirectRollingAgreementFacet} from "../../src/equallend-direct/E
 import {EqualLendDirectRollingLifecycleFacet} from "../../src/equallend-direct/EqualLendDirectRollingLifecycleFacet.sol";
 import {EqualLendDirectRollingPaymentFacet} from "../../src/equallend-direct/EqualLendDirectRollingPaymentFacet.sol";
 import {EqualLendDirectRollingViewFacet} from "../../src/views/EqualLendDirectRollingViewFacet.sol";
-import {PositionNFTWalletFacet} from "../../src/erc8004/PositionNFTWalletFacet.sol";
 
 // Test harness facets
 import {DirectTestHarnessFacet} from "./DirectTestHarnessFacet.sol";
@@ -283,7 +282,7 @@ abstract contract DirectDiamondTestBase is Test {
         RollingFacets memory rolling = _deployRollingFacets();
         HarnessFacets memory harnessFacets = _deployHarnessFacets();
 
-        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](11);
+        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](10);
         addCuts[0] = _cut(direct.offerFacet, _selectorsOffer());
         addCuts[1] = _cut(direct.agreementFacet, _selectorsAgreement());
         addCuts[2] = _cut(direct.lifecycleFacet, _selectorsLifecycle());
@@ -294,7 +293,6 @@ abstract contract DirectDiamondTestBase is Test {
         addCuts[7] = _cut(rolling.rollingLifecycleFacet, _selectorsRollingLifecycle());
         addCuts[8] = _cut(rolling.rollingPaymentFacet, _selectorsRollingPayment());
         addCuts[9] = _cut(rolling.rollingViewFacet, _selectorsRollingView());
-        addCuts[10] = _cut(_deployWalletFacet(), _selectorsWallet());
         IDiamondCut(address(diamond)).diamondCut(addCuts, address(0), "");
     }
 
@@ -338,9 +336,6 @@ abstract contract DirectDiamondTestBase is Test {
         rolling.rollingViewFacet = address(new EqualLendDirectRollingViewFacet());
     }
 
-    function _deployWalletFacet() internal returns (address) {
-        return address(new PositionNFTWalletFacet());
-    }
 
     function _deployHarnessFacets() internal returns (HarnessFacets memory harnessFacets) {
         harnessFacets.harnessFacet = address(new DirectTestHarnessFacet());
@@ -444,11 +439,6 @@ abstract contract DirectDiamondTestBase is Test {
         s[0] = EqualLendDirectRollingViewFacet.calculateRollingPayment.selector;
         s[1] = EqualLendDirectRollingViewFacet.getRollingStatus.selector;
         s[2] = EqualLendDirectRollingViewFacet.aggregateRollingExposure.selector;
-    }
-
-    function _selectorsWallet() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](1);
-        s[0] = PositionNFTWalletFacet.onAgentTransfer.selector;
     }
 
     function _selectorsHarness() internal pure returns (bytes4[] memory s) {

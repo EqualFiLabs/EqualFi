@@ -76,7 +76,6 @@ forge test --match-path "test/treasury/*t.sol"
 forge test --match-path "test/views/*t.sol"
 forge test --match-path "test/invariants/*t.sol"
 forge test --match-path "test/derivatives/*t.sol"
-forge test --match-path "test/erc8004/*t.sol"
 forge test --match-path "test/compete/*t.sol"
 ```
 
@@ -274,7 +273,6 @@ Equalis exists because trustlessness has to be real. Not a brand. Not a vibe. A 
 If you’re a builder, a user, or someone who wants to see onchain finance done differently, welcome. If you’re tired of hearing that the way things are is the way they have to be, you’re in the right place.
 
 Discord: [https://discord.gg/brsMNDux4T](https://discord.gg/brsMNDux4T)
-
 
 
 
