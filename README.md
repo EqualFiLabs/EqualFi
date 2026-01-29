@@ -1,3 +1,5 @@
+# EqualFi and The Equalis Protocol
+
 [![CI](https://github.com/EqualFiLabs/EqualFi/actions/workflows/ci.yml/badge.svg)](https://github.com/EqualFiLabs/EqualFi/actions/workflows/ci.yml)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/brsMNDux4T)
 
@@ -9,7 +11,114 @@ This work is inspired in part by:
 
 ***We must build for the right reasons.***
 
-> Status: early-stage
+
+
+# Getting Started
+
+## Requirements
+
+- **Git** (for submodules)
+- **Foundry** (forge, cast, anvil) — `solc` is pinned to **0.8.33** via Foundry config
+- **Bash** (for helper scripts under `script/`)
+
+## Install Foundry
+
+If you do not already have Foundry installed:
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+```
+
+## Install Dependencies
+
+The repo uses git submodules for core dependencies.
+
+```bash
+git submodule update --init --recursive
+```
+
+If you prefer to re-install via Foundry (optional):
+
+```bash
+forge install foundry-rs/forge-std@v1.7.6
+forge install OpenZeppelin/openzeppelin-contracts@v5.5.0
+```
+
+## Build
+
+```bash
+forge build
+```
+
+## Run Tests
+
+Run the full test suite:
+
+```bash
+forge test
+```
+
+Run test groups by directory:
+
+```bash
+forge test --match-path "test/admin/*t.sol"
+forge test --match-path "test/equallend-direct/*t.sol"
+forge test --match-path "test/facets/*t.sol"
+forge test --match-path "test/gas/*t.sol"
+forge test --match-path "test/libraries/*t.sol"
+forge test --match-path "test/maintenance/*t.sol"
+forge test --match-path "test/managed-pools/*t.sol"
+forge test --match-path "test/mocks/*t.sol"
+forge test --match-path "test/penalty/*t.sol"
+forge test --match-path "test/root/*t.sol"
+forge test --match-path "test/treasury/*t.sol"
+forge test --match-path "test/views/*t.sol"
+forge test --match-path "test/invariants/*t.sol"
+forge test --match-path "test/derivatives/*t.sol"
+forge test --match-path "test/erc8004/*t.sol"
+forge test --match-path "test/compete/*t.sol"
+```
+
+Or run the repo helper script:
+
+```bash
+bash script/run-tests-seq.sh
+```
+
+## Format
+
+```bash
+forge fmt
+```
+
+## Local Chain (Optional)
+
+If you need a local Ethereum node for scripts or manual testing:
+
+```bash
+anvil
+```
+
+Then, in a separate terminal, you can run scripts with Foundry:
+
+```bash
+forge script script/DeployDiamond.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+```
+
+## Repository Layout
+
+- `src/` — core protocol contracts and facets
+- `test/` — unit, property, and invariant tests
+- `script/` — deployment and verification scripts
+- `docs/` — protocol design and technical docs
+- `lib/` — vendored dependencies (forge-std, OpenZeppelin)
+
+## Notes
+
+- Foundry settings are in `foundry.toml` (optimizer enabled, viaIR on, solc 0.8.33).
+- If you encounter missing submodules, re-run the submodule install step.
+
 
 ## What is The Equalis Protocol
 
