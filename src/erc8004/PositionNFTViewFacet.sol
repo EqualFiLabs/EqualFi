@@ -22,6 +22,10 @@ contract PositionNFTViewFacet {
         return LibERC8004Storage.s().agentNonces[agentId];
     }
 
+    function isAgent(uint256 agentId) external view returns (bool) {
+        return LibERC8004Storage.s().registered[agentId];
+    }
+
     function getIdentityRegistry() external view returns (address) {
         address registry = LibPositionNFT.s().positionNFTContract;
         if (registry == address(0)) {
