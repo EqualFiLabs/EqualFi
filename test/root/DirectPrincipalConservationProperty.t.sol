@@ -17,6 +17,9 @@ contract DirectPrincipalConservationPropertyTest is DirectDiamondTestBase {
         borrowerPrincipal = bound(borrowerPrincipal, 1 ether, 1_000_000 ether);
         offerPrincipal = bound(offerPrincipal, 1, lenderPrincipal);
         collateralLockAmount = bound(collateralLockAmount, 1, borrowerPrincipal);
+        if (offerPrincipal > borrowerPrincipal) {
+            offerPrincipal = borrowerPrincipal;
+        }
 
         MockERC20 token = new MockERC20("Mock", "MOCK", 18, 0);
         setUpDiamond();

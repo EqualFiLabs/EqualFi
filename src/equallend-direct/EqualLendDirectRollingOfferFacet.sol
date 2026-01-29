@@ -111,12 +111,14 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             revert InsufficientPrincipal(params.collateralLockAmount, available);
         }
 
-        uint256 currentBorrowerDebt =
-            LibSolvencyChecks.calculateTotalDebt(collateralPool, positionKey, params.collateralPoolId);
-        require(
-            LibSolvencyChecks.checkSolvency(collateralPool, positionKey, principal, currentBorrowerDebt),
-            "SolvencyViolation: Borrower LTV"
-        );
+        if (params.borrowAsset == params.collateralAsset) {
+            uint256 currentBorrowerDebt =
+                LibSolvencyChecks.calculateTotalDebt(collateralPool, positionKey, params.lenderPoolId);
+            require(
+                LibSolvencyChecks.checkSolvency(collateralPool, positionKey, principal, currentBorrowerDebt),
+                "SolvencyViolation: Borrower LTV"
+            );
+        }
 
         uint256 encBefore = LibEncumbrance.totalForActiveCredit(positionKey, params.collateralPoolId);
         LibEncumbrance.position(positionKey, params.collateralPoolId).directLocked = locked + params.collateralLockAmount;

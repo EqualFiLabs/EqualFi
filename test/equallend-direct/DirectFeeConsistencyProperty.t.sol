@@ -43,9 +43,9 @@ contract DirectFeeConsistencyPropertyTest is DirectDiamondTestBase {
         bytes32 borrowerKeyB = nft.getPositionKey(borrowerPositionB);
 
         harness.seedPoolWithMembership(1, address(asset), lenderKeyA, 500 ether, true);
-        harness.seedPoolWithMembership(2, address(asset), borrowerKeyA, 30 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKeyA, 200 ether, true);
         harness.seedPoolWithMembership(3, address(asset), lenderKeyB, 500 ether, true);
-        harness.seedPoolWithMembership(4, address(asset), borrowerKeyB, 30 ether, true);
+        harness.seedPoolWithMembership(4, address(asset), borrowerKeyB, 200 ether, true);
 
         asset.transfer(address(0xA11CE), 500 ether);
         asset.transfer(address(0xB0B), 200 ether);

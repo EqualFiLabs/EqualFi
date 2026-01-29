@@ -89,13 +89,15 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         uint256 available = borrowerPrincipal - locked;
         if (offer.collateralLockAmount > available) revert InsufficientPrincipal(offer.collateralLockAmount, available);
 
-        uint256 currentBorrowerDebt =
-            LibSolvencyChecks.calculateTotalDebt(collateralPool, borrowerKey, offer.collateralPoolId);
-        uint256 newBorrowerDebt = currentBorrowerDebt + offer.collateralLockAmount;
-        require(
-            LibSolvencyChecks.checkSolvency(collateralPool, borrowerKey, borrowerPrincipal, newBorrowerDebt),
-            "SolvencyViolation: Borrower LTV"
-        );
+        if (offer.borrowAsset == offer.collateralAsset) {
+            uint256 currentBorrowerDebt =
+                LibSolvencyChecks.calculateTotalDebt(collateralPool, borrowerKey, offer.lenderPoolId);
+            uint256 newBorrowerDebt = currentBorrowerDebt + offer.principal;
+            require(
+                LibSolvencyChecks.checkSolvency(collateralPool, borrowerKey, borrowerPrincipal, newBorrowerDebt),
+                "SolvencyViolation: Borrower LTV"
+            );
+        }
 
         if (offer.paymentIntervalSeconds == 0) revert DirectError_InvalidTimestamp();
         uint256 nextDueCalc = block.timestamp + offer.paymentIntervalSeconds;
@@ -205,12 +207,15 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         uint256 locked = LibEncumbrance.position(borrowerKey, offer.collateralPoolId).directLocked;
         if (locked < offer.collateralLockAmount) revert InsufficientPrincipal(offer.collateralLockAmount, locked);
 
-        uint256 currentBorrowerDebt =
-            LibSolvencyChecks.calculateTotalDebt(collateralPool, borrowerKey, offer.collateralPoolId);
-        require(
-            LibSolvencyChecks.checkSolvency(collateralPool, borrowerKey, borrowerPrincipal, currentBorrowerDebt),
-            "SolvencyViolation: Borrower LTV"
-        );
+        if (offer.borrowAsset == offer.collateralAsset) {
+            uint256 currentBorrowerDebt =
+                LibSolvencyChecks.calculateTotalDebt(collateralPool, borrowerKey, offer.lenderPoolId);
+            uint256 newBorrowerDebt = currentBorrowerDebt + offer.principal;
+            require(
+                LibSolvencyChecks.checkSolvency(collateralPool, borrowerKey, borrowerPrincipal, newBorrowerDebt),
+                "SolvencyViolation: Borrower LTV"
+            );
+        }
 
         if (offer.paymentIntervalSeconds == 0) revert DirectError_InvalidTimestamp();
         uint256 nextDueCalc = block.timestamp + offer.paymentIntervalSeconds;

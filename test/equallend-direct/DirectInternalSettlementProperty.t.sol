@@ -150,7 +150,7 @@ contract DirectDefaultDistributionHierarchyTest is DirectTestBase {
 
     function testProperty_DefaultDistributionHierarchy() public {
         uint256 lenderPrincipal = 200 ether;
-        uint256 borrowerPrincipal = 80 ether;
+        uint256 borrowerPrincipal = 200 ether;
         uint256 principal = 100 ether;
         uint256 collateralLock = 50 ether;
 
