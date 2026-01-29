@@ -44,12 +44,15 @@ contract DirectExercisePropertyTest is DirectDiamondTestBase {
         vm.warp(200 days);
         uint256 lenderPositionId = nft.mint(lenderOwner, 1);
         uint256 borrowerPositionId = nft.mint(borrowerOwner, 2);
+        uint256 borrowerPositionId2 = nft.mint(borrowerOwner, 3);
         finalizePositionNFT();
         bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
         bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+        bytes32 borrowerKey2 = nft.getPositionKey(borrowerPositionId2);
 
         harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
-        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 30 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 200 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey2, 200 ether, true);
 
         asset.transfer(lenderOwner, 500 ether);
         asset.transfer(borrowerOwner, 50 ether);
@@ -99,11 +102,11 @@ contract DirectExercisePropertyTest is DirectDiamondTestBase {
         vm.prank(lenderOwner);
         uint256 allowedOfferId = offers.postOffer(allowedParams);
         vm.prank(borrowerOwner);
-        uint256 allowedAgreementId = agreements.acceptOffer(allowedOfferId, borrowerPositionId);
+        uint256 allowedAgreementId = agreements.acceptOffer(allowedOfferId, borrowerPositionId2);
 
         vm.warp(acceptTimestamp + 1 days);
         uint256 lenderPrincipalBefore = LibAppStorage.s().pools[1].userPrincipal[lenderKey];
-        uint256 borrowerPrincipalBefore = LibAppStorage.s().pools[2].userPrincipal[borrowerKey];
+        uint256 borrowerPrincipalBefore = LibAppStorage.s().pools[2].userPrincipal[borrowerKey2];
         uint256 feeIndexBefore = LibAppStorage.s().pools[2].feeIndex;
         uint256 trackedBefore = LibAppStorage.s().pools[2].trackedBalance;
 
@@ -132,7 +135,7 @@ contract DirectExercisePropertyTest is DirectDiamondTestBase {
             "protocol principal increased in lender pool"
         );
         assertEq(
-            LibAppStorage.s().pools[2].userPrincipal[borrowerKey],
+            LibAppStorage.s().pools[2].userPrincipal[borrowerKey2],
             borrowerPrincipalBefore - collateralAvailable,
             "borrower collateral deducted"
         );
@@ -150,7 +153,7 @@ contract DirectExercisePropertyTest is DirectDiamondTestBase {
         vm.prank(lenderOwner);
         uint256 lateOfferId = offers.postOffer(allowedParams);
         vm.prank(borrowerOwner);
-        uint256 lateAgreementId = agreements.acceptOffer(lateOfferId, borrowerPositionId);
+        uint256 lateAgreementId = agreements.acceptOffer(lateOfferId, borrowerPositionId2);
         uint256 lateAcceptTimestamp = block.timestamp;
 
         vm.warp(DirectTestUtils.dueTimestamp(lateAcceptTimestamp, allowedParams.durationSeconds) + 1 days + 1);

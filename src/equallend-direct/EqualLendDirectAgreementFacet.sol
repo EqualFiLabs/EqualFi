@@ -210,16 +210,21 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
             revert InsufficientPrincipal(offer.collateralLockAmount, locked);
         }
 
-        // The lock was recorded during postBorrowerOffer; avoid double-counting it as debt.
-        require(
-            LibSolvencyChecks.checkSolvency(
-                collateralPool,
-                borrowerKey,
-                borrowerPrincipal,
-                LibSolvencyChecks.calculateTotalDebt(collateralPool, borrowerKey, offer.collateralPoolId)
-            ),
-            "SolvencyViolation: Borrower LTV"
-        );
+        // The lock was recorded during postBorrowerOffer; only enforce LTV for same-asset debt.
+        if (offer.borrowAsset == offer.collateralAsset) {
+            uint256 currentBorrowerDebt =
+                LibSolvencyChecks.calculateTotalDebt(collateralPool, borrowerKey, offer.lenderPoolId);
+            uint256 newBorrowerDebt = currentBorrowerDebt + offer.principal;
+            require(
+                LibSolvencyChecks.checkSolvency(
+                    collateralPool,
+                    borrowerKey,
+                    borrowerPrincipal,
+                    newBorrowerDebt
+                ),
+                "SolvencyViolation: Borrower LTV"
+            );
+        }
 
         DirectTypes.DirectConfig storage cfg = ds.config;
         (uint256 platformFee, uint256 interestAmount, uint256 totalFee, uint64 dueTimestamp) =
@@ -376,16 +381,20 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
             revert InsufficientPrincipal(offer.collateralLockAmount, borrowerPrincipal - locked);
         }
 
-        require(
-            LibSolvencyChecks.checkSolvency(
-                pool,
-                borrowerKey,
-                borrowerPrincipal,
-                LibSolvencyChecks.calculateTotalDebt(pool, borrowerKey, offer.collateralPoolId)
-                    + offer.collateralLockAmount
-            ),
-            "SolvencyViolation: Borrower LTV"
-        );
+        if (offer.borrowAsset == offer.collateralAsset) {
+            uint256 currentBorrowerDebt =
+                LibSolvencyChecks.calculateTotalDebt(pool, borrowerKey, offer.lenderPoolId);
+            uint256 newBorrowerDebt = currentBorrowerDebt + offer.principal;
+            require(
+                LibSolvencyChecks.checkSolvency(
+                    pool,
+                    borrowerKey,
+                    borrowerPrincipal,
+                    newBorrowerDebt
+                ),
+                "SolvencyViolation: Borrower LTV"
+            );
+        }
 
         uint256 borrowerEncBefore = LibEncumbrance.totalForActiveCredit(borrowerKey, offer.collateralPoolId);
         LibEncumbrance.position(borrowerKey, offer.collateralPoolId).directLocked = locked + offer.collateralLockAmount;
@@ -567,15 +576,20 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         if (collateralRequired == 0) revert DirectError_InvalidRatio();
         if (collateralRequired > borrowerPrincipal - locked) revert InsufficientPrincipal(collateralRequired, borrowerPrincipal - locked);
 
-        require(
-            LibSolvencyChecks.checkSolvency(
-                pool,
-                borrowerKey,
-                borrowerPrincipal,
-                LibSolvencyChecks.calculateTotalDebt(pool, borrowerKey, offer.collateralPoolId) + collateralRequired
-            ),
-            "SolvencyViolation: Borrower LTV"
-        );
+        if (offer.borrowAsset == offer.collateralAsset) {
+            uint256 currentBorrowerDebt =
+                LibSolvencyChecks.calculateTotalDebt(pool, borrowerKey, offer.lenderPoolId);
+            uint256 newBorrowerDebt = currentBorrowerDebt + principalAmount;
+            require(
+                LibSolvencyChecks.checkSolvency(
+                    pool,
+                    borrowerKey,
+                    borrowerPrincipal,
+                    newBorrowerDebt
+                ),
+                "SolvencyViolation: Borrower LTV"
+            );
+        }
 
         uint256 borrowerEncBefore = LibEncumbrance.totalForActiveCredit(borrowerKey, offer.collateralPoolId);
         LibEncumbrance.position(borrowerKey, offer.collateralPoolId).directLocked = locked + collateralRequired;
