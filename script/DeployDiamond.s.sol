@@ -27,9 +27,6 @@ import {PoolUtilizationViewFacet} from "../src/views/PoolUtilizationViewFacet.so
 import {LoanPreviewFacet} from "../src/views/LoanPreviewFacet.sol";
 import {PositionViewFacet} from "../src/views/PositionViewFacet.sol";
 import {PositionNFTMetadataFacet} from "../src/views/PositionNFTMetadataFacet.sol";
-import {PositionNFTIdentityFacet} from "../src/erc8004/PositionNFTIdentityFacet.sol";
-import {PositionNFTWalletFacet} from "../src/erc8004/PositionNFTWalletFacet.sol";
-import {PositionNFTViewFacet} from "../src/erc8004/PositionNFTViewFacet.sol";
 import {MultiPoolPositionViewFacet} from "../src/views/MultiPoolPositionViewFacet.sol";
 import {AuctionManagementViewFacet} from "../src/views/AuctionManagementViewFacet.sol";
 import {PositionManagementFacet} from "../src/equallend/PositionManagementFacet.sol";
@@ -64,6 +61,10 @@ import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {Types} from "../src/libraries/Types.sol";
 import {OptionToken} from "../src/derivatives/OptionToken.sol";
 import {FuturesToken} from "../src/derivatives/FuturesToken.sol";
+import {PositionAgentTBAFacet} from "../src/erc6551/PositionAgentTBAFacet.sol";
+import {PositionAgentRegistryFacet} from "../src/erc6551/PositionAgentRegistryFacet.sol";
+import {PositionAgentViewFacet} from "../src/erc6551/PositionAgentViewFacet.sol";
+import {PositionAgentConfigFacet} from "../src/erc6551/PositionAgentConfigFacet.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);
@@ -95,6 +96,9 @@ contract DeployDiamondScript is Script {
     bytes32 internal constant ACTION_WITHDRAW = keccak256("ACTION_WITHDRAW");
     bytes32 internal constant ACTION_CLOSE_ROLLING = keccak256("ACTION_CLOSE_ROLLING");
     uint64 internal constant ATOMIC_REFUND_SAFETY_WINDOW = 3 days;
+    address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
+    address internal constant ERC8004_MAINNET = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
+    address internal constant ERC8004_SEPOLIA = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
 
     struct TokenSpec {
         string id;
@@ -150,9 +154,6 @@ contract DeployDiamondScript is Script {
         LoanPreviewFacet loanPreview = new LoanPreviewFacet();
         PositionViewFacet positionView = new PositionViewFacet();
         PositionNFTMetadataFacet positionNftMetadata = new PositionNFTMetadataFacet();
-        PositionNFTIdentityFacet positionNftIdentity = new PositionNFTIdentityFacet();
-        PositionNFTWalletFacet positionNftWallet = new PositionNFTWalletFacet();
-        PositionNFTViewFacet positionNftView = new PositionNFTViewFacet();
         MultiPoolPositionViewFacet multiPoolView = new MultiPoolPositionViewFacet();
         AuctionManagementViewFacet auctionView = new AuctionManagementViewFacet();
         PositionManagementFacet positionManagement = new PositionManagementFacet();
@@ -179,6 +180,10 @@ contract DeployDiamondScript is Script {
         FuturesFacet futuresFacet = new FuturesFacet();
         DerivativeViewFacet derivativeView = new DerivativeViewFacet();
         MamCurveViewFacet mamCurveView = new MamCurveViewFacet();
+        PositionAgentTBAFacet positionAgentTBA = new PositionAgentTBAFacet();
+        PositionAgentRegistryFacet positionAgentRegistry = new PositionAgentRegistryFacet();
+        PositionAgentViewFacet positionAgentView = new PositionAgentViewFacet();
+        PositionAgentConfigFacet positionAgentConfig = new PositionAgentConfigFacet();
 
         // Build facet cuts (core + admin + fee + index + base views)
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](14);
@@ -197,7 +202,7 @@ contract DeployDiamondScript is Script {
         cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[13] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](36);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](37);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -205,35 +210,36 @@ contract DeployDiamondScript is Script {
         more[4] = _cut(address(loanPreview), _selectors(loanPreview));
         more[5] = _cut(address(positionView), _selectors(positionView));
         more[6] = _cut(address(positionNftMetadata), _selectors(positionNftMetadata));
-        more[7] = _cut(address(positionNftIdentity), _selectors(positionNftIdentity));
-        more[8] = _cut(address(positionNftWallet), _selectors(positionNftWallet));
-        more[9] = _cut(address(positionNftView), _selectors(positionNftView));
-        more[10] = _cut(address(multiPoolView), _selectors(multiPoolView));
-        more[11] = _cut(address(auctionView), _selectors(auctionView));
-        more[12] = _cut(address(positionManagement), _selectors(positionManagement));
-        more[13] = _cut(address(lending), _selectors(lending));
-        more[14] = _cut(address(penalty), _selectors(penalty));
-        more[15] = _cut(address(directOffer), _selectors(directOffer));
-        more[16] = _cut(address(directAgreement), _selectors(directAgreement));
-        more[17] = _cut(address(directLifecycle), _selectors(directLifecycle));
-        more[18] = _cut(address(directView), _selectors(directView));
-        more[19] = _cut(address(directRollingOffer), _selectors(directRollingOffer));
-        more[20] = _cut(address(directRollingAgreement), _selectors(directRollingAgreement));
-        more[21] = _cut(address(directRollingLifecycle), _selectors(directRollingLifecycle));
-        more[22] = _cut(address(directRollingPayment), _selectors(directRollingPayment));
-        more[23] = _cut(address(directRollingView), _selectors(directRollingView));
-        more[24] = _cut(address(activeCreditView), _selectors(activeCreditView));
-        more[25] = _cut(address(ammAuction), _selectors(ammAuction));
-        more[26] = _cut(address(communityAuction), _selectors(communityAuction));
-        more[27] = _cut(address(atomicDesk), _selectors(atomicDesk));
-        more[28] = _cut(address(settlementEscrow), _selectors(settlementEscrow));
-        more[29] = _cut(address(mamCurveCreate), _selectors(mamCurveCreate));
-        more[30] = _cut(address(mamCurveManage), _selectors(mamCurveManage));
-        more[31] = _cut(address(mamCurveExec), _selectors(mamCurveExec));
-        more[32] = _cut(address(optionsFacet), _selectors(optionsFacet));
-        more[33] = _cut(address(futuresFacet), _selectors(futuresFacet));
-        more[34] = _cut(address(derivativeView), _selectors(derivativeView));
-        more[35] = _cut(address(mamCurveView), _selectors(mamCurveView));
+        more[7] = _cut(address(multiPoolView), _selectors(multiPoolView));
+        more[8] = _cut(address(auctionView), _selectors(auctionView));
+        more[9] = _cut(address(positionManagement), _selectors(positionManagement));
+        more[10] = _cut(address(lending), _selectors(lending));
+        more[11] = _cut(address(penalty), _selectors(penalty));
+        more[12] = _cut(address(directOffer), _selectors(directOffer));
+        more[13] = _cut(address(directAgreement), _selectors(directAgreement));
+        more[14] = _cut(address(directLifecycle), _selectors(directLifecycle));
+        more[15] = _cut(address(directView), _selectors(directView));
+        more[16] = _cut(address(directRollingOffer), _selectors(directRollingOffer));
+        more[17] = _cut(address(directRollingAgreement), _selectors(directRollingAgreement));
+        more[18] = _cut(address(directRollingLifecycle), _selectors(directRollingLifecycle));
+        more[19] = _cut(address(directRollingPayment), _selectors(directRollingPayment));
+        more[20] = _cut(address(directRollingView), _selectors(directRollingView));
+        more[21] = _cut(address(activeCreditView), _selectors(activeCreditView));
+        more[22] = _cut(address(ammAuction), _selectors(ammAuction));
+        more[23] = _cut(address(communityAuction), _selectors(communityAuction));
+        more[24] = _cut(address(atomicDesk), _selectors(atomicDesk));
+        more[25] = _cut(address(settlementEscrow), _selectors(settlementEscrow));
+        more[26] = _cut(address(mamCurveCreate), _selectors(mamCurveCreate));
+        more[27] = _cut(address(mamCurveManage), _selectors(mamCurveManage));
+        more[28] = _cut(address(mamCurveExec), _selectors(mamCurveExec));
+        more[29] = _cut(address(optionsFacet), _selectors(optionsFacet));
+        more[30] = _cut(address(futuresFacet), _selectors(futuresFacet));
+        more[31] = _cut(address(derivativeView), _selectors(derivativeView));
+        more[32] = _cut(address(mamCurveView), _selectors(mamCurveView));
+        more[33] = _cut(address(positionAgentTBA), _selectors(positionAgentTBA));
+        more[34] = _cut(address(positionAgentRegistry), _selectors(positionAgentRegistry));
+        more[35] = _cut(address(positionAgentView), _selectors(positionAgentView));
+        more[36] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
 
         // Deploy diamond
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
@@ -255,6 +261,20 @@ contract DeployDiamondScript is Script {
         DiamondInit initializer = new DiamondInit();
         IDiamondCut(address(diamond))
             .diamondCut(more, address(initializer), abi.encodeWithSelector(DiamondInit.init.selector, timelock, address(nftContract)));
+
+        address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(0));
+        address identityRegistry = _resolveIdentityRegistry();
+        PositionAgentConfigFacet(address(diamond)).setERC6551Registry(ERC6551_REGISTRY);
+        if (erc6551Implementation != address(0)) {
+            PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
+        } else {
+            console2.log("ERC6551_IMPLEMENTATION not set; skipping implementation config");
+        }
+        if (identityRegistry != address(0)) {
+            PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
+        } else {
+            console2.log("Identity registry unknown; skipping identity config");
+        }
 
         AdminGovernanceFacet gov = AdminGovernanceFacet(address(diamond));
         gov.setTreasury(treasury);
@@ -295,6 +315,16 @@ contract DeployDiamondScript is Script {
         c.facetAddress = facet;
         c.action = IDiamondCut.FacetCutAction.Add;
         c.functionSelectors = selectors_;
+    }
+
+    function _resolveIdentityRegistry() internal view returns (address) {
+        if (block.chainid == 1) {
+            return ERC8004_MAINNET;
+        }
+        if (block.chainid == 11155111) {
+            return ERC8004_SEPOLIA;
+        }
+        return vm.envOr("IDENTITY_REGISTRY", address(0));
     }
 
     // Selector helpers
@@ -456,33 +486,6 @@ contract DeployDiamondScript is Script {
 
     function _selectors(PositionNFTMetadataFacet viewFacet) internal pure returns (bytes4[] memory s) {
         s = viewFacet.selectors();
-    }
-
-    function _selectors(PositionNFTIdentityFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](7);
-        s[0] = bytes4(keccak256("register()"));
-        s[1] = bytes4(keccak256("register(string)"));
-        s[2] = bytes4(keccak256("register(string,(string,bytes)[])"));
-        s[3] = PositionNFTIdentityFacet.setAgentURI.selector;
-        s[4] = PositionNFTIdentityFacet.getAgentURI.selector;
-        s[5] = PositionNFTIdentityFacet.setMetadata.selector;
-        s[6] = PositionNFTIdentityFacet.getMetadata.selector;
-    }
-
-    function _selectors(PositionNFTWalletFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](4);
-        s[0] = PositionNFTWalletFacet.setAgentWallet.selector;
-        s[1] = PositionNFTWalletFacet.onAgentTransfer.selector;
-        s[2] = PositionNFTWalletFacet.DOMAIN_SEPARATOR.selector;
-        s[3] = bytes4(keccak256("SET_AGENT_WALLET_TYPEHASH()"));
-    }
-
-    function _selectors(PositionNFTViewFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](4);
-        s[0] = PositionNFTViewFacet.getAgentWallet.selector;
-        s[1] = PositionNFTViewFacet.getAgentNonce.selector;
-        s[2] = PositionNFTViewFacet.getIdentityRegistry.selector;
-        s[3] = PositionNFTViewFacet.isAgent.selector;
     }
 
     function _selectors(MultiPoolPositionViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
@@ -734,6 +737,37 @@ contract DeployDiamondScript is Script {
 
     function _selectors(MamCurveViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
         s = viewFacet.selectors();
+    }
+
+    function _selectors(PositionAgentTBAFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](4);
+        s[0] = PositionAgentTBAFacet.computeTBAAddress.selector;
+        s[1] = PositionAgentTBAFacet.deployTBA.selector;
+        s[2] = PositionAgentTBAFacet.getTBAImplementation.selector;
+        s[3] = PositionAgentTBAFacet.getERC6551Registry.selector;
+    }
+
+    function _selectors(PositionAgentRegistryFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = PositionAgentRegistryFacet.recordAgentRegistration.selector;
+        s[1] = PositionAgentRegistryFacet.getIdentityRegistry.selector;
+    }
+
+    function _selectors(PositionAgentViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = PositionAgentViewFacet.getTBAAddress.selector;
+        s[1] = PositionAgentViewFacet.getAgentId.selector;
+        s[2] = PositionAgentViewFacet.isAgentRegistered.selector;
+        s[3] = PositionAgentViewFacet.isTBADeployed.selector;
+        s[4] = PositionAgentViewFacet.getCanonicalRegistries.selector;
+        s[5] = PositionAgentViewFacet.getTBAInterfaceSupport.selector;
+    }
+
+    function _selectors(PositionAgentConfigFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](3);
+        s[0] = PositionAgentConfigFacet.setERC6551Registry.selector;
+        s[1] = PositionAgentConfigFacet.setERC6551Implementation.selector;
+        s[2] = PositionAgentConfigFacet.setIdentityRegistry.selector;
     }
 
     function _deployTokensAndPools(

@@ -107,14 +107,8 @@ src/equallend/
 ├── PositionManagementFacet.sol  # Mint, deposit, withdraw, yield operations
 └── PoolManagementFacet.sol      # Pool initialization and configuration
 
-src/erc8004/
-├── PositionNFTIdentityFacet.sol # ERC-8004 registration and metadata
-├── PositionNFTWalletFacet.sol   # Agent wallet verification
-└── PositionNFTViewFacet.sol     # Read-only queries
-
 src/libraries/
 ├── LibPositionNFT.sol           # Position key derivation and storage
-├── LibERC8004Storage.sol        # ERC-8004 data storage
 └── LibPositionHelpers.sol       # Common position utilities
 ```
 
@@ -128,16 +122,15 @@ src/libraries/
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                    PositionNFT (ERC-721)                  │   │
 │  │              Token ownership and transfers                │   │
-│  │         Forwards ERC-8004 calls to Diamond               │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                              │                                  │
 │                              ▼                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                    Diamond Proxy                          │   │
-│  │  ┌────────────────┐ ┌────────────────┐ ┌──────────────┐  │   │
-│  │  │   Position     │ │   ERC-8004     │ │    Pool      │  │   │
-│  │  │  Management    │ │    Facets      │ │  Management  │  │   │
-│  │  └────────────────┘ └────────────────┘ └──────────────┘  │   │
+│  │  ┌────────────────┐ ┌──────────────┐                      │   │
+│  │  │   Position     │ │    Pool      │                      │   │
+│  │  │  Management    │ │  Management  │                      │   │
+│  │  └────────────────┘ └──────────────┘                      │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                              │                                  │
 │                              ▼                                  │
@@ -155,9 +148,6 @@ src/libraries/
 |-------|---------------|---------------|
 | **PositionManagementFacet** | Position lifecycle | `mintPosition`, `depositToPosition`, `withdrawFromPosition`, `rollYieldToPosition` |
 | **PoolManagementFacet** | Pool configuration | `initPool`, `initManagedPool`, whitelist management |
-| **PositionNFTIdentityFacet** | ERC-8004 identity | `register`, `setAgentURI`, `setMetadata` |
-| **PositionNFTWalletFacet** | Wallet verification | `setAgentWallet`, `onAgentTransfer` |
-| **PositionNFTViewFacet** | Read-only queries | `getAgentWallet`, `getAgentNonce` |
 
 ---
 
@@ -298,62 +288,9 @@ mapping(bytes32 => RollingLoan) rollingLoans;
 
 ## ERC-8004 Integration
 
-Position NFTs implement ERC-8004 (Trustless Agents), enabling each position to function as a discoverable agent identity.
+Position NFTs are represented as ERC-8004 agents **via the canonical ERC-8004 Identity Registry and ERC-6551 TBAs**, not via in-protocol facets. Registration and metadata updates are executed directly by the Position NFT owner through the TBA, and the Identity NFT is minted by the canonical registry.
 
-### Agent Identity Model
-
-```
-agentRegistry: eip155:{chainId}:{positionNFTAddress}
-agentId: {tokenId}
-```
-
-### Registration
-
-Positions can be registered with optional URI and metadata:
-
-```solidity
-// Via PositionNFT contract (forwards to Diamond)
-function register() external returns (uint256 agentId);
-function register(string calldata agentURI) external returns (uint256 agentId);
-function register(string calldata agentURI, MetadataEntry[] calldata metadata) 
-    external returns (uint256 agentId);
-```
-
-### Agent URI
-
-The `tokenURI` function returns the ERC-8004 registration file URI:
-
-```solidity
-function tokenURI(uint256 tokenId) public view returns (string memory);
-```
-
-This enables NFT marketplaces and indexers to discover agent metadata.
-
-### Agent Wallet
-
-Positions can have a verified payment address:
-
-```solidity
-function setAgentWallet(
-    uint256 agentId,
-    address newWallet,
-    uint256 deadline,
-    bytes calldata signature
-) external;
-```
-
-The wallet requires cryptographic proof via EIP-712 (EOA) or ERC-1271 (smart contract).
-
-### Metadata
-
-Arbitrary key-value metadata can be stored:
-
-```solidity
-function setMetadata(uint256 agentId, string calldata key, bytes calldata value) external;
-function getMetadata(uint256 agentId, string calldata key) external view returns (bytes memory);
-```
-
-The key `"agentWallet"` is reserved and can only be set via `setAgentWallet`.
+For the current design and call flows, see `.kiro/specs/erc6551-position-agents/design.md`.
 
 ---
 
@@ -455,21 +392,6 @@ mapping(bytes32 => RollingLoan) rollingLoans;
 mapping(bytes32 => uint256[]) userFixedLoanIds;
 ```
 
-### ERC-8004 Storage
-
-```solidity
-struct ERC8004Storage {
-    // Agent URI (agentId => URI)
-    mapping(uint256 => string) agentURIs;
-    
-    // Metadata (agentId => keccak256(key) => value)
-    mapping(uint256 => mapping(bytes32 => bytes)) metadata;
-    
-    // Nonces for replay protection (agentId => nonce)
-    mapping(uint256 => uint256) agentNonces;
-}
-```
-
 ---
 
 ## API Reference
@@ -489,15 +411,6 @@ function getPoolId(uint256 tokenId) external view returns (uint256);
 // Get creation timestamp
 function getCreationTime(uint256 tokenId) external view returns (uint40);
 
-// ERC-8004 forwarding
-function register() external returns (uint256 agentId);
-function setAgentURI(uint256 agentId, string calldata newURI) external;
-function getAgentURI(uint256 agentId) external view returns (string memory);
-function setMetadata(uint256 agentId, string calldata key, bytes calldata value) external;
-function getMetadata(uint256 agentId, string calldata key) external view returns (bytes memory);
-function setAgentWallet(uint256 agentId, address wallet, uint256 deadline, bytes calldata sig) external;
-function getAgentWallet(uint256 agentId) external view returns (address);
-function getAgentNonce(uint256 agentId) external view returns (uint256);
 ```
 
 ### PositionManagementFacet
@@ -724,26 +637,6 @@ event MinterUpdated(address indexed oldMinter, address indexed newMinter);
 event DiamondUpdated(address indexed oldDiamond, address indexed newDiamond);
 ```
 
-### ERC-8004 Events
-
-```solidity
-// Agent registered
-event Registered(uint256 indexed agentId, string agentURI, address indexed owner);
-
-// URI updated
-event URIUpdated(uint256 indexed agentId, string newURI, address indexed updatedBy);
-
-// Metadata set
-event MetadataSet(
-    uint256 indexed agentId,
-    string indexed indexedMetadataKey,
-    string metadataKey,
-    bytes metadataValue
-);
-```
-
----
-
 ## Error Reference
 
 ### Position Errors
@@ -765,13 +658,3 @@ event MetadataSet(
 | Error | Description |
 |-------|-------------|
 | `PositionNFTHasOpenOffers(positionKey)` | Cannot transfer with open offers |
-
-### ERC-8004 Errors
-
-| Error | Description |
-|-------|-------------|
-| `ERC8004_Unauthorized(caller, agentId)` | Caller not authorized for agent |
-| `ERC8004_InvalidAgent(agentId)` | Agent does not exist |
-| `ERC8004_ReservedMetadataKey(key)` | Cannot set reserved key via setMetadata |
-| `ERC8004_DeadlineExpired(deadline, current)` | Signature deadline passed |
-| `ERC8004_InvalidSignature()` | Signature verification failed |
