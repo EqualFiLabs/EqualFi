@@ -38,4 +38,5 @@ jobs:
           forge test --match-path "test/treasury/*t.sol"
           forge test --match-path "test/views/*t.sol"
           forge test --match-path "test/invariants/*t.sol"
+          firge test --match-path "test/erc8004/*t.sol"
           forge test --match-path "test/compete/*t.sol"

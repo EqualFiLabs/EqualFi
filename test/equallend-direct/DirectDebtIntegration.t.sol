@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-/// forge-config: default.optimizer = false
 
 import {PositionManagementFacet} from "../../src/equallend/PositionManagementFacet.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";

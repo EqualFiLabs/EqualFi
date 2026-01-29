@@ -49,6 +49,18 @@ contract EqualIndexFeeSplitAccuracyHarness is EqualIndexPositionFacet {
         LibAppStorage.s().assetToPoolId[asset] = pid;
     }
 
+    function setTreasuryShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = bps;
+        store.treasuryShareConfigured = true;
+    }
+
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function setIndex(
         uint256 indexId,
         address token,
@@ -115,6 +127,8 @@ contract EqualIndexFeeSplitAccuracyPropertyTest is Test {
         address owner = address(0xBEEF);
         uint256 tokenId = nft.mint(owner, 1);
         facet.setPositionNFT(address(nft));
+        facet.setTreasuryShareBps(0);
+        facet.setActiveCreditShareBps(0);
 
         bytes32 positionKey = nft.getPositionKey(tokenId);
         facet.seedPool(ASSET_POOL_ID, address(asset), 1_000_000 ether);

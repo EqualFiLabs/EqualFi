@@ -4,14 +4,14 @@ pragma solidity ^0.8.20;
 
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
-import {DirectDiamondTestBase} from "./DirectDiamondTestBase.sol";
+import {DirectTestBase} from "./DirectTestBase.sol";
 import {DirectTestUtils} from "./DirectTestUtils.sol";
 import {LibPositionHelpers} from "../../src/libraries/LibPositionHelpers.sol";
 
 /// @notice Feature: multi-pool-position-nfts, Property 4: Direct Agreement Solvency Preservation
 /// @notice Validates: Requirements 5.1, 5.2, 5.3, 5.4
 /// forge-config: default.fuzz.runs = 50
-contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
+contract DirectInternalSettlementPropertyTest is DirectTestBase {
     MockERC20 internal asset;
     address internal lender = address(0xA11CE);
     address internal borrower = address(0xB0B);
@@ -24,7 +24,7 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
     }
 
     function setUp() public {
-        setUpDiamond();
+        setUpBase();
         asset = new MockERC20("A", "A", 18, 1_000_000 ether);
 
         DirectTypes.DirectConfig memory cfg = DirectTypes.DirectConfig({
@@ -34,7 +34,7 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
             defaultLenderBps: 10_000,
             minInterestDuration: 0
         });
-        harness.setConfig(cfg);
+        facet.setConfig(cfg);
     }
 
     function _mintPositions(uint256 lenderPrincipal, uint256 borrowerPrincipal)
@@ -43,11 +43,10 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
     {
         ctx.lenderPos = nft.mint(lender, 1);
         ctx.borrowerPos = nft.mint(borrower, 1);
-        finalizePositionNFT();
         ctx.lenderKey = nft.getPositionKey(ctx.lenderPos);
         ctx.borrowerKey = nft.getPositionKey(ctx.borrowerPos);
-        harness.addPoolMember(1, address(asset), ctx.lenderKey, lenderPrincipal, true);
-        harness.addPoolMember(1, address(asset), ctx.borrowerKey, borrowerPrincipal, true);
+        facet.addPoolMember(1, address(asset), ctx.lenderKey, lenderPrincipal, true);
+        facet.addPoolMember(1, address(asset), ctx.borrowerKey, borrowerPrincipal, true);
     }
 
     function testProperty_DirectAgreementSolvencyPreserved() public {
@@ -57,8 +56,8 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
 
         PositionContext memory ctx = _mintPositions(lenderPrincipal, borrowerPrincipal);
         {
-            (uint256 lenderPrincipalSeed,, , ,) = views.poolState(1, ctx.lenderKey);
-            (uint256 borrowerPrincipalSeed,, , ,) = views.poolState(1, ctx.borrowerKey);
+            (uint256 lenderPrincipalSeed,, , ,) = facet.poolState(1, ctx.lenderKey);
+            (uint256 borrowerPrincipalSeed,, , ,) = facet.poolState(1, ctx.borrowerKey);
             assertEq(lenderPrincipalSeed, lenderPrincipal, "seed lender principal");
             assertEq(borrowerPrincipalSeed, borrowerPrincipal, "seed borrower principal");
         }
@@ -78,26 +77,26 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
         offer.allowLenderCall = false;
 
         vm.prank(lender);
-        uint256 offerId = offers.postOffer(offer);
+        uint256 offerId = facet.postOffer(offer);
         vm.prank(borrower);
-        uint256 agreementId = agreements.acceptOffer(offerId, ctx.borrowerPos);
+        uint256 agreementId = facet.acceptOffer(offerId, ctx.borrowerPos);
 
         // Ledger-based settlement: lender liquidity debited, borrower principal unchanged
         {
-            (uint256 borrowerAfter,, uint256 trackedAfterAccept,,) = views.poolState(1, ctx.borrowerKey);
+            (uint256 borrowerAfter,, uint256 trackedAfterAccept,,) = facet.poolState(1, ctx.borrowerKey);
             assertEq(borrowerAfter, borrowerPrincipal, "borrower principal unchanged");
             assertEq(trackedAfterAccept, lenderPrincipal + borrowerPrincipal - principal, "tracked balance debited");
         }
 
         // Repay internally
         vm.prank(borrower);
-        asset.approve(address(diamond), type(uint256).max);
+        asset.approve(address(facet), type(uint256).max);
         vm.prank(borrower);
-        lifecycle.repay(agreementId);
+        facet.repay(agreementId);
 
         {
-            (uint256 borrowerFinal, uint256 totalFinal, uint256 trackedFinal,,) = views.poolState(1, ctx.borrowerKey);
-            (uint256 lenderFinal,, , ,) = views.poolState(1, ctx.lenderKey);
+            (uint256 borrowerFinal, uint256 totalFinal, uint256 trackedFinal,,) = facet.poolState(1, ctx.borrowerKey);
+            (uint256 lenderFinal,, , ,) = facet.poolState(1, ctx.lenderKey);
             // Principals unchanged; tracked restored
             assertEq(borrowerFinal, borrowerPrincipal, "borrower principal restored");
             assertEq(lenderFinal, lenderPrincipal, "lender principal unchanged");
@@ -108,7 +107,7 @@ contract DirectInternalSettlementPropertyTest is DirectDiamondTestBase {
 
 /// @notice Feature: multi-pool-position-nfts, Property 5: Default Distribution Hierarchy
 /// @notice Validates: Requirements 5.5, 5.6
-contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
+contract DirectDefaultDistributionHierarchyTest is DirectTestBase {
     MockERC20 internal asset;
     address internal lender = address(0xA11CE);
     address internal borrower = address(0xB0B);
@@ -122,7 +121,7 @@ contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
     }
 
     function setUp() public {
-        setUpDiamond();
+        setUpBase();
         asset = new MockERC20("A", "A", 18, 1_000_000 ether);
 
         DirectTypes.DirectConfig memory cfg = DirectTypes.DirectConfig({
@@ -132,9 +131,9 @@ contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
             defaultLenderBps: 1000,
             minInterestDuration: 0
         });
-        harness.setConfig(cfg);
-        harness.setTreasuryShare(treasury, 6667);
-        harness.setActiveCreditShare(0);
+        facet.setConfig(cfg);
+        facet.setTreasuryShare(treasury, 6667);
+        facet.setActiveCreditShare(0);
     }
 
     function _mintPositions(uint256 lenderPrincipal, uint256 borrowerPrincipal)
@@ -143,11 +142,10 @@ contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
     {
         ctx.lenderPos = nft.mint(lender, 1);
         ctx.borrowerPos = nft.mint(borrower, 1);
-        finalizePositionNFT();
         ctx.lenderKey = nft.getPositionKey(ctx.lenderPos);
         ctx.borrowerKey = nft.getPositionKey(ctx.borrowerPos);
-        harness.addPoolMember(1, address(asset), ctx.lenderKey, lenderPrincipal, true);
-        harness.addPoolMember(1, address(asset), ctx.borrowerKey, borrowerPrincipal, true);
+        facet.addPoolMember(1, address(asset), ctx.lenderKey, lenderPrincipal, true);
+        facet.addPoolMember(1, address(asset), ctx.borrowerKey, borrowerPrincipal, true);
     }
 
     function testProperty_DefaultDistributionHierarchy() public {
@@ -173,17 +171,17 @@ contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
         offer.allowLenderCall = false;
 
         vm.prank(lender);
-        uint256 offerId = offers.postOffer(offer);
+        uint256 offerId = facet.postOffer(offer);
         vm.prank(borrower);
-        uint256 agreementId = agreements.acceptOffer(offerId, ctx.borrowerPos);
+        uint256 agreementId = facet.acceptOffer(offerId, ctx.borrowerPos);
 
         vm.warp(block.timestamp + 2 days);
-        lifecycle.recover(agreementId);
+        facet.recover(agreementId);
 
         {
-            (uint256 lenderAfter,, , ,) = views.poolState(1, ctx.lenderKey);
-            (uint256 borrowerAfter,, , ,) = views.poolState(1, ctx.borrowerKey);
-            (uint256 protocolAfter,, , ,) = views.poolState(1, LibPositionHelpers.systemPositionKey(treasury));
+            (uint256 lenderAfter,, , ,) = facet.poolState(1, ctx.lenderKey);
+            (uint256 borrowerAfter,, , ,) = facet.poolState(1, ctx.borrowerKey);
+            (uint256 protocolAfter,, , ,) = facet.poolState(1, LibPositionHelpers.systemPositionKey(treasury));
 
             uint256 lenderShare = (collateralLock * 1000) / 10_000;
             uint256 remainder = collateralLock - lenderShare;
@@ -195,7 +193,7 @@ contract DirectDefaultDistributionHierarchyTest is DirectDiamondTestBase {
             assertEq(borrowerAfter, borrowerPrincipal - collateralLock, "borrower collateral applied");
         }
 
-        DirectTypes.DirectAgreement memory agreement = views.getAgreement(agreementId);
+        DirectTypes.DirectAgreement memory agreement = facet.getAgreement(agreementId);
         assertEq(uint8(agreement.status), uint8(DirectTypes.DirectStatus.Defaulted), "agreement defaulted");
     }
 }

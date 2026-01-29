@@ -28,6 +28,18 @@ contract ManagedPoolSystemShareTreasuryFallbackHarness {
         store.managedPoolSystemShareConfigured = true;
     }
 
+    function setTreasuryShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = bps;
+        store.treasuryShareConfigured = true;
+    }
+
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function setTreasury(address treasury) external {
         LibAppStorage.s().treasury = treasury;
     }
@@ -68,6 +80,8 @@ contract ManagedPoolSystemShareTreasuryFallbackTest is Test {
 
         harness.initPools(address(token));
         harness.setManagedPoolSystemShareBps(2000);
+        harness.setTreasuryShareBps(2000);
+        harness.setActiveCreditShareBps(0);
         harness.setTreasury(address(0xBEEF));
 
         token.mint(address(harness), 1_000_000 ether);
