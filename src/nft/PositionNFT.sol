@@ -12,6 +12,9 @@ interface IDirectOfferCanceller {
     function hasOpenOffers(bytes32 positionKey) external view returns (bool);
 }
 
+interface IAgentURIDiamond {
+    function getAgentURI(uint256 agentId) external view returns (string memory);
+}
 
 /// @title PositionNFT
 /// @notice ERC-721 NFT representing isolated account containers in EqualLend pools
@@ -132,6 +135,9 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
     {
         if (!_exists(tokenId)) {
             revert InvalidTokenId(tokenId);
+        }
+        if (diamond != address(0)) {
+            return IAgentURIDiamond(diamond).getAgentURI(tokenId);
         }
         return super.tokenURI(tokenId);
     }

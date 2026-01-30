@@ -77,6 +77,7 @@ contract PoolAdminHarness is PoolManagementFacet, AdminGovernanceFacet {}
 contract PositionManagementHarness is PositionManagementFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.s().positionNFTContract = nft;
+        LibPositionNFT.s().nftModeEnabled = true;
     }
 
     function initPool(uint256 pid, address underlying, uint256 minDeposit, uint256 minLoan, uint16 ltvBps) external {
@@ -104,6 +105,7 @@ contract PositionManagementHarness is PositionManagementFacet {
 contract LendingHarness is LendingFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.s().positionNFTContract = nft;
+        LibPositionNFT.s().nftModeEnabled = true;
     }
 
     function addFixedTermConfig(uint256 pid, uint40 duration, uint16 apyBps) external {
@@ -139,6 +141,7 @@ contract LendingHarness is LendingFacet {
 contract PenaltyHarness is PenaltyFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.s().positionNFTContract = nft;
+        LibPositionNFT.s().nftModeEnabled = true;
     }
 
     function initPool(uint256 pid, address underlying) external {
