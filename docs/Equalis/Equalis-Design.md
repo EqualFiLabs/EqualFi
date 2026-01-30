@@ -1,6 +1,6 @@
 # Equalis Protocol - Design Document
 
-**Version:** 9.0  
+**Version:** 10.0  
 
 ---
 
@@ -17,6 +17,7 @@
 9. [Testing Strategy](#testing-strategy)
 10. [Deployment and Operations](#deployment-and-operations)
 11. [Position NFT Derivatives](#position-nft-derivatives)
+12. [Position Agent System](#position-agent-system)
 
 ---
 
@@ -24,28 +25,30 @@
 
 ### 1.1 Protocol Overview
 
-Equalis is a deterministic, lossless credit primitive that replaces price-based liquidations and utilization curves with time-based credit and account-level accounting. The protocol implements a lending system where:
+Equalis is a deterministic credit primitive that replaces price-based liquidations and utilization curves with time-based credit and account-level accounting. The protocol implements a lending system where:
 
 - **No liquidations via oracles**: Credit risk is bounded by deterministic rates, terms, and loan-to-value parameters
 - **Account-level solvency**: Each account's obligations are always covered by their own locked principal
-- **Lossless deposits**: Depositors cannot lose principal due to other users' actions or failures
-- **Isolated pools**: Each pool maintains independent accounting with no cross-pool contagion risk
+- **Deposits are not impaired by other users' defaults**: Borrower defaults do not socialize losses across other depositors; pool-level maintenance fees apply uniformly as an explicit protocol cost
+- **Pool isolation with managed variants**: Each pool maintains independent accounting; managed pools can exist alongside a canonical base pool and route a system share of fees back to the base layer
 
 ### 1.2 Key Innovations
 
 1. **Position NFT System**: Each user position is represented as an ERC-721 NFT, enabling transferable account containers with all associated deposits, loans, and yield
 2. **Dual Index Accounting**: FeeIndex (monotone increasing) for yield distribution and MaintenanceIndex for proportional fee deduction with normalized fee base calculation
-3. **Zero-Interest Self-Secured Credit**: Self-secured same-asset borrowing has no interest charges - borrowers repay exactly the principal borrowed, with protocol revenue derived from usage-based fees (flashloans, MAM curves) rather than interest
+3. **Zero-Interest Self-Secured Credit**: Self-secured same-asset borrowing has no interest charges; borrowers repay principal, while protocol revenue is derived from explicit action fees, maintenance fees, and module fees (including flash loans and MAM curves)
 4. **Oracle-Free Cross-Asset Lending**: Equalis Direct enables true P2P lending between any assets without price oracles - lenders set their own cross-asset terms and collateral ratios
 5. **Equalis Direct Term Loans**: Peer-to-peer term lending with optional early exercise (American-style settlement), configurable prepayment policies, and borrower-initiated offers
 6. **Equalis Direct Rolling Loans**: Peer-to-peer rolling credit with periodic payments, arrears tracking, amortization support, and configurable grace periods
 7. **Ratio Tranche Offers**: CLOB-style offers with price ratios for variable-size fills, enabling order book-like trading dynamics for both lenders and borrowers
 8. **Active Credit Index**: Time-gated fee subsidies for active credit participants (P2P lenders and same-asset borrowers) with weighted dilution anti-gaming protection
-9. **Penalty-Based Default Settlement**: Fixed 5% penalty system for loan defaults instead of full liquidation, ensuring proportional and predictable outcomes
+9. **Deterministic Default Handling**: Self-secured loan penalties use a fixed-rate penalty model; Direct defaults split collateral deterministically between lender and protocol/index shares rather than liquidation auctions
 10. **Normalized Principal Accounting**: Fee base calculations prevent recursive fee inflation while maintaining lending expressiveness across same-asset and cross-asset domains
-11. **EqualIndex Integration**: Multi-asset index token system with deterministic fee structures
+11. **EqualIndex Integration**: Multi-asset index token system with deterministic fee structures, fee pots, and optional fee-gated creation; index tokens have dedicated pools for internal accounting
 12. **Diamond Architecture**: Modular facet-based design enabling upgradability while maintaining storage isolation
-13. **Position NFT Derivatives**: Oracle-free AMM Auctions, Options, Futures, and Maker Auction Markets using Position NFTs as the universal identity and Pools as unified collateral source
+13. **Position NFT Derivatives**: Oracle-free AMM Auctions, Options, Futures, and Maker Auction Markets using Position NFTs as the universal identity and pools as the collateral source (with current MAM constraints on pricing orientation and fee asset)
+14. **Managed Pools and Pool Flash Loans**: Optional managed pools with whitelist/cap controls and system-share fee routing, plus base-pool flash loans with anti-split protection
+15. **Position Agent System**: ERC-6551 Token Bound Accounts with ERC-6900 modular smart contract architecture and ERC-8004 agent identity, enabling Position NFTs to act as autonomous, discoverable agents with extensible module capabilities
 
 ---
 
@@ -78,24 +81,63 @@ Equalis is a deterministic, lossless credit primitive that replaces price-based 
 │  │    Facet     │  │    Facet     │  │    Facet     │           │
 │  └──────────────┘  └──────────────┘  └──────────────┘           │
 │                                                                 │
-│  ┌──────────────┐  ┌──────────────┐                             │
-│  │  MamCurve    │  │  Derivative  │                             │
-│  │    Facet     │  │  ViewFacet   │                             │
-│  └──────────────┘  └──────────────┘                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │  MamCurve    │  │  Derivative  │  │ PositionAgent│           │
+│  │    Facet     │  │  ViewFacet   │  │   Facets     │           │
+│  └──────────────┘  └──────────────┘  └──────────────┘           │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Shared Libraries                           │
 │  LibFeeIndex │ LibNetEquity │ LibEncumbrance │ LibSolvency │... │
+│  LibPositionAgentStorage │ MSCAStorage                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Diamond Storage                            │
 │  AppStorage │ DirectStorage │ IndexStorage │ NFTStorage         │
+│  PositionAgentStorage                                           │
 └─────────────────────────────────────────────────────────────────┘
          │                    │                    │
          ▼                    ▼                    ▼
    ┌──────────┐        ┌──────────┐        ┌──────────┐
    │ Position │        │   ERC20  │        │  Index   │
    │   NFT    │        │  Tokens  │        │  Tokens  │
-   └──────────┘        └──────────┘        └──────────┘
+   └────┬─────┘        └──────────┘        └──────────┘
+        │
+        │ controls (ERC-6551)
+        ▼
+   ┌──────────────────────────────────────────────────┐
+   │           Token Bound Account (TBA)              │
+   │              ERC-6900 MSCA                       │
+   ├──────────────────────────────────────────────────┤
+   │  ┌─────────────┐  ┌─────────────┐                │
+   │  │ Validation  │  │  Execution  │                │
+   │  │  Modules    │  │   Modules   │                │
+   │  └─────────────┘  └─────────────┘                │
+   └────────────────────────┬─────────────────────────┘
+                            │ owns
+                            ▼
+                    ┌──────────────┐
+                    │ ERC-8004     │
+                    │ Identity NFT │
+                    └──────────────┘
+```
+
+**External Canonical Registries**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Canonical Registries                         │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────┐  ┌─────────────────────────────┐  │
+│  │   ERC-6551 Registry     │  │  ERC-8004 Identity Registry │  │
+│  │   (TBA Factory)         │  │  (Agent Identity)           │  │
+│  │   0x0000...6551         │  │  0x8004...                  │  │
+│  └─────────────────────────┘  └─────────────────────────────┘  │
+│                                                                 │
+│  ┌─────────────────────────┐                                   │
+│  │   ERC-4337 EntryPoint   │                                   │
+│  │   (Account Abstraction) │                                   │
+│  │   0x0000...4337         │                                   │
+│  └─────────────────────────┘                                   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 Diamond Pattern Implementation
@@ -115,6 +157,8 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 - `LibDerivativeStorage`: Derivative products state (auctions, options, futures)
 - `EqualIndexStorage`: Index token state (vaults, fee pots)
 - `LibPositionNFT`: Position NFT configuration
+- `LibPositionAgentStorage`: Position Agent state (TBA mappings, registry addresses)
+- `MSCAStorage`: ERC-6900 modular account state (modules, hooks, validation)
 
 **Benefits:**
 - Modular upgrades without full redeployment
@@ -158,6 +202,10 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 | **MamCurveFacet** | Dutch auction market making curves | `createCurve`, `createCurvesBatch`, `updateCurve`, `updateCurvesBatch`, `cancelCurve`, `cancelCurvesBatch`, `executeCurveSwap`, `loadCurveForFill`, `setMamPaused` |
 | **MamCurveViewFacet** | MAM curve queries | `getCurve`, `getCurvesByPosition`, `getCurvesByPositionId` |
 | **DerivativeViewFacet** | Derivative product queries | `getAmmAuction`, `getOptionSeries`, `getFuturesSeries` |
+| **PositionAgentTBAFacet** | TBA computation and deployment | `computeTBAAddress`, `deployTBA`, `getTBAImplementation`, `getERC6551Registry` |
+| **PositionAgentRegistryFacet** | Agent registration recording | `recordAgentRegistration`, `getIdentityRegistry` |
+| **PositionAgentViewFacet** | Agent state queries | `getTBAAddress`, `getAgentId`, `isAgentRegistered`, `isTBADeployed`, `getCanonicalRegistries`, `getTBAInterfaceSupport` |
+| **PositionAgentConfigFacet** | Registry configuration | `setERC6551Registry`, `setERC6551Implementation`, `setIdentityRegistry` |
 
 ---
 
@@ -201,7 +249,7 @@ require(solvencyRatio >= depositorLTVBps)
 **Principle**: All credit terms are fixed at origination with no reactive adjustments.
 
 **Implementation**:
-- Zero interest for self-secured same-asset credit
+- Zero interest for self-secured same-asset credit (action and maintenance fees apply)
 - Fixed APY rates for P2P lending set by lenders
 - Payment schedules determined by time, not utilization
 - No oracle-based liquidations
@@ -212,10 +260,10 @@ require(solvencyRatio >= depositorLTVBps)
    - Payment interval: 30 days (fixed)
    - Delinquency threshold: 2 missed payments
    - Penalty threshold: 3 missed payments
-   - **Zero interest** - borrowers repay only principal
+   - **Zero interest** (action and maintenance fees may apply) - borrowers repay only principal
 
 2. **Pool Fixed-Term Loans**: Explicit term with no interest
-   - **Zero interest** - borrowers repay only principal
+   - **Zero interest** (action and maintenance fees may apply) - borrowers repay only principal
    - Repayment only requires principal
    - Penalty after expiry timestamp
 
@@ -264,6 +312,7 @@ paid = min(outstanding, poolAvailable, contractBalance);
 - Same position key used across all pools for this NFT
 - Transferring NFT transfers all deposits, loans, and yield across all pools
 - Users can hold multiple NFTs for different account containers
+- **Position Agent Capability**: Each Position NFT can control an ERC-6551 Token Bound Account (TBA) and register as an ERC-8004 agent (see Section 12)
 
 **Multi-Pool Position State**:
 ```solidity
@@ -402,7 +451,7 @@ function addToWhitelist(uint256 pid, uint256 tokenId) external {
 - `transferManager(pid, newManager)` - transfer management
 - `renounceManager(pid)` - permanently renounce management (irreversible)
 
-Unmanaged pools remain permissionless and immutable after creation.
+Unmanaged pools are permissionless when pool creation fees are enabled. Core pool configuration is immutable after creation, but action fees can be overridden by governance and maintenance rates are bounded by configuration.
 
 ### 4.3 FeeIndex System with Normalized Fee Base and Active Credit Index
 
@@ -411,7 +460,7 @@ Unmanaged pools remain permissionless and immutable after creation.
 **Fee Sources**:
 - Flashloan execution fees
 - MAM curve fill fees
-- Penalty fees (63% to FeeIndex after enforcer share)
+- Penalty fees routed via the fee router (Treasury / Active Credit / Fee Index), with configurable splits after the enforcer share
 - Direct lending platform fees
 - Action fees (configurable)
 - **Note**: Interest is not charged on self-secured same-asset borrowing; protocol revenue derives from usage-based fees
@@ -676,7 +725,7 @@ event EncumbranceDecreased(
 
 **Characteristics**:
 - Open-ended credit lines
-- **Zero interest** - borrowers repay only principal
+- **Zero interest** (action and maintenance fees may apply) - borrowers repay only principal
 - Periodic payment requirements (30 days) for tracking delinquency
 - Expandable via `expandRollingFromPosition`
 - Single rolling loan per position per pool
@@ -729,7 +778,7 @@ struct RollingCreditLoan {
 
 **Characteristics**:
 - Explicit term with fixed expiry
-- **Zero interest** - borrowers repay only principal
+- **Zero interest** (action and maintenance fees may apply) - borrowers repay only principal
 - Multiple fixed-term loans per position
 - No payment schedule (lump sum at maturity)
 
@@ -782,9 +831,8 @@ function calculatePenalty(uint256 principalAtOpen) internal pure returns (uint25
 
 **Distribution of the penalty** (from `PenaltyFacet`):
 - 10% to the enforcer (incentive)
-- 63% to the pool FeeIndex (benefits all depositors)
-- 9% to protocol treasury
-- 18% to the Active Credit Index (time-gated subsidy pool)
+- Remaining 90% routed through the fee router (Treasury / Active Credit Index / Fee Index) according to configured splits  
+  *(default configuration: 10% treasury, 70% Active Credit, 20% Fee Index on the remaining amount)*
 
 **Process**:
 1. Verify penalty eligibility (missed payments or expiry)
@@ -792,7 +840,7 @@ function calculatePenalty(uint256 principalAtOpen) internal pure returns (uint25
 3. Calculate 5% penalty: `penalty = principalAtOpen * 500 / 10_000`
 4. Apply penalty cap: `penaltyApplied = min(penalty, principalRemaining, availableCollateral)`
 5. Reduce user principal by the seized principal + penalty (borrower absorbs both)
-6. Calculate distribution shares from penalty amount
+6. Calculate distribution shares from the remaining penalty amount via the fee router
 7. Transfer enforcer and treasury shares (leave protocol accounting)
 8. Accrue FeeIndex and Active Credit shares to their indices (remains in protocol accounting)
 9. Close loan (mark as defaulted/closed)
@@ -1128,7 +1176,7 @@ struct DirectRollingConfig {
     uint16 minRollingApyBps;          // e.g., 1 (0.01%)
     uint16 maxRollingApyBps;          // e.g., 10000 (100%)
     uint16 defaultPenaltyBps;         // Penalty rate for defaults
-    uint64 minPaymentWei;             // Minimum accepted payment to avoid dust
+    uint16 minPaymentBps;            // Minimum payment as bps of outstanding principal
 }
 ```
 
@@ -1212,7 +1260,9 @@ amountForDebt = min(remainingAfterPenalty, arrears + outstandingPrincipal)
 borrowerRefund = remainingAfterPenalty - amountForDebt
 
 // Split debt recovery
-lenderShare = amountForDebt - protocolShare - feeIndexShare - activeCreditShare
+lenderShare = (amountForDebt * defaultLenderBps) / 10_000
+remainder = amountForDebt - lenderShare
+// Remainder routed via fee router (Treasury / Active Credit / Fee Index)
 ```
 
 ### 4.11 Direct Lending Configuration
@@ -1220,26 +1270,21 @@ lenderShare = amountForDebt - protocolShare - feeIndexShare - activeCreditShare
 **Term Loan Configuration**:
 ```solidity
 struct DirectConfig {
-    uint16 platformFeeBps;                    // Fee on principal (e.g., 50 = 0.5%)
-    uint16 platformSplitLenderBps;            // Share to lender (e.g., 4000 = 40%)
-    uint16 platformSplitFeeIndexBps;          // Share to FeeIndex (e.g., 3000 = 30%)
-    uint16 platformSplitProtocolBps;          // Share to protocol (calculated as remainder)
-    uint16 platformSplitActiveCreditIndexBps; // Share to Active Credit Index (e.g., 1000 = 10%)
-    uint16 defaultFeeIndexBps;                // Collateral to FeeIndex on default
-    uint16 defaultProtocolBps;                // Collateral to protocol on default
-    uint16 defaultActiveCreditIndexBps;       // Collateral to Active Credit Index on default
-    uint40 minInterestDuration;               // Minimum interest charge period
-    address protocolTreasury;
+    uint16 platformFeeBps;        // Fee on principal (bps)
+    uint16 interestLenderBps;     // Lender share of interest (bps)
+    uint16 platformFeeLenderBps;  // Lender share of platform fee (bps)
+    uint16 defaultLenderBps;      // Lender share of collateral on default (bps)
+    uint40 minInterestDuration;   // Minimum interest charge period
 }
 ```
 
 **Platform Fee Distribution**:
 ```solidity
-// Protocol share calculated as remainder to ensure exact split
-lenderPlatformShare = (platformFee * platformSplitLenderBps) / 10_000;
-feeIndexShare = (platformFee * platformSplitFeeIndexBps) / 10_000;
-activeCreditIndexShare = (platformFee * platformSplitActiveCreditIndexBps) / 10_000;
-protocolShare = platformFee - lenderPlatformShare - feeIndexShare - activeCreditIndexShare;
+// Lender receives configured shares of interest and platform fee; remainder routes via fee router
+lenderPlatformShare = (platformFee * platformFeeLenderBps) / 10_000;
+lenderInterestShare = (interestAmount * interestLenderBps) / 10_000;
+platformRemainder = platformFee - lenderPlatformShare;
+interestRemainder = interestAmount - lenderInterestShare;
 ```
 
 **Rolling Loan Configuration**:
@@ -1251,7 +1296,7 @@ struct DirectRollingConfig {
     uint16 minRollingApyBps;          // Minimum APY (e.g., 1 = 0.01%)
     uint16 maxRollingApyBps;          // Maximum APY (e.g., 10000 = 100%)
     uint16 defaultPenaltyBps;         // Default penalty rate
-    uint64 minPaymentWei;             // Minimum payment to avoid dust
+    uint16 minPaymentBps;             // Minimum payment as bps of outstanding principal
 }
 ```
 
@@ -1285,7 +1330,7 @@ directSameAssetDebt[positionKey][asset]       // Same-asset debt tracking
 
 **Invariants**:
 - `LibEncumbrance.total(positionKey, poolId) <= userPrincipal[positionKey]` (per position, per pool)
-- `defaultFeeIndexBps + defaultProtocolBps + defaultActiveCreditIndexBps <= 10000`
+- `defaultLenderBps <= 10000` and global fee router splits satisfy `treasuryBps + activeCreditBps <= 10000`
 
 ### 4.12 Flash Loan System
 
@@ -1293,14 +1338,14 @@ directSameAssetDebt[positionKey][asset]       // Same-asset debt tracking
 - Borrow from single pool's `trackedBalance`
 - Fixed fee in basis points (configurable per pool)
 - Anti-split protection (optional): one flash loan per receiver per block
-- Fee routed to FeeIndex via treasury split
+- Fee routed through the fee router (Treasury / Active Credit / Fee Index)
 
 **Process**:
 ```solidity
 function flashLoan(uint256 pid, address receiver, uint256 amount, bytes calldata data) {
     require(amount <= p.trackedBalance);
     
-    uint256 fee = (amount * p.immutableConfig.flashLoanFeeBps) / 10_000;
+    uint256 fee = (amount * p.poolConfig.flashLoanFeeBps) / 10_000;
     IERC20(p.underlying).safeTransfer(receiver, amount);
     IFlashLoanReceiver(receiver).onFlashLoan(msg.sender, p.underlying, amount, data);
     require(balanceAfter >= balanceBefore + fee);
@@ -1314,12 +1359,18 @@ function flashLoan(uint256 pid, address receiver, uint256 amount, bytes calldata
 
 **Overview**: Basket tokens holding fixed-weight portfolios of ERC20 assets.
 
+**Creation Constraints (Implementation)**:
+- Index creation is permissionless only when enabled and may require a creation fee.
+- All underlying assets must already have pools.
+- A dedicated pool for the index token is created automatically to keep index units in the unified accounting system.
+
 **Key Features**:
 - Deterministic bundle composition (fixed asset amounts per unit)
 - Per-asset mint/burn fees (basis points)
 - Separate fee pots per asset (accumulated fees distributed on burn)
 - Flash loans of proportional basket amounts
-- Protocol fee split configurable
+- Configurable fee-share splits for pool routing vs fee pots (mint/burn and flash shares can differ)
+- Optional fee-gated creation; index token pools created automatically
 
 **Index Structure**:
 ```solidity
@@ -1329,7 +1380,6 @@ struct Index {
     uint16[] mintFeeBps;            // Per-asset mint fee
     uint16[] burnFeeBps;            // Per-asset burn fee
     uint16 flashFeeBps;             // Flash loan fee
-    uint16 protocolCutBps;          // Protocol share of fees
     uint256 totalUnits;             // Total supply
     address token;                  // ERC20 token address
     bool paused;
@@ -1341,14 +1391,14 @@ struct Index {
 2. Calculate fees: `fee = (need * mintFeeBps[i]) / 10_000`
 3. Transfer `need + fee` from user
 4. Credit `need` to vault balance
-5. Split fee: pot share + protocol share
+5. Split fee: fee pot share + pool fee router share
 6. Mint proportional units
 
 **Burn Process**:
 1. Calculate NAV share: `(vaultBalance * units) / totalSupply`
 2. Calculate pot share: `(feePot * units) / totalSupply`
 3. Calculate gross redemption: `navShare + potShare`
-4. Calculate burn fee and split
+4. Calculate burn fee and split between fee pot share + pool fee router share
 5. Transfer net amount to user
 6. Burn units
 
@@ -1477,7 +1527,7 @@ struct PoolData {
     mapping(bytes32 => uint256) userFeeIndex;
     mapping(bytes32 => uint256) userMaintenanceIndex;
     mapping(bytes32 => uint256) userAccruedYield;
-    mapping(bytes32 => ActiveCreditState) userActiveCreditStateP2P;
+    mapping(bytes32 => ActiveCreditState) userActiveCreditStateEncumbrance;
     mapping(bytes32 => ActiveCreditState) userActiveCreditStateDebt;
     
     // Loan mappings
@@ -1698,6 +1748,9 @@ function calculateDirectInterest(
 4. Precision loss in fee calculations (remainder tracking)
 5. Pool isolation violations (tracked balance enforcement)
 6. Solvency constraint bypass (comprehensive checks)
+7. Unauthorized TBA control (Position NFT ownership verification)
+8. Malicious module installation (owner-only authorization)
+9. Hook recursion/depth attacks (depth limits and recursion detection)
 
 **Out-of-Scope**:
 1. Oracle manipulation (no oracles used)
@@ -1717,6 +1770,7 @@ function calculateDirectInterest(
   - Configure fee parameters
   - Update maintenance rates
   - Pause/unpause indexes
+  - Configure Position Agent registry addresses
   
 - **Manager** (Managed Pools Only):
   - Modify mutable pool parameters
@@ -1731,6 +1785,15 @@ function calculateDirectInterest(
   - Full control over their positions
   - Can deposit, withdraw, borrow, repay
   - Can transfer NFTs (transfers all state)
+  - Can deploy TBAs for their Position NFTs
+  - Can register agents in the ERC-8004 registry
+  - Can install/uninstall modules on their TBAs
+
+- **TBA Owner**: Position NFT owner (derived via ERC-6551)
+  - Controls the Token Bound Account
+  - Can execute transactions through the TBA
+  - Can install validation and execution modules
+  - Ownership automatically transfers with Position NFT
 
 ### 7.3 Reentrancy Protection
 
@@ -1763,6 +1826,14 @@ function calculateDirectInterest(
 2. `trackedBalance[poolId]` only changes via pool-specific operations
 3. Maintenance fees paid from pool's own `trackedBalance`
 
+**Position Agent Invariants**:
+1. TBA address is deterministic: `computeTBAAddress(tokenId)` always returns the same address
+2. TBA ownership follows Position NFT: `TBA.owner() == PositionNFT.ownerOf(tokenId)`
+3. Identity NFT owned by TBA: `IdentityRegistry.ownerOf(agentId) == tbaAddress`
+4. Module installation requires Position NFT ownership
+5. Hook depth never exceeds `MAX_HOOK_DEPTH` (8)
+6. Total hook gas never exceeds `MAX_HOOK_GAS` (13,000,000)
+
 ---
 
 ## 8. Integration Points
@@ -1775,6 +1846,19 @@ function calculateDirectInterest(
 - `SafeERC20`: Safe token transfers
 - `ReentrancyGuard`: Reentrancy protection
 - `Math`: Precision math operations
+- `ECDSA`: Signature recovery for EIP-712 validation
+
+**Canonical External Registries**:
+- **ERC-6551 Registry**: `0x000000006551c19487814612e58FE06813775758` (same on all EVM chains)
+  - Creates deterministic Token Bound Accounts
+  - Used by Position Agent system for TBA deployment
+- **ERC-8004 Identity Registry**: Chain-specific addresses
+  - Ethereum Mainnet: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
+  - Ethereum Sepolia: `0x8004A818BFB912233c491871b3d84c89A494BD9e`
+  - Used for agent identity registration
+- **ERC-4337 EntryPoint v0.7**: `0x0000000071727De22E5E9d8BAf0edAc6f37da032` (same on all EVM chains)
+  - Account abstraction infrastructure
+  - Used by MSCA for UserOperation validation
 
 **No External Oracles**:
 - All pricing deterministic
@@ -1787,7 +1871,7 @@ function calculateDirectInterest(
 - Standard compliant
 - Enumerable extension
 - On-chain metadata (SVG + JSON)
-- Transfer hooks for Direct offer cancellation
+- Transfer hooks block transfers while Direct offers are open (no auto-cancel)
 
 **Index Tokens (ERC-20)**:
 - Standard compliant
@@ -1854,6 +1938,24 @@ event ManagerTransferred(uint256 indexed pid, address indexed oldManager, addres
 event ManagerRenounced(uint256 indexed pid, address indexed formerManager);
 ```
 
+**Position Agent Events**:
+```solidity
+// TBA and Agent Registration
+event TBADeployed(uint256 indexed positionTokenId, address indexed tbaAddress);
+event AgentRegistered(uint256 indexed positionTokenId, address indexed tbaAddress, uint256 indexed agentId);
+
+// Configuration Updates
+event ERC6551RegistryUpdated(address indexed previous, address indexed current);
+event ERC6551ImplementationUpdated(address indexed previous, address indexed current);
+event IdentityRegistryUpdated(address indexed previous, address indexed current);
+
+// ERC-6900 MSCA Events
+event ExecutionInstalled(address indexed module, ExecutionManifest manifest);
+event ExecutionUninstalled(address indexed module, bool onUninstallSucceeded, ExecutionManifest manifest);
+event ValidationInstalled(address indexed module, uint32 indexed entityId);
+event ValidationUninstalled(address indexed module, uint32 indexed entityId, bool onUninstallSucceeded);
+```
+
 ---
 
 ## 9. Testing Strategy
@@ -1880,7 +1982,7 @@ event ManagerRenounced(uint256 indexed pid, address indexed formerManager);
 
 1. **FeeIndex Monotonicity**: `feeIndex` never decreases
 2. **Solvency Preservation**: All operations maintain solvency constraints
-3. **Pool Isolation**: Operations on one pool don't affect others
+3. **Pool Isolation**: Operations on one pool don't affect others, except explicit managed-pool system-share routing to the base pool
 4. **Principal Conservation**: `sum(userPrincipal) == totalDeposits`
 5. **Encumbrance Capacity**: `LibEncumbrance.total(positionKey, poolId) <= userPrincipal`
 6. **Penalty Correctness**: Penalty distribution sums correctly
@@ -1991,7 +2093,39 @@ event ManagerRenounced(uint256 indexed pid, address indexed formerManager);
    FuturesFacet(diamond).setFuturesToken(address(futuresToken));
    ```
 
-8. **Deploy Optional Facets**:
+8. **Deploy Position Agent Infrastructure**:
+   ```solidity
+   // Deploy ERC-6900 MSCA implementation
+   PositionMSCAImpl msca = new PositionMSCAImpl(entryPointAddress);
+   
+   // Deploy Position Agent facets
+   PositionAgentTBAFacet tbaFacet = new PositionAgentTBAFacet();
+   PositionAgentRegistryFacet regFacet = new PositionAgentRegistryFacet();
+   PositionAgentViewFacet viewFacet = new PositionAgentViewFacet();
+   PositionAgentConfigFacet configFacet = new PositionAgentConfigFacet();
+   
+   // Add facets to Diamond via diamondCut
+   // ...
+   
+   // Configure canonical registry addresses
+   PositionAgentConfigFacet(diamond).setERC6551Registry(0x000000006551c19487814612e58FE06813775758);
+   PositionAgentConfigFacet(diamond).setERC6551Implementation(address(msca));
+   // Mainnet:
+   PositionAgentConfigFacet(diamond).setIdentityRegistry(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
+   // Sepolia:
+   // PositionAgentConfigFacet(diamond).setIdentityRegistry(0x8004A818BFB912233c491871b3d84c89A494BD9e);
+   ```
+
+9. **Deploy Optional ERC-6900 Modules**:
+   ```solidity
+   // Deploy default validation module
+   OwnerValidationModule ownerModule = new OwnerValidationModule();
+   
+   // Deploy skill modules (optional)
+   PositionAgentAmmSkillModule ammSkillModule = new PositionAgentAmmSkillModule();
+   ```
+
+10. **Deploy Optional Facets**:
    - EqualIndexFacetV3
    - EqualIndexAdminFacetV3
    - EqualIndexActionsFacetV3
@@ -2075,15 +2209,10 @@ uint256 poolId = PoolManagementFacet(diamond).initManagedPool{value: managedPool
 ```solidity
 DirectConfig memory directConfig = DirectConfig({
     platformFeeBps: 50,
-    platformSplitLenderBps: 4000,
-    platformSplitFeeIndexBps: 3000,
-    platformSplitProtocolBps: 2000,
-    platformSplitActiveCreditIndexBps: 1000,
-    defaultFeeIndexBps: 7000,
-    defaultProtocolBps: 2000,
-    defaultActiveCreditIndexBps: 1000,
-    minInterestDuration: 1 hours,
-    protocolTreasury: treasuryAddress
+    interestLenderBps: 7000,
+    platformFeeLenderBps: 4000,
+    defaultLenderBps: 7000,
+    minInterestDuration: 1 hours
 });
 
 DirectRollingConfig memory rollingConfig = DirectRollingConfig({
@@ -2093,7 +2222,7 @@ DirectRollingConfig memory rollingConfig = DirectRollingConfig({
     minRollingApyBps: 1,
     maxRollingApyBps: 10000,
     defaultPenaltyBps: 500,
-    minPaymentWei: 1e15
+    minPaymentBps: 50
 });
 ```
 
@@ -2156,6 +2285,24 @@ DirectRollingConfig memory rollingConfig = DirectRollingConfig({
 - **LibFeeIndex**: Fee index accounting library (1e18 scale) for yield distribution
 - **LibSolvencyChecks**: Shared utilities for deterministic solvency and debt calculations
 - **LibIndexEncumbrance**: Thin wrapper around LibEncumbrance for index-specific encumbrance operations
+
+### Position Agent Terms
+- **TBA (Token Bound Account)**: ERC-6551 smart contract account controlled by an NFT, enabling Position NFTs to hold assets and execute transactions
+- **MSCA (Modular Smart Contract Account)**: ERC-6900 compliant account with modular validation and execution capabilities
+- **Position Agent**: A Position NFT registered as an ERC-8004 agent, discoverable by external indexers
+- **Validation Module**: ERC-6900 module that authorizes execution (user ops, runtime calls, signatures)
+- **Execution Module**: ERC-6900 module that adds new callable functions to the account
+- **Validation Hook**: Pre-validation checks for permissions and limits
+- **Execution Hook**: Pre/post execution checks for policy enforcement
+- **Module Entity**: Packed reference (module address 20 bytes + entity ID 4 bytes)
+- **Validation Config**: Packed validation function with flags (25 bytes)
+- **Hook Config**: Packed hook function with flags (25 bytes)
+- **Bootstrap Mode**: Initial TBA state with native EIP-712 validation before module installation
+- **Agent ID**: The ERC-721 tokenId minted by the ERC-8004 Identity Registry
+- **Agent URI**: The URI resolving to the agent's registration file (ERC-8004 tokenURI)
+- **Agent Wallet**: A verified address where the agent receives payments (set to TBA address)
+- **Skill Module**: An execution module that provides specific capabilities (e.g., AMM auction creation)
+- **EntryPoint**: The ERC-4337 singleton contract that handles UserOperation bundles
 
 ### A.2 Formula Reference
 
@@ -2254,6 +2401,13 @@ treasuryFee = feeAmount - makerFee - indexFee // 10%
 
 - [EIP-2535: Diamond Standard](https://eips.ethereum.org/EIPS/eip-2535)
 - [EIP-721: Non-Fungible Token Standard](https://eips.ethereum.org/EIPS/eip-721)
+- [EIP-6551: Non-fungible Token Bound Accounts](https://eips.ethereum.org/EIPS/eip-6551)
+- [EIP-6900: Modular Smart Contract Accounts](https://eips.ethereum.org/EIPS/eip-6900)
+- [EIP-8004: Agent Identity](https://eips.ethereum.org/EIPS/eip-8004)
+- [EIP-4337: Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
+- [EIP-1271: Standard Signature Validation](https://eips.ethereum.org/EIPS/eip-1271)
+- [EIP-7201: Namespaced Storage Layout](https://eips.ethereum.org/EIPS/eip-7201)
+- [EIP-712: Typed Structured Data Hashing](https://eips.ethereum.org/EIPS/eip-712)
 - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
 - [Foundry Book](https://book.getfoundry.sh/)
 
@@ -2767,5 +2921,532 @@ event MamPausedUpdated(bool paused);
 5. **Physical Delivery Futures**: Lock in forward prices for asset delivery
 6. **Dutch Auction Sales**: Time-bounded price discovery for asset sales via MAM curves
 7. **Programmatic Market Making**: Create multiple MAM curves with different price ranges for sophisticated trading strategies
+
+---
+
+## 12. Position Agent System
+
+### 12.1 Overview
+
+The Position Agent System transforms Position NFTs into autonomous, discoverable agents on the Ethereum network. By combining ERC-6551 Token Bound Accounts (TBAs) with ERC-6900 Modular Smart Contract Accounts (MSCAs) and ERC-8004 agent identity, each Position NFT becomes a programmable entity capable of holding assets, executing transactions, and participating in the broader agent ecosystem.
+
+**Key Capabilities**:
+- **Autonomous Execution**: TBAs can hold assets and execute transactions independently of the Diamond
+- **Global Discovery**: Agents registered in the canonical ERC-8004 Identity Registry are discoverable by external indexers
+- **Modular Extensibility**: Third-party modules extend capabilities without protocol redeployment
+- **ERC-4337 Ready**: Compatible with account abstraction for gas sponsorship and batched operations
+- **Ownership Binding**: Agent identity automatically follows Position NFT ownership
+
+### 12.2 Architecture
+
+```
+┌──────────────┐     owns      ┌──────────────┐    controls    ┌─────────────┐
+│   EOA/Wallet │ ────────────► │ Position NFT │ ─────────────► │     TBA     │
+│   (0xAlice)  │               │  (tokenId)   │                │   (MSCA)    │
+└──────────────┘               └──────────────┘                └──────┬──────┘
+                                                                      │
+                                                                      │ owns
+                                                                      ▼
+                                                               ┌─────────────┐
+                                                               │ Identity NFT│
+                                                               │  (agentId)  │
+                                                               └─────────────┘
+```
+
+**Ownership Chain**:
+- EOA/Wallet owns Position NFT
+- Position NFT controls TBA (inherent ERC-6551 behavior)
+- TBA owns ERC-8004 Identity NFT
+- When Position NFT transfers, the entire chain automatically updates
+
+### 12.3 Core Components
+
+#### 12.3.1 Token Bound Account (TBA)
+
+The TBA is an ERC-6551 account implementation using the ERC-6900 Modular Smart Contract Account (MSCA) architecture.
+
+**Contract**: `PositionMSCA` / `PositionMSCAImpl`
+
+**Capabilities**:
+- Execute arbitrary calls on behalf of the Position NFT owner
+- Hold ERC-20, ERC-721, ERC-1155 tokens and native ETH
+- Validate signatures (ERC-1271)
+- Support modular validation and execution via ERC-6900
+- Compatible with ERC-4337 account abstraction
+
+**Interfaces Implemented**:
+
+| Interface | Purpose |
+|-----------|---------|
+| `IERC6900Account` | Modular account management |
+| `IAccount` | ERC-4337 user operation validation |
+| `IAccountExecute` | ERC-4337 execution |
+| `IERC6551Account` | Token bound account semantics |
+| `IERC6551Executable` | TBA execution interface |
+| `IERC1271` | Smart contract signature validation |
+| `IERC165` | Interface detection |
+| `IERC721Receiver` | Safe NFT reception |
+
+#### 12.3.2 ERC-8004 Identity NFT
+
+The Identity NFT is minted by the canonical ERC-8004 Identity Registry and represents the agent's on-chain identity.
+
+**Properties**:
+- Owned by the TBA (not the EOA)
+- `agentWallet` set to TBA address
+- `tokenURI` points to off-chain registration file
+- Globally discoverable by ERC-8004 indexers
+
+#### 12.3.3 Diamond Facets
+
+| Facet | Responsibility |
+|-------|----------------|
+| `PositionAgentTBAFacet` | TBA address computation and deployment |
+| `PositionAgentRegistryFacet` | Agent registration recording and verification |
+| `PositionAgentViewFacet` | Read-only queries for agent state |
+| `PositionAgentConfigFacet` | Admin configuration of registry addresses |
+
+### 12.4 Standards Compliance
+
+#### 12.4.1 ERC-6551: Token Bound Accounts
+
+**Registry Address (all EVM chains)**: `0x000000006551c19487814612e58FE06813775758`
+
+**TBA Address Derivation**:
+```solidity
+TBA_Address = CREATE2(
+    registry,
+    salt,
+    keccak256(
+        implementation_bytecode ++
+        abi.encode(salt, chainId, tokenContract, tokenId)
+    )
+)
+```
+
+#### 12.4.2 ERC-6900: Modular Smart Contract Accounts
+
+**Core Concepts**:
+
+| Concept | Description |
+|---------|-------------|
+| **Validation Module** | Authorizes execution (user ops, runtime calls, signatures) |
+| **Execution Module** | Adds new callable functions to the account |
+| **Validation Hook** | Pre-validation checks (permissions, limits) |
+| **Execution Hook** | Pre/post execution checks (policies, logging) |
+| **Module Entity** | Packed reference: module address (20 bytes) + entity ID (4 bytes) |
+
+#### 12.4.3 ERC-8004: Agent Identity
+
+**Registry Addresses**:
+
+| Chain | Address |
+|-------|---------|
+| Ethereum Mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| Ethereum Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+
+#### 12.4.4 ERC-4337: Account Abstraction
+
+The MSCA is compatible with ERC-4337 for bundler-based transaction submission:
+- `validateUserOp` for bundler validation
+- `executeUserOp` for custom execution routing
+- EntryPoint nonce management
+- Paymaster compatibility
+
+### 12.5 Data Models
+
+#### 12.5.1 Position Agent Storage
+
+```solidity
+// LibPositionAgentStorage
+struct AgentStorage {
+    // Canonical registry addresses
+    address erc6551Registry;        // ERC-6551 TBA factory
+    address erc6551Implementation;  // MSCA implementation contract
+    address identityRegistry;       // ERC-8004 Identity Registry
+    
+    // Fixed salt for TBA derivation
+    bytes32 tbaSalt;                // Default: bytes32(0)
+    
+    // Position NFT tokenId => ERC-8004 agentId
+    mapping(uint256 => uint256) positionToAgentId;
+    
+    // Position NFT tokenId => TBA deployed flag
+    mapping(uint256 => bool) tbaDeployed;
+}
+```
+
+#### 12.5.2 MSCA Storage (ERC-7201 Namespaced)
+
+```solidity
+// MSCAStorage
+struct Layout {
+    // Selector -> execution module data
+    mapping(bytes4 => ExecutionData) executionData;
+    
+    // Selector -> execution hooks
+    mapping(bytes4 => HookConfig[]) selectorExecHooks;
+    
+    // Validation function -> validation data
+    mapping(ModuleEntity => ValidationData) validationData;
+    
+    // Validation function -> validation hooks
+    mapping(ModuleEntity => HookConfig[]) validationHooks;
+    
+    // Supported interface IDs (from modules)
+    mapping(bytes4 => uint256) supportedInterfaces;
+    
+    // Installed modules tracking
+    mapping(address => bool) installedModules;
+    
+    // Hook execution guards
+    uint256 hookDepth;
+    bool hookExecutionActive;
+}
+```
+
+#### 12.5.3 Type Definitions
+
+```solidity
+/// @dev Packed module function reference: module address (20 bytes) + entity ID (4 bytes)
+type ModuleEntity is bytes24;
+
+/// @dev Packed validation config: module address (20 bytes) + entity ID (4 bytes) + flags (1 byte)
+type ValidationConfig is bytes25;
+
+/// @dev Packed hook config: module address (20 bytes) + entity ID (4 bytes) + flags (1 byte)
+type HookConfig is bytes25;
+
+/// @dev Validation flags bit layout:
+/// bit 0: isUserOpValidation
+/// bit 1: isSignatureValidation
+/// bit 2: isGlobal
+type ValidationFlags is uint8;
+```
+
+#### 12.5.4 Off-Chain Registration File
+
+```json
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "Equalis Position #42",
+  "description": "Equalis Position NFT - Isolated account container with ERC-6551 TBA",
+  "image": "ipfs://{cid}/position-42.svg",
+  "endpoints": [
+    { "name": "web", "endpoint": "https://app.equalis.io/positions/42" },
+    { "name": "REST", "endpoint": "https://api.equalis.io/v1/positions/42" }
+  ],
+  "x402Support": false,
+  "active": true,
+  "registrations": [
+    {
+      "agentId": "123",
+      "agentRegistry": "eip155:1:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+    }
+  ],
+  "supportedTrust": [],
+  "position": {
+    "positionKey": "0x...",
+    "positionNFT": "0x...",
+    "positionTokenId": "42",
+    "tbaAddress": "0x...",
+    "createdAt": "2026-01-30T12:00:00Z"
+  }
+}
+```
+
+### 12.6 Operational Flows
+
+#### 12.6.1 TBA Deployment
+
+```solidity
+// 1. Compute TBA address (view function, no deployment)
+address tba = diamond.computeTBAAddress(positionTokenId);
+
+// 2. Deploy TBA (idempotent - returns existing if already deployed)
+address tba = diamond.deployTBA(positionTokenId);
+```
+
+**Process**:
+1. Verify caller is Position NFT owner
+2. Check if TBA already deployed (code.length > 0)
+3. Call ERC-6551 registry `createAccount(impl, salt, chainId, positionNFT, tokenId)`
+4. Emit `TBADeployed(tokenId, tbaAddress)`
+
+#### 12.6.2 Agent Registration
+
+The registration process involves two steps:
+
+**Step 1: External Registration via TBA**
+```solidity
+// Prepare registration file and upload to IPFS
+string memory agentURI = "ipfs://Qm.../registration.json";
+
+// Call Identity Registry via TBA
+bytes memory registerCall = abi.encodeWithSignature("register(string)", agentURI);
+uint256 agentId = abi.decode(
+    IERC6551Executable(tba).execute(identityRegistry, 0, registerCall, 0),
+    (uint256)
+);
+```
+
+**Step 2: Record in Diamond**
+```solidity
+// Record the registration for on-chain mapping
+diamond.recordAgentRegistration(positionTokenId, agentId);
+```
+
+**Verification**:
+- Verify caller is Position NFT owner
+- Verify `ownerOf(agentId) == tbaAddress` in the Identity Registry
+- Store mapping: `positionToAgentId[tokenId] = agentId`
+- Emit `AgentRegistered(tokenId, tbaAddress, agentId)`
+
+#### 12.6.3 Position NFT Transfer
+
+When a Position NFT transfers, the agent identity automatically follows:
+
+1. Position NFT transfers from Alice to Bob
+2. TBA ownership automatically transfers (inherent ERC-6551 behavior)
+3. Identity NFT remains owned by TBA (no transfer needed)
+4. `agentWallet` remains valid (set to TBA address)
+5. Bob can now execute through the TBA
+
+**No additional transactions required** - the ownership chain updates automatically.
+
+### 12.7 Module System
+
+#### 12.7.1 Module Types
+
+| Type | Interface | Purpose |
+|------|-----------|---------|
+| **Validation Module** | `IERC6900ValidationModule` | Authorize execution (user ops, runtime, signatures) |
+| **Validation Hook** | `IERC6900ValidationHookModule` | Pre-validation checks (permissions, limits) |
+| **Execution Module** | `IERC6900ExecutionModule` | Add new callable functions |
+| **Execution Hook** | `IERC6900ExecutionHookModule` | Pre/post execution checks (policies) |
+
+#### 12.7.2 Default Validation Module
+
+The `OwnerValidationModule` is the default validation module that validates signatures against the Position NFT owner.
+
+**Features**:
+- EIP-712 typed data signing
+- UserOp validation for ERC-4337
+- Runtime validation for direct calls
+- Signature validation for ERC-1271
+
+**Signature Domain**:
+```solidity
+EIP712Domain(
+    string name,      // "EqualLend Owner Validation"
+    string version,   // "1.0.0"
+    uint256 chainId,  // Current chain ID
+    address verifyingContract  // TBA address
+)
+```
+
+#### 12.7.3 Bootstrap Mode
+
+New TBAs start in bootstrap mode with native EIP-712 owner validation:
+
+1. **Initial State**: `_bootstrapActive = true`
+2. **Bootstrap Validation**: Direct ECDSA signature verification against Position NFT owner
+3. **Module Installation**: First validation module installed using bootstrap validation
+4. **Post-Bootstrap**: Bootstrap mode may remain as emergency fallback
+
+#### 12.7.4 Module Installation
+
+**Validation Module Installation**:
+```solidity
+account.installValidation(
+    validationConfig,  // Packed: module + entityId + flags
+    selectors,         // Which selectors this validation applies to
+    installData,       // Data passed to module.onInstall()
+    hooks              // Associated validation/execution hooks
+);
+```
+
+**Execution Module Installation**:
+```solidity
+account.installExecution(
+    module,           // Module contract address
+    manifest,         // Execution functions, hooks, interface IDs
+    installData       // Data passed to module.onInstall()
+);
+```
+
+#### 12.7.5 Hook Execution Order
+
+**Pre-Hooks**: First-installed-first-executed
+**Post-Hooks**: Reverse order (last-installed-first-executed)
+
+```
+Install order: Hook A, Hook B, Hook C
+
+Execution order:
+  Pre-Hook A  →  Pre-Hook B  →  Pre-Hook C
+       ↓
+  [Main Execution]
+       ↓
+  Post-Hook C  →  Post-Hook B  →  Post-Hook A
+```
+
+#### 12.7.6 Hook Safety Limits
+
+| Limit | Value | Purpose |
+|-------|-------|---------|
+| Max Hook Depth | 8 | Prevent stack overflow |
+| Max Hook Gas Budget | 13,000,000 | Leave headroom under 16M block limit |
+| Recursive Hooks | Blocked | Prevent infinite loops |
+
+#### 12.7.7 Permissionless Module Policy
+
+- **No Allowlist**: Any module can be installed
+- **Owner Authorization**: Only Position NFT owner can install/uninstall
+- **Self-Modification Blocked**: Modules cannot modify their own installation
+- **Module-to-Module Blocked**: Modules cannot install other modules
+
+### 12.8 Skill Modules
+
+Skill modules are execution modules that provide specific capabilities to Position Agents, enabling them to interact with the Equalis protocol.
+
+#### 12.8.1 AMM Auction Skill Module
+
+The `PositionAgentAmmSkillModule` enables TBAs to create and manage AMM auctions.
+
+**Capabilities**:
+- Create AMM auctions via the Diamond
+- Cancel auctions (if policy allows)
+- Roll yield to position
+
+**Policy Configuration**:
+```solidity
+struct AuctionPolicy {
+    bool enabled;
+    bool allowCancel;
+    bool enforcePoolAllowlist;
+    uint64 minDuration;
+    uint64 maxDuration;
+    uint16 minFeeBps;
+    uint16 maxFeeBps;
+    uint256 minReserveA;
+    uint256 maxReserveA;
+    uint256 minReserveB;
+    uint256 maxReserveB;
+}
+```
+
+**Usage**:
+```solidity
+// Install the skill module on the TBA
+account.installExecution(
+    address(ammSkillModule),
+    ammSkillModule.executionManifest(),
+    abi.encode(diamondAddress, auctionPolicy, rollPolicy)
+);
+
+// Create auction through the TBA
+PositionAgentAmmSkillModule(tba).createAuction(params);
+```
+
+### 12.9 Security Model
+
+#### 12.9.1 Authorization Layers
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     AUTHORIZATION STACK                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 1: Position NFT Ownership                                │
+│  • Only Position NFT owner can control TBA                      │
+│  • Ownership verified via IERC721.ownerOf()                     │
+│  • Automatic transfer on NFT transfer                           │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 2: Validation Modules                                    │
+│  • EIP-712 signature verification                               │
+│  • Custom validation logic (session keys, multisig, etc.)       │
+│  • Selector-specific or global validation                       │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 3: Validation Hooks                                      │
+│  • Pre-validation permission checks                             │
+│  • Rate limiting, spending limits                               │
+│  • Time-based restrictions                                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 4: Execution Hooks                                       │
+│  • Pre-execution policy enforcement                             │
+│  • Post-execution verification                                  │
+│  • Logging and monitoring                                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 12.9.2 Security Considerations
+
+| Concern | Mitigation |
+|---------|------------|
+| **Unauthorized Module Install** | Only Position NFT owner can install modules |
+| **Selector Collision** | Installation reverts on conflict with existing or native selectors |
+| **Module Self-Modification** | Blocked at contract level |
+| **Hook Recursion** | Recursion detection and depth limits |
+| **Hook Gas Exhaustion** | 13M gas budget per transaction |
+| **ERC-721 Receiver Safety** | Minimal implementation, accepts all tokens |
+| **Signature Replay** | EIP-712 domain binding to account address and chain ID |
+| **Position NFT Burn** | TBA owner becomes address(0), freezing Identity NFT |
+
+#### 12.9.3 Position NFT Burn Edge Case
+
+If a Position NFT is burned:
+1. TBA owner becomes `address(0)`
+2. Identity NFT becomes frozen inside TBA
+3. No recovery mechanism (by design)
+
+**Mitigation Options**:
+- Prevent burn if agent exists (protocol-level)
+- Require transferring Identity NFT first
+- Mark position as inactive in off-chain indexer
+
+### 12.10 Integration with Equalis Protocol
+
+#### 12.10.1 TBA as Protocol Participant
+
+TBAs can interact with the Equalis Diamond as any other account:
+- Deposit to positions (via skill modules)
+- Create derivatives (AMM auctions, options, futures, MAM curves)
+- Execute Direct lending operations
+- Roll yield to principal
+
+#### 12.10.2 Skill Module Integration Pattern
+
+```solidity
+// Skill module calls Diamond on behalf of TBA
+function createAuction(CreateAuctionParams calldata params) external returns (uint256) {
+    // Enforce policy
+    _enforceAuctionPolicy(params);
+    
+    // Call Diamond (TBA is msg.sender from Diamond's perspective)
+    return IAmmAuctionFacet(diamond).createAuction(params);
+}
+```
+
+#### 12.10.3 Position Key Consistency
+
+The Position NFT's position key remains consistent whether interacting via:
+- Direct EOA calls to the Diamond
+- TBA calls to the Diamond
+- Skill module calls through the TBA
+
+```solidity
+// Position key is always derived from the Position NFT
+bytes32 positionKey = keccak256(abi.encodePacked(positionNFTContract, tokenId));
+```
+
+### 12.11 Use Cases
+
+1. **Autonomous Agents**: Position NFTs acting as discoverable ERC-8004 agents for automated trading, yield optimization, or portfolio management
+2. **Delegated Execution**: Third-party modules executing on behalf of positions with policy constraints
+3. **Session Keys**: Temporary authorization via validation modules for limited-scope operations
+4. **Multi-Sig Positions**: Validation modules requiring multiple signatures for high-value operations
+5. **Automated Strategies**: Skill modules implementing automated rebalancing, yield harvesting, or risk management
+6. **Cross-Protocol Integration**: TBAs interacting with external DeFi protocols while maintaining Equalis position state
+7. **Agent Marketplaces**: Discoverable agents offering services via ERC-8004 registration
 
 ---

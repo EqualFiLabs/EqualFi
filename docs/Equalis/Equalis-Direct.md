@@ -32,7 +32,7 @@ Equalis Direct is a P2P lending system that enables bilateral loans between Posi
 - All risk is bilateral between positions - pools never take P2P credit risk
 - **Oracle-free cross-asset lending**: Any asset can be lent against any collateral asset
 - **Deterministic settlement**: Time-based recovery without price oracles
-- **Per-pool isolation**: Each pool maintains independent Direct exposure tracking
+- **Per-pool isolation**: Each pool maintains independent Direct exposure tracking (managed pools may route a system share to a base pool, but credit risk remains bilateral)
 - **Upfront fee realization**: Predictable, fixed-cost lending semantics
 - APR-based interest calculation with simple interest model
 
@@ -102,11 +102,11 @@ The system integrates with existing Equalis infrastructure:
 1. **Position NFT System**: Validates ownership and retrieves position keys
 2. **Solvency Checks**: Uses `LibEncumbrance.total()` to include all encumbered principal as debt-like exposure
 3. **Withdrawal Logic**: Enforces encumbrance constraints via `LibSolvencyChecks.calculateAvailablePrincipal()`
-4. **FeeIndex System**: Distributes platform fee shares via `LibFeeIndex.accrueWithSource()`
-5. **Active Credit Index**: Time-gated subsidies via `LibActiveCreditIndex.accrueWithSource()` for P2P lenders and same-asset borrowers
-6. **Treasury System**: Routes protocol fee shares to configured treasury via `LibFeeTreasury`
-7. **Liquidation Protection**: Pool liquidations respect locked collateral and escrowed offers via LibEncumbrance
-8. **Position Transfer Guard**: NFT transfer hook cancels outstanding Direct offers
+4. **Fee Router / FeeIndex**: Platform fee remainders route via the fee router into Treasury, Fee Index, and Active Credit Index
+5. **Active Credit Index**: Time-gated subsidies via `LibActiveCreditIndex` for encumbrance and same-asset debt states
+6. **Treasury System**: Treasury share is paid via the fee router when configured
+7. **Enforcement Safety**: Default recovery respects locked collateral and escrowed offers via `LibEncumbrance`
+8. **Position Transfer Guard**: NFT transfer hook blocks transfers while outstanding Direct offers exist (no auto-cancel)
 9. **Encumbrance System**: Centralized tracking via `LibEncumbrance` for all position locks
 
 ### Per-Pool Exposure Isolation
@@ -133,7 +133,7 @@ LibEncumbrance.total(positionKey, poolId)  // Sum of all encumbrance types
 - Independent risk management per pool
 - Enhanced solvency precision with pool-specific constraints
 - Improved liquidity management
-- Cross-pool safety (issues in one pool don't affect others)
+- Cross-pool safety (issues in one pool don't affect others, except explicit managed-pool system-share routing)
 - Unified encumbrance tracking across Direct lending and Index positions
 
 ---
@@ -153,7 +153,7 @@ Term loans are fixed-duration bilateral loans with upfront interest payment, opt
 - **Tranche-Backed Offers**: Lenders can escrow a fixed tranche for multiple fills
 - **Ratio Tranche Offers**: Lenders or borrowers can post CLOB-style offers with price ratios for variable-size fills
 - **Borrower Offers**: Borrowers can post offers specifying their desired terms, which lenders can accept
-- **Auto-Exercise on Fill**: Offers can be configured to immediately exercise upon acceptance (useful for synthetic options)
+- **Early Exercise (Optional)**: Borrowers can exercise early when explicitly permitted (useful for synthetic option-style agreements)
 - **Cross-Asset Support**: Any asset can be lent against any collateral asset
 
 ### Data Structures
@@ -570,7 +570,7 @@ struct DirectRollingConfig {
     uint16 minRollingApyBps;          // e.g., 1 (0.01%)
     uint16 maxRollingApyBps;          // e.g., 10000 (100%)
     uint16 defaultPenaltyBps;         // Penalty rate for defaults
-    uint64 minPaymentWei;             // Minimum payment to avoid dust
+    uint16 minPaymentBps;            // Minimum payment as bps of outstanding principal
 }
 ```
 
@@ -683,11 +683,10 @@ remainingAfterPenalty = collateralSeized - penalty
 amountForDebt = min(remainingAfterPenalty, arrears + outstandingPrincipal)
 borrowerRefund = remainingAfterPenalty - amountForDebt
 
-// Split debt recovery (4-way split)
-protocolShare = (amountForDebt * defaultProtocolBps) / 10_000
-feeIndexShare = (amountForDebt * defaultFeeIndexBps) / 10_000
-activeCreditShare = (amountForDebt * defaultActiveCreditIndexBps) / 10_000
-lenderShare = amountForDebt - protocolShare - feeIndexShare - activeCreditShare
+// Split debt recovery
+lenderShare = (amountForDebt * defaultLenderBps) / 10_000
+remainder = amountForDebt - lenderShare
+// Remainder routed via fee router (Treasury / Active Credit / Fee Index)
 ```
 
 ### View Functions
@@ -730,7 +729,7 @@ The Active Credit Index extends the fee index system to provide time-gated subsi
 
 ### Participants
 
-- **P2P Lenders**: Earn rewards on `directLent` principal (all asset types)
+- **Encumbered Capital**: Earns rewards when capital is locked or lent through Direct encumbrance (e.g., `directLocked`, `directLent`, `directOfferEscrow`)
 - **Same-Asset Borrowers**: Earn rewards on same-asset debt (rolling, fixed, direct P2P)
 
 ### Time Gate Mechanism
@@ -795,7 +794,7 @@ uint256 activeCreditPrincipalTotal;     // Sum of active credit principal
 uint256 activeCreditMaturedTotal;       // Matured principal base for accruals
 
 // Per-user state
-mapping(bytes32 => ActiveCreditState) userActiveCreditStateP2P;
+mapping(bytes32 => ActiveCreditState) userActiveCreditStateEncumbrance;
 mapping(bytes32 => ActiveCreditState) userActiveCreditStateDebt;
 ```
 
@@ -814,8 +813,8 @@ function settle(uint256 pid, bytes32 user) internal {
     // 1. Roll matured buckets into activeCreditMaturedTotal
     _rollMatured(p);
     
-    // 2. Settle P2P lender state
-    _settleState(p, p.userActiveCreditStateP2P[user], pid, user);
+    // 2. Settle encumbrance state
+    _settleState(p, p.userActiveCreditStateEncumbrance[user], pid, user);
     
     // 3. Settle debt state
     _settleState(p, p.userActiveCreditStateDebt[user], pid, user);
@@ -847,16 +846,11 @@ Protects against short-duration wash trading:
 
 ```solidity
 struct DirectConfig {
-    uint16 platformFeeBps;                    // Fee on principal (e.g., 50 = 0.5%)
-    uint16 platformSplitLenderBps;            // Share to lender
-    uint16 platformSplitFeeIndexBps;          // Share to FeeIndex
-    uint16 platformSplitProtocolBps;          // Share to protocol
-    uint16 platformSplitActiveCreditIndexBps; // Share to Active Credit Index
-    uint16 defaultFeeIndexBps;                // Collateral to FeeIndex on default
-    uint16 defaultProtocolBps;                // Collateral to protocol on default
-    uint16 defaultActiveCreditIndexBps;       // Collateral to Active Credit Index
-    uint40 minInterestDuration;               // Minimum interest charge period
-    address protocolTreasury;
+    uint16 platformFeeBps;        // Fee on principal (bps)
+    uint16 interestLenderBps;     // Lender share of interest (bps)
+    uint16 platformFeeLenderBps;  // Lender share of platform fee (bps)
+    uint16 defaultLenderBps;      // Lender share of collateral on default (bps)
+    uint40 minInterestDuration;   // Minimum interest charge period
 }
 
 struct DirectRollingConfig {
@@ -866,7 +860,7 @@ struct DirectRollingConfig {
     uint16 minRollingApyBps;
     uint16 maxRollingApyBps;
     uint16 defaultPenaltyBps;
-    uint64 minPaymentWei;
+    uint16 minPaymentBps;
 }
 ```
 
@@ -984,33 +978,28 @@ function getPositionDirectState(uint256 positionId, uint256 poolId)
 
 ## 7. Fee Distribution
 
-### Platform Fee Split (4-Way)
+### Platform Fee and Interest Split (Implementation)
 
-Fee distribution uses `LibFeeIndex.accrueWithSource()` for pool-wide yield distribution:
+Direct agreements realize interest and platform fees upfront. Lenders receive configured shares; remaining amounts route through the standard fee router (Treasury / Active Credit / Fee Index).
 
 ```solidity
-function _distributeDirectFees(uint256 platformFee, DirectConfig storage cfg) internal {
-    uint256 lenderShare = (platformFee * cfg.platformSplitLenderBps) / 10_000;
-    uint256 feeIndexShare = (platformFee * cfg.platformSplitFeeIndexBps) / 10_000;
-    uint256 activeCreditShare = (platformFee * cfg.platformSplitActiveCreditIndexBps) / 10_000;
-    uint256 protocolShare = platformFee - lenderShare - feeIndexShare - activeCreditShare;
-    
-    // FeeIndex share distributed via LibFeeIndex.accrueWithSource()
-    // Active Credit share distributed via LibActiveCreditIndex.accrueWithSource()
-    // Protocol share sent to treasury
-    // Lender share added to lender's accrued yield
-}
+// Interest and platform fee shares to lender
+lenderInterestShare = (interestAmount * cfg.interestLenderBps) / 10_000;
+lenderPlatformShare = (platformFee * cfg.platformFeeLenderBps) / 10_000;
+
+// Remainders route via LibFeeRouter (Treasury / ACI / Fee Index)
+interestRemainder = interestAmount - lenderInterestShare;
+platformRemainder = platformFee - lenderPlatformShare;
 ```
 
-### Default Fee Split (4-Way)
+### Default Shares (Implementation)
+
+On default, the lender receives a configured collateral share and the remainder is routed via the fee router:
 
 ```solidity
-function _calculateDefaultShares(uint256 collateral, DirectConfig storage cfg) internal {
-    uint256 protocolShare = (collateral * cfg.defaultProtocolBps) / 10_000;
-    uint256 feeIndexShare = (collateral * cfg.defaultFeeIndexBps) / 10_000;
-    uint256 activeCreditShare = (collateral * cfg.defaultActiveCreditIndexBps) / 10_000;
-    uint256 lenderShare = collateral - protocolShare - feeIndexShare - activeCreditShare;
-}
+lenderShare = (collateralAmount * cfg.defaultLenderBps) / 10_000;
+remainder = collateralAmount - lenderShare;
+// remainder routed via LibFeeRouter (Treasury / ACI / Fee Index)
 ```
 
 ### Interest Calculation
