@@ -1,0 +1,8 @@
+testMode: property
+testLimit: 50000
+seqLen: 100
+corpusDir: corpus-amm
+coverage: true
+codeSize: 0xffffff
+# Allow higher gas limit for complex setup
+gasLimit: 10000000000

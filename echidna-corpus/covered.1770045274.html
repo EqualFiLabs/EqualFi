@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Echidna Coverage Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <style>
+:root {
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --primary-light: rgba(99,102,241,0.1);
+    --success: #22c55e;
+    --warning: #eab308;
+    --danger: #ef4444;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --surface: #fff;
+    --text: var(--gray-800);
+    --text-light: var(--gray-500);
+    --radius: 0.375rem;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow: 0 1px 3px rgba(0,0,0,0.1);
+    --success-rgb: 34,197,94;
+    --warning-rgb: 234,179,8;
+    --danger-rgb: 239,68,68;
+}
+
+/* Reset */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Roboto', -apple-system, sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--gray-50);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
+button {
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    outline: none;
+}
+
+/* Layout */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--gray-200);
+    padding: 1rem 1.5rem;
+    z-index: 10;
+    box-shadow: var(--shadow-sm);
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1400px;
+    margin: 0;
+    width: 100%;
+}
+
+.logo-text {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--gray-800);
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.25rem;
+    padding: 0 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--radius);
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.btn-secondary {
+    background: #B92B3D;
+    border-color: #B92B3D;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #9e2434;
+    border-color: #9e2434;
+}
+
+.btn-sm {
+    height: 2rem;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+}
+
+.button-group {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.button-group .btn {
+    flex: 1;
+}
+
+/* Split panel layout */
+.split-panel {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+#file-split-panel {
+    display: flex;
+    flex-direction: row;
+}
+
+/* File explorer panel */
+#file-explorer {
+    flex: 0 0 260px;
+    height: 100%;
+    overflow: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--gray-200);
+    padding: 0;
+    position: relative;
+    min-width: 200px;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden; /* to not show horizontal scrollbar with resizer */
+}
+
+#file-explorer-resizer {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    width: 10px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.05), transparent);
+}
+
+#file-explorer-resizer:hover {
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.1), transparent);
+}
+
+.file-explorer-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.file-search {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    align-items: center;
+}
+
+.file-search input {
+    flex: 1;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    outline: none;
+}
+
+.file-search input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary-light);
+}
+
+#file-search-clear {
+    margin-left: 0.5rem;
+    color: var(--gray-500);
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 0.25rem;
+    border-radius: var(--radius);
+}
+
+#file-search-clear:hover {
+    background: var(--gray-100);
+}
+
+.search-highlight {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.search-no-results {
+    padding: 1rem;
+    font-style: italic;
+    color: var(--gray-500);
+    text-align: center;
+}
+
+.file-explorer-content {
+    overflow: auto;
+    flex: 1;
+    padding: 1rem;
+}
+
+.file-explorer-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Main view panel */
+#main-view-panel {
+    flex: 1;
+    height: 100%;
+    overflow: auto;
+    padding: 1.5rem;
+    background: var(--gray-50);
+}
+
+/* Stats cards */
+.stats-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-title {
+    font-size: 0.875rem;
+    color: var(--text-light);
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+/* Progress bar */
+.progress-container {
+    width: 100%;
+    height: 0.5rem;
+    background: var(--gray-200);
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.progress-bar {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.3s;
+}
+
+/* File tree */
+.file-tree {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.file-tree li {
+    margin: 0.25rem 0;
+}
+
+.file-tree ul {
+    list-style: none;
+    padding-left: 1.25rem;
+    margin: 0.25rem 0;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--radius);
+    transition: background-color 0.2s;
+}
+
+.file-item:hover {
+    background: var(--gray-100);
+}
+
+.file-item.active {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.file-toggle {
+    width: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+.file-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.5rem;
+    color: var(--gray-500);
+}
+
+.file-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-coverage {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    margin-left: 0.5rem;
+}
+
+/* File tree icons */
+.directory > .file-item > .file-icon:before { content: "📁"; }
+.directory.expanded > .file-item > .file-icon:before { content: "📂"; }
+.file > .file-item > .file-icon:before { content: "📄"; }
+.directory > .file-item > .file-toggle:before { content: "▶"; }
+.directory.expanded > .file-item > .file-toggle:before { content: "▼"; }
+.file > .file-item > .file-toggle { visibility: hidden; }
+.directory > ul { display: none; }
+.directory.expanded > ul { display: block; }
+
+/* Source files */
+.source-file {
+    margin-bottom: 1.5rem;
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    background: var(--surface);
+}
+
+.source-file-header {
+    padding: 0.75rem 1rem;
+    background: #12181E;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background-color 0.2s;
+}
+
+.source-file-header:hover {
+    background: #1e2832;
+}
+
+.source-file-header .file-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.source-file-header .file-name {
+    font-weight: 500;
+}
+
+.source-file-header .coverage-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.source-file-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.source-file.expanded .source-file-content {
+    max-height: none;
+}
+
+.source-file-stats {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 0.875rem;
+    color: var(--text-light);
+}
+
+/* Code styling */
+.code-container {
+    position: relative;
+    overflow: auto;
+    max-height: 600px;
+}
+
+.code-coverage-table {
+    border-collapse: collapse;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    tab-size: 4;
+    width: 100%;
+}
+
+.code-coverage-table pre {
+    margin: 0;
+    font-family: inherit;
+}
+
+.row-line-number {
+    user-select: none;
+    text-align: right;
+    padding: 0 0.75rem;
+    width: 1%;
+    min-width: 2.5rem;
+    color: var(--gray-400);
+    background: var(--gray-100);
+    border-right: 1px solid var(--gray-200);
+}
+
+.row-reverted-status {
+    user-select: none;
+    text-align: center;
+    width: 1%;
+    min-width: 2.25rem;
+    max-width: fit-content;
+    padding: 0 0.25rem;
+    color: var(--gray-600);
+    background: var(--gray-100);
+    border-right: 1px solid var(--gray-200);
+    white-space: nowrap;
+}
+
+.row-source {
+    padding: 0 0.75rem;
+}
+
+.row-line-covered {
+    background: rgba(var(--success-rgb), 0.1);
+}
+
+.row-line-uncovered {
+    background: rgba(var(--danger-rgb), 0.1);
+}
+
+/* Footer */
+footer {
+    background: var(--surface);
+    border-top: 1px solid var(--gray-200);
+    padding: 1rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .stats-container { grid-template-columns: 1fr; }
+    #file-explorer { display: none; }
+}    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <span class="logo-text">Echidna Coverage Report</span>
+            </div>
+        </header>
+
+        <!-- Main content -->
+        <div class="split-panel" id="file-split-panel">
+            <!-- File Explorer -->
+            <div id="file-explorer">
+                <div class="file-explorer-header">
+                    <h3 class="file-explorer-title">Files</h3>
+                </div>
+                <div class="file-search">
+                    <input type="text" id="file-search-input" placeholder="Search files..." />
+                    <button id="file-search-clear" title="Clear search">×</button>
+                </div>
+                <div class="file-explorer-content">
+                    <ul id="file-tree-root" class="file-tree"></ul>
+                    <div id="search-no-results" class="search-no-results" style="display: none;">No matching files found</div>
+                </div>
+                <div id="file-explorer-resizer"></div>
+            </div>
+
+            <!-- Main panel -->
+            <div id="main-view-panel">
+                <!-- Overview -->
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-title">Files</div>
+                        <div class="stat-value">1</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Total Lines</div>
+                        <div class="stat-value">129</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Coverage</div>
+                        <div class="stat-value">97.0%</div>
+                        <div class="progress-container">
+                            <div class="progress-bar" style="width: 97.0%; background-color: hsl(116, 90%, 45%)"></div>
+                        </div>
+                        <div style="margin-top: 0.5rem">
+                            <span class="stat-badge">47 / 48 lines</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Actions</div>
+                        <div class="button-group">
+                            <button class="btn btn-secondary btn-sm" onclick="setAllSourceFilesCollapsed(false)">Expand All</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setAllSourceFilesCollapsed(true)">Collapse All</button>
+                        </div>
+                        <div class="button-group" style="margin-top: 0.5rem">
+                            <button class="btn btn-secondary btn-sm" onclick="setEmptySourceFilesCollapsed(false)">Expand Empty</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setEmptySourceFilesCollapsed(true)">Collapse Empty</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual file coverage -->
+                <div class="source-file" id="EchidnaValidationLogic_sol" data-file-path="EchidnaValidationLogic.sol" data-lines-active="48" data-lines-covered="47">
+                    <div class="source-file-header">
+                        <div class="file-info">
+                            <span class="coverage-badge" style="background-color: hsla(116, 90%, 45%, 0.15); color: hsl(116, 90%, 45%)">
+                                97.0%
+                            </span>
+                            <span class="file-name">EchidnaValidationLogic.sol</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </div>
+                    <div class="source-file-content">
+                        <div class="source-file-stats">
+                            <span>Lines covered: <strong>47 / 48</strong> (97.0%)</span>
+                        </div>
+                        <div class="code-container">
+                            <table class="code-coverage-table">
+                                <tr>
+                                    <td class="row-line-number">1</td>
+                                    <td class="row-source"><pre>// SPDX-License-Identifier: BUSL-1.1</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">2</td>
+                                    <td class="row-source"><pre>pragma solidity ^0.8.20;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">3</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">4</td>
+                                    <td class="row-source"><pre>contract EchidnaValidationLogic {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">5</td>
+                                    <td class="row-source"><pre>    uint256 internal constant SIG_VALIDATION_FAILED = 1;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">6</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">7</td>
+                                    <td class="row-source"><pre>    // ========== COPIED LOGIC ==========</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">8</td>
+                                    <td class="row-source"><pre>    // Copied from ValidationFlowLib.sol because original is private</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">9</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">10</td>
+                                    <td class="row-source"><pre>    function _intersectValidationData(uint256 acc, uint256 next) internal pure returns (uint256) {</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">11</td>
+                                    <td class="row-source"><pre>        (address authA, uint48 untilA, uint48 afterA) = _parseValidationData(acc);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">12</td>
+                                    <td class="row-source"><pre>        (address authB, uint48 untilB, uint48 afterB) = _parseValidationData(next);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">13</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">14</td>
+                                    <td class="row-source"><pre>        if (authA == address(1) || authB == address(1)) {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">15</td>
+                                    <td class="row-source"><pre>            return SIG_VALIDATION_FAILED;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">16</td>
+                                    <td class="row-source"><pre>        }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">17</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">18</td>
+                                    <td class="row-source"><pre>        if (authA == address(0)) {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">19</td>
+                                    <td class="row-source"><pre>            authA = authB;</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">20</td>
+                                    <td class="row-source"><pre>        } else if (authB != address(0) &amp;&amp; authA != authB) {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">21</td>
+                                    <td class="row-source"><pre>            return SIG_VALIDATION_FAILED;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">22</td>
+                                    <td class="row-source"><pre>        }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">23</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">24</td>
+                                    <td class="row-source"><pre>        if (untilA == 0) {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">25</td>
+                                    <td class="row-source"><pre>            untilA = type(uint48).max;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">26</td>
+                                    <td class="row-source"><pre>        }</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">27</td>
+                                    <td class="row-source"><pre>        if (untilB == 0) {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">28</td>
+                                    <td class="row-source"><pre>            untilB = type(uint48).max;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">29</td>
+                                    <td class="row-source"><pre>        }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">30</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">31</td>
+                                    <td class="row-source"><pre>        uint48 until = untilA &lt; untilB ? untilA : untilB;</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">32</td>
+                                    <td class="row-source"><pre>        uint48 after_ = afterA &gt; afterB ? afterA : afterB;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">33</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">34</td>
+                                    <td class="row-source"><pre>        if (until == type(uint48).max) {</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">35</td>
+                                    <td class="row-source"><pre>            until = 0;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">36</td>
+                                    <td class="row-source"><pre>        }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">37</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">38</td>
+                                    <td class="row-source"><pre>        return _packValidationData(authA, until, after_);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">39</td>
+                                    <td class="row-source"><pre>    }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">40</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">41</td>
+                                    <td class="row-source"><pre>    function _parseValidationData(uint256 data) internal pure returns (address authorizer, uint48 validUntil, uint48 validAfter) {</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">42</td>
+                                    <td class="row-source"><pre>        authorizer = address(uint160(data));</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">43</td>
+                                    <td class="row-source"><pre>        validUntil = uint48(data &gt;&gt; 160);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">44</td>
+                                    <td class="row-source"><pre>        validAfter = uint48(data &gt;&gt; 208);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">45</td>
+                                    <td class="row-source"><pre>    }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">46</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">47</td>
+                                    <td class="row-source"><pre>    function _packValidationData(address authorizer, uint48 validUntil, uint48 validAfter) internal pure returns (uint256) {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">48</td>
+                                    <td class="row-source"><pre>        return uint256(uint160(authorizer)) | (uint256(validUntil) &lt;&lt; 160) | (uint256(validAfter) &lt;&lt; 208);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">49</td>
+                                    <td class="row-source"><pre>    }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">50</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">51</td>
+                                    <td class="row-source"><pre>    // ========== ASSERTION TESTS ==========</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">52</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">53</td>
+                                    <td class="row-source"><pre>    function test_commutativity(uint256 a, uint256 b) public pure {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">54</td>
+                                    <td class="row-source"><pre>        uint256 res1 = _intersectValidationData(a, b);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">55</td>
+                                    <td class="row-source"><pre>        uint256 res2 = _intersectValidationData(b, a);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">56</td>
+                                    <td class="row-source"><pre>        assert(res1 == res2);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">57</td>
+                                    <td class="row-source"><pre>    }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">58</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">59</td>
+                                    <td class="row-source"><pre>    function test_idempotence(uint256 a) public pure {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">60</td>
+                                    <td class="row-source"><pre>        uint256 res = _intersectValidationData(a, a);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">61</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">62</td>
+                                    <td class="row-source"><pre>        if (res == a) return;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">63</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">64</td>
+                                    <td class="row-source"><pre>        // Handle normalization: type(uint48).max becomes 0</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">65</td>
+                                    <td class="row-source"><pre>        (, uint48 untilA, ) = _parseValidationData(a);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">66</td>
+                                    <td class="row-source"><pre>        (, uint48 untilRes, ) = _parseValidationData(res);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">67</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">68</td>
+                                    <td class="row-source"><pre>        if (untilA == type(uint48).max &amp;&amp; untilRes == 0) {</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">69</td>
+                                    <td class="row-source"><pre>            // Check other fields match</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">70</td>
+                                    <td class="row-source"><pre>            (address authA, , uint48 afterA) = _parseValidationData(a);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">71</td>
+                                    <td class="row-source"><pre>            (address authRes, , uint48 afterRes) = _parseValidationData(res);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">72</td>
+                                    <td class="row-source"><pre>            assert(authA == authRes &amp;&amp; afterA == afterRes);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">73</td>
+                                    <td class="row-source"><pre>            return;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">74</td>
+                                    <td class="row-source"><pre>        }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">75</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr class="row-line-uncovered">
+                                    <td class="row-line-number">76</td>
+                                    <td class="row-source"><pre>        assert(false); // Fail if not normalization</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">77</td>
+                                    <td class="row-source"><pre>    }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">78</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">79</td>
+                                    <td class="row-source"><pre>    function test_time_restrictions(uint256 a, uint256 b) public pure {</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">80</td>
+                                    <td class="row-source"><pre>        uint256 res = _intersectValidationData(a, b);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">81</td>
+                                    <td class="row-source"><pre>        if (res == SIG_VALIDATION_FAILED) return;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">82</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">83</td>
+                                    <td class="row-source"><pre>        (,, uint48 afterA) = _parseValidationData(a);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">84</td>
+                                    <td class="row-source"><pre>        (,, uint48 afterB) = _parseValidationData(b);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">85</td>
+                                    <td class="row-source"><pre>        (,, uint48 afterRes) = _parseValidationData(res);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">86</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">87</td>
+                                    <td class="row-source"><pre>        // Result start time must be max(startA, startB)</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">88</td>
+                                    <td class="row-source"><pre>        assert(afterRes &gt;= afterA);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">89</td>
+                                    <td class="row-source"><pre>        assert(afterRes &gt;= afterB);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">90</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">91</td>
+                                    <td class="row-source"><pre>        // Check end time</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">92</td>
+                                    <td class="row-source"><pre>        (, uint48 untilA,) = _parseValidationData(a);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">93</td>
+                                    <td class="row-source"><pre>        (, uint48 untilB,) = _parseValidationData(b);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">94</td>
+                                    <td class="row-source"><pre>        (, uint48 untilRes,) = _parseValidationData(res);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">95</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">96</td>
+                                    <td class="row-source"><pre>        // 0 means type(uint48).max</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">97</td>
+                                    <td class="row-source"><pre>        uint48 effectiveUntilA = untilA == 0 ? type(uint48).max : untilA;</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">98</td>
+                                    <td class="row-source"><pre>        uint48 effectiveUntilB = untilB == 0 ? type(uint48).max : untilB;</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">99</td>
+                                    <td class="row-source"><pre>        uint48 effectiveUntilRes = untilRes == 0 ? type(uint48).max : untilRes;</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">100</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">101</td>
+                                    <td class="row-source"><pre>        assert(effectiveUntilRes &lt;= effectiveUntilA);</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">102</td>
+                                    <td class="row-source"><pre>        assert(effectiveUntilRes &lt;= effectiveUntilB);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">103</td>
+                                    <td class="row-source"><pre>    }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">104</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">105</td>
+                                    <td class="row-source"><pre>    function test_authorizer_conflict(uint256 a, uint256 b) public pure {</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">106</td>
+                                    <td class="row-source"><pre>        (address authA,,) = _parseValidationData(a);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">107</td>
+                                    <td class="row-source"><pre>        (address authB,,) = _parseValidationData(b);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">108</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">109</td>
+                                    <td class="row-source"><pre>        uint256 res = _intersectValidationData(a, b);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">110</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">111</td>
+                                    <td class="row-source"><pre>        if (authA != address(0) &amp;&amp; authB != address(0) &amp;&amp; authA != authB) {</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">112</td>
+                                    <td class="row-source"><pre>            // Conflict must result in failure</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">113</td>
+                                    <td class="row-source"><pre>            assert(res == SIG_VALIDATION_FAILED);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">114</td>
+                                    <td class="row-source"><pre>        }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">115</td>
+                                    <td class="row-source"><pre>    }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">116</td>
+                                    <td class="row-source"><pre>    </pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">117</td>
+                                    <td class="row-source"><pre>    function test_failure_propagation(uint256 a) public pure {</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">118</td>
+                                    <td class="row-source"><pre>        // If one input is failure, result is failure</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">119</td>
+                                    <td class="row-source"><pre>        // Wait, SIG_VALIDATION_FAILED is 1. </pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">120</td>
+                                    <td class="row-source"><pre>        // address(1) is failure marker in logic: if (authA == address(1)).</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">121</td>
+                                    <td class="row-source"><pre>        // address(1) corresponds to 1.</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">122</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">123</td>
+                                    <td class="row-source"><pre>        uint256 failure = SIG_VALIDATION_FAILED;</pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">124</td>
+                                    <td class="row-source"><pre>        uint256 res = _intersectValidationData(a, failure);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">125</td>
+                                    <td class="row-source"><pre>        </pre></td>
+                                </tr>
+                                <tr class="row-line-covered">
+                                    <td class="row-line-number">126</td>
+                                    <td class="row-source"><pre>        assert(res == SIG_VALIDATION_FAILED);</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">127</td>
+                                    <td class="row-source"><pre>    }</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">128</td>
+                                    <td class="row-source"><pre>}</pre></td>
+                                </tr>
+                                <tr>
+                                    <td class="row-line-number">129</td>
+                                    <td class="row-source"><pre></pre></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <div>Report generated by <a href="https://github.com/crytic/echidna" target="_blank">Echidna</a> on February 02, 2026 at 15:14:34 UTC</div>
+        </footer>
+    </div>
+    <script>
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    initSourceFileExpansion();
+    initializeFileTree();
+    initResizer();
+});
+
+// Initialize source file expansion behavior
+function initSourceFileExpansion() {
+    document.querySelectorAll('.source-file').forEach(file => {
+        const header = file.querySelector('.source-file-header');
+        header.addEventListener('click', () => {
+            file.classList.toggle('expanded');
+            const chevron = header.querySelector('.chevron-icon');
+            chevron.style.transform = file.classList.contains('expanded') ? 'rotate(180deg)' : 'rotate(0)';
+        });
+    });
+}
+
+// Initialize the resizer functionality
+function initResizer() {
+    const fileExplorer = document.getElementById('file-explorer');
+    const resizer = document.getElementById('file-explorer-resizer');
+    let startX, startWidth;
+
+    // Handle mousedown on the resizer
+    resizer.addEventListener('mousedown', e => {
+        startX = e.clientX;
+        startWidth = parseInt(window.getComputedStyle(fileExplorer).width, 10);
+
+        // Add event listeners for resizing
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // Prevent text selection during resize
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+    });
+
+    // Handle mousemove for resizing
+    function handleMouseMove(e) {
+        const newWidth = startWidth + (e.clientX - startX);
+
+        // Apply width constraints
+        if (newWidth >= 200 && newWidth <= 500) {
+            fileExplorer.style.width = newWidth + 'px';
+            fileExplorer.style.flex = `0 0 ${newWidth}px`;
+        }
+    }
+
+    // Handle mouseup to end resizing
+    function handleMouseUp() {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+    }
+}
+
+// Helper function to get color based on coverage percentage
+function getCoverageColor(percentage) {
+    return percentage < 50
+        ? `hsl(${percentage * 1.2}, 90%, 50%)`
+        : `hsl(${60 + (percentage - 50) * 1.2}, 90%, 45%)`;
+}
+
+// Helper function for transparent background with coverage color
+function getCoverageColorAlpha(percentage) {
+    return percentage < 50
+        ? `hsla(${percentage * 1.2}, 90%, 50%, 0.15)`
+        : `hsla(${60 + (percentage - 50) * 1.2}, 90%, 45%, 0.15)`;
+}
+
+// Build file tree structure from file paths
+function buildFileTree() {
+    const root = { name: '', type: 'directory', children: {}, path: '' };
+    const sourceFiles = document.getElementsByClassName("source-file");
+
+    // First pass: build the tree structure
+    for (let i = 0; i < sourceFiles.length; i++) {
+        const filePath = sourceFiles[i].dataset.filePath;
+        const pathParts = filePath.split(/[\/\\]+/);
+        let current = root;
+        let currentPath = '';
+
+        for (let j = 0; j < pathParts.length; j++) {
+            const part = pathParts[j];
+            if (part === '') continue;
+
+            currentPath += (currentPath ? '/' : '') + part;
+
+            if (j === pathParts.length - 1) {
+                // This is a file
+                current.children[part] = {
+                    name: part,
+                    type: 'file',
+                    path: filePath,
+                    element: sourceFiles[i],
+                    coveredLines: parseInt(sourceFiles[i].dataset.linesCovered),
+                    activeLines: parseInt(sourceFiles[i].dataset.linesActive)
+                };
+            } else {
+                // This is a directory
+                if (!current.children[part]) {
+                    current.children[part] = {
+                        name: part,
+                        type: 'directory',
+                        children: {},
+                        path: currentPath
+                    };
+                }
+                current = current.children[part];
+            }
+        }
+    }
+
+    // Second pass: calculate directory coverage
+    calculateDirectoryCoverage(root);
+
+    return root;
+}
+
+// Calculate coverage for directories by aggregating file coverage
+function calculateDirectoryCoverage(node) {
+    if (node.type === 'file') {
+        return {
+            coveredLines: node.coveredLines,
+            activeLines: node.activeLines
+        };
+    }
+
+    let totalCovered = 0;
+    let totalActive = 0;
+
+    for (const childName in node.children) {
+        const child = node.children[childName];
+        const { coveredLines, activeLines } = calculateDirectoryCoverage(child);
+        totalCovered += coveredLines;
+        totalActive += activeLines;
+    }
+
+    node.coveredLines = totalCovered;
+    node.activeLines = totalActive;
+
+    return {
+        coveredLines: totalCovered,
+        activeLines: totalActive
+    };
+}
+
+// Render the file tree to the DOM
+function renderFileTree(node, parentElement, isRoot = false) {
+    const list = isRoot ? parentElement : document.createElement('ul');
+
+    // Sort children: directories first, then files, both alphabetically
+    const sortedChildren = Object.values(node.children).sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    for (const child of sortedChildren) {
+        const li = document.createElement('li');
+        li.className = child.type;
+
+        // Create item container
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'file-item';
+
+        // Create toggle button for directories
+        const toggle = document.createElement('span');
+        toggle.className = 'file-toggle';
+        itemDiv.appendChild(toggle);
+
+        // Create file/folder icon
+        const icon = document.createElement('span');
+        icon.className = 'file-icon';
+        itemDiv.appendChild(icon);
+
+        // Create name span
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'file-name';
+        nameSpan.textContent = child.name;
+        itemDiv.appendChild(nameSpan);
+
+        // Add coverage indicator
+        if (child.activeLines > 0) {
+            const coverage = document.createElement('span');
+            coverage.className = 'file-coverage';
+            const percentage = Math.round((child.coveredLines / child.activeLines) * 100);
+            coverage.style.backgroundColor = getCoverageColor(percentage);
+            coverage.title = `${child.coveredLines}/${child.activeLines} lines covered (${percentage}%)`;
+            itemDiv.appendChild(coverage);
+        }
+
+        li.appendChild(itemDiv);
+
+        // Handle click events
+        if (child.type === 'directory') {
+            toggle.addEventListener('click', e => {
+                e.stopPropagation();
+                li.classList.toggle('expanded');
+            });
+
+            itemDiv.addEventListener('click', () => {
+                li.classList.toggle('expanded');
+            });
+
+            // Recursively render children
+            renderFileTree(child, li);
+        } else {
+            // Add click handler for files
+            itemDiv.addEventListener('click', () => {
+                // Deactivate all other items
+                document.querySelectorAll('.file-item.active').forEach(el => {
+                    el.classList.remove('active');
+                });
+
+                // Activate this item
+                itemDiv.classList.add('active');
+
+                // Navigate to the file
+                const fileElement = child.element;
+                fileElement.scrollIntoView({ behavior: 'smooth' });
+
+                // Expand the file if it's collapsed
+                if (!fileElement.classList.contains('expanded')) {
+                    fileElement.querySelector('.source-file-header').click();
+                }
+            });
+        }
+
+        list.appendChild(li);
+    }
+
+    if (!isRoot) {
+        parentElement.appendChild(list);
+    }
+}
+
+// Initialize the file tree
+function initializeFileTree() {
+    const fileTreeRoot = document.getElementById('file-tree-root');
+    const fileTree = buildFileTree();
+    renderFileTree(fileTree, fileTreeRoot, true);
+
+    // Expand the first level directories by default
+    document.querySelectorAll('#file-tree-root > li.directory').forEach(dir => {
+        dir.classList.add('expanded');
+    });
+
+    // Initialize search functionality
+    initializeFileSearch();
+}
+
+// Initialize file search functionality
+function initializeFileSearch() {
+    const searchInput = document.getElementById('file-search-input');
+    const clearButton = document.getElementById('file-search-clear');
+    const noResultsMessage = document.getElementById('search-no-results');
+
+    // Debounce function to limit how often the search is performed during typing
+    function debounce(func, delay) {
+        let timeout;
+        return function() {
+            const context = this;
+            const args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    }
+
+    // Function to highlight text that matches the search term
+    function highlightText(element, searchTerm) {
+        const text = element.textContent;
+
+        if (!searchTerm) {
+            // Clear any existing highlights
+            element.textContent = text;
+            return false;
+        }
+
+        const lowerText = text.toLowerCase();
+        const lowerSearchTerm = searchTerm.toLowerCase();
+
+        if (lowerText.includes(lowerSearchTerm)) {
+            const startIndex = lowerText.indexOf(lowerSearchTerm);
+            const endIndex = startIndex + lowerSearchTerm.length;
+
+            const beforeMatch = text.substring(0, startIndex);
+            const match = text.substring(startIndex, endIndex);
+            const afterMatch = text.substring(endIndex);
+
+            element.innerHTML = beforeMatch + '<span class="search-highlight">' + match + '</span>' + afterMatch;
+            return true;
+        }
+
+        element.textContent = text;
+        return false;
+    }
+
+    // Function to filter the file tree based on search term
+    function filterFileTree(searchTerm) {
+        const fileTreeItems = document.querySelectorAll('.file-tree li');
+        let hasVisibleItems = false;
+
+        if (searchTerm === '') {
+            // If search is cleared, show everything and reset expansion state
+            fileTreeItems.forEach(item => {
+                const nameElement = item.querySelector('.file-name');
+                highlightText(nameElement, ''); // Clear highlights
+                item.style.display = '';
+
+                // Only expand first level by default
+                if (item.classList.contains('directory')) {
+                    // Check if this is a direct child of the root file tree
+                    if (item.parentElement.id === 'file-tree-root') {
+                        item.classList.add('expanded');
+                    } else {
+                        item.classList.remove('expanded');
+                    }
+                }
+            });
+        } else {
+            // Two-pass filtering for search
+
+            // First pass: hide everything and find matches
+            const matchingItems = [];
+            fileTreeItems.forEach(item => {
+                const nameElement = item.querySelector('.file-name');
+                const isMatch = highlightText(nameElement, searchTerm);
+                item.style.display = 'none'; // Hide everything initially
+
+                if (isMatch) {
+                    matchingItems.push(item);
+                }
+            });
+
+            // Second pass: show matching items and all their ancestor directories
+            matchingItems.forEach(item => {
+                hasVisibleItems = true;
+
+                // Show the matching item
+                item.style.display = '';
+
+                // Show and expand all parent directories
+                let parent = item.parentElement.closest('li.directory');
+                while (parent) {
+                    parent.style.display = '';
+                    parent.classList.add('expanded');
+                    parent = parent.parentElement.closest('li.directory');
+                }
+            });
+        }
+
+        // Show/hide the "no results" message
+        noResultsMessage.style.display = searchTerm && !hasVisibleItems ? 'block' : 'none';
+    }
+
+    // Debounced search function to avoid excessive filtering while typing
+    const debouncedSearch = debounce(filterFileTree, 200);
+
+    // Search input event
+    searchInput.addEventListener('input', function() {
+        debouncedSearch(this.value.trim());
+    });
+
+    // Clear button event
+    clearButton.addEventListener('click', function() {
+        searchInput.value = '';
+        filterFileTree('');
+        searchInput.focus();
+    });
+}
+
+// Button click handler for expanding/collapsing all files
+function setAllSourceFilesCollapsed(collapsed) {
+    document.querySelectorAll('.source-file').forEach(file => {
+        if ((collapsed && file.classList.contains('expanded')) ||
+            (!collapsed && !file.classList.contains('expanded'))) {
+            file.querySelector('.source-file-header').click();
+        }
+    });
+}
+
+// Button click handler for expanding/collapsing empty files
+function setEmptySourceFilesCollapsed(collapsed) {
+    document.querySelectorAll('.source-file').forEach(file => {
+        if (parseInt(file.dataset.linesActive) <= 0) {
+            if ((collapsed && file.classList.contains('expanded')) ||
+                (!collapsed && !file.classList.contains('expanded'))) {
+                file.querySelector('.source-file-header').click();
+            }
+        }
+    });
+}    </script>
+</body>
+</html>

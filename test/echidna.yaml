@@ -1,0 +1,30 @@
+# Echidna config for EqualFi FeeIndex fuzzing
+
+testMode: "assertion"
+# prefix: "echidna_" # Not used for assertions usually, but defaults apply.
+
+# Focused fuzzing campaign
+seqLen: 50           # Shorter sequences for pure math functions
+testLimit: 100000    # More sequences to explore edge cases
+shrinkLimit: 5000
+
+# Coverage + artifacts
+coverage: true
+corpusDir: "echidna-corpus"
+coverageFormats: ["txt", "html"]
+
+# Deterministic seed for reproducibility
+seed: 42
+
+# Output format
+format: "text"
+
+# Filter out constructor and internal functions
+filterFunctions: ["safeUnencumber"]
+filterBlacklist: true
+
+# No FFI needed for pure math
+allowFFI: false
+
+# Fast fuzzing (no symbolic execution for initial run)
+symExec: false

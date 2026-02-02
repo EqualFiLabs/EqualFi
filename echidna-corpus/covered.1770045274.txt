@@ -1,0 +1,131 @@
+/home/hooftly/Projects/EqualFi/test/EchidnaValidationLogic.sol
+   1 |     | // SPDX-License-Identifier: BUSL-1.1
+   2 |     | pragma solidity ^0.8.20;
+   3 |     | 
+   4 | *r  | contract EchidnaValidationLogic {
+   5 | *   |     uint256 internal constant SIG_VALIDATION_FAILED = 1;
+   6 |     | 
+   7 |     |     // ========== COPIED LOGIC ==========
+   8 |     |     // Copied from ValidationFlowLib.sol because original is private
+   9 |     | 
+  10 | *   |     function _intersectValidationData(uint256 acc, uint256 next) internal pure returns (uint256) {
+  11 |     |         (address authA, uint48 untilA, uint48 afterA) = _parseValidationData(acc);
+  12 |     |         (address authB, uint48 untilB, uint48 afterB) = _parseValidationData(next);
+  13 |     | 
+  14 | *   |         if (authA == address(1) || authB == address(1)) {
+  15 | *   |             return SIG_VALIDATION_FAILED;
+  16 |     |         }
+  17 |     | 
+  18 | *   |         if (authA == address(0)) {
+  19 | *   |             authA = authB;
+  20 | *   |         } else if (authB != address(0) && authA != authB) {
+  21 | *   |             return SIG_VALIDATION_FAILED;
+  22 |     |         }
+  23 |     | 
+  24 | *   |         if (untilA == 0) {
+  25 | *   |             untilA = type(uint48).max;
+  26 |     |         }
+  27 | *   |         if (untilB == 0) {
+  28 | *   |             untilB = type(uint48).max;
+  29 |     |         }
+  30 |     | 
+  31 | *   |         uint48 until = untilA < untilB ? untilA : untilB;
+  32 | *   |         uint48 after_ = afterA > afterB ? afterA : afterB;
+  33 |     | 
+  34 | *   |         if (until == type(uint48).max) {
+  35 |     |             until = 0;
+  36 |     |         }
+  37 |     | 
+  38 |     |         return _packValidationData(authA, until, after_);
+  39 |     |     }
+  40 |     | 
+  41 | *   |     function _parseValidationData(uint256 data) internal pure returns (address authorizer, uint48 validUntil, uint48 validAfter) {
+  42 |     |         authorizer = address(uint160(data));
+  43 |     |         validUntil = uint48(data >> 160);
+  44 | *   |         validAfter = uint48(data >> 208);
+  45 |     |     }
+  46 |     | 
+  47 |     |     function _packValidationData(address authorizer, uint48 validUntil, uint48 validAfter) internal pure returns (uint256) {
+  48 | *   |         return uint256(uint160(authorizer)) | (uint256(validUntil) << 160) | (uint256(validAfter) << 208);
+  49 |     |     }
+  50 |     | 
+  51 |     |     // ========== ASSERTION TESTS ==========
+  52 |     | 
+  53 |     |     function test_commutativity(uint256 a, uint256 b) public pure {
+  54 | *   |         uint256 res1 = _intersectValidationData(a, b);
+  55 | *   |         uint256 res2 = _intersectValidationData(b, a);
+  56 | *   |         assert(res1 == res2);
+  57 |     |     }
+  58 |     | 
+  59 | *   |     function test_idempotence(uint256 a) public pure {
+  60 | *   |         uint256 res = _intersectValidationData(a, a);
+  61 |     |         
+  62 | *   |         if (res == a) return;
+  63 |     |         
+  64 |     |         // Handle normalization: type(uint48).max becomes 0
+  65 |     |         (, uint48 untilA, ) = _parseValidationData(a);
+  66 |     |         (, uint48 untilRes, ) = _parseValidationData(res);
+  67 |     |         
+  68 | *   |         if (untilA == type(uint48).max && untilRes == 0) {
+  69 |     |             // Check other fields match
+  70 |     |             (address authA, , uint48 afterA) = _parseValidationData(a);
+  71 |     |             (address authRes, , uint48 afterRes) = _parseValidationData(res);
+  72 | *   |             assert(authA == authRes && afterA == afterRes);
+  73 |     |             return;
+  74 |     |         }
+  75 |     |         
+  76 |     |         assert(false); // Fail if not normalization
+  77 |     |     }
+  78 |     | 
+  79 | *   |     function test_time_restrictions(uint256 a, uint256 b) public pure {
+  80 | *   |         uint256 res = _intersectValidationData(a, b);
+  81 | *   |         if (res == SIG_VALIDATION_FAILED) return;
+  82 |     | 
+  83 |     |         (,, uint48 afterA) = _parseValidationData(a);
+  84 | *   |         (,, uint48 afterB) = _parseValidationData(b);
+  85 | *   |         (,, uint48 afterRes) = _parseValidationData(res);
+  86 |     | 
+  87 |     |         // Result start time must be max(startA, startB)
+  88 | *   |         assert(afterRes >= afterA);
+  89 | *   |         assert(afterRes >= afterB);
+  90 |     |         
+  91 |     |         // Check end time
+  92 | *   |         (, uint48 untilA,) = _parseValidationData(a);
+  93 | *   |         (, uint48 untilB,) = _parseValidationData(b);
+  94 | *   |         (, uint48 untilRes,) = _parseValidationData(res);
+  95 |     |         
+  96 |     |         // 0 means type(uint48).max
+  97 | *   |         uint48 effectiveUntilA = untilA == 0 ? type(uint48).max : untilA;
+  98 | *   |         uint48 effectiveUntilB = untilB == 0 ? type(uint48).max : untilB;
+  99 | *   |         uint48 effectiveUntilRes = untilRes == 0 ? type(uint48).max : untilRes;
+ 100 |     |         
+ 101 | *   |         assert(effectiveUntilRes <= effectiveUntilA);
+ 102 | *   |         assert(effectiveUntilRes <= effectiveUntilB);
+ 103 |     |     }
+ 104 |     | 
+ 105 |     |     function test_authorizer_conflict(uint256 a, uint256 b) public pure {
+ 106 |     |         (address authA,,) = _parseValidationData(a);
+ 107 |     |         (address authB,,) = _parseValidationData(b);
+ 108 |     |         
+ 109 | *   |         uint256 res = _intersectValidationData(a, b);
+ 110 |     |         
+ 111 | *   |         if (authA != address(0) && authB != address(0) && authA != authB) {
+ 112 |     |             // Conflict must result in failure
+ 113 | *   |             assert(res == SIG_VALIDATION_FAILED);
+ 114 |     |         }
+ 115 |     |     }
+ 116 |     |     
+ 117 |     |     function test_failure_propagation(uint256 a) public pure {
+ 118 |     |         // If one input is failure, result is failure
+ 119 |     |         // Wait, SIG_VALIDATION_FAILED is 1. 
+ 120 |     |         // address(1) is failure marker in logic: if (authA == address(1)).
+ 121 |     |         // address(1) corresponds to 1.
+ 122 |     |         
+ 123 |     |         uint256 failure = SIG_VALIDATION_FAILED;
+ 124 | *   |         uint256 res = _intersectValidationData(a, failure);
+ 125 |     |         
+ 126 | *   |         assert(res == SIG_VALIDATION_FAILED);
+ 127 |     |     }
+ 128 |     | }
+ 129 |     | 
+

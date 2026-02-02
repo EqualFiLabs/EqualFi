@@ -1,0 +1,7 @@
+testMode: property
+testLimit: 50000
+seqLen: 100
+corpusDir: corpus-direct
+coverage: true
+codeSize: 0xffffff
+gasLimit: 10000000000

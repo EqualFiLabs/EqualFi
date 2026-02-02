@@ -1,0 +1,20 @@
+# Echidna config for property-based fuzzing (e.g. EqualIndex)
+
+testMode: "property"
+seqLen: 50
+testLimit: 100000
+shrinkLimit: 5000
+
+coverage: true
+corpusDir: "echidna-corpus"
+coverageFormats: ["txt", "html"]
+
+seed: 42
+format: "text"
+
+# Filter out constructor and internal functions
+filterFunctions: ["safeUnencumber"]
+filterBlacklist: true
+
+allowFFI: false
+symExec: false

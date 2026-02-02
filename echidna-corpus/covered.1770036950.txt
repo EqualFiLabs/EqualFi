@@ -1,0 +1,337 @@
+/home/hooftly/Projects/EqualFi/src/libraries/Errors.sol
+   1 |     | // SPDX-License-Identifier: BUSL-1.1
+   2 |     | pragma solidity ^0.8.20;
+   3 |     | 
+   4 |     | // Custom error definitions for EqualLend protocol
+   5 |     | 
+   6 |     | // Pool-level thresholds
+   7 |     | error DepositBelowMinimum(uint256 attempted, uint256 required);
+   8 |     | error LoanBelowMinimum(uint256 attempted, uint256 required);
+   9 |     | error InvalidMinimumThreshold(string reason);
+  10 |     | 
+  11 |     | // Rolling credit expansion
+  12 |     | error DelinquentBorrower(address user, uint256 missedPayments);
+  13 |     | error ExpansionBelowMinimum(uint256 amount, uint256 minimum);
+  14 |     | error InsufficientCollateral(uint256 newPrincipal, uint256 maxBorrowable);
+  15 |     | error InsufficientPoolLiquidity(uint256 requested, uint256 available);
+  16 |     | error NoActiveRollingLoan(address user);
+  17 |     | 
+  18 |     | // Fee configuration
+  19 |     | error ActionFeeBoundsViolation(uint128 amount, uint128 min, uint128 max);
+  20 |     | error UnauthorizedFeeConfiguration();
+  21 |     | error PoolNotInitialized(uint256 pid);
+  22 |     | error IndexNotFound(uint256 indexId);
+  23 |     | error ActionFeeDisabled(uint256 pid, bytes32 action);
+  24 |     | error IndexActionFeeDisabled(uint256 indexId, bytes32 action);
+  25 |     | error AumFeeOutOfBounds(uint16 attempted, uint16 min, uint16 max);
+  26 |     | 
+  27 |     | // Pool initialization and configuration
+  28 |     | error PoolAlreadyExists(uint256 pid);
+  29 |     | error PermissionlessPoolAlreadyInitialized(address underlying, uint256 existingPid);
+  30 |     | error DefaultPoolConfigNotSet();
+  31 |     | error InvalidUnderlying();
+  32 |     | error InvalidParameterRange(string parameter);
+  33 |     | error InvalidAumFeeBounds();
+  34 |     | error InsufficientPoolCreationFee(uint256 required, uint256 provided);
+  35 |     | error InsufficientManagedPoolCreationFee(uint256 required, uint256 provided);
+  36 |     | error InsufficientIndexCreationFee(uint256 required, uint256 provided);
+  37 |     | error ParameterIsImmutable(string parameter);
+  38 |     | error PoolDoesNotExist(uint256 pid);
+  39 |     | error PoolNotManaged(uint256 pid);
+  40 |     | error InvalidManagedPoolConfig(string reason);
+  41 |     | error UnauthorizedAdmin();
+  42 |     | error InvalidDepositCap();
+  43 |     | error InvalidLTVRatio();
+  44 |     | error InvalidCollateralizationRatio();
+  45 |     | error InvalidMaintenanceRate();
+  46 |     | error InvalidFlashLoanFee();
+  47 |     | error InvalidAPYRate(string parameter);
+  48 |     | error InvalidFixedTermDuration();
+  49 |     | error InvalidFixedTermFee();
+  50 |     | error ManagedPoolCreationDisabled();
+  51 |     | error InvalidTreasuryAddress();
+  52 |     | error NotPoolManager(address caller, address manager);
+  53 |     | error OnlyManagerAllowed();
+  54 |     | error InvalidManagerTransfer();
+  55 |     | error ManagerAlreadyRenounced();
+  56 |     | error WhitelistRequired(bytes32 positionKey, uint256 poolId);
+  57 |     | error TreasuryNotSet();
+  58 |     | error PoolCreationFeeTransferFailed();
+  59 |     | error IndexCreationFeeTransferFailed();
+  60 |     | error DepositCapExceeded(uint256 attempted, uint256 cap);
+  61 |     | error MaxUserCountExceeded(uint256 maxUsers);
+  62 |     | 
+  63 |     | // EqualIndex validation
+  64 |     | error InvalidArrayLength();
+  65 |     | error InvalidBundleDefinition();
+  66 |     | error InvalidFeeReceiver();
+  67 |     | error InvalidUnits();
+  68 |     | error InsufficientBalance();
+  69 |     | error NotImplemented();
+  70 |     | error IndexPaused(uint256 indexId);
+  71 |     | error UnknownIndex(uint256 indexId);
+  72 |     | error CapExceeded(uint256 indexId, uint256 requested, uint256 cap);
+  73 |     | error Unauthorized();
+  74 |     | error Reentrancy();
+  75 |     | error FlashLoanUnderpaid(uint256 indexId, address asset, uint256 expected, uint256 received);
+  76 |     | error NoSurplus();
+  77 |     | error UnknownAsset();
+  78 |     | error NoYieldAvailable();
+  79 |     | error NoPoolForAsset(address asset);
+  80 |     | error EncumbranceUnderflow(uint256 requested, uint256 available);
+  81 |     | error InsufficientUnencumberedPrincipal(uint256 requested, uint256 available);
+  82 |     | error NotMemberOfRequiredPool(bytes32 positionKey, uint256 poolId);
+  83 |     | error InsufficientIndexTokens(uint256 requested, uint256 available);
+  84 |     | 
+  85 |     | // Index token controls
+  86 |     | error NotMinter();
+  87 |     | error InvalidMinter();
+  88 |     | 
+  89 |     | // Position NFT errors
+  90 |     | error NotNFTOwner(address caller, uint256 tokenId);
+  91 |     | error InvalidTokenId(uint256 tokenId);
+  92 |     | error SolvencyViolation(uint256 principal, uint256 debt, uint256 ltvBps);
+  93 |     | error InsufficientPrincipal(uint256 requested, uint256 available);
+  94 |     | error ActiveLoansExist();
+  95 |     | // Pool membership validation
+  96 |     | error PoolMembershipRequired(bytes32 positionKey, uint256 poolId);
+  97 |     | error MembershipAlreadyExists(bytes32 positionKey, uint256 poolId);
+  98 |     | error CannotClearMembership(bytes32 positionKey, uint256 poolId, string reason);
+  99 |     | 
+ 100 |     | // Accounting and fee base validation
+ 101 |     | error NegativeFeeBase();
+ 102 |     | error InvalidAssetComparison();
+ 103 |     | error FeeBaseOverflow();
+ 104 |     | error DebtUnderflow();
+ 105 |     | error SameAssetDebtMismatch(uint256 expected, uint256 actual);
+ 106 |     | error CrossAssetDebtLeakage(uint256 crossAssetDebt);
+ 107 |     | error NativeTransferFailed(address to, uint256 amount);
+ 108 |     | error UnexpectedMsgValue(uint256 value);
+ 109 |     | 
+ 110 |     | // Direct lending errors
+ 111 |     | error DirectError_InvalidPositionNFT();
+ 112 |     | error DirectError_InvalidTimestamp();
+ 113 |     | error DirectError_ZeroAmount();
+ 114 |     | error DirectError_InvalidAsset();
+ 115 |     | error DirectError_InvalidOffer();
+ 116 |     | error DirectError_InvalidConfiguration();
+ 117 |     | error DirectError_InvalidRatio();
+ 118 |     | error DirectError_InvalidFillAmount();
+ 119 |     | error DirectError_InvalidAgreementState();
+ 120 |     | error DirectError_AutoExerciseNotAllowed();
+ 121 |     | error DirectError_EarlyExerciseNotAllowed();
+ 122 |     | error DirectError_EarlyRepayNotAllowed();
+ 123 |     | error DirectError_LenderCallNotAllowed();
+ 124 |     | error DirectError_GracePeriodActive();
+ 125 |     | error DirectError_GracePeriodExpired();
+ 126 |     | error DirectError_InvalidTrancheAmount();
+ 127 |     | error DirectError_NotOfferPoster();
+ 128 |     | error DirectError_TrancheInsufficient();
+ 129 |     | error DirectError_CancellationReason();
+ 130 |     | 
+ 131 |     | // Rolling lending errors
+ 132 |     | error RollingError_InvalidInterval(uint32 provided, uint32 minIntervalSeconds);
+ 133 |     | error RollingError_InvalidPaymentCount(uint16 provided, uint16 maxPaymentCount);
+ 134 |     | error RollingError_InvalidGracePeriod(uint32 provided, uint32 paymentIntervalSeconds);
+ 135 |     | error RollingError_InvalidAPY(uint16 provided, uint16 minRollingApyBps, uint16 maxRollingApyBps);
+ 136 |     | error RollingError_ExcessivePremium(uint256 provided, uint256 maxPremium);
+ 137 |     | error RollingError_MinPayment(uint256 amount, uint256 minimum);
+ 138 |     | error RollingError_AmortizationDisabled();
+ 139 |     | error RollingError_RecoveryNotEligible();
+ 140 |     | error RollingError_DustPayment(uint256 amount, uint256 minPayment);
+ 141 |     | 
+ 142 |     | // Limit order errors
+ 143 |     | 
+
+/home/hooftly/Projects/EqualFi/src/libraries/LibEncumbrance.sol
+   1 |     | // SPDX-License-Identifier: BUSL-1.1
+   2 |     | pragma solidity ^0.8.20;
+   3 |     | 
+   4 |     | import {EncumbranceUnderflow} from "./Errors.sol";
+   5 |     | 
+   6 |     | /// @notice Central storage and helpers for all encumbrance components per position and pool.
+   7 |     | library LibEncumbrance {
+   8 |     |     bytes32 internal constant STORAGE_POSITION = keccak256("equallend.encumbrance.storage");
+   9 |     | 
+  10 |     |     struct Encumbrance {
+  11 |     |         uint256 directLocked;
+  12 |     |         uint256 directLent;
+  13 |     |         uint256 directOfferEscrow;
+  14 |     |         uint256 indexEncumbered;
+  15 |     |     }
+  16 |     | 
+  17 |     |     struct EncumbranceStorage {
+  18 |     |         mapping(bytes32 => mapping(uint256 => Encumbrance)) encumbrance;
+  19 |     |         mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByIndex;
+  20 |     |     }
+  21 |     | 
+  22 |     |     event EncumbranceIncreased(
+  23 |     |         bytes32 indexed positionKey,
+  24 |     |         uint256 indexed poolId,
+  25 |     |         uint256 indexed indexId,
+  26 |     |         uint256 amount,
+  27 |     |         uint256 totalEncumbered,
+  28 |     |         uint256 indexEncumbered
+  29 |     |     );
+  30 |     |     event EncumbranceDecreased(
+  31 |     |         bytes32 indexed positionKey,
+  32 |     |         uint256 indexed poolId,
+  33 |     |         uint256 indexed indexId,
+  34 |     |         uint256 amount,
+  35 |     |         uint256 totalEncumbered,
+  36 |     |         uint256 indexEncumbered
+  37 |     |     );
+  38 |     | 
+  39 |     |     function s() internal pure returns (EncumbranceStorage storage es) {
+  40 |     |         bytes32 storagePosition = STORAGE_POSITION;
+  41 |     |         assembly {
+  42 |     |             es.slot := storagePosition
+  43 |     |         }
+  44 |     |     }
+  45 |     | 
+  46 |     |     function position(bytes32 positionKey, uint256 poolId) internal view returns (Encumbrance storage enc) {
+  47 |     |         enc = s().encumbrance[positionKey][poolId];
+  48 |     |     }
+  49 |     | 
+  50 |     |     function get(bytes32 positionKey, uint256 poolId) internal view returns (Encumbrance memory enc) {
+  51 |     |         enc = s().encumbrance[positionKey][poolId];
+  52 |     |     }
+  53 |     | 
+  54 |     |     function total(bytes32 positionKey, uint256 poolId) internal view returns (uint256) {
+  55 |     |         Encumbrance storage enc = s().encumbrance[positionKey][poolId];
+  56 |     |         return enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+  57 |     |     }
+  58 |     | 
+  59 |     |     function totalForActiveCredit(bytes32 positionKey, uint256 poolId) internal view returns (uint256) {
+  60 |     |         Encumbrance storage enc = s().encumbrance[positionKey][poolId];
+  61 |     |         return enc.directLocked + enc.directLent + enc.directOfferEscrow;
+  62 |     |     }
+  63 |     | 
+  64 |     |     function getIndexEncumbered(bytes32 positionKey, uint256 poolId) internal view returns (uint256) {
+  65 | *   |         return s().encumbrance[positionKey][poolId].indexEncumbered;
+  66 |     |     }
+  67 |     | 
+  68 | *   |     function getIndexEncumberedForIndex(bytes32 positionKey, uint256 poolId, uint256 indexId)
+  69 |     |         internal
+  70 |     |         view
+  71 |     |         returns (uint256)
+  72 |     |     {
+  73 |     |         return s().encumberedByIndex[positionKey][poolId][indexId];
+  74 |     |     }
+  75 |     | 
+  76 |     |     function encumberIndex(bytes32 positionKey, uint256 poolId, uint256 indexId, uint256 amount) internal {
+  77 |     |         EncumbranceStorage storage es = s();
+  78 |     |         Encumbrance storage enc = es.encumbrance[positionKey][poolId];
+  79 | *   |         uint256 newTotal = enc.indexEncumbered + amount;
+  80 |     |         enc.indexEncumbered = newTotal;
+  81 | *   |         uint256 newIndexTotal = es.encumberedByIndex[positionKey][poolId][indexId] + amount;
+  82 |     |         es.encumberedByIndex[positionKey][poolId][indexId] = newIndexTotal;
+  83 | *   |         emit EncumbranceIncreased(positionKey, poolId, indexId, amount, newTotal, newIndexTotal);
+  84 |     |     }
+  85 |     | 
+  86 |     |     function unencumberIndex(bytes32 positionKey, uint256 poolId, uint256 indexId, uint256 amount) internal {
+  87 |     |         EncumbranceStorage storage es = s();
+  88 |     |         Encumbrance storage enc = es.encumbrance[positionKey][poolId];
+  89 |     |         uint256 currentIndex = es.encumberedByIndex[positionKey][poolId][indexId];
+  90 | *   |         if (amount > currentIndex) {
+  91 | *r  |             revert EncumbranceUnderflow(amount, currentIndex);
+  92 |     |         }
+  93 | *   |         uint256 currentTotal = enc.indexEncumbered;
+  94 | *   |         if (amount > currentTotal) {
+  95 |     |             revert EncumbranceUnderflow(amount, currentTotal);
+  96 |     |         }
+  97 | *   |         uint256 newTotal = currentTotal - amount;
+  98 | *   |         uint256 newIndexTotal = currentIndex - amount;
+  99 |     |         enc.indexEncumbered = newTotal;
+ 100 |     |         es.encumberedByIndex[positionKey][poolId][indexId] = newIndexTotal;
+ 101 | *   |         emit EncumbranceDecreased(positionKey, poolId, indexId, amount, newTotal, newIndexTotal);
+ 102 |     |     }
+ 103 |     | }
+ 104 |     | 
+
+/home/hooftly/Projects/EqualFi/test/EchidnaEncumbrance.sol
+  1 |     | // SPDX-License-Identifier: BUSL-1.1
+  2 |     | pragma solidity ^0.8.20;
+  3 |     | 
+  4 |     | import {LibEncumbrance} from "../src/libraries/LibEncumbrance.sol";
+  5 |     | 
+  6 | *r  | contract EchidnaEncumbrance {
+  7 |     |     // We need to use a fixed position and pool for stateful testing
+  8 |     |     bytes32 internal constant TEST_POSITION = keccak256("test.position");
+  9 | *   |     uint256 internal constant TEST_POOL = 1;
+ 10 | *   |     uint256 internal constant MAX_AMOUNT = type(uint128).max;
+ 11 |     | 
+ 12 |     |     // Expose internal library functions via public harness
+ 13 |     |     function encumberIndex(uint256 indexId, uint256 amount) public {
+ 14 | *   |         amount = amount % MAX_AMOUNT;
+ 15 |     |         LibEncumbrance.encumberIndex(TEST_POSITION, TEST_POOL, indexId, amount);
+ 16 |     |     }
+ 17 |     | 
+ 18 |     |     function unencumberIndex(uint256 indexId, uint256 amount) public {
+ 19 | *   |         amount = amount % MAX_AMOUNT;
+ 20 |     |         // Only attempt if it won't revert (or let it revert to test safety)
+ 21 |     |         // For property testing, we might want to check reverts, but here we test state consistency
+ 22 | *   |         try this.safeUnencumber(indexId, amount) {} catch {}
+ 23 |     |     }
+ 24 |     | 
+ 25 |     |     // Helper to allow try/catch
+ 26 |     |     function safeUnencumber(uint256 indexId, uint256 amount) external {
+ 27 |     |         LibEncumbrance.unencumberIndex(TEST_POSITION, TEST_POOL, indexId, amount);
+ 28 |     |     }
+ 29 |     | 
+ 30 |     |     // ========== INVARIANTS ==========
+ 31 |     | 
+ 32 |     |     /// @notice Index encumbrance must equal sum of individual indices
+ 33 |     |     /// @dev We track 3 arbitrary indices for this invariant
+ 34 |     |     function echidna_index_sum_consistency() public view returns (bool) {
+ 35 |     |         uint256 idx1 = LibEncumbrance.getIndexEncumberedForIndex(TEST_POSITION, TEST_POOL, 1);
+ 36 |     |         uint256 idx2 = LibEncumbrance.getIndexEncumberedForIndex(TEST_POSITION, TEST_POOL, 2);
+ 37 |     |         uint256 idx3 = LibEncumbrance.getIndexEncumberedForIndex(TEST_POSITION, TEST_POOL, 3);
+ 38 |     |         
+ 39 |     |         uint256 total = LibEncumbrance.getIndexEncumbered(TEST_POSITION, TEST_POOL);
+ 40 |     |         
+ 41 |     |         // The total stored in Encumbrance struct must be >= sum of checked indices
+ 42 |     |         // (It can be greater if other indices were touched by fuzzing)
+ 43 | *   |         return total >= idx1 + idx2 + idx3;
+ 44 |     |     }
+ 45 |     | 
+ 46 |     |     /// @notice Total encumbrance must equal sum of components
+ 47 |     |     function echidna_total_matches_components() public view returns (bool) {
+ 48 |     |         uint256 total = LibEncumbrance.total(TEST_POSITION, TEST_POOL);
+ 49 |     |         LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(TEST_POSITION, TEST_POOL);
+ 50 |     |         
+ 51 |     |         return total == enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+ 52 |     |     }
+ 53 |     | 
+ 54 |     |     /// @notice Unencumbering more than available must revert (handled by Echidna via try/catch in usage)
+ 55 |     |     /// Use a specific test to assert failure mode?
+ 56 |     |     function test_unencumber_underflow(uint256 indexId, uint256 amount) public {
+ 57 | *   |         amount = amount % MAX_AMOUNT;
+ 58 |     |         uint256 current = LibEncumbrance.getIndexEncumberedForIndex(TEST_POSITION, TEST_POOL, indexId);
+ 59 |     |         
+ 60 | *   |         if (amount > current) {
+ 61 | *   |             try this.safeUnencumber(indexId, amount) {
+ 62 |     |                 assert(false); // Should have reverted
+ 63 |     |             } catch {
+ 64 |     |                 assert(true); // Correctly reverted
+ 65 |     |             }
+ 66 |     |         }
+ 67 |     |     }
+ 68 |     | 
+ 69 |     |     /// @notice Encumbering adds correctly to state
+ 70 |     |     function test_encumber_add(uint256 indexId, uint256 amount) public {
+ 71 | *   |         amount = amount % MAX_AMOUNT;
+ 72 |     |         uint256 preTotal = LibEncumbrance.getIndexEncumbered(TEST_POSITION, TEST_POOL);
+ 73 | *   |         uint256 preIndex = LibEncumbrance.getIndexEncumberedForIndex(TEST_POSITION, TEST_POOL, indexId);
+ 74 |     |         
+ 75 | *   |         this.encumberIndex(indexId, amount);
+ 76 |     |         
+ 77 |     |         uint256 postTotal = LibEncumbrance.getIndexEncumbered(TEST_POSITION, TEST_POOL);
+ 78 | *   |         uint256 postIndex = LibEncumbrance.getIndexEncumberedForIndex(TEST_POSITION, TEST_POOL, indexId);
+ 79 |     |         
+ 80 | *   |         assert(postTotal == preTotal + amount);
+ 81 | *   |         assert(postIndex == preIndex + amount);
+ 82 |     |     }
+ 83 |     | }
+ 84 |     | 
+
