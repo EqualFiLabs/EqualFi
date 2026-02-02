@@ -1,0 +1,18 @@
+# Echidna config for OptionsFacet
+
+testMode: "assertion"
+seqLen: 75
+testLimit: 1000
+shrinkLimit: 5000
+coverage: true
+corpusDir: "echidna-corpus-options"
+coverageFormats: ["txt", "html"]
+seed: 42
+format: "text"
+
+allowFFI: false
+filterFunctions: ["setup"]
+filterBlacklist: true
+
+# Crytic compile options
+cryticArgs: ["--compile-force-framework", "foundry"]

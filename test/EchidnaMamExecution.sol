@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {MamCurveExecutionFacet} from "../src/EqualX/MamCurveExecutionFacet.sol";
-import {LibAppStorage} from "../src/libraries/LibAppStorage.sol";
-import {LibDerivativeStorage} from "../src/libraries/LibDerivativeStorage.sol";
-import {LibEncumbrance} from "../src/libraries/LibEncumbrance.sol";
-import {Types} from "../src/libraries/Types.sol";
-import {MamTypes} from "../src/libraries/MamTypes.sol";
-import {MockERC20} from "../src/mocks/MockERC20.sol";
+import {MamCurveExecutionFacet} from "../../src/EqualX/MamCurveExecutionFacet.sol";
+import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
+import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
+import {Types} from "../../src/libraries/Types.sol";
+import {MamTypes} from "../../src/libraries/MamTypes.sol";
+import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
+import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
 
 // Mock NFT to satisfy ownership and key derivation checks
-contract MockPositionNFT {
+contract MockPositionNFTMam {
     function ownerOf(uint256) external view returns (address) {
         return msg.sender;
     }
@@ -25,7 +27,7 @@ contract MockPositionNFT {
 contract EchidnaMamExecution is MamCurveExecutionFacet {
     MockERC20 internal tokenBase;
     MockERC20 internal tokenQuote;
-    MockPositionNFT internal mockNft;
+    MockPositionNFTMam internal mockNft;
     
     uint256 internal constant PID_BASE = 1;
     uint256 internal constant PID_QUOTE = 2;
@@ -34,9 +36,13 @@ contract EchidnaMamExecution is MamCurveExecutionFacet {
     uint256 internal constant CURVE_ID = 1;
     
     constructor() {
+        // Setup done in setup() for Echidna
+    }
+
+    function setup() public {
         tokenBase = new MockERC20("Base", "BASE", 18, 1_000_000 ether);
         tokenQuote = new MockERC20("Quote", "QUOTE", 18, 1_000_000 ether);
-        mockNft = new MockPositionNFT();
+        mockNft = new MockPositionNFTMam();
         
         makerKey = keccak256(abi.encodePacked(MAKER_ID));
 
@@ -50,16 +56,20 @@ contract EchidnaMamExecution is MamCurveExecutionFacet {
         pBase.userPrincipal[makerKey] = 1000 ether;
         pBase.totalDeposits = 1000 ether;
         pBase.trackedBalance = 1000 ether;
-        tokenBase.mint(address(this), 1000 ether);
+        pBase.feeIndex = LibFeeIndex.INDEX_SCALE;
+        pBase.activeCreditIndex = LibActiveCreditIndex.INDEX_SCALE;
         
         // Quote Pool
         Types.PoolData storage pQuote = s.pools[PID_QUOTE];
         pQuote.initialized = true;
         pQuote.underlying = address(tokenQuote);
+        pQuote.feeIndex = LibFeeIndex.INDEX_SCALE;
+        pQuote.activeCreditIndex = LibActiveCreditIndex.INDEX_SCALE;
         
         // Setup Curve
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         ds.config.mamMakerShareBps = 8000; // 80% to maker
+        ds.nextCurveId = CURVE_ID; // Ensure ID exists
         
         MamTypes.StoredCurve storage curve = ds.curves[CURVE_ID];
         curve.active = true;
@@ -85,10 +95,7 @@ contract EchidnaMamExecution is MamCurveExecutionFacet {
         
         ds.curveBaseIsA[CURVE_ID] = true; // Base is TokenA
         
-        // Encumber the maker's base tokens manually
-        // We use index 0 for MAM? Need to verify LibDerivativeHelpers logic or just check execution.
-        // LibDerivativeHelpers._unlockCollateral uses `LibEncumbrance.unencumberIndex(..., curveId, ...)`?
-        // Let's assume curveId is used as indexId.
+        // Encumber the maker's base tokens
         LibEncumbrance.encumberIndex(makerKey, PID_BASE, CURVE_ID, 500 ether); 
     }
     
@@ -99,8 +106,8 @@ contract EchidnaMamExecution is MamCurveExecutionFacet {
         
         // Self-funding the swap to bypass EOA approval issues
         // We act as the taker
-        tokenQuote.mint(address(this), amountIn * 2);
-        tokenQuote.approve(address(this), amountIn * 2);
+        tokenQuote.mint(address(this), amountIn);
+        tokenQuote.approve(address(this), amountIn);
         
         // Execute swap
         // We call via `this` to act as external caller (msg.sender = address(this))
@@ -137,6 +144,9 @@ contract EchidnaMamExecution is MamCurveExecutionFacet {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         MamTypes.StoredCurve storage curve = ds.curves[CURVE_ID];
         
+        // Need to be careful with index ID. Is it CURVE_ID? 
+        // In MamCurveCreationFacet: LibEncumbrance.encumberIndex(positionKey, poolId, curveId, amount)
+        // So yes, curveId is the index.
         uint256 encumbered = LibEncumbrance.getIndexEncumberedForIndex(makerKey, PID_BASE, CURVE_ID);
         return encumbered == curve.remainingVolume;
     }

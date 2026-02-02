@@ -1,0 +1,17 @@
+# Echidna config for MamCurveExecutionFacet
+
+testMode: "assertion"
+seqLen: 75
+testLimit: 50000
+shrinkLimit: 5000
+coverage: true
+corpusDir: "echidna-corpus-mam"
+coverageFormats: ["txt", "html"]
+seed: 42
+format: "text"
+
+allowFFI: false
+filterFunctions: ["setup"]
+filterBlacklist: true
+
+cryticArgs: ["--compile-force-framework", "foundry"]

@@ -2,10 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @notice ERC-1155 token for options rights, controlled by a manager (Diamond).
-contract OptionToken is ERC1155, Ownable {
+contract OptionToken is ERC1155Supply, Ownable {
     error DerivativeToken_NotManager(address caller);
     error DerivativeToken_InvalidManager(address manager);
 

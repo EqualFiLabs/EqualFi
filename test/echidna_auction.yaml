@@ -1,0 +1,18 @@
+# Echidna config for CommunityAuctionFacet
+
+testMode: "assertion"
+seqLen: 75
+testLimit: 50000
+shrinkLimit: 5000
+coverage: true
+corpusDir: "echidna-corpus-auction"
+coverageFormats: ["txt", "html"]
+seed: 42
+format: "text"
+
+allowFFI: false
+filterFunctions: ["setup"]
+filterBlacklist: true
+
+# Reuse options crytic args if possible, or simplified
+cryticArgs: ["--compile-force-framework", "foundry", "--compile-ignore-filenames", "src/erc6900/PositionMSCA.sol,src/erc6900/PositionMSCAImpl.sol"]
