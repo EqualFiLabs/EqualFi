@@ -512,9 +512,19 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(EqualLendDirectOfferFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](2);
-        s[0] = bytes4(keccak256("cancelOffersForPosition(bytes32)"));
-        s[1] = EqualLendDirectOfferFacet.hasOpenOffers.selector;
+        s = new bytes4[](12);
+        s[0] = EqualLendDirectOfferFacet.postBorrowerOffer.selector;
+        s[1] = EqualLendDirectOfferFacet.cancelBorrowerOffer.selector;
+        s[2] = bytes4(keccak256("postOffer((uint256,uint256,uint256,address,address,uint256,uint16,uint64,uint256,bool,bool,bool))"));
+        s[3] = bytes4(keccak256("postOffer((uint256,uint256,uint256,address,address,uint256,uint16,uint64,uint256,bool,bool,bool),(bool,uint256))"));
+        s[4] = EqualLendDirectOfferFacet.cancelOffer.selector;
+        s[5] = bytes4(keccak256("cancelOffersForPosition(bytes32)"));
+        s[6] = bytes4(keccak256("cancelOffersForPosition(uint256)"));
+        s[7] = EqualLendDirectOfferFacet.hasOpenOffers.selector;
+        s[8] = EqualLendDirectOfferFacet.postRatioTrancheOffer.selector;
+        s[9] = EqualLendDirectOfferFacet.cancelRatioTrancheOffer.selector;
+        s[10] = EqualLendDirectOfferFacet.postBorrowerRatioTrancheOffer.selector;
+        s[11] = EqualLendDirectOfferFacet.cancelBorrowerRatioTrancheOffer.selector;
     }
 
     function _selectors(PositionAgentTBAFacet) internal pure returns (bytes4[] memory s) {
