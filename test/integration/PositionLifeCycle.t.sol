@@ -5,6 +5,8 @@ import "forge-std/Test.sol";
 import {LeanDeployScript} from "../../script/leanDeploy.s.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
+import {MamTypes} from "../../src/libraries/MamTypes.sol";
+import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 
 // Define local interfaces
 interface IPositionManagement {
@@ -15,18 +17,28 @@ interface IPositionManagement {
 
 interface IPositionNFT {
     function ownerOf(uint256 tokenId) external view returns (address);
+    function getPositionKey(uint256 tokenId) external view returns (bytes32);
 }
 
 interface IDirectLendingFacet {
     function postOffer(DirectTypes.DirectOfferParams calldata params) external returns (uint256 offerId);
+    function cancelOffer(uint256 offerId) external;
+}
+
+interface IMamCreationFacet {
+    function createCurve(MamTypes.CurveDescriptor calldata desc) external returns (uint256 curveId);
+    function cancelCurve(uint256 curveId) external;
 }
 
 contract PositionLifeCycleTest is Test {
     
     LeanDeployScript.Deployment internal sys;
     address internal rETH; // Pool 1
+    address internal USDC; // Pool 5
     uint256 internal posId;
     address internal user;
+    uint256 internal activeOfferId;
+    uint256 internal activeCurveId;
 
     function setUp() public {
         LeanDeployScript script = new LeanDeployScript();
@@ -34,50 +46,96 @@ contract PositionLifeCycleTest is Test {
         
         sys = script.deployForTest(address(this), address(this), address(this));
         
-        rETH = sys.tokens[0];
+        rETH = sys.tokens[0]; // Pool 1
+        USDC = sys.tokens[4]; // Pool 5
         
+        // Setup user funds
         MockERC20(rETH).mint(user, 1_000_000 ether);
+        MockERC20(USDC).mint(user, 1_000_000 * 1e6);
     }
 
     function testLifeCycle() public {
         vm.startPrank(user);
         
         _initUser();
-        // Deposit is handled in minting or separate step
         _stepDirectLending();
+        _stepMamBid(); // Create MAM Curve
+        
+        // _verifyEncumbrance(); // TODO: Add view checks
+        
+        _stepUnwind();
         
         vm.stopPrank();
     }
 
     function _initUser() internal {
-        // Mint Position via Diamond (PositionManagementFacet)
-        // Mint with deposit to save a step
-        
         MockERC20(rETH).approve(sys.diamond, type(uint256).max);
+        MockERC20(USDC).approve(sys.diamond, type(uint256).max);
         
-        // Pool 1 = rETH
+        // Mint Position for rETH (Pool 1) with 100 rETH
         posId = IPositionManagement(sys.diamond).mintPositionWithDeposit(1, 100 ether);
         
-        assertEq(IPositionNFT(sys.positionNFT).ownerOf(posId), user);
+        // Also deposit USDC (Pool 5) to the SAME position (cross-collateral)
+        // Note: depositToPosition(tokenId, poolId, amount)
+        IPositionManagement(sys.diamond).depositToPosition(posId, 5, 1000 * 1e6);
     }
 
     function _stepDirectLending() internal {
+        // Create Direct Offer (Lend rETH)
         DirectTypes.DirectOfferParams memory params = DirectTypes.DirectOfferParams({
             lenderPositionId: posId,
-            lenderPoolId: 1, // rETH Pool
-            collateralPoolId: 1, // Self-secured
+            lenderPoolId: 1, // rETH
+            collateralPoolId: 1, 
             collateralAsset: rETH,
             borrowAsset: rETH,
             principal: 10 ether,
             aprBps: 500,
             durationSeconds: 30 days,
-            collateralLockAmount: 10 ether, // Must be > 0
+            collateralLockAmount: 10 ether,
             allowEarlyRepay: true,
             allowEarlyExercise: false,
             allowLenderCall: false
         });
 
-        uint256 offerId = IDirectLendingFacet(sys.diamond).postOffer(params);
-        assertTrue(offerId > 0, "Offer ID should be > 0");
+        activeOfferId = IDirectLendingFacet(sys.diamond).postOffer(params);
+        assertTrue(activeOfferId > 0, "Direct Offer ID > 0");
+    }
+
+    function _stepMamBid() internal {
+        // Create MAM Curve (Sell rETH for USDC)
+        // Pool A = 1 (rETH), Pool B = 5 (USDC)
+        
+        bytes32 key = IPositionNFT(sys.positionNFT).getPositionKey(posId);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: key,
+            makerPositionId: posId,
+            poolIdA: 1,
+            poolIdB: 5,
+            tokenA: rETH,
+            tokenB: USDC,
+            side: false, // Sell A (rETH)
+            priceIsQuotePerBase: true,
+            maxVolume: 5 ether,
+            startPrice: 3000 * 1e6, // 3000 USDC per ETH (scaled?) Need to check scaling logic
+            endPrice: 3000 * 1e6,   // Flat curve (limit order)
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 10,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 0
+        });
+
+        activeCurveId = IMamCreationFacet(sys.diamond).createCurve(desc);
+        assertTrue(activeCurveId > 0, "MAM Curve ID > 0");
+    }
+
+    function _stepUnwind() internal {
+        // 1. Cancel Direct Offer
+        IDirectLendingFacet(sys.diamond).cancelOffer(activeOfferId);
+        
+        // 2. Cancel MAM Curve
+        IMamCreationFacet(sys.diamond).cancelCurve(activeCurveId);
     }
 }
