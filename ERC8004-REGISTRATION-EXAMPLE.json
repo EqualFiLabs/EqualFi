@@ -1,0 +1,79 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "EqualFi Position Agent",
+  "description": "Position NFT agent with installable automation skills.",
+  "image": "ipfs://<cid>/agent.png",
+  "services": [
+    {
+      "name": "agentWallet",
+      "endpoint": "eip155:1:0xYourAgentWallet"
+    },
+    {
+      "name": "MCP",
+      "endpoint": "https://api.equalfi.xyz/mcp",
+      "version": "2025-06-18"
+    },
+    {
+      "name": "ERC6900Skills",
+      "version": "1.0.0",
+      "endpoint": "ipfs://<cid>/skills.json",
+      "modules": [
+        {
+          "module": "eip155:1:0xModuleAddressA",
+          "type": "execution",
+          "moduleId": "equalfi.exec.pool-manager.1.0.0",
+          "interfaces": ["IERC6900ExecutionModule", "IERC165"],
+          "selectors": ["0x12345678", "0x90abcdef"],
+          "hooks": [
+            { "phase": "pre", "entityId": 1 },
+            { "phase": "post", "entityId": 1 }
+          ],
+          "permissions": {
+            "canExecuteArbitraryCalls": false,
+            "canTransferTokens": true,
+            "allowedTargets": ["eip155:1:0xPool", "eip155:1:0xRouter"]
+          }
+        },
+        {
+          "module": "eip155:1:0xModuleAddressB",
+          "type": "validation",
+          "moduleId": "equallend.owner-validation.1.0.0",
+          "interfaces": ["IERC6900ValidationModule", "IERC165"],
+          "selectors": ["0xffffffff"],
+          "flags": {
+            "global": true,
+            "userOp": true,
+            "signature": true
+          }
+        }
+      ],
+      "state": {
+        "account": "eip155:1:0xPositionTBA",
+        "lastUpdated": "2026-01-30T00:00:00Z",
+        "modulesHash": "0x<keccak256 of modules array canonical encoding>"
+      }
+    },
+    {
+      "name": "OASF",
+      "endpoint": "https://github.com/agntcy/oasf/",
+      "version": "v0.8.0",
+      "skills": [
+        "agent_orchestration/task_decomposition",
+        "evaluation_monitoring/anomaly_detection"
+      ],
+      "domains": [
+        "finance_and_business/investment_services",
+        "technology/blockchain/defi"
+      ]
+    }
+  ],
+  "registrations": [
+    {
+      "agentId": 42,
+      "agentRegistry": "eip155:1:0x8004a6090Cd10A7288092483047B097295Fb8847"
+    }
+  ],
+  "supportedTrust": ["reputation", "crypto-economic"],
+  "active": true,
+  "x402Support": true
+}

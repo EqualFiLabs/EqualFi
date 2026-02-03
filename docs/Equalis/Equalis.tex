@@ -37,7 +37,7 @@ Equalis proposes an alternative foundation built around determinism and user age
 
 Equalis Direct also supports \textbf{P2P options} (synthetic, physically settled option payoffs) expressed as collateralized agreements where the borrower’s repay-versus-forfeit decision maps to exercise. Strikes are encoded by fixed collateral-to-principal ratios rather than oracle-priced cash settlement. These agreements use the same event-indexable offer flow as peer-to-peer credit, and option portfolios can be packaged and transferred by transferring the Position NFT that contains the agreements.
 
-Equalis also targets liquidity fragmentation directly. The system enforces \textbf{one global pool per token} and uses an \textbf{encumbrance} model: capital allocated to internal venues is marked as encumbered via accounting rather than leaving the pool. This enables shared liquidity and fee routing across protocol surfaces, while keeping accounting coherent and reducing multi-contract asset hopping.
+Equalis also targets liquidity fragmentation directly. The system enforces a \textbf{canonical base pool per token} and uses an \textbf{encumbrance} model: capital allocated to internal venues is marked as encumbered via accounting rather than leaving the pool. This enables shared liquidity and fee routing across protocol surfaces, while keeping accounting coherent and reducing multi-contract asset hopping.
 
 Value is returned to participants through a \textbf{dual index system}: a \textit{Fee Index} that rewards passive liquidity providers and an \textit{Active Credit Index} that rewards deployed, productive capital (borrowed principal, underwriting, and encumbered module inventory). Protocol modules can pay direct counterparties (for example market makers) while also routing a share of fees into the same per-token indexes.
 
@@ -51,7 +51,7 @@ This paper defines the architecture for unified pools and encumbrance, the index
 \section*{Key Claims (and Non-Claims)}
 \begin{itemize}
   \item \textbf{Claim: Deterministic core credit.} Self-secured credit does not require oracles or liquidation markets to maintain solvency.
-  \item \textbf{Claim: Unified liquidity by token.} For each token, there is a single global pool that aggregates liquidity and fee routing across protocol surfaces.
+  \item \textbf{Claim: Unified liquidity by token.} For each token, there is a canonical base pool that aggregates liquidity and fee routing across protocol surfaces, with optional managed pools that route a system share back to the base layer.
   \item \textbf{Claim: Dual-index incentives.} Passive liquidity and active deployment are rewarded through separate indexes to keep incentives legible.
   \item \textbf{Claim: Deterministic basket liquidity.} EqualIndex provides fixed-composition, fully backed basket tokens and proportional basket flash loans without external pricing oracles.
   \item \textbf{Claim: MEV-aware execution surfaces.} MAM curves enable time-based pricing (including limit-order-like flat curves) and reduce trade-induced repricing MEV vectors common to reserve-based AMMs.
@@ -66,7 +66,7 @@ This paper defines the architecture for unified pools and encumbrance, the index
 \end{itemize}
 
 \begin{textabstract}
-Equalis is a deterministic DeFi stack built around one global pool per token, encumbrance-based internal allocation, and a dual index incentive system that rewards both passive liquidity and productive capital deployment. It combines 0\% self-secured credit, explicit P2P credit and synthetic P2P options, MEV-aware execution via updatable time-based MAM curves, and deterministic basket liquidity via EqualIndex (including basket flash loans), with fees routed back through shared per-token value rails.
+Equalis is a deterministic DeFi stack built around a canonical base pool per token (with optional managed pools), encumbrance-based internal allocation, and a dual index incentive system that rewards both passive liquidity and productive capital deployment. It combines 0\% self-secured credit, explicit P2P credit and synthetic P2P options, MEV-aware execution via updatable time-based MAM curves, and deterministic basket liquidity via EqualIndex (including basket flash loans), with fees routed back through shared per-token value rails.
 \end{textabstract}
 
 \section{Problem Statement}
@@ -119,7 +119,7 @@ Equalis is designed to challenge the above assumptions by shifting the core of o
 \begin{itemize}
   \item \textbf{Deterministic solvency for the core:} enable credit that does not require price feeds or liquidation markets to remain solvent.
   \item \textbf{User agency over forced selling:} replace health-factor monitoring with explicit terms and obligations.
-  \item \textbf{Unified liquidity per token:} enforce one global pool per asset and route fees from multiple protocol surfaces back into the same accounting base.
+  \item \textbf{Unified liquidity per token:} maintain a canonical base pool per asset and route fees from multiple protocol surfaces back into the same accounting base (with optional managed pools described below).
   \item \textbf{Legible incentives without emissions reliance:} reward passive liquidity and active deployment separately using a dual-index model.
   \item \textbf{Walkaway-orientation:} minimize discretionary control surfaces and define a path toward progressively immutable protocol behavior.
 \end{itemize}
@@ -132,7 +132,7 @@ This paper describes an architecture for deterministic credit primitives, unifie
 
 Equalis is a modular onchain financial system built around a deterministic core and unified per-token liquidity. The system is defined by four structural choices:
 \begin{enumerate}
-  \item \textbf{One global pool per token} (unified liquidity and unified fee routing),
+  \item \textbf{One canonical pool per token} (unified liquidity and unified fee routing, with optional managed pools),
   \item \textbf{A Position NFT} that represents a complete onchain balance sheet,
   \item \textbf{Encumbrance-based allocation} that enables internal venues without fragmenting liquidity,
   \item \textbf{A shared fee router and dual indexes} that distribute value to passive and active participants.
@@ -141,7 +141,10 @@ On top of this foundation, Equalis supports opt-in modules that generate fees (a
 
 \subsection{High-Level Architecture}
 
-For each supported token $T$, Equalis maintains a single global pool $\mathcal{P}_T$. All protocol surfaces that use token $T$ reference $\mathcal{P}_T$ as the canonical liquidity source and the canonical destination for fee routing in token $T$.
+For each supported token $T$, Equalis maintains a canonical base pool $\mathcal{P}_T$. All protocol surfaces that use token $T$ reference $\mathcal{P}_T$ as the canonical liquidity source and the canonical destination for fee routing in token $T$.
+
+\paragraph{Managed pools (implementation).}
+The current implementation also supports \textbf{managed pools}: additional pools for the same underlying asset with custom parameters, optional whitelists, and independent accounting. Managed pools route a configurable system share of fees back to the canonical base pool (or treasury when no base pool is active). This preserves unified fee rails at the base layer while enabling curated or permissioned pool variants.
 
 Users interact with the system through \textbf{Position NFTs}. A Position NFT holds a complete account state: deposits, liabilities, module allocations, and accrued claims on per-token indexes. Protocol modules allocate inventory via encumbrance accounting rather than extracting liquidity into isolated sub-pools. Fees produced by modules route back into the same per-token accounting rails.
 
@@ -149,13 +152,16 @@ Users interact with the system through \textbf{Position NFTs}. A Position NFT ho
 
 \subsubsection{Global Token Pools}
 
-Each token $T$ has exactly one pool $\mathcal{P}_T$. This pool is the shared accounting and liquidity substrate for all actions involving $T$. The pool tracks:
+Each token $T$ has a canonical base pool $\mathcal{P}_T$. This pool is the shared accounting and liquidity substrate for all actions involving $T$. The base pool tracks:
 \begin{itemize}
   \item total deposited liquidity,
   \item total encumbered liquidity (allocated to modules),
   \item pool parameters governing deterministic credit bounds (e.g., self-secured LTV),
   \item per-token fee and reward accounting via indexes.
 \end{itemize}
+
+\paragraph{Pool membership and gating (implementation).}
+Pool interactions are membership-gated in the current codebase. Membership can be auto-joined on first interaction, but managed pools can enforce explicit whitelist membership. Membership can only be cleared when balances and obligations are settled.
 
 \subsubsection{Position NFTs}
 
@@ -230,11 +236,14 @@ EqualIndex provides:
 
 Fees collected per underlying asset are split between (i) an \textit{index-holder fee pot} and (ii) a \textit{pool share} routed through the system fee router (Treasury, Active Credit Index, and the underlying pool Fee Index). This makes EqualIndex a fee-producing execution primitive that strengthens unified per-token fee rails rather than creating an isolated incentive island.
 
+\subsubsection{Pool Flash Loans (Implementation Detail)}
+In addition to basket flash loans, the base pools themselves expose single-asset flash loans with deterministic fee routing and optional anti-split protection. These are fee-producing surfaces and integrate with the same fee router, but they do not rely on external pricing.
+
 \subsection{Key System Properties}
 
 The architecture aims to preserve the following properties:
 \begin{itemize}
-  \item \textbf{Unified liquidity:} one pool per token across the entire system.
+  \item \textbf{Unified liquidity:} a canonical base pool per token across the entire system (with optional managed pools).
   \item \textbf{Coherent accounting:} encumbrance prevents double-use and keeps obligations legible.
   \item \textbf{Composability without fragmentation:} modules can be added as fee-producing surfaces while sharing the same per-token fee rails.
   \item \textbf{Legible incentives:} dual indexes separate rewards for passive liquidity and active deployment.
@@ -269,6 +278,9 @@ where:
 
 Self-secured credit is \textbf{0\% interest}. The borrower does not pay an interest rate that compounds over time. Instead, the protocol’s economic model is based on fee-generating activity across protocol surfaces that route value into shared indexes (described in later sections).
 
+\paragraph{Interest-free does not mean fee-free (implementation).}
+The current implementation charges explicit \emph{action fees} (borrow/repay/withdraw/flash/close), applies a pool-level \emph{maintenance fee} (accrued via a negative index on deposits), and enforces minimum payment rules for rolling loans. These are deterministic and onchain, and they are not price-dependent.
+
 \subsubsection{Why Solvency Does Not Require Oracles}
 
 In self-secured credit, collateral and debt are denominated in the same token. Solvency is therefore not a function of external price movements. No mark-to-market conversion is required to decide whether the position remains solvent:
@@ -297,6 +309,10 @@ Equalis treats deployed capital as valuable rather than suspicious. Borrowed pri
 
 In the deterministic core, self-secured borrowing is therefore not merely ``allowed'' it is designed to be \textit{economically legible}. Borrowing increases activity, and activity contributes to fee generation across modules that can route value back to active participants.
 
+\subsection{Fixed-Term Self-Secured Loans (Implementation Detail)}
+
+The current implementation also supports fixed-term self-secured loans alongside rolling credit. These fixed-term loans are still same-asset and oracle-free; expiry is handled via deterministic repayment and penalty rules rather than price-based liquidation.
+
 \subsection{Preventing Trivial Loop Farming (High-Level)}
 
 A system that rewards activity must also ensure that activity is costly to fake. Equalis uses explicit accounting rules to prevent trivial ``borrow and deposit'' loops from extracting rewards without producing system value. At a high level, the protocol separates:
@@ -318,6 +334,9 @@ The deterministic core is designed so that positions are not subject to protocol
 \end{itemize}
 
 This property is foundational for later strategies discussed in this paper, including leverage loops that depend on continuity through drawdowns without relying on liquidation market behavior.
+
+\paragraph{Delinquency enforcement (implementation).}
+While there are no oracle-triggered liquidations, the current implementation does enforce delinquency rules: missed payment thresholds or expired fixed-term loans can trigger deterministic penalty and collateral seizure flows. These are obligation-triggered (not price-triggered) and are part of the deterministic enforcement surface.
 
 \subsection{Relationship to Explicit Credit (Preview)}
 
@@ -385,6 +404,9 @@ In Equalis Direct, a missed obligation is treated as a default event under the a
 \end{itemize}
 
 The intent is not to claim defaults are harmless. The intent is to ensure enforcement is legible and incentive-compatible, without importing liquidation MEV as a core design requirement.
+
+\paragraph{Grace windows and default splits (implementation).}
+The current implementation applies fixed grace windows around repayment/exercise, and default recovery routes collateral through deterministic splits: a lender share plus a protocol/index share routed via the fee router. These parameters are explicit and bounded.
 
 \subsubsection{Economic Integration with the Dual Index System}
 
@@ -648,9 +670,15 @@ Transferability must remain compatible with protocol invariants. In practice, tr
 
 If fungibility, partial transfers, or standardized lots are required, the system may also support explicit option tokenization (e.g., ERC-1155-based options). Synthetic options are the lightweight agreement-native primitive optimized for OTC-style deals, structured hedging, and minimizing dependency on external price feeds.
 
+\paragraph{Tokenized derivatives (implementation).}
+The current implementation includes tokenized options and futures series as separate modules. These instruments are physically settled and integrate with the same pool/encumbrance infrastructure but are not the primary focus of this paper's core credit architecture.
+
 \section{EqualIndex: Deterministic Basket Tokens and Basket Flash Loans}
 
 EqualIndex is a permissionless index token primitive designed to create \textbf{static, fully backed basket tokens} and to expose that basket as a deterministic execution surface for multi-leg routing and arbitrage. EqualIndex is intentionally \textbf{boring in the right ways}: fixed composition, transparent backing, deterministic mint/burn, and fee flows that are explicit and auditable.
+
+\paragraph{Creation gating (implementation).}
+In the current implementation, ``permissionless'' creation is conditional: index creation can be enabled or disabled by configuration and may require a fixed creation fee. Creation also requires that all underlying assets already have pools, and the protocol automatically creates a dedicated pool for the index token itself to keep index units inside the same pool accounting system.
 
 EqualIndex is integral to the Equalis system for two reasons:
 \begin{enumerate}
@@ -687,6 +715,7 @@ For each underlying $T_i$, minting can collect a fee $f^{\text{mint}}_{i}(x)$ de
   \item a \textbf{pool share} routed through the system fee router for $T_i$ (Treasury, Active Credit Index, and the $T_i$ pool Fee Index), and
   \item an \textbf{index-holder share} added to the index's $T_i$ fee pot.
 \end{itemize}
+The implementation allows separate configurable fee-share parameters for mint/burn versus flash loan fees.
 
 \subsection{Burning}
 
@@ -779,7 +808,7 @@ This integration enables users to hold basket exposure and participate in index-
 
 \paragraph{EqualIndex is:}
 \begin{itemize}
-  \item permissionless basket creation (subject to system constraints),
+  \item permissionless basket creation when enabled (subject to system constraints and creation fees),
   \item fixed-composition, fully backed baskets,
   \item deterministic mint/burn accounting,
   \item basket flash loans for atomic multi-asset execution,
@@ -796,11 +825,14 @@ This integration enables users to hold basket exposure and participate in index-
 
 \section{Unified Liquidity and Encumbrance}
 
-Equalis is designed to eliminate a common DeFi tradeoff: increasing product surface area typically fragments liquidity and forces users to choose which venue gets their capital today. Equalis instead enforces \textbf{one global pool per token} and treats internal venues as accounting-level allocations of that pool rather than separate liquidity systems.
+Equalis is designed to eliminate a common DeFi tradeoff: increasing product surface area typically fragments liquidity and forces users to choose which venue gets their capital today. Equalis instead enforces a \textbf{canonical base pool per token} and treats internal venues as accounting-level allocations of that pool rather than separate liquidity systems.
 
 \subsection{One Pool per Token (Globally)}
 
-For each token $T$, the protocol maintains a single canonical pool $\mathcal{P}_T$. There are not multiple competing pools for the same token across different protocol products. All modules that use $T$ reference the same pool state and the same fee rails.
+For each token $T$, the protocol maintains a canonical base pool $\mathcal{P}_T$. All core modules that use $T$ reference the same pool state and the same fee rails.
+
+\paragraph{Managed pools (implementation).}
+In addition to the base pool, the current codebase supports managed pools for the same underlying asset. Managed pools can enforce whitelist membership and custom parameters while routing a configurable system share of fees back to the base pool (or treasury). This allows curated pool variants without abandoning unified fee rails at the base layer.
 
 This yields two immediate properties:
 \begin{itemize}
@@ -827,6 +859,9 @@ Encumbrance is the protocol mechanism that allocates liquidity from a position i
   \item an increase in the position's \textit{encumbered} balance of $T$ by $x$,
   \item a module-specific encumbrance record under $M$.
 \end{itemize}
+
+\paragraph{Encumbrance namespaces (implementation).}
+The implementation distinguishes explicit encumbrance buckets, including \texttt{directLocked} (borrower collateral), \texttt{directLent} (maker inventory / lent capital), \texttt{directOfferEscrow} (offer escrow), and \texttt{indexEncumbered} (index backing). These namespaces affect solvency and Active Credit eligibility differently and are tracked per position and per pool.
 
 Let a position $p$ have ledger balances for token $T$:
 \begin{align*}
@@ -860,7 +895,7 @@ Encumbrance can represent different kinds of allocation depending on the module:
   \item \textbf{Other modules:} any module that consumes inventory can define its own encumbrance namespace.
 \end{itemize}
 
-The unified encumbrance interface allows modules to be composed while maintaining a single global pool per token.
+The unified encumbrance interface allows modules to be composed while maintaining a canonical base pool per token (and consistent fee rails across optional managed pools).
 
 \subsection{Why Unified Liquidity Matters}
 
@@ -970,6 +1005,12 @@ Encumbered balances remain within the pool accounting domain. Whether encumbered
 \]
 with $w^{FI}_{p,T}$ computed on the total deposit side and normalized by same-asset debt. This preserves the concept that participating in modules does not necessarily forfeit passive exposure, while still preventing borrow-deposit double counting.
 
+\paragraph{Maintenance and negative yield (implementation).}
+The current implementation applies a pool-level maintenance fee that reduces principal over time via a negative maintenance index. Fee Index settlement applies maintenance reductions before positive yield is accrued.
+
+\paragraph{Backing and yield reserves (implementation).}
+Fee Index accruals are backed by a pool-level yield reserve and enforce availability constraints against tracked balances plus active credit principal. This preserves solvency even when liquidity is encumbered or lent out.
+
 \subsection{Active Credit Index (Active Leg)}
 
 The Active Credit Index rewards deployed capital: borrowing, underwriting, and module participation that puts capital to work.
@@ -985,6 +1026,9 @@ Active weight $w^{ACI}_{p,T}$ is designed to include eligible deployed capital s
 \end{itemize}
 
 The precise active categories are defined by module interfaces, and the system can restrict which encumbrance namespaces count as active to ensure ACI rewards align with fee-producing behavior.
+
+\subsubsection{Time-Gating and Weighted Maturity (Implementation Detail)}
+The current implementation enforces a time gate (24 hours) before active balances contribute to $w^{ACI}_{p,T}$. Increases in active principal are blended via weighted start-time dilution to reduce short-term cycling advantages. Active credit is tracked in separate states for \emph{debt} and \emph{encumbrance}, each with its own maturity clock and index snapshot.
 
 \subsubsection{Anti-Gaming Constraints}
 
@@ -1005,6 +1049,7 @@ Protocol surfaces generate fees in many ways, including but not limited to:
   \item peer-to-peer agreement fees and penalties (including default-related flows),
   \item EqualIndex mint and burn fees (per underlying asset),
   \item EqualIndex basket flash loan fees (per underlying asset),
+  \item pool action fees (borrow/repay/withdraw/flash/close),
   \item other module-defined fees that settle into pool tokens.
 \end{itemize}
 
@@ -1014,6 +1059,9 @@ For each token $T$, fees collected in $T$ are routed through the token’s fee r
   \item a \textbf{protocol share} (e.g., Treasury),
   \item an \textbf{index share} allocated to $I_T$ and/or $A_T$.
 \end{itemize}
+
+\paragraph{Maintenance fees (implementation).}
+Pool-level maintenance fees are accrued separately and paid to a designated receiver; they reduce depositor principal via the maintenance index and are not routed through $I_T$ or $A_T$.
 
 \subsection{System-Level Implication: Expanding Surfaces Without Fragmenting Yield}
 
@@ -1140,7 +1188,7 @@ This definition is intentionally constrained. It does not claim that capital can
 
 In fragmented architectures, adding new products often creates new liquidity silos and new incentive islands. Users move capital to chase yield, and the system expends continuous subsidies to keep liquidity in each silo.
 
-Equalis enforces one pool per token. This changes the scaling dynamic:
+Equalis enforces a canonical base pool per token (with optional managed pools). This changes the scaling dynamic:
 \begin{itemize}
   \item new modules do not create a new pool for token $T$,
   \item fees collected in token $T$ route back into the same per-token indexes $(I_T, A_T)$,
@@ -1217,7 +1265,7 @@ Because the system enables more ways to deploy capital, it is important to be ex
 
 Equalis redefines capital efficiency as utilization within a unified accounting system:
 \begin{itemize}
-  \item one pool per token prevents liquidity and incentives from fragmenting into silos,
+  \item a canonical base pool per token prevents liquidity and incentives from fragmenting into silos (while allowing optional managed pools with system-share routing),
   \item encumbrance enables internal deployment without pool exit,
   \item dual indexes keep passive and active incentives legible,
   \item modules (including EqualIndex and AMM auctions) expand fee sources while feeding the same per-token rails.
@@ -1342,6 +1390,9 @@ A MAM curve has the following defining characteristics:
   \item \textbf{Batchable operations:} curves support batch create, batch update, and lifecycle operations that are amenable to higher-frequency maker behavior.
   \item \textbf{Event-indexable discovery:} creation, updates, fills, cancellation, and expiration emit events that can be indexed into an order-book-like UI.
 \end{itemize}
+
+\paragraph{Current implementation constraints.}
+The deployed code currently constrains MAM curves to quote-per-base pricing, fee asset = token-in, and a fixed generation scheme at creation; updates require future start times. These constraints can be relaxed in later versions but should be treated as part of the current specification.
 
 \subsection{Base and Quote Assets}
 
@@ -1678,6 +1729,9 @@ Examples of parameters that should be bounded if present include:
   \item module-specific fee configuration where required for sustainability.
 \end{itemize}
 
+\paragraph{Fee-gated creation and action fees (implementation).}
+The current implementation includes fee-gated pool creation, fee-gated index creation (when enabled), and per-action flat fees (borrow/repay/withdraw/flash/close) at the pool level. These should be treated as bounded parameters if retained in a long-term immutable configuration.
+
 The protocol does not rely on governance to ``actively manage'' markets (e.g., rebalancing indices, changing compositions, or steering price). Where market behavior is needed, it is expressed through explicit offers (P2P credit), maker-set curves (MAM), or maker-set inventory and fee choices (auctions).
 
 \subsection{Upgrade Policy and Trust Assumptions}
@@ -1728,7 +1782,7 @@ For each token $T$, the pool $\mathcal{P}_T$ maintains:
 \begin{itemize}
   \item \textbf{Totals:} total deposits, total encumbered balances, and any buffers required for fee routing.
   \item \textbf{Indexes:} global $I_T$ (Fee Index) and $A_T$ (Active Credit Index).
-  \item \textbf{Parameters:} deterministic credit bounds (e.g., self-secured LTV $\lambda_T$), fee routing configuration, and module eligibility flags.
+  \item \textbf{Parameters:} deterministic credit bounds (e.g., self-secured LTV $\lambda_T$), fee routing configuration, module eligibility flags, and action/maintenance fee settings.
 \end{itemize}
 
 Pool-level operations include:
@@ -1805,6 +1859,9 @@ Modules discussed in this paper include:
   \item \textbf{EqualIndex:} mint/burn accounting, per-underlying fee pots, basket flash loans and per-underlying fee routing.
 \end{itemize}
 
+\paragraph{Additional implemented modules (current codebase).}
+The implementation also includes tokenized \textbf{Options} and \textbf{Futures} series, an \textbf{Atomic Desk} and settlement escrow surface, and account-abstraction components (Position Agents, ERC-6551 TBAs, and ERC-6900 modules). These are compatible with the same pool/encumbrance/index architecture but are not fully specified in the core sections above.
+
 \subsection{System Invariants}
 
 The protocol is defined by invariants that must hold under all valid state transitions. These invariants are intended to be:
@@ -1878,7 +1935,7 @@ The core thesis is simple:
 \begin{itemize}
   \item \textbf{Deterministic solvency for the core:} self-secured credit can be high-LTV and 0\% interest because collateral and debt are denominated in the same asset, removing the need for oracle-based liquidation to preserve solvency.
   \item \textbf{Explicit risk where risk is unavoidable:} cross-asset borrowing is handled through peer-to-peer agreements with legible terms, optional covenants (including opt-in callability), and deterministic default handling.
-  \item \textbf{Unified liquidity by token:} one global pool per token, with encumbrance-based allocation, prevents liquidity and incentives from fragmenting across products.
+  \item \textbf{Unified liquidity by token:} a canonical base pool per token (with optional managed pools), with encumbrance-based allocation, prevents liquidity and incentives from fragmenting across products.
   \item \textbf{System-wide fee rails:} a dual index system routes value back to participants in a way that keeps passive liquidity rewards and active deployment rewards distinct and difficult to game.
   \item \textbf{Fee-producing execution surfaces:} AMM auctions, MAM curves, and EqualIndex basket primitives expand what capital can do while feeding the same per-token fee rails.
 \end{itemize}
@@ -1904,7 +1961,7 @@ If DeFi is to become durable, it must move beyond systems that depend on reactiv
 \section{Glossary}
 
 \begin{description}
-  \item[Pool ($\mathcal{P}_T$)] The single global pool for token $T$ that holds unified accounting and fee rails.
+  \item[Pool ($\mathcal{P}_T$)] The canonical base pool for token $T$ that holds unified accounting and fee rails (with optional managed pools routed back to it).
   \item[Position NFT] An ERC-721 account container representing a complete balance sheet: deposits, debt, encumbrances, agreements, and index claims.
   \item[Encumbrance] Internal allocation mechanism that marks balances as committed to a module without leaving the pool accounting domain.
   \item[Fee Router] Per-token routing mechanism that splits collected fees between direct participants, Treasury, and indexes.
