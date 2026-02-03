@@ -40,7 +40,7 @@ contract DirectRepayTimingPropertyTest is DirectDiamondTestBase {
         bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
 
         harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
-        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 40 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 200 ether, true);
 
         asset.transfer(lenderOwner, 500 ether);
         asset.transfer(borrowerOwner, 300 ether);
@@ -143,7 +143,7 @@ contract DirectRepayFunctionalityPropertyTest is DirectDiamondTestBase {
         bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
 
         harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
-        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 20 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 200 ether, true);
 
         asset.transfer(lenderOwner, 500 ether);
         asset.transfer(borrowerOwner, 300 ether);

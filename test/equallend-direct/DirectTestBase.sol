@@ -274,6 +274,11 @@ contract DirectFixture is DirectFacetHarness {
         LibAppStorage.s().treasuryShareBps = shareBps;
     }
 
+    function setActiveCreditShare(uint16 shareBps) external {
+        LibAppStorage.s().activeCreditShareConfigured = true;
+        LibAppStorage.s().activeCreditShareBps = shareBps;
+    }
+
     function getUserPrincipal(uint256 pid, bytes32 positionKey) external view returns (uint256) {
         return LibAppStorage.s().pools[pid].userPrincipal[positionKey];
     }

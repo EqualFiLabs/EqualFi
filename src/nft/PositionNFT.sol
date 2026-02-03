@@ -3,20 +3,17 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Base64.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {InvalidTokenId} from "../libraries/Errors.sol";
-
-/// @notice Interface for pool configuration queries via the Diamond
-interface IPoolUnderlying {
-    function getPoolUnderlying(uint256 poolId) external view returns (address);
-}
 
 /// @notice Interface for direct-offer hooks from the Diamond (cancellation/checks)
 interface IDirectOfferCanceller {
     function cancelOffersForPosition(bytes32 positionKey) external;
     function hasOpenOffers(bytes32 positionKey) external view returns (bool);
+}
+
+interface IAgentURIDiamond {
+    function getAgentURI(uint256 agentId) external view returns (string memory);
 }
 
 /// @title PositionNFT
@@ -127,9 +124,9 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         return tokenCreationTime[tokenId];
     }
 
-    /// @notice Generate token URI with position metadata
+    /// @notice Return the ERC-8004 agent registration file URI
     /// @param tokenId The token ID
-    /// @return JSON metadata string conforming to ERC-721 standard
+    /// @return Registration file URI
     function tokenURI(uint256 tokenId) 
         public 
         view 
@@ -139,36 +136,10 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         if (!_exists(tokenId)) {
             revert InvalidTokenId(tokenId);
         }
-        uint256 poolId = tokenToPool[tokenId];
-        uint40 createdAt = tokenCreationTime[tokenId];
-        bytes32 positionKey = LibPositionNFT.getPositionKey(address(this), tokenId);
-        address underlyingAsset = _getUnderlyingAsset(poolId);
-
-        string memory json = string(
-            abi.encodePacked(
-                '{"name":"EqualLend Position #',
-                Strings.toString(tokenId),
-                '","description":"Isolated account container in EqualLend protocol. This NFT represents a position that can hold deposits, originate loans, and accrue yield. Transferring this NFT transfers all associated deposits and obligations.",',
-                '"image":"data:image/svg+xml;base64,',
-                _generateSVG(tokenId, poolId),
-                '","attributes":[',
-                '{"trait_type":"Pool ID","value":',
-                Strings.toString(poolId),
-                '},',
-                '{"trait_type":"Underlying Asset","value":"',
-                Strings.toHexString(uint160(underlyingAsset), 20),
-                '"},',
-                '{"trait_type":"Created At","value":',
-                Strings.toString(uint256(createdAt)),
-                '},',
-                '{"trait_type":"Position Key","value":"',
-                Strings.toHexString(uint256(positionKey), 32),
-                '"}',
-                ']}'
-            )
-        );
-
-        return string(abi.encodePacked("data:application/json;base64,", Base64.encode(bytes(json))));
+        if (diamond != address(0)) {
+            return IAgentURIDiamond(diamond).getAgentURI(tokenId);
+        }
+        return super.tokenURI(tokenId);
     }
 
     /// @notice Check if a token exists
@@ -176,43 +147,6 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
     /// @return True if the token exists
     function _exists(uint256 tokenId) internal view returns (bool) {
         return _ownerOf(tokenId) != address(0);
-    }
-
-    function _getUnderlyingAsset(uint256 poolId) internal view returns (address) {
-        address diamondAddr = diamond;
-        if (diamondAddr == address(0)) {
-            return address(0);
-        }
-        try IPoolUnderlying(diamondAddr).getPoolUnderlying(poolId) returns (address asset) {
-            return asset;
-        } catch {
-            return address(0);
-        }
-    }
-
-    function _generateSVG(uint256 tokenId, uint256 poolId) internal pure returns (string memory) {
-        string memory svg = string(
-            abi.encodePacked(
-                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">',
-                '<defs>',
-                '<linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">',
-                '<stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />',
-                '<stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />',
-                '</linearGradient>',
-                '</defs>',
-                '<rect width="400" height="400" fill="url(#grad)"/>',
-                '<text x="200" y="150" font-family="Arial, sans-serif" font-size="24" fill="white" text-anchor="middle" font-weight="bold">EqualLend Position</text>',
-                '<text x="200" y="200" font-family="Arial, sans-serif" font-size="48" fill="white" text-anchor="middle" font-weight="bold">#',
-                Strings.toString(tokenId),
-                '</text>',
-                '<text x="200" y="250" font-family="Arial, sans-serif" font-size="18" fill="white" text-anchor="middle">Pool ',
-                Strings.toString(poolId),
-                '</text>',
-                '</svg>'
-            )
-        );
-
-        return Base64.encode(bytes(svg));
     }
 
     /// @notice Override supportsInterface to include ERC721Enumerable
@@ -262,7 +196,7 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         // deposits, loans, and yield associated with it.
         
         // Block transfers while outstanding direct offers exist (checked via the diamond, if set).
-        if (from != address(0) && from != to && diamond != address(0)) {
+        if (from != address(0) && to != address(0) && from != to && diamond != address(0)) {
             bytes32 positionKey = LibPositionNFT.getPositionKey(address(this), tokenId);
             if (IDirectOfferCanceller(diamond).hasOpenOffers(positionKey)) {
                 revert PositionNFTHasOpenOffers(positionKey);
@@ -271,4 +205,5 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         
         return from;
     }
+
 }

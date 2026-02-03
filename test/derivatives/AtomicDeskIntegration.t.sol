@@ -29,6 +29,8 @@ interface IAtomicDeskTestHarness {
     function getPrincipal(uint256 pid, bytes32 positionKey) external view returns (uint256);
     function getTracked(uint256 pid) external view returns (uint256);
     function setTreasury(address treasury) external;
+    function setActiveCreditShareBps(uint16 bps) external;
+    function setTreasuryShareBps(uint16 bps) external;
 }
 
 contract AtomicDeskTestHarnessFacet {
@@ -86,6 +88,18 @@ contract AtomicDeskTestHarnessFacet {
     function setTreasury(address treasury) external {
         LibAppStorage.s().treasury = treasury;
     }
+
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
+    function setTreasuryShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = bps;
+        store.treasuryShareConfigured = true;
+    }
 }
 
 abstract contract AtomicDeskDiamondTestBase is Test {
@@ -135,6 +149,8 @@ abstract contract AtomicDeskDiamondTestBase is Test {
         nft = new PositionNFT();
         nft.setMinter(address(this));
         harness.setPositionNFT(address(nft));
+        harness.setActiveCreditShareBps(0);
+        harness.setTreasuryShareBps(2000);
 
         tokenA = new MockERC20("TokenA", "TKA", 18, 0);
         tokenB = new MockERC20("TokenB", "TKB", 18, 0);
@@ -196,7 +212,7 @@ abstract contract AtomicDeskDiamondTestBase is Test {
     }
 
     function _selectorsHarness() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](7);
+        s = new bytes4[](9);
         s[0] = AtomicDeskTestHarnessFacet.setPositionNFT.selector;
         s[1] = AtomicDeskTestHarnessFacet.seedPool.selector;
         s[2] = AtomicDeskTestHarnessFacet.joinPool.selector;
@@ -204,6 +220,8 @@ abstract contract AtomicDeskDiamondTestBase is Test {
         s[4] = AtomicDeskTestHarnessFacet.getPrincipal.selector;
         s[5] = AtomicDeskTestHarnessFacet.getTracked.selector;
         s[6] = AtomicDeskTestHarnessFacet.setTreasury.selector;
+        s[7] = AtomicDeskTestHarnessFacet.setActiveCreditShareBps.selector;
+        s[8] = AtomicDeskTestHarnessFacet.setTreasuryShareBps.selector;
     }
 
     function _selectorsAtomicDesk() internal pure returns (bytes4[] memory s) {

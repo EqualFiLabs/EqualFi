@@ -50,7 +50,7 @@ contract DirectComprehensiveIntegrationTest is DirectDiamondTestBase {
 
         // Same-asset pools for exercise path
         harness.addPoolMember(1, address(tokenA), lenderKey, 500 ether, true);
-        harness.addPoolMember(1, address(tokenA), borrowerKey, 30 ether, true);
+        harness.addPoolMember(1, address(tokenA), borrowerKey, 200 ether, true);
 
         tokenA.transfer(lenderOwner, 500 ether);
         tokenA.transfer(borrowerOwner, 200 ether);

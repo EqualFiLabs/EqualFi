@@ -6,13 +6,33 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionHelpers} from "../../src/libraries/LibPositionHelpers.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import "../../src/libraries/Errors.sol";
+
+contract MockAgentURIDiamond {
+    mapping(uint256 => string) private agentURIs;
+
+    function setAgentURI(uint256 agentId, string calldata uri) external {
+        agentURIs[agentId] = uri;
+    }
+
+    function getAgentURI(uint256 agentId) external view returns (string memory) {
+        return agentURIs[agentId];
+    }
+
+    function hasOpenOffers(bytes32) external pure returns (bool) {
+        return false;
+    }
+
+    function onAgentTransfer(uint256) external pure {}
+}
 
 /// @notice Property-based tests for Position NFT core functionality
 /// forge-config: default.fuzz.runs = 100
 contract PositionNFTPropertyTest is Test {
     PositionNFT public nft;
     MockERC20 public token;
+    MockAgentURIDiamond public mockDiamond;
     
     address public user1 = address(0x1111);
     address public user2 = address(0x2222);
@@ -26,6 +46,8 @@ contract PositionNFTPropertyTest is Test {
         token = new MockERC20("Test Token", "TEST", 18, 1000000 ether);
         // Set test contract as minter for direct testing
         nft.setMinter(address(this));
+        mockDiamond = new MockAgentURIDiamond();
+        nft.setDiamond(address(mockDiamond));
     }
     
     /// @notice **Feature: position-nfts, Property 1: Unique Token ID Generation**
@@ -272,14 +294,11 @@ contract PositionNFTPropertyTest is Test {
             // Verify creation time is stored correctly
             assertEq(nft.getCreationTime(tokenId), uint40(mintTime), "Creation time should match");
             
-            // Verify tokenURI doesn't revert and contains expected data
+            // Verify tokenURI returns registered agentURI
+            string memory expected = string(abi.encodePacked("ipfs://agent/", Strings.toString(tokenId)));
+            mockDiamond.setAgentURI(tokenId, expected);
             string memory uri = nft.tokenURI(tokenId);
-            assertTrue(bytes(uri).length > 0, "Token URI should not be empty");
-            
-            // Verify URI contains pool ID (basic check)
-            // The URI should contain the pool ID as a string
-            bytes memory uriBytes = bytes(uri);
-            assertTrue(uriBytes.length > 0, "URI should have content");
+            assertEq(uri, expected, "Token URI should match agentURI");
         }
     }
     

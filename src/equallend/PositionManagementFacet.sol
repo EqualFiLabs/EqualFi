@@ -12,6 +12,7 @@ import {PositionNFT} from "../nft/PositionNFT.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
 import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
+import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibPoolMembership} from "../libraries/LibPoolMembership.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {
@@ -513,8 +514,9 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
     /// @param tokenId The token ID
     function rollYieldToPosition(uint256 tokenId, uint256 pid) public payable nonReentrant {
         LibCurrency.assertZeroMsgValue();
-        // Verify ownership
-        _requireOwnership(tokenId);
+        // Verify ownership or approved operator (e.g., Position Agent TBA)
+        PositionNFT nft = LibDirectHelpers._positionNFT();
+        LibDirectHelpers._requireBorrowerAuthority(nft, tokenId);
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);

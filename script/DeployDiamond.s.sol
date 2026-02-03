@@ -61,6 +61,10 @@ import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {Types} from "../src/libraries/Types.sol";
 import {OptionToken} from "../src/derivatives/OptionToken.sol";
 import {FuturesToken} from "../src/derivatives/FuturesToken.sol";
+import {PositionAgentTBAFacet} from "../src/erc6551/PositionAgentTBAFacet.sol";
+import {PositionAgentRegistryFacet} from "../src/erc6551/PositionAgentRegistryFacet.sol";
+import {PositionAgentViewFacet} from "../src/erc6551/PositionAgentViewFacet.sol";
+import {PositionAgentConfigFacet} from "../src/erc6551/PositionAgentConfigFacet.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);
@@ -92,6 +96,9 @@ contract DeployDiamondScript is Script {
     bytes32 internal constant ACTION_WITHDRAW = keccak256("ACTION_WITHDRAW");
     bytes32 internal constant ACTION_CLOSE_ROLLING = keccak256("ACTION_CLOSE_ROLLING");
     uint64 internal constant ATOMIC_REFUND_SAFETY_WINDOW = 3 days;
+    address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
+    address internal constant ERC8004_MAINNET = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
+    address internal constant ERC8004_SEPOLIA = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
 
     struct TokenSpec {
         string id;
@@ -173,6 +180,10 @@ contract DeployDiamondScript is Script {
         FuturesFacet futuresFacet = new FuturesFacet();
         DerivativeViewFacet derivativeView = new DerivativeViewFacet();
         MamCurveViewFacet mamCurveView = new MamCurveViewFacet();
+        PositionAgentTBAFacet positionAgentTBA = new PositionAgentTBAFacet();
+        PositionAgentRegistryFacet positionAgentRegistry = new PositionAgentRegistryFacet();
+        PositionAgentViewFacet positionAgentView = new PositionAgentViewFacet();
+        PositionAgentConfigFacet positionAgentConfig = new PositionAgentConfigFacet();
 
         // Build facet cuts (core + admin + fee + index + base views)
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](14);
@@ -191,7 +202,7 @@ contract DeployDiamondScript is Script {
         cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[13] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](33);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](37);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -225,6 +236,10 @@ contract DeployDiamondScript is Script {
         more[30] = _cut(address(futuresFacet), _selectors(futuresFacet));
         more[31] = _cut(address(derivativeView), _selectors(derivativeView));
         more[32] = _cut(address(mamCurveView), _selectors(mamCurveView));
+        more[33] = _cut(address(positionAgentTBA), _selectors(positionAgentTBA));
+        more[34] = _cut(address(positionAgentRegistry), _selectors(positionAgentRegistry));
+        more[35] = _cut(address(positionAgentView), _selectors(positionAgentView));
+        more[36] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
 
         // Deploy diamond
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
@@ -246,6 +261,20 @@ contract DeployDiamondScript is Script {
         DiamondInit initializer = new DiamondInit();
         IDiamondCut(address(diamond))
             .diamondCut(more, address(initializer), abi.encodeWithSelector(DiamondInit.init.selector, timelock, address(nftContract)));
+
+        address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(0));
+        address identityRegistry = _resolveIdentityRegistry();
+        PositionAgentConfigFacet(address(diamond)).setERC6551Registry(ERC6551_REGISTRY);
+        if (erc6551Implementation != address(0)) {
+            PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
+        } else {
+            console2.log("ERC6551_IMPLEMENTATION not set; skipping implementation config");
+        }
+        if (identityRegistry != address(0)) {
+            PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
+        } else {
+            console2.log("Identity registry unknown; skipping identity config");
+        }
 
         AdminGovernanceFacet gov = AdminGovernanceFacet(address(diamond));
         gov.setTreasury(treasury);
@@ -286,6 +315,16 @@ contract DeployDiamondScript is Script {
         c.facetAddress = facet;
         c.action = IDiamondCut.FacetCutAction.Add;
         c.functionSelectors = selectors_;
+    }
+
+    function _resolveIdentityRegistry() internal view returns (address) {
+        if (block.chainid == 1) {
+            return ERC8004_MAINNET;
+        }
+        if (block.chainid == 11155111) {
+            return ERC8004_SEPOLIA;
+        }
+        return vm.envOr("IDENTITY_REGISTRY", address(0));
     }
 
     // Selector helpers
@@ -698,6 +737,37 @@ contract DeployDiamondScript is Script {
 
     function _selectors(MamCurveViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
         s = viewFacet.selectors();
+    }
+
+    function _selectors(PositionAgentTBAFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](4);
+        s[0] = PositionAgentTBAFacet.computeTBAAddress.selector;
+        s[1] = PositionAgentTBAFacet.deployTBA.selector;
+        s[2] = PositionAgentTBAFacet.getTBAImplementation.selector;
+        s[3] = PositionAgentTBAFacet.getERC6551Registry.selector;
+    }
+
+    function _selectors(PositionAgentRegistryFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = PositionAgentRegistryFacet.recordAgentRegistration.selector;
+        s[1] = PositionAgentRegistryFacet.getIdentityRegistry.selector;
+    }
+
+    function _selectors(PositionAgentViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = PositionAgentViewFacet.getTBAAddress.selector;
+        s[1] = PositionAgentViewFacet.getAgentId.selector;
+        s[2] = PositionAgentViewFacet.isAgentRegistered.selector;
+        s[3] = PositionAgentViewFacet.isTBADeployed.selector;
+        s[4] = PositionAgentViewFacet.getCanonicalRegistries.selector;
+        s[5] = PositionAgentViewFacet.getTBAInterfaceSupport.selector;
+    }
+
+    function _selectors(PositionAgentConfigFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](3);
+        s[0] = PositionAgentConfigFacet.setERC6551Registry.selector;
+        s[1] = PositionAgentConfigFacet.setERC6551Implementation.selector;
+        s[2] = PositionAgentConfigFacet.setIdentityRegistry.selector;
     }
 
     function _deployTokensAndPools(

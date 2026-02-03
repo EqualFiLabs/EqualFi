@@ -40,6 +40,7 @@ struct PositionSnapshot {
 contract PositionManagementFacetHarness is PositionManagementFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.s().positionNFTContract = nft;
+        LibPositionNFT.s().nftModeEnabled = true;
     }
 
     function initPool(uint256 pid, address underlying, uint256 minDeposit, uint256 minLoan, uint16 ltvBps) external {

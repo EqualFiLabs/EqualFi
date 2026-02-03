@@ -30,6 +30,12 @@ contract AmmAuctionYieldReserveHarness is AmmAuctionFacet, PositionManagementFac
         LibDerivativeStorage.derivativeStorage().config.ammMakerShareBps = shareBps;
     }
 
+    function setActiveCreditShareBps(uint16 bps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.activeCreditShareBps = bps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function seedPool(
         uint256 pid,
         address underlying,
@@ -94,6 +100,7 @@ contract AmmAuctionYieldReserveRegressionTest is Test {
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(address(0xC0FFEE));
         harness.setMakerShareBps(7000);
+        harness.setActiveCreditShareBps(0);
     }
 
     /// @notice Reproduces the Base Sepolia AMM trade sequence and checks trackedBalance backing.
