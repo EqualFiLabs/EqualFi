@@ -227,11 +227,12 @@ contract ConfigViewFacet {
         return p.whitelist[positionKey];
     }
 
-    /// @notice Get the current managed pool configuration for a managed pool.
-    function getManagedPoolConfig(uint256 pid) external view returns (Types.ManagedPoolConfig memory config) {
+    /// @notice Get the current pool configuration for a managed pool.
+    /// @dev Managed pools use `Types.PoolConfig` as the canonical config.
+    function getManagedPoolConfig(uint256 pid) external view returns (Types.PoolConfig memory config) {
         Types.PoolData storage p = _pool(pid);
         if (!p.isManagedPool) revert PoolNotManaged(pid);
-        config = p.managedConfig;
+        config = p.poolConfig;
     }
 
     /// @notice Get the underlying asset address for a pool

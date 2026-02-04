@@ -74,8 +74,8 @@ contract ManagedPoolManagementHarness is PoolManagementFacet {
         return (p.isManagedPool, p.manager, p.whitelistEnabled, p.underlying);
     }
 
-    function managedConfig(uint256 pid) external view returns (Types.ManagedPoolConfig memory) {
-        return LibAppStorage.s().pools[pid].managedConfig;
+    function poolConfig(uint256 pid) external view returns (Types.PoolConfig memory) {
+        return LibAppStorage.s().pools[pid].poolConfig;
     }
 
 }
@@ -112,36 +112,30 @@ contract ManagedPoolCreationPropertyTest is Test {
         bool isCapped,
         uint256 depositCap,
         uint256 maxUsers
-    ) internal pure returns (Types.ManagedPoolConfig memory cfg) {
+    ) internal pure returns (Types.PoolConfig memory cfg) {
         Types.FixedTermConfig[] memory terms = new Types.FixedTermConfig[](1);
         terms[0] = Types.FixedTermConfig({durationSecs: 30 days, apyBps: 500});
 
-        Types.ActionFeeSet memory actionFees;
-        actionFees.borrowFee = Types.ActionFeeConfig({amount: 1 ether, enabled: true});
-        actionFees.repayFee = Types.ActionFeeConfig({amount: 0, enabled: false});
-        actionFees.withdrawFee = Types.ActionFeeConfig({amount: 0, enabled: false});
-        actionFees.flashFee = Types.ActionFeeConfig({amount: 0, enabled: false});
-        actionFees.closeRollingFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.rollingApyBps = rollingApy;
+        cfg.depositorLTVBps = ltv;
+        cfg.maintenanceRateBps = maintenance;
+        cfg.flashLoanFeeBps = flashFee;
+        cfg.flashLoanAntiSplit = true;
+        cfg.minDepositAmount = minDeposit;
+        cfg.minLoanAmount = minLoan;
+        cfg.minTopupAmount = minTopup;
+        cfg.isCapped = isCapped;
+        cfg.depositCap = depositCap;
+        cfg.maxUserCount = maxUsers;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
+        cfg.fixedTermConfigs = terms;
 
-        cfg = Types.ManagedPoolConfig({
-            rollingApyBps: rollingApy,
-            depositorLTVBps: ltv,
-            maintenanceRateBps: maintenance,
-            flashLoanFeeBps: flashFee,
-            flashLoanAntiSplit: true,
-            minDepositAmount: minDeposit,
-            minLoanAmount: minLoan,
-            minTopupAmount: minTopup,
-            isCapped: isCapped,
-            depositCap: depositCap,
-            maxUserCount: maxUsers,
-            aumFeeMinBps: 100,
-            aumFeeMaxBps: 500,
-            fixedTermConfigs: terms,
-            actionFees: actionFees,
-            manager: address(0),
-            whitelistEnabled: true
-        });
+        cfg.borrowFee = Types.ActionFeeConfig({amount: 1 ether, enabled: true});
+        cfg.repayFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.withdrawFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.flashFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.closeRollingFee = Types.ActionFeeConfig({amount: 0, enabled: false});
     }
 
     function testProperty_ManagedPoolCreationCompleteness(
@@ -172,7 +166,7 @@ contract ManagedPoolCreationPropertyTest is Test {
         bool isCapped = true;
         depositCap = bound(depositCap, 1, 1e36);
 
-        Types.ManagedPoolConfig memory cfg = _managedConfig(
+        Types.PoolConfig memory cfg = _managedConfig(
             rollingApy,
             rollingApyExternal,
             ltv,
@@ -187,9 +181,6 @@ contract ManagedPoolCreationPropertyTest is Test {
             maxUsers
         );
 
-        cfg.manager = creator;
-        cfg.whitelistEnabled = true;
-
         vm.deal(creator, 1 ether);
         vm.prank(creator);
         vm.expectEmit(true, true, false, false);
@@ -200,7 +191,7 @@ contract ManagedPoolCreationPropertyTest is Test {
 
         (bool isManagedPool, address manager, bool whitelistEnabled, address storedUnderlying) =
             facet.poolInfo(MANAGED_PID);
-        Types.ManagedPoolConfig memory storedConfig = facet.managedConfig(MANAGED_PID);
+        Types.PoolConfig memory storedConfig = facet.poolConfig(MANAGED_PID);
 
         assertTrue(isManagedPool, "managed flag set");
         assertEq(manager, creator, "manager stored");
@@ -232,7 +223,7 @@ contract ManagedPoolCreationPropertyTest is Test {
         vm.prank(payer);
         facet.initPool{value: 0.05 ether}(address(otherUnderlying));
 
-        Types.ManagedPoolConfig memory cfg = _managedConfig(
+        Types.PoolConfig memory cfg = _managedConfig(
             500,
             600,
             8000,
@@ -248,8 +239,6 @@ contract ManagedPoolCreationPropertyTest is Test {
         );
 
         address creator = address(0xCAFE);
-        cfg.manager = creator;
-        cfg.whitelistEnabled = true;
         vm.deal(creator, 1 ether);
         vm.prank(creator);
         facet.initManagedPool{value: 0.1 ether}(MANAGED_PID, address(otherUnderlying), cfg);
@@ -295,7 +284,7 @@ contract ManagedPoolCreationFeePropertyTest is Test {
         // If the treasury itself pays the fee, the outgoing msg.value offsets the incoming transfer
         // and the observed delta is zero. Exclude that degenerate case for this routing property.
         vm.assume(creator != treasury);
-        Types.ManagedPoolConfig memory cfg = Types.ManagedPoolConfig({
+        Types.PoolConfig memory cfg = Types.PoolConfig({
             rollingApyBps: 500,
             depositorLTVBps: 8000,
             maintenanceRateBps: 50,
@@ -310,15 +299,11 @@ contract ManagedPoolCreationFeePropertyTest is Test {
             aumFeeMinBps: 100,
             aumFeeMaxBps: 500,
             fixedTermConfigs: new Types.FixedTermConfig[](0),
-            actionFees: Types.ActionFeeSet({
-                borrowFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
-            }),
-            manager: address(0),
-            whitelistEnabled: true
+            borrowFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
         });
 
         vm.deal(creator, 1 ether);
@@ -368,7 +353,7 @@ contract ManagedPoolCreationErrorTests is Test {
         facet.setManagedPoolCreationFee(0.3 ether);
         facet.setTreasury(treasury);
 
-        Types.ManagedPoolConfig memory cfg = Types.ManagedPoolConfig({
+        Types.PoolConfig memory cfg = Types.PoolConfig({
             rollingApyBps: 500,
             depositorLTVBps: 8000,
             maintenanceRateBps: 50,
@@ -383,15 +368,11 @@ contract ManagedPoolCreationErrorTests is Test {
             aumFeeMinBps: 100,
             aumFeeMaxBps: 500,
             fixedTermConfigs: new Types.FixedTermConfig[](0),
-            actionFees: Types.ActionFeeSet({
-                borrowFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
-            }),
-            manager: address(0),
-            whitelistEnabled: true
+            borrowFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
         });
 
         vm.deal(address(this), 1 ether);
@@ -403,7 +384,7 @@ contract ManagedPoolCreationErrorTests is Test {
         facet.setManagedPoolCreationFee(0);
         facet.setTreasury(treasury);
 
-        Types.ManagedPoolConfig memory cfg = Types.ManagedPoolConfig({
+        Types.PoolConfig memory cfg = Types.PoolConfig({
             rollingApyBps: 500,
             depositorLTVBps: 8000,
             maintenanceRateBps: 50,
@@ -418,15 +399,11 @@ contract ManagedPoolCreationErrorTests is Test {
             aumFeeMinBps: 100,
             aumFeeMaxBps: 500,
             fixedTermConfigs: new Types.FixedTermConfig[](0),
-            actionFees: Types.ActionFeeSet({
-                borrowFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-                closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
-            }),
-            manager: address(0),
-            whitelistEnabled: true
+            borrowFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
         });
 
         vm.deal(address(this), 1 ether);
@@ -438,7 +415,7 @@ contract ManagedPoolCreationErrorTests is Test {
         facet.setManagedPoolCreationFee(0.5 ether);
         // treasury intentionally unset (zero)
 
-        Types.ManagedPoolConfig memory cfg;
+        Types.PoolConfig memory cfg;
         cfg.minDepositAmount = 1 ether;
         cfg.minLoanAmount = 1 ether;
         cfg.minTopupAmount = 0.1 ether;

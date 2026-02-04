@@ -71,7 +71,7 @@ contract ManagedPoolWhitelistHarness is PoolManagementFacet {
 
     function whitelistFlag(uint256 pid) external view returns (bool poolFlag, bool configFlag) {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
-        return (p.whitelistEnabled, p.managedConfig.whitelistEnabled);
+        return (p.whitelistEnabled, p.whitelistEnabled);
     }
 
     function poolUnderlying(uint256 pid) external view returns (address) {
@@ -110,7 +110,7 @@ contract ManagedPoolWhitelistPropertyTest is Test {
         facet.setOwner(address(this));
         facet.setDefaultPoolConfig(_defaultPoolConfig());
 
-        Types.ManagedPoolConfig memory cfg;
+        Types.PoolConfig memory cfg;
         cfg.rollingApyBps = 500;
         cfg.depositorLTVBps = 8000;
         cfg.maintenanceRateBps = 50;
@@ -121,8 +121,6 @@ contract ManagedPoolWhitelistPropertyTest is Test {
         cfg.aumFeeMinBps = 100;
         cfg.aumFeeMaxBps = 500;
         cfg.isCapped = false;
-        cfg.manager = manager;
-        cfg.whitelistEnabled = true;
 
         vm.deal(manager, 1 ether);
         vm.prank(manager);
@@ -199,7 +197,7 @@ contract ManagedPoolWhitelistRemovalPropertyTest is Test {
     }
 
     function testProperty_RemovedUserOperationsPreserved() public {
-        Types.ManagedPoolConfig memory cfg;
+        Types.PoolConfig memory cfg;
         cfg.rollingApyBps = 500;
         cfg.depositorLTVBps = 8000;
         cfg.maintenanceRateBps = 50;
@@ -210,8 +208,6 @@ contract ManagedPoolWhitelistRemovalPropertyTest is Test {
         cfg.aumFeeMinBps = 100;
         cfg.aumFeeMaxBps = 500;
         cfg.isCapped = false;
-        cfg.manager = manager;
-        cfg.whitelistEnabled = true;
 
         vm.deal(manager, 1 ether);
         vm.prank(manager);

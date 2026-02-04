@@ -22,11 +22,9 @@ contract ManagedPoolStorageHarness {
         bool whitelistEnabled
     ) external {
         pool.manager = manager;
-        pool.managedConfig.manager = manager;
-        pool.managedConfig.rollingApyBps = rollingApyBps;
-        pool.managedConfig.minDepositAmount = minDepositAmount;
+        pool.poolConfig.rollingApyBps = rollingApyBps;
+        pool.poolConfig.minDepositAmount = minDepositAmount;
         pool.whitelistEnabled = whitelistEnabled;
-        pool.managedConfig.whitelistEnabled = whitelistEnabled;
     }
 
     function setLedger(bytes32 positionKey, uint256 principal) external {
@@ -42,11 +40,11 @@ contract ManagedPoolStorageHarness {
     }
 
     function selectedRollingApy() external view returns (uint16) {
-        return pool.isManagedPool ? pool.managedConfig.rollingApyBps : pool.poolConfig.rollingApyBps;
+        return pool.poolConfig.rollingApyBps;
     }
 
     function selectedMinDeposit() external view returns (uint256) {
-        return pool.isManagedPool ? pool.managedConfig.minDepositAmount : pool.poolConfig.minDepositAmount;
+        return pool.poolConfig.minDepositAmount;
     }
 
     function ledgerOf(bytes32 positionKey) external view returns (uint256) {
@@ -58,11 +56,11 @@ contract ManagedPoolStorageHarness {
     }
 
     function managers() external view returns (address poolManager, address configManager) {
-        return (pool.manager, pool.managedConfig.manager);
+        return (pool.manager, pool.manager);
     }
 
     function whitelistFlags() external view returns (bool poolFlag, bool configFlag) {
-        return (pool.whitelistEnabled, pool.managedConfig.whitelistEnabled);
+        return (pool.whitelistEnabled, pool.whitelistEnabled);
     }
 }
 
@@ -101,23 +99,23 @@ contract ManagedPoolStoragePropertyTest is Test {
         harness.setWhitelist(userKey, true);
 
         harness.setIsManagedPool(false);
-        assertEq(harness.selectedRollingApy(), immutableApy, "immutable rolling APY used for unmanaged pools");
-        assertEq(harness.selectedMinDeposit(), immutableMinDeposit, "immutable min deposit used for unmanaged pools");
+        assertEq(harness.selectedRollingApy(), managedApy, "pool config used for unmanaged pools");
+        assertEq(harness.selectedMinDeposit(), managedMinDeposit, "pool config used for unmanaged pools");
 
         harness.setWhitelist(userKey, false);
         assertEq(harness.ledgerOf(userKey), principal, "whitelist writes do not mutate ledger entries");
 
         harness.setIsManagedPool(true);
-        assertEq(harness.selectedRollingApy(), managedApy, "managed pools branch to managed config");
-        assertEq(harness.selectedMinDeposit(), managedMinDeposit, "managed pools read managed thresholds");
+        assertEq(harness.selectedRollingApy(), managedApy, "pool config used for managed pools");
+        assertEq(harness.selectedMinDeposit(), managedMinDeposit, "pool config used for managed pools");
 
         (address poolManager, address configManager) = harness.managers();
         assertEq(poolManager, manager, "pool manager stored");
-        assertEq(configManager, manager, "managed config manager stored");
+        assertEq(configManager, manager, "pool manager stored");
 
         (bool poolWhitelistFlag, bool configWhitelistFlag) = harness.whitelistFlags();
         assertTrue(poolWhitelistFlag, "pool whitelist flag preserved");
-        assertTrue(configWhitelistFlag, "config whitelist flag preserved");
+        assertTrue(configWhitelistFlag, "pool whitelist flag preserved");
         assertFalse(harness.whitelistStatus(userKey), "whitelist mapping isolated from pool selection");
     }
 }

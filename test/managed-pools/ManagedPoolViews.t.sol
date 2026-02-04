@@ -101,9 +101,8 @@ contract ManagedPoolViewsTest is Test {
         harness.setManagedPoolCreationFee(0.1 ether);
     }
 
-    function _managedConfig() internal pure returns (Types.ManagedPoolConfig memory cfg) {
-        Types.ActionFeeSet memory actionFees;
-        cfg = Types.ManagedPoolConfig({
+    function _managedConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg = Types.PoolConfig({
             rollingApyBps: 500,
             depositorLTVBps: 8000,
             maintenanceRateBps: 50,
@@ -118,9 +117,11 @@ contract ManagedPoolViewsTest is Test {
             aumFeeMinBps: 100,
             aumFeeMaxBps: 500,
             fixedTermConfigs: new Types.FixedTermConfig[](0),
-            actionFees: actionFees,
-            manager: address(0),
-            whitelistEnabled: true
+            borrowFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
         });
     }
 
@@ -156,8 +157,7 @@ contract ManagedPoolViewsTest is Test {
     }
 
     function _initManagedPool() internal returns (uint256 pid) {
-        Types.ManagedPoolConfig memory mCfg = _managedConfig();
-        mCfg.manager = manager;
+        Types.PoolConfig memory mCfg = _managedConfig();
         vm.deal(manager, 1 ether);
         vm.prank(manager);
         pid = 2;
@@ -178,7 +178,7 @@ contract ManagedPoolViewsTest is Test {
         // Update managed config and verify view reflects current values
         vm.prank(manager);
         harness.setRollingApy(pid, 750);
-        Types.ManagedPoolConfig memory cfgView = harness.getManagedPoolConfig(pid);
+        Types.PoolConfig memory cfgView = harness.getManagedPoolConfig(pid);
         assertEq(cfgView.rollingApyBps, 750, "managed config updated");
     }
 

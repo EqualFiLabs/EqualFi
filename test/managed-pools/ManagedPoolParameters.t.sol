@@ -70,12 +70,12 @@ contract ManagedPoolSetterHarness is PoolManagementFacet {
         LibAppStorage.s().defaultPoolConfigSet = true;
     }
 
-    function managedConfig(uint256 pid) external view returns (Types.ManagedPoolConfig memory) {
-        return LibAppStorage.s().pools[pid].managedConfig;
+    function poolConfig(uint256 pid) external view returns (Types.PoolConfig memory) {
+        return LibAppStorage.s().pools[pid].poolConfig;
     }
 
     function forceDepositCap(uint256 pid, uint256 cap) external {
-        LibAppStorage.s().pools[pid].managedConfig.depositCap = cap;
+        LibAppStorage.s().pools[pid].poolConfig.depositCap = cap;
     }
 }
 
@@ -98,10 +98,8 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
         facet.setDefaultPoolConfig(_defaultPoolConfig());
     }
 
-    function _managedConfig(uint256 depositCap) internal view returns (Types.ManagedPoolConfig memory cfg) {
-        Types.ActionFeeSet memory fees;
-        fees.borrowFee = Types.ActionFeeConfig({amount: 1 ether, enabled: true});
-        cfg = Types.ManagedPoolConfig({
+    function _poolConfig(uint256 depositCap) internal view returns (Types.PoolConfig memory cfg) {
+        cfg = Types.PoolConfig({
             rollingApyBps: 500,
             depositorLTVBps: 8000,
             maintenanceRateBps: 50,
@@ -116,14 +114,16 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
             aumFeeMinBps: 100,
             aumFeeMaxBps: 500,
             fixedTermConfigs: new Types.FixedTermConfig[](0),
-            actionFees: fees,
-            manager: manager,
-            whitelistEnabled: true
+            borrowFee: Types.ActionFeeConfig({amount: 1 ether, enabled: true}),
+            repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
+            closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
         });
     }
 
     function _initManagedPool(uint256 pid, uint256 depositCap) internal {
-        Types.ManagedPoolConfig memory cfg = _managedConfig(depositCap);
+        Types.PoolConfig memory cfg = _poolConfig(depositCap);
         vm.deal(manager, 1 ether);
         vm.prank(manager);
         facet.initManagedPool{value: 0.1 ether}(pid, address(underlying), cfg);
@@ -180,7 +180,7 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
         vm.prank(manager);
         facet.setActionFees(MANAGED_PID, newFees);
 
-        Types.ManagedPoolConfig memory stored = facet.managedConfig(MANAGED_PID);
+        Types.PoolConfig memory stored = facet.poolConfig(MANAGED_PID);
         assertEq(stored.rollingApyBps, newRollingApy, "rolling apy updated");
         assertEq(stored.depositorLTVBps, newLtv, "ltv updated");
         assertEq(stored.minDepositAmount, newMinDeposit, "min deposit updated");
@@ -191,7 +191,7 @@ contract ManagedPoolParameterUpdatePropertyTest is Test {
         assertEq(stored.maxUserCount, newMaxUsers, "max users updated");
         assertEq(stored.maintenanceRateBps, newMaintenance, "maintenance updated");
         assertEq(stored.flashLoanFeeBps, newFlashFee, "flash fee updated");
-        assertEq(stored.actionFees.borrowFee.amount, newBorrowFee, "action fee updated");
+        assertEq(stored.borrowFee.amount, newBorrowFee, "action fee updated");
 
         vm.expectRevert(abi.encodeWithSelector(NotPoolManager.selector, nonManager, manager));
         vm.prank(nonManager);
@@ -236,7 +236,7 @@ contract ManagedPoolParameterBoundsPropertyTest is Test {
     }
 
     function _initManagedPool() internal {
-        Types.ManagedPoolConfig memory cfg;
+        Types.PoolConfig memory cfg;
         cfg.rollingApyBps = 500;
         cfg.depositorLTVBps = 8000;
         cfg.maintenanceRateBps = 50;
@@ -248,8 +248,6 @@ contract ManagedPoolParameterBoundsPropertyTest is Test {
         cfg.depositCap = 100 ether;
         cfg.aumFeeMinBps = 100;
         cfg.aumFeeMaxBps = 500;
-        cfg.whitelistEnabled = true;
-        cfg.manager = manager;
         vm.deal(manager, 1 ether);
         vm.prank(manager);
         facet.initManagedPool{value: 0.05 ether}(MANAGED_PID, address(underlying), cfg);

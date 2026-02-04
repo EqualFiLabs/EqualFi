@@ -51,13 +51,13 @@ contract ManagedIntegrationHarness is PoolManagementFacet, PositionManagementFac
         p.whitelist[LibPositionHelpers.systemPositionKey(manager)] = true;
         p.underlying = underlying;
         p.initialized = true;
-        p.managedConfig.minDepositAmount = minDeposit;
-        p.managedConfig.minLoanAmount = minLoan;
-        p.managedConfig.minTopupAmount = minTopup;
-        p.managedConfig.depositorLTVBps = 8_000;
-        p.managedConfig.isCapped = false;
-        p.managedConfig.maxUserCount = 0;
-        p.managedConfig.rollingApyBps = 500;
+        p.poolConfig.minDepositAmount = minDeposit;
+        p.poolConfig.minLoanAmount = minLoan;
+        p.poolConfig.minTopupAmount = minTopup;
+        p.poolConfig.depositorLTVBps = 8_000;
+        p.poolConfig.isCapped = false;
+        p.poolConfig.maxUserCount = 0;
+        p.poolConfig.rollingApyBps = 500;
         p.feeIndex = LibFeeIndex.INDEX_SCALE;
         p.maintenanceIndex = LibFeeIndex.INDEX_SCALE;
         // Mirror immutable config for legacy call sites that still read poolConfig

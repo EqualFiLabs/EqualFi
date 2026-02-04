@@ -26,7 +26,7 @@ contract PoolManagementFacet {
         uint256 indexed pid,
         address indexed underlying,
         address indexed manager,
-        Types.ManagedPoolConfig config
+        Types.PoolConfig config
     );
 
     event ManagedConfigUpdated(uint256 indexed pid, string parameter, bytes oldValue, bytes newValue);
@@ -261,14 +261,12 @@ contract PoolManagementFacet {
         actionFees.closeRollingFee = defaults.closeRollingFee;
     }
 
-    /// @notice Initialize a new managed pool with mutable configuration and whitelist gating
-    /// @param pid Pool ID (must be unused)
-    /// @param underlying ERC20 token address
-    /// @param config Managed pool configuration
+    /// @notice Initialize a new managed pool with mutable configuration and whitelist gating.
+    /// @dev Managed pools use `Types.PoolConfig` as the canonical config (mutated by the manager).
     function initManagedPool(
         uint256 pid,
         address underlying,
-        Types.ManagedPoolConfig calldata config
+        Types.PoolConfig calldata config
     ) external payable {
         LibAppStorage.AppStorage storage store = LibAppStorage.s();
 
@@ -326,12 +324,7 @@ contract PoolManagementFacet {
         // Validate flash loan fee
         if (config.flashLoanFeeBps > 10_000) revert InvalidFlashLoanFee();
 
-        if (config.manager != address(0) && config.manager != msg.sender) {
-            revert InvalidManagedPoolConfig("manager must be msg.sender or zero");
-        }
-        if (!config.whitelistEnabled) {
-            revert InvalidManagedPoolConfig("whitelistEnabled must be true");
-        }
+        // Manager is msg.sender; whitelist gating defaults to enabled.
 
         // Validate APY rates
         if (config.rollingApyBps > 10_000) revert InvalidAPYRate("rollingApyBps > 100%");
@@ -345,30 +338,33 @@ contract PoolManagementFacet {
             store.assetToPoolId[underlying] = pid;
         }
 
-        // Store managed configuration
-        p.managedConfig.rollingApyBps = config.rollingApyBps;
-        p.managedConfig.depositorLTVBps = config.depositorLTVBps;
-        p.managedConfig.maintenanceRateBps = maintenanceRate;
-        p.managedConfig.flashLoanFeeBps = config.flashLoanFeeBps;
-        p.managedConfig.flashLoanAntiSplit = config.flashLoanAntiSplit;
-        p.managedConfig.minDepositAmount = config.minDepositAmount;
-        p.managedConfig.minLoanAmount = config.minLoanAmount;
-        p.managedConfig.minTopupAmount = config.minTopupAmount;
-        p.managedConfig.isCapped = config.isCapped;
-        p.managedConfig.depositCap = config.depositCap;
-        p.managedConfig.maxUserCount = config.maxUserCount;
-        p.managedConfig.aumFeeMinBps = config.aumFeeMinBps;
-        p.managedConfig.aumFeeMaxBps = config.aumFeeMaxBps;
-        p.managedConfig.manager = msg.sender;
+        // Store canonical pool configuration.
+        p.poolConfig.rollingApyBps = config.rollingApyBps;
+        p.poolConfig.depositorLTVBps = config.depositorLTVBps;
+        p.poolConfig.maintenanceRateBps = maintenanceRate;
+        p.poolConfig.flashLoanFeeBps = config.flashLoanFeeBps;
+        p.poolConfig.flashLoanAntiSplit = config.flashLoanAntiSplit;
+        p.poolConfig.minDepositAmount = config.minDepositAmount;
+        p.poolConfig.minLoanAmount = config.minLoanAmount;
+        p.poolConfig.minTopupAmount = config.minTopupAmount;
+        p.poolConfig.isCapped = config.isCapped;
+        p.poolConfig.depositCap = config.depositCap;
+        p.poolConfig.maxUserCount = config.maxUserCount;
+        p.poolConfig.aumFeeMinBps = config.aumFeeMinBps;
+        p.poolConfig.aumFeeMaxBps = config.aumFeeMaxBps;
 
-        _storeFixedTermConfigs(p.managedConfig.fixedTermConfigs, config.fixedTermConfigs);
+        // Store fixed term configs
+        _storeFixedTermConfigs(p.poolConfig.fixedTermConfigs, config.fixedTermConfigs);
 
-        // Store action fees
-        p.managedConfig.actionFees = config.actionFees;
+        // Store initial action fee config in the canonical PoolConfig.
+        p.poolConfig.borrowFee = config.borrowFee;
+        p.poolConfig.repayFee = config.repayFee;
+        p.poolConfig.withdrawFee = config.withdrawFee;
+        p.poolConfig.flashFee = config.flashFee;
+        p.poolConfig.closeRollingFee = config.closeRollingFee;
 
         // Initialize managed pool state
         p.whitelistEnabled = true;
-        p.managedConfig.whitelistEnabled = true;
 
         // Initialize currentAumFeeBps to a value within bounds (default to minimum)
         p.currentAumFeeBps = config.aumFeeMinBps;
@@ -381,9 +377,8 @@ contract PoolManagementFacet {
             store.poolCount = pid + 1;
         }
 
-        Types.ManagedPoolConfig memory emittedConfig = config;
-        emittedConfig.manager = msg.sender;
-        emittedConfig.whitelistEnabled = true;
+        Types.PoolConfig memory emittedConfig = config;
+        emittedConfig.maintenanceRateBps = maintenanceRate;
 
         emit PoolInitializedManaged(pid, underlying, msg.sender, emittedConfig);
     }
@@ -402,63 +397,63 @@ contract PoolManagementFacet {
     function setRollingApy(uint256 pid, uint16 apyBps) external {
         Types.PoolData storage p = _enforceManager(pid);
         if (apyBps > 10_000) revert InvalidAPYRate("rollingApyBps > 100%");
-        uint16 oldVal = p.managedConfig.rollingApyBps;
-        p.managedConfig.rollingApyBps = apyBps;
+        uint16 oldVal = p.poolConfig.rollingApyBps;
+        p.poolConfig.rollingApyBps = apyBps;
         _emitManagedUpdate(pid, "rollingApyBps", abi.encode(oldVal), abi.encode(apyBps));
     }
 
     function setDepositorLTV(uint256 pid, uint16 ltvBps) external {
         Types.PoolData storage p = _enforceManager(pid);
         if (ltvBps == 0 || ltvBps > 10_000) revert InvalidLTVRatio();
-        uint16 oldVal = p.managedConfig.depositorLTVBps;
-        p.managedConfig.depositorLTVBps = ltvBps;
+        uint16 oldVal = p.poolConfig.depositorLTVBps;
+        p.poolConfig.depositorLTVBps = ltvBps;
         _emitManagedUpdate(pid, "depositorLTVBps", abi.encode(oldVal), abi.encode(ltvBps));
     }
 
     function setMinDepositAmount(uint256 pid, uint256 minDeposit) external {
         Types.PoolData storage p = _enforceManager(pid);
         if (minDeposit == 0) revert InvalidMinimumThreshold("minDepositAmount must be > 0");
-        uint256 oldVal = p.managedConfig.minDepositAmount;
-        p.managedConfig.minDepositAmount = minDeposit;
+        uint256 oldVal = p.poolConfig.minDepositAmount;
+        p.poolConfig.minDepositAmount = minDeposit;
         _emitManagedUpdate(pid, "minDepositAmount", abi.encode(oldVal), abi.encode(minDeposit));
     }
 
     function setMinLoanAmount(uint256 pid, uint256 minLoan) external {
         Types.PoolData storage p = _enforceManager(pid);
         if (minLoan == 0) revert InvalidMinimumThreshold("minLoanAmount must be > 0");
-        uint256 oldVal = p.managedConfig.minLoanAmount;
-        p.managedConfig.minLoanAmount = minLoan;
+        uint256 oldVal = p.poolConfig.minLoanAmount;
+        p.poolConfig.minLoanAmount = minLoan;
         _emitManagedUpdate(pid, "minLoanAmount", abi.encode(oldVal), abi.encode(minLoan));
     }
 
     function setMinTopupAmount(uint256 pid, uint256 minTopup) external {
         Types.PoolData storage p = _enforceManager(pid);
         if (minTopup == 0) revert InvalidMinimumThreshold("minTopupAmount must be > 0");
-        uint256 oldVal = p.managedConfig.minTopupAmount;
-        p.managedConfig.minTopupAmount = minTopup;
+        uint256 oldVal = p.poolConfig.minTopupAmount;
+        p.poolConfig.minTopupAmount = minTopup;
         _emitManagedUpdate(pid, "minTopupAmount", abi.encode(oldVal), abi.encode(minTopup));
     }
 
     function setDepositCap(uint256 pid, uint256 cap) external {
         Types.PoolData storage p = _enforceManager(pid);
         if (cap == 0) revert InvalidDepositCap();
-        uint256 oldVal = p.managedConfig.depositCap;
-        p.managedConfig.depositCap = cap;
+        uint256 oldVal = p.poolConfig.depositCap;
+        p.poolConfig.depositCap = cap;
         _emitManagedUpdate(pid, "depositCap", abi.encode(oldVal), abi.encode(cap));
     }
 
     function setIsCapped(uint256 pid, bool isCapped) external {
         Types.PoolData storage p = _enforceManager(pid);
-        if (isCapped && p.managedConfig.depositCap == 0) revert InvalidDepositCap();
-        bool oldVal = p.managedConfig.isCapped;
-        p.managedConfig.isCapped = isCapped;
+        if (isCapped && p.poolConfig.depositCap == 0) revert InvalidDepositCap();
+        bool oldVal = p.poolConfig.isCapped;
+        p.poolConfig.isCapped = isCapped;
         _emitManagedUpdate(pid, "isCapped", abi.encode(oldVal), abi.encode(isCapped));
     }
 
     function setMaxUserCount(uint256 pid, uint256 maxUsers) external {
         Types.PoolData storage p = _enforceManager(pid);
-        uint256 oldVal = p.managedConfig.maxUserCount;
-        p.managedConfig.maxUserCount = maxUsers;
+        uint256 oldVal = p.poolConfig.maxUserCount;
+        p.poolConfig.maxUserCount = maxUsers;
         _emitManagedUpdate(pid, "maxUserCount", abi.encode(oldVal), abi.encode(maxUsers));
     }
 
@@ -467,16 +462,16 @@ contract PoolManagementFacet {
         LibAppStorage.AppStorage storage store = LibAppStorage.s();
         uint16 maxRate = store.maxMaintenanceRateBps == 0 ? 100 : store.maxMaintenanceRateBps;
         if (rateBps == 0 || rateBps > maxRate) revert InvalidMaintenanceRate();
-        uint16 oldVal = p.managedConfig.maintenanceRateBps;
-        p.managedConfig.maintenanceRateBps = rateBps;
+        uint16 oldVal = p.poolConfig.maintenanceRateBps;
+        p.poolConfig.maintenanceRateBps = rateBps;
         _emitManagedUpdate(pid, "maintenanceRateBps", abi.encode(oldVal), abi.encode(rateBps));
     }
 
     function setFlashLoanFee(uint256 pid, uint16 feeBps) external {
         Types.PoolData storage p = _enforceManager(pid);
         if (feeBps > 10_000) revert InvalidFlashLoanFee();
-        uint16 oldVal = p.managedConfig.flashLoanFeeBps;
-        p.managedConfig.flashLoanFeeBps = feeBps;
+        uint16 oldVal = p.poolConfig.flashLoanFeeBps;
+        p.poolConfig.flashLoanFeeBps = feeBps;
         _emitManagedUpdate(pid, "flashLoanFeeBps", abi.encode(oldVal), abi.encode(feeBps));
     }
 
@@ -490,17 +485,19 @@ contract PoolManagementFacet {
         _validateActionFee(store, actionFees.flashFee.amount);
         _validateActionFee(store, actionFees.closeRollingFee.amount);
 
-        Types.ActionFeeSet memory oldVal = p.managedConfig.actionFees;
-        p.managedConfig.actionFees = actionFees;
+        Types.ActionFeeSet memory oldVal;
+        oldVal.borrowFee = p.poolConfig.borrowFee;
+        oldVal.repayFee = p.poolConfig.repayFee;
+        oldVal.withdrawFee = p.poolConfig.withdrawFee;
+        oldVal.flashFee = p.poolConfig.flashFee;
+        oldVal.closeRollingFee = p.poolConfig.closeRollingFee;
 
-        // Update mutable pool action fees to reflect managed config
-        p.actionFees[ACTION_BORROW] = Types.ActionFeeConfig(actionFees.borrowFee.amount, actionFees.borrowFee.enabled);
-        p.actionFees[ACTION_REPAY] = Types.ActionFeeConfig(actionFees.repayFee.amount, actionFees.repayFee.enabled);
-        p.actionFees[ACTION_WITHDRAW] =
-            Types.ActionFeeConfig(actionFees.withdrawFee.amount, actionFees.withdrawFee.enabled);
-        p.actionFees[ACTION_FLASH] = Types.ActionFeeConfig(actionFees.flashFee.amount, actionFees.flashFee.enabled);
-        p.actionFees[ACTION_CLOSE_ROLLING] =
-            Types.ActionFeeConfig(actionFees.closeRollingFee.amount, actionFees.closeRollingFee.enabled);
+        // Update canonical pool config.
+        p.poolConfig.borrowFee = actionFees.borrowFee;
+        p.poolConfig.repayFee = actionFees.repayFee;
+        p.poolConfig.withdrawFee = actionFees.withdrawFee;
+        p.poolConfig.flashFee = actionFees.flashFee;
+        p.poolConfig.closeRollingFee = actionFees.closeRollingFee;
 
         _emitManagedUpdate(pid, "actionFees", abi.encode(oldVal), abi.encode(actionFees));
     }
@@ -548,7 +545,6 @@ contract PoolManagementFacet {
         Types.PoolData storage p = _enforceManager(pid);
         bool old = p.whitelistEnabled;
         p.whitelistEnabled = enabled;
-        p.managedConfig.whitelistEnabled = enabled;
         emit WhitelistToggled(pid, enabled);
         _emitManagedUpdate(pid, "whitelistEnabled", abi.encode(old), abi.encode(enabled));
     }
@@ -560,7 +556,6 @@ contract PoolManagementFacet {
         if (newManager == address(0)) revert InvalidManagerTransfer();
         address oldManager = p.manager;
         p.manager = newManager;
-        p.managedConfig.manager = newManager;
         emit ManagerTransferred(pid, oldManager, newManager);
     }
 
@@ -572,7 +567,6 @@ contract PoolManagementFacet {
         if (msg.sender != currentManager) revert NotPoolManager(msg.sender, currentManager);
         address oldManager = currentManager;
         p.manager = address(0);
-        p.managedConfig.manager = address(0);
         emit ManagerRenounced(pid, oldManager);
     }
 
