@@ -19,6 +19,9 @@ contract OwnerValidationModule is IERC6900ValidationModule {
     bytes32 internal constant MESSAGE_TYPEHASH = keccak256("Message(bytes32 hash)");
 
     bytes4 internal constant ERC1271_MAGICVALUE = 0x1626ba7e;
+    bytes32 internal constant ERC6492_MAGIC_VALUE =
+        0x6492649264926492649264926492649264926492649264926492649264926492;
+    uint256 internal constant ERC6492_MIN_LENGTH = 192;
     uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
     string internal constant NAME = "EqualLend Owner Validation";
@@ -42,14 +45,12 @@ contract OwnerValidationModule is IERC6900ValidationModule {
 
     function validateUserOp(uint32, PackedUserOperation calldata userOp, bytes32 userOpHash)
         external
-        view
         override
         returns (uint256)
     {
         address owner = IERC6551Account(userOp.sender).owner();
         bytes32 digest = _hashTypedData(userOp.sender, keccak256(abi.encode(USER_OP_TYPEHASH, userOpHash)));
-        (address signer, ECDSA.RecoverError error, ) = ECDSA.tryRecoverCalldata(digest, userOp.signature);
-        if (error != ECDSA.RecoverError.NoError || signer != owner) {
+        if (!_isValidOwnerSignature(owner, digest, userOp.signature)) {
             return SIG_VALIDATION_FAILED;
         }
         return 0;
@@ -78,8 +79,7 @@ contract OwnerValidationModule is IERC6900ValidationModule {
     ) external view override returns (bytes4) {
         address owner = IERC6551Account(account).owner();
         bytes32 digest = _hashTypedData(account, keccak256(abi.encode(MESSAGE_TYPEHASH, hash)));
-        (address signer, ECDSA.RecoverError error, ) = ECDSA.tryRecoverCalldata(digest, signature);
-        if (error == ECDSA.RecoverError.NoError && signer == owner) {
+        if (_isValidOwnerSignature(owner, digest, signature)) {
             return ERC1271_MAGICVALUE;
         }
         return bytes4(0xffffffff);
@@ -96,5 +96,77 @@ contract OwnerValidationModule is IERC6900ValidationModule {
             )
         );
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    }
+
+    function _isValidOwnerSignature(address owner, bytes32 digest, bytes calldata signature)
+        internal
+        view
+        returns (bool)
+    {
+        if (_isERC6492Signature(signature)) {
+            if (signature.length < ERC6492_MIN_LENGTH) {
+                return false;
+            }
+            (address factory, bytes memory factoryCalldata, bytes memory innerSig) =
+                _decodeERC6492Signature(signature);
+            if (owner.code.length > 0) {
+                if (_isValidERC1271(owner, digest, innerSig)) {
+                    return true;
+                }
+            }
+            if (factory.code.length == 0) {
+                return false;
+            }
+            // ERC-6492 may require deployment side effects, so use call (not staticcall).
+            bool ok = _callFactory(factory, factoryCalldata);
+            if (!ok) {
+                return false;
+            }
+            return _isValidERC1271(owner, digest, innerSig);
+        }
+
+        if (owner.code.length > 0) {
+            return _isValidERC1271(owner, digest, signature);
+        }
+
+        (address signer, ECDSA.RecoverError error, ) = ECDSA.tryRecoverCalldata(digest, signature);
+        return error == ECDSA.RecoverError.NoError && signer == owner;
+    }
+
+    function _isValidERC1271(address owner, bytes32 digest, bytes memory signature)
+        internal
+        view
+        returns (bool)
+    {
+        (bool ok, bytes memory data) = owner.staticcall(
+            abi.encodeWithSelector(IERC1271.isValidSignature.selector, digest, signature)
+        );
+        return ok && data.length == 32 && bytes4(data) == ERC1271_MAGICVALUE;
+    }
+
+    function _isERC6492Signature(bytes calldata signature) internal pure returns (bool) {
+        if (signature.length < 32) {
+            return false;
+        }
+        bytes32 suffix;
+        assembly {
+            suffix := calldataload(add(signature.offset, sub(signature.length, 32)))
+        }
+        return suffix == ERC6492_MAGIC_VALUE;
+    }
+
+    function _decodeERC6492Signature(bytes calldata signature)
+        internal
+        pure
+        returns (address factory, bytes memory factoryCalldata, bytes memory innerSig)
+    {
+        bytes memory wrapped = signature[:signature.length - 32];
+        (factory, factoryCalldata, innerSig) = abi.decode(wrapped, (address, bytes, bytes));
+    }
+
+    function _callFactory(address factory, bytes memory factoryCalldata) internal view returns (bool ok) {
+        assembly {
+            ok := call(gas(), factory, 0, add(factoryCalldata, 0x20), mload(factoryCalldata), 0, 0)
+        }
     }
 }

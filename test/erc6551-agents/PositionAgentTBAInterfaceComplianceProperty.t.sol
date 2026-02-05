@@ -11,6 +11,8 @@ import {IERC6551Account} from "../../src/interfaces/IERC6551Account.sol";
 import {IERC6551Executable} from "../../src/interfaces/IERC6551Executable.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
+import {ERC6551BeaconProxy} from "../../src/erc6551/ERC6551BeaconProxy.sol";
+import {MockBeacon} from "../helpers/MockBeacon.sol";
 
 contract MockERC6551Registry {
     function createAccount(
@@ -138,16 +140,20 @@ contract PositionAgentTBAInterfaceCompliancePropertyTest is Test {
     PositionNFT private nft;
     MockERC6551Registry private registry;
     MockERC6551Account private implementation;
+    MockBeacon private beacon;
+    ERC6551BeaconProxy private beaconProxy;
     PositionAgentViewFacetHarness private facet;
 
     function setUp() public {
         nft = new PositionNFT();
         registry = new MockERC6551Registry();
         implementation = new MockERC6551Account();
+        beacon = new MockBeacon(address(implementation));
+        beaconProxy = new ERC6551BeaconProxy(address(beacon));
         facet = new PositionAgentViewFacetHarness();
 
         facet.setPositionNFT(address(nft));
-        facet.setConfig(address(registry), address(implementation), address(0), bytes32(0));
+        facet.setConfig(address(registry), address(beaconProxy), address(0), bytes32(0));
     }
 
     /// @notice **Feature: erc6551-position-agents, Property 3: TBA Interface Compliance**
@@ -160,7 +166,7 @@ contract PositionAgentTBAInterfaceCompliancePropertyTest is Test {
         assertFalse(account || executable || receiver || sig, "undeployed TBA should report no support");
 
         registry.createAccount(
-            address(implementation),
+            address(beaconProxy),
             bytes32(0),
             block.chainid,
             address(nft),

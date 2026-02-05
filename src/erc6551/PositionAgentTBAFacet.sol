@@ -57,6 +57,8 @@ contract PositionAgentTBAFacet {
             return tbaAddress;
         }
 
+        ds.tbaDeployed[positionTokenId] = true;
+
         address registry = ds.erc6551Registry;
         address implementation = ds.erc6551Implementation;
         address positionNFT = _positionNFTAddress();
@@ -69,11 +71,11 @@ contract PositionAgentTBAFacet {
             positionTokenId
         );
 
-        ds.tbaDeployed[positionTokenId] = true;
         emit TBADeployed(positionTokenId, deployed);
         return deployed;
     }
 
+    /// @notice Returns the ERC-6551 account implementation (beacon proxy implementation)
     function getTBAImplementation() external view returns (address) {
         return LibPositionAgentStorage.s().erc6551Implementation;
     }
