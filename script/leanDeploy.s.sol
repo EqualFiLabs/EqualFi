@@ -512,9 +512,17 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(EqualLendDirectOfferFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](2);
-        s[0] = bytes4(keccak256("cancelOffersForPosition(bytes32)"));
-        s[1] = EqualLendDirectOfferFacet.hasOpenOffers.selector;
+        s = new bytes4[](6);
+        s[0] = bytes4(keccak256("postOffer((uint256,uint256,uint256,address,address,uint256,uint16,uint64,uint256,bool,bool,bool))"));
+        s[1] = bytes4(
+            keccak256(
+                "postOffer((uint256,uint256,uint256,address,address,uint256,uint16,uint64,uint256,bool,bool,bool),(bool,uint256))"
+            )
+        );
+        s[2] = EqualLendDirectOfferFacet.cancelOffer.selector;
+        s[3] = bytes4(keccak256("cancelOffersForPosition(bytes32)"));
+        s[4] = bytes4(keccak256("cancelOffersForPosition(uint256)"));
+        s[5] = EqualLendDirectOfferFacet.hasOpenOffers.selector;
     }
 
     function _selectors(PositionAgentTBAFacet) internal pure returns (bytes4[] memory s) {
