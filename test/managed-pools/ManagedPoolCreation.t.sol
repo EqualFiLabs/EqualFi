@@ -83,6 +83,22 @@ contract ManagedPoolManagementHarness is PoolManagementFacet {
 /// **Feature: managed-pools, Property 1: Managed pool creation completeness**
 /// **Validates: Requirements 1.1, 1.5, 1.6, 1.7**
 contract ManagedPoolCreationPropertyTest is Test {
+    struct ManagedPoolCreationInputs {
+        address creator;
+        uint16 rollingApy;
+        uint16 rollingApyExternal;
+        uint16 ltv;
+        uint16 cr;
+        uint16 maintenance;
+        uint16 flashFee;
+        uint256 minDeposit;
+        uint256 minLoan;
+        uint256 minTopup;
+        bool isCapped;
+        uint256 depositCap;
+        uint256 maxUsers;
+    }
+
     ManagedPoolManagementHarness internal facet;
     MockERC20 internal underlying;
     MockERC20 internal otherUnderlying;
@@ -101,9 +117,9 @@ contract ManagedPoolCreationPropertyTest is Test {
 
     function _managedConfig(
         uint16 rollingApy,
-        uint16 rollingApyExternal,
+        uint16 /*rollingApyExternal*/,
         uint16 ltv,
-        uint16 cr,
+        uint16 /*cr*/,
         uint16 maintenance,
         uint16 flashFee,
         uint256 minDeposit,
@@ -138,6 +154,74 @@ contract ManagedPoolCreationPropertyTest is Test {
         cfg.closeRollingFee = Types.ActionFeeConfig({amount: 0, enabled: false});
     }
 
+    function _boundCreationInputs(
+        address creator,
+        uint16 rollingApy,
+        uint16 rollingApyExternal,
+        uint16 ltv,
+        uint16 cr,
+        uint16 maintenance,
+        uint16 flashFee,
+        uint256 minDeposit,
+        uint256 minLoan,
+        uint256 minTopup,
+        uint256 depositCap,
+        uint256 maxUsers
+    ) internal pure returns (ManagedPoolCreationInputs memory input) {
+        input.creator = address(uint160(bound(uint256(uint160(creator)), 1, type(uint160).max - 1)));
+        input.rollingApy = uint16(bound(rollingApy, 1, 10_000));
+        input.rollingApyExternal = uint16(bound(rollingApyExternal, 1, 10_000));
+        input.ltv = uint16(bound(ltv, 1, 10_000));
+        input.cr = uint16(bound(cr, 1, 50_000));
+        input.maintenance = uint16(bound(maintenance, 1, 100));
+        input.flashFee = uint16(bound(flashFee, 0, 10_000));
+        input.minDeposit = bound(minDeposit, 1, 1e36);
+        input.minLoan = bound(minLoan, 1, 1e36);
+        input.minTopup = bound(minTopup, 1, 1e36);
+        input.isCapped = true;
+        input.depositCap = bound(depositCap, 1, 1e36);
+        input.maxUsers = bound(maxUsers, 0, 1000);
+    }
+
+    function _assertManagedPoolCreationCompleteness(ManagedPoolCreationInputs memory input) internal {
+        Types.PoolConfig memory cfg = _managedConfig(
+            input.rollingApy,
+            input.rollingApyExternal,
+            input.ltv,
+            input.cr,
+            input.maintenance,
+            input.flashFee,
+            input.minDeposit,
+            input.minLoan,
+            input.minTopup,
+            input.isCapped,
+            input.depositCap,
+            input.maxUsers
+        );
+
+        vm.deal(input.creator, 1 ether);
+        vm.prank(input.creator);
+        vm.expectEmit(true, true, false, false);
+        emit PoolManagementFacet.PoolInitialized(1, address(underlying), _defaultPoolConfig());
+        vm.expectEmit(true, true, true, false);
+        emit PoolManagementFacet.PoolInitializedManaged(MANAGED_PID, address(underlying), input.creator, cfg);
+        facet.initManagedPool{value: 0.1 ether}(MANAGED_PID, address(underlying), cfg);
+
+        (bool isManagedPool, address manager, bool whitelistEnabled, address storedUnderlying) =
+            facet.poolInfo(MANAGED_PID);
+        Types.PoolConfig memory storedConfig = facet.poolConfig(MANAGED_PID);
+
+        assertTrue(isManagedPool, "managed flag set");
+        assertEq(manager, input.creator, "manager stored");
+        assertTrue(whitelistEnabled, "whitelist enabled");
+        assertEq(storedUnderlying, address(underlying), "underlying stored");
+        assertEq(storedConfig.rollingApyBps, input.rollingApy, "rolling apy stored");
+        assertEq(storedConfig.minDepositAmount, input.minDeposit, "min deposit stored");
+        assertEq(storedConfig.aumFeeMinBps, 100, "aum fee min stored");
+        assertEq(storedConfig.fixedTermConfigs.length, 1, "fixed term stored");
+        assertEq(storedConfig.fixedTermConfigs[0].durationSecs, 30 days, "fixed term duration stored");
+    }
+
     function testProperty_ManagedPoolCreationCompleteness(
         address creator,
         uint16 rollingApy,
@@ -152,21 +236,8 @@ contract ManagedPoolCreationPropertyTest is Test {
         uint256 depositCap,
         uint256 maxUsers
     ) public {
-        creator = address(uint160(bound(uint256(uint160(creator)), 1, type(uint160).max - 1)));
-        rollingApy = uint16(bound(rollingApy, 1, 10_000));
-        rollingApyExternal = uint16(bound(rollingApyExternal, 1, 10_000));
-        ltv = uint16(bound(ltv, 1, 10_000));
-        cr = uint16(bound(cr, 1, 50_000));
-        maintenance = uint16(bound(maintenance, 1, 100));
-        flashFee = uint16(bound(flashFee, 0, 10_000));
-        minDeposit = bound(minDeposit, 1, 1e36);
-        minLoan = bound(minLoan, 1, 1e36);
-        minTopup = bound(minTopup, 1, 1e36);
-        maxUsers = bound(maxUsers, 0, 1000);
-        bool isCapped = true;
-        depositCap = bound(depositCap, 1, 1e36);
-
-        Types.PoolConfig memory cfg = _managedConfig(
+        ManagedPoolCreationInputs memory input = _boundCreationInputs(
+            creator,
             rollingApy,
             rollingApyExternal,
             ltv,
@@ -176,32 +247,10 @@ contract ManagedPoolCreationPropertyTest is Test {
             minDeposit,
             minLoan,
             minTopup,
-            isCapped,
             depositCap,
             maxUsers
         );
-
-        vm.deal(creator, 1 ether);
-        vm.prank(creator);
-        vm.expectEmit(true, true, false, false);
-        emit PoolManagementFacet.PoolInitialized(1, address(underlying), _defaultPoolConfig());
-        vm.expectEmit(true, true, true, false);
-        emit PoolManagementFacet.PoolInitializedManaged(MANAGED_PID, address(underlying), creator, cfg);
-        facet.initManagedPool{value: 0.1 ether}(MANAGED_PID, address(underlying), cfg);
-
-        (bool isManagedPool, address manager, bool whitelistEnabled, address storedUnderlying) =
-            facet.poolInfo(MANAGED_PID);
-        Types.PoolConfig memory storedConfig = facet.poolConfig(MANAGED_PID);
-
-        assertTrue(isManagedPool, "managed flag set");
-        assertEq(manager, creator, "manager stored");
-        assertTrue(whitelistEnabled, "whitelist enabled");
-        assertEq(storedUnderlying, address(underlying), "underlying stored");
-        assertEq(storedConfig.rollingApyBps, rollingApy, "rolling apy stored");
-        assertEq(storedConfig.minDepositAmount, minDeposit, "min deposit stored");
-        assertEq(storedConfig.aumFeeMinBps, 100, "aum fee min stored");
-        assertEq(storedConfig.fixedTermConfigs.length, 1, "fixed term stored");
-        assertEq(storedConfig.fixedTermConfigs[0].durationSecs, 30 days, "fixed term duration stored");
+        _assertManagedPoolCreationCompleteness(input);
     }
 
     function testManagedPoolAllowsTokenWithPermissionlessPool() public {
