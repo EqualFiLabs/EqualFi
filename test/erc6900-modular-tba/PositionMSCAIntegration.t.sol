@@ -25,6 +25,8 @@ import {IERC6900ValidationModule} from "../../src/erc6900/IERC6900ValidationModu
 import {IERC6900ValidationHookModule} from "../../src/erc6900/IERC6900ValidationHookModule.sol";
 import {IERC6900Module} from "../../src/erc6900/IERC6900Module.sol";
 import {OwnerValidationModule} from "../../src/erc6900/OwnerValidationModule.sol";
+import {ERC6551BeaconProxy} from "../../src/erc6551/ERC6551BeaconProxy.sol";
+import {MockBeacon} from "../helpers/MockBeacon.sol";
 
 contract MockERC6551Registry {
     function createAccount(
@@ -325,11 +327,11 @@ contract PositionMSCAIntegrationTest is Test {
     function _deployAccount(
         address owner,
         MockERC6551Registry registry,
-        PositionMSCAImpl implementation,
+        ERC6551BeaconProxy beaconProxy,
         MockPositionNFT nft
     ) internal returns (address account) {
         uint256 tokenId = nft.mint(owner);
-        account = registry.createAccount(address(implementation), SALT, block.chainid, address(nft), tokenId);
+        account = registry.createAccount(address(beaconProxy), SALT, block.chainid, address(nft), tokenId);
     }
 
     /// @notice **Integration: ERC-6551 Registry Deployment**
@@ -338,13 +340,15 @@ contract PositionMSCAIntegrationTest is Test {
         MockEntryPoint entryPoint = new MockEntryPoint();
         MockERC6551Registry registry = new MockERC6551Registry();
         PositionMSCAImpl implementation = new PositionMSCAImpl(address(entryPoint));
+        MockBeacon beacon = new MockBeacon(address(implementation));
+        ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
         MockPositionNFT nft = new MockPositionNFT();
 
         address owner = address(0xA11CE);
         uint256 tokenId = nft.mint(owner);
-        address account = registry.createAccount(address(implementation), SALT, block.chainid, address(nft), tokenId);
+        address account = registry.createAccount(address(beaconProxy), SALT, block.chainid, address(nft), tokenId);
 
-        address computed = registry.account(address(implementation), SALT, block.chainid, address(nft), tokenId);
+        address computed = registry.account(address(beaconProxy), SALT, block.chainid, address(nft), tokenId);
         assertEq(account, computed, "registry account mismatch");
 
         (uint256 chainId, address tokenContract, uint256 returnedTokenId) = IERC6551Account(account).token();
@@ -368,8 +372,10 @@ contract PositionMSCAIntegrationTest is Test {
         MockEntryPoint entryPoint = new MockEntryPoint();
         MockERC6551Registry registry = new MockERC6551Registry();
         PositionMSCAImpl implementation = new PositionMSCAImpl(address(entryPoint));
+        MockBeacon beacon = new MockBeacon(address(implementation));
+        ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
         MockPositionNFT nft = new MockPositionNFT();
-        address account = _deployAccount(owner, registry, implementation, nft);
+        address account = _deployAccount(owner, registry, beaconProxy, nft);
 
         CounterTarget target = new CounterTarget();
         OwnerValidationModule validationModule = new OwnerValidationModule();
@@ -414,8 +420,10 @@ contract PositionMSCAIntegrationTest is Test {
         MockEntryPoint entryPoint = new MockEntryPoint();
         MockERC6551Registry registry = new MockERC6551Registry();
         PositionMSCAImpl implementation = new PositionMSCAImpl(address(entryPoint));
+        MockBeacon beacon = new MockBeacon(address(implementation));
+        ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
         MockPositionNFT nft = new MockPositionNFT();
-        address account = _deployAccount(owner, registry, implementation, nft);
+        address account = _deployAccount(owner, registry, beaconProxy, nft);
 
         Recorder recorder = new Recorder();
         ValidationModule validationA = new ValidationModule(recorder, 1);

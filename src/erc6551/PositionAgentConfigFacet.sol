@@ -20,6 +20,7 @@ contract PositionAgentConfigFacet {
         emit ERC6551RegistryUpdated(previous, newRegistry);
     }
 
+    /// @notice Sets the ERC-6551 account implementation (beacon proxy implementation)
     function setERC6551Implementation(address newImplementation) external {
         _requireAdmin();
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();

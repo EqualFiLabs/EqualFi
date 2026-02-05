@@ -7,6 +7,8 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
 import {PositionAgentRegistryFacet} from "../../src/erc6551/PositionAgentRegistryFacet.sol";
 import {PositionAgent_InvalidAgentOwner} from "../../src/libraries/PositionAgentErrors.sol";
+import {ERC6551BeaconProxy} from "../../src/erc6551/ERC6551BeaconProxy.sol";
+import {MockBeacon} from "../helpers/MockBeacon.sol";
 
 contract MockERC6551Registry {
     function account(
@@ -74,6 +76,8 @@ contract PositionAgentRegistrationVerifyPropertyTest is Test {
     PositionNFT private nft;
     MockERC6551Registry private registry;
     MockERC6551Account private implementation;
+    MockBeacon private beacon;
+    ERC6551BeaconProxy private beaconProxy;
     MockIdentityRegistry private identity;
     PositionAgentRegistryFacetHarness private facet;
     address private owner = address(0xA11CE);
@@ -83,11 +87,13 @@ contract PositionAgentRegistrationVerifyPropertyTest is Test {
         nft.setMinter(address(this));
         registry = new MockERC6551Registry();
         implementation = new MockERC6551Account();
+        beacon = new MockBeacon(address(implementation));
+        beaconProxy = new ERC6551BeaconProxy(address(beacon));
         identity = new MockIdentityRegistry();
         facet = new PositionAgentRegistryFacetHarness();
 
         facet.setPositionNFT(address(nft));
-        facet.setConfig(address(registry), address(implementation), address(identity), bytes32(0));
+        facet.setConfig(address(registry), address(beaconProxy), address(identity), bytes32(0));
     }
 
     /// @notice **Feature: erc6551-position-agents, Property 6: Agent Registration Verification**
@@ -100,7 +106,7 @@ contract PositionAgentRegistrationVerifyPropertyTest is Test {
         uint256 tokenId = nft.mint(owner, poolId);
 
         address tba = registry.account(
-            address(implementation),
+            address(beaconProxy),
             bytes32(0),
             block.chainid,
             address(nft),
