@@ -79,7 +79,7 @@ contract OwnerValidationModule is IERC6900ValidationModule {
     ) external view override returns (bytes4) {
         address owner = IERC6551Account(account).owner();
         bytes32 digest = _hashTypedData(account, keccak256(abi.encode(MESSAGE_TYPEHASH, hash)));
-        if (_isValidOwnerSignature(owner, digest, signature)) {
+        if (_isValidOwnerSignatureView(owner, digest, signature)) {
             return ERC1271_MAGICVALUE;
         }
         return bytes4(0xffffffff);
@@ -100,7 +100,6 @@ contract OwnerValidationModule is IERC6900ValidationModule {
 
     function _isValidOwnerSignature(address owner, bytes32 digest, bytes calldata signature)
         internal
-        view
         returns (bool)
     {
         if (_isERC6492Signature(signature)) {
@@ -123,6 +122,30 @@ contract OwnerValidationModule is IERC6900ValidationModule {
                 return false;
             }
             return _isValidERC1271(owner, digest, innerSig);
+        }
+
+        if (owner.code.length > 0) {
+            return _isValidERC1271(owner, digest, signature);
+        }
+
+        (address signer, ECDSA.RecoverError error, ) = ECDSA.tryRecoverCalldata(digest, signature);
+        return error == ECDSA.RecoverError.NoError && signer == owner;
+    }
+
+    function _isValidOwnerSignatureView(address owner, bytes32 digest, bytes calldata signature)
+        internal
+        view
+        returns (bool)
+    {
+        if (_isERC6492Signature(signature)) {
+            if (signature.length < ERC6492_MIN_LENGTH) {
+                return false;
+            }
+            (, , bytes memory innerSig) = _decodeERC6492Signature(signature);
+            if (owner.code.length > 0) {
+                return _isValidERC1271(owner, digest, innerSig);
+            }
+            return false;
         }
 
         if (owner.code.length > 0) {
@@ -164,7 +187,7 @@ contract OwnerValidationModule is IERC6900ValidationModule {
         (factory, factoryCalldata, innerSig) = abi.decode(wrapped, (address, bytes, bytes));
     }
 
-    function _callFactory(address factory, bytes memory factoryCalldata) internal view returns (bool ok) {
+    function _callFactory(address factory, bytes memory factoryCalldata) internal returns (bool ok) {
         assembly {
             ok := call(gas(), factory, 0, add(factoryCalldata, 0x20), mload(factoryCalldata), 0, 0)
         }
