@@ -326,7 +326,25 @@ function validateUserOp(
 ) external returns (uint256 validationData);
 ```
 
-### 4.5 ERC-1271: Smart Contract Signatures
+### 4.5 ERC-6492: Counterfactual Signature Validation
+
+The system supports ERC-6492 wrapper signatures for counterfactual accounts (accounts that may not be deployed yet at signature time).
+
+**Why this matters in this architecture:**
+- TBAs are ERC-6551 counterfactual addresses derived deterministically from `(implementation, salt, chainId, tokenContract, tokenId)`.
+- Implementations are deployed through the canonical ERC-6551 registry, and this protocol commonly uses a beacon-backed implementation address for upgradeable MSCA behavior.
+- ERC-6492 allows signatures to carry deployment context so verification can succeed even before the signer account is deployed.
+
+**Implementation behavior (OwnerValidationModule):**
+1. Detect ERC-6492 wrapper via the `0x6492...6492` magic suffix.
+2. Decode `(factory, factoryCalldata, innerSignature)`.
+3. If signer code already exists, attempt standard ERC-1271 validation directly.
+4. Otherwise, call the provided factory calldata (side-effecting deployment path).
+5. Retry ERC-1271 validation on the now-deployed signer account.
+
+This makes counterfactual signature flows compatible with ERC-6551 account deployment patterns while preserving ERC-1271 signature semantics after deployment.
+
+### 4.6 ERC-1271: Smart Contract Signatures
 
 The TBA validates signatures on behalf of the Position NFT owner.
 
@@ -1154,21 +1172,17 @@ event ValidationUninstalled(address indexed module, uint32 indexed entityId, boo
 - [ERC-6900: Modular Smart Contract Accounts](https://eips.ethereum.org/EIPS/eip-6900)
 - [ERC-8004: Agent Identity](https://eips.ethereum.org/EIPS/eip-8004)
 - [ERC-4337: Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
+- [ERC-6492: Signature Validation for Predeploy Contracts](https://eips.ethereum.org/EIPS/eip-6492)
 - [ERC-1271: Standard Signature Validation](https://eips.ethereum.org/EIPS/eip-1271)
 - [ERC-7201: Namespaced Storage Layout](https://eips.ethereum.org/EIPS/eip-7201)
 - [EIP-712: Typed Structured Data Hashing](https://eips.ethereum.org/EIPS/eip-712)
 - [EIP-2535: Diamond Standard](https://eips.ethereum.org/EIPS/eip-2535)
 
-**Related Design Documents:**
-- `DESIGN-ERC8004-ERC6551-POSITION-AGENTS.md` - Original TBA + Identity design
-- `DESIGN-ERC6900-MODULAR-TBA.md` - Modular account design
-- `.kiro/specs/erc6551-position-agents/` - ERC-6551 integration spec
-- `.kiro/specs/erc6900-modular-tba/` - ERC-6900 MSCA spec
 
 ---
 
 ## Document History
 
-| Version | Date | Author | Changes |
-|---------|------|--------|---------|
-| 1.0.0 | 2026-01-30 | EqualGi Labs | Initial unified design document |
+| Version | Date | Author |
+|---------|------|--------|
+| 1.0.1 | 2026-02-06 | EqualFi Labs |
