@@ -151,6 +151,7 @@ contract MamCurveGasTest is Test {
         vm.resumeGasMetering();
 
         vm.prank(taker);
+        uint256 gasStart = gasleft();
         harness.executeCurveSwap(
             curveId,
             amountIn,
@@ -158,6 +159,8 @@ contract MamCurveGasTest is Test {
             uint64(block.timestamp + 1 days),
             taker
         );
+        uint256 swapOnlyGas = gasStart - gasleft();
+        emit log_named_uint("MAM swap_only gas", swapOnlyGas);
     }
 
     function testGasCreateCurvesBatch() public {

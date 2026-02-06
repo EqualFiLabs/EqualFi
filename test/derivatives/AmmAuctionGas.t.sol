@@ -74,7 +74,10 @@ contract AmmAuctionGasTest is Test {
         vm.resumeGasMetering();
 
         vm.prank(taker);
+        uint256 gasStart = gasleft();
         harness.swapExactIn(auctionId, address(tokenA), amountIn, 1, taker);
+        uint256 swapOnlyGas = gasStart - gasleft();
+        emit log_named_uint("AMM swap_only gas", swapOnlyGas);
     }
 
     function testGasCreateAuction() public {

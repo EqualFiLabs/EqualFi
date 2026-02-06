@@ -125,7 +125,7 @@ contract PositionAgentAerodromeSlipstreamForkTest is Test {
     address internal constant SLIPSTREAM_NPM = 0x827922686190790b37229fd06084350E74485b72;
     address internal constant CL_FACTORY = 0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A;
 
-    address internal constant ENTRYPOINT = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
+    address internal constant ENTRYPOINT = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
 
     uint256 internal constant USDC_POOL = 1;
     uint256 internal constant WETH_POOL = 2;

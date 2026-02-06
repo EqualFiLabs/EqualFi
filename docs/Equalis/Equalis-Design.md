@@ -82,8 +82,8 @@ Equalis is a deterministic credit primitive that replaces price-based liquidatio
 │  └──────────────┘  └──────────────┘  └──────────────┘           │
 │                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │  MamCurve    │  │  Derivative  │  │ PositionAgent│           │
-│  │    Facet     │  │  ViewFacet   │  │   Facets     │           │
+│  │  MamCurve*   │  │  Derivative  │  │ PositionAgent│           │
+│  │   Facets     │  │  ViewFacet   │  │   Facets     │           │
 │  └──────────────┘  └──────────────┘  └──────────────┘           │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
@@ -120,6 +120,8 @@ Equalis is a deterministic credit primitive that replaces price-based liquidatio
                     │ Identity NFT │
                     └──────────────┘
 ```
+
+`*` MAM is implemented as three facets: `MamCurveCreationFacet`, `MamCurveManagementFacet`, and `MamCurveExecutionFacet`.
 
 **External Canonical Registries**:
 ```
@@ -182,26 +184,32 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 | **EqualLendDirectRollingAgreementFacet** | P2P rolling acceptance | `acceptRollingOffer`, `getRollingAgreement` |
 | **EqualLendDirectRollingPaymentFacet** | P2P rolling payments | `makeRollingPayment` |
 | **EqualLendDirectRollingLifecycleFacet** | P2P rolling lifecycle | `recoverRolling`, `exerciseRolling`, `repayRollingInFull` |
-| **EqualIndex Facets (V3)** | Multi-asset index tokens | Admin (`setIndexFees`, `setPaused`), Actions (`mint`, `burn`, `flashLoan`), View (`getIndex`, `getIndexAssets`, etc.) |
+| **EqualIndex Facets (V3)** | Multi-asset index tokens | Admin (`setIndexFees`, `setPaused`), Actions (`mint`, `burn`, `flashLoan`), Position (`depositToPosition`, `withdrawFromPosition`), View (`getIndex`, `getIndexAssets`) |
 | **MaintenanceFacet** | AUM fee management | `pokeMaintenance`, `settleMaintenance` |
 | **AdminFacet / AdminGovernanceFacet** | Protocol governance | `setTimelock`, `setTreasury`, fee split configuration |
 | **ActiveCreditViewFacet** | Active credit queries | `pendingActiveCredit`, `getActiveCreditState` |
-| **ConfigViewFacet** | Protocol configuration queries | `getPoolConfig`, `getDirectConfig` |
-| **EnhancedLoanViewFacet** | Detailed loan information | `getLoanDetails`, `getLoanStatus` |
-| **LiquidityViewFacet** | Pool liquidity queries | `getPoolLiquidity`, `getAvailableLiquidity` |
-| **LoanPreviewFacet** | Loan simulation | `previewLoan`, `previewRepayment` |
-| **LoanViewFacet** | Basic loan queries | `getLoan`, `getUserLoans` |
-| **MultiPoolPositionViewFacet** | Cross-pool position state | `getPositionAcrossPools` |
+| **ConfigViewFacet** | Protocol configuration queries | `getPoolConfig`, `getManagedPoolConfig`, `getPoolIdForAsset`, `getRollingDelinquencyThresholds` |
+| **EnhancedLoanViewFacet** | Detailed loan information | `getUserLoanSummary`, `getUserHealthMetrics`, `previewRepayFixed` |
+| **LiquidityViewFacet** | Pool liquidity queries | `totalAvailableLiquidity`, `getTotalPoolDeposits`, `getUserBalances` |
+| **LoanPreviewFacet** | Loan simulation | `previewFixedLoanCosts`, `calculateFixedLoanPayoff`, `previewRollingLoanCosts` |
+| **LoanViewFacet** | Basic loan queries | `getRollingLoan`, `getFixedLoan`, `getUserFixedLoanIds` |
+| **MultiPoolPositionViewFacet** | Cross-pool position state | `getMultiPoolPositionState`, `getPositionAggregatedSummary` |
 | **PoolUtilizationViewFacet** | Utilization metrics | `getPoolUtilization` |
-| **PositionViewFacet** | Position state queries | `getPositionState`, `getPositionDebt` |
-| **EqualLendDirectViewFacet** | Direct lending queries | `getOffer`, `getBorrowerOffer`, `getAgreement`, `getLenderOffers` |
+| **PositionViewFacet** | Position state queries | `getPositionState`, `getPositionLoanSummary`, `getPositionEncumbrance` |
+| **EqualLendDirectViewFacet** | Direct lending queries and config | `setDirectConfig`, `getOffer`, `getBorrowerOffer`, `getAgreement`, `getLenderOffers` |
 | **EqualLendDirectRollingViewFacet** | Rolling direct helpers | `getRollingStatus`, `calculateRollingPayment`, `aggregateRollingExposure` |
 | **AmmAuctionFacet** | Time-bounded AMM auctions | `createAuction`, `swapExactIn`, `finalizeAuction`, `cancelAuction` |
+| **AtomicDeskFacet** | Atomic RFQ desks and tranche reservations | `registerDesk`, `openTranche`, `reserveAtomicSwap`, `setHashlock` |
+| **CommunityAuctionFacet** | Multi-maker auction markets | `createCommunityAuction`, `joinCommunityAuction`, `swapExactIn`, `finalizeAuction` |
+| **SettlementEscrowFacet** | Escrow settlement and refunds | `settle`, `refund`, `setCommittee`, `configureMailbox` |
 | **OptionsFacet** | Covered call and secured put options | `createOptionSeries`, `exerciseOptions`, `reclaimOptions` |
 | **FuturesFacet** | Physical delivery futures | `createFuturesSeries`, `settleFutures`, `reclaimFutures` |
-| **MamCurveFacet** | Dutch auction market making curves | `createCurve`, `createCurvesBatch`, `updateCurve`, `updateCurvesBatch`, `cancelCurve`, `cancelCurvesBatch`, `executeCurveSwap`, `loadCurveForFill`, `setMamPaused` |
+| **MamCurveCreationFacet** | MAM creation and pause control | `setMamPaused`, `createCurve`, `createCurvesBatch` |
+| **MamCurveManagementFacet** | MAM updates/cancel/expiry | `updateCurve`, `updateCurvesBatch`, `cancelCurve`, `expireCurve` |
+| **MamCurveExecutionFacet** | MAM execution | `loadCurveForFill`, `executeCurveSwap` |
 | **MamCurveViewFacet** | MAM curve queries | `getCurve`, `getCurvesByPosition`, `getCurvesByPositionId` |
 | **DerivativeViewFacet** | Derivative product queries | `getAmmAuction`, `getOptionSeries`, `getFuturesSeries` |
+| **AuctionManagementViewFacet** | Auction-management views | `getActiveCommunityAuctions`, `getCommunityAuctionMakers`, `getPoolHealth` |
 | **PositionAgentTBAFacet** | TBA computation and deployment | `computeTBAAddress`, `deployTBA`, `getTBAImplementation`, `getERC6551Registry` |
 | **PositionAgentRegistryFacet** | Agent registration recording | `recordAgentRegistration`, `getIdentityRegistry` |
 | **PositionAgentViewFacet** | Agent state queries | `getTBAAddress`, `getAgentId`, `isAgentRegistered`, `isTBADeployed`, `getCanonicalRegistries`, `getTBAInterfaceSupport` |
@@ -418,17 +426,18 @@ mapping(bytes32 => mapping(uint256 => bool)) joined; // positionKey => poolId =>
 
 #### Managed Pools and Whitelists
 
-Pools may be initialized as **managed**, designating a manager account and storing mutable parameters in `managedConfig`:
+Pools may be initialized as **managed**, designating a manager account while still using canonical `PoolConfig` on `PoolData`:
 
 **Managed Pool Features**:
 - Mutable configuration: rates, thresholds, caps, action fees, flash fees, maintenance
 - Whitelist gating keyed to position keys (derived from Position NFT IDs)
 - Auto-join reverts for non-whitelisted positions when whitelist is enabled
 - Managers can add/remove whitelist entries, toggle enforcement, transfer or renounce management
+- Optional managed-pool system-share routing via `LibFeeRouter.routeManagedShare`
 
 **Managed Pool Requirements**:
 - `whitelistEnabled` must be `true` at pool creation
-- Manager must be `msg.sender` or `address(0)` at creation
+- Manager is always set to `msg.sender` at creation
 - Separate `managedPoolCreationFee` (distinct from unmanaged `poolCreationFee`)
 - If `managedPoolCreationFee == 0`, managed pool creation is disabled
 
@@ -451,7 +460,7 @@ function addToWhitelist(uint256 pid, uint256 tokenId) external {
 - `transferManager(pid, newManager)` - transfer management
 - `renounceManager(pid)` - permanently renounce management (irreversible)
 
-Unmanaged pools are permissionless when pool creation fees are enabled. Core pool configuration is immutable after creation, but action fees can be overridden by governance and maintenance rates are bounded by configuration.
+Unmanaged pools are permissionless when pool creation fees are enabled. Pool config is stored in `PoolData.poolConfig` for both managed and unmanaged pools; action fees can still be overridden by governance and maintenance rates are bounded by config.
 
 ### 4.3 FeeIndex System with Normalized Fee Base and Active Credit Index
 
@@ -738,7 +747,7 @@ event EncumbranceDecreased(
    - Initialize loan state with `apyBps = 0`
 
 2. **Payment**: `makePaymentFromPosition(tokenId, poolId, paymentAmount)`
-   - **No minimum payment** - any amount applies directly to principal
+   - Minimum payment is optional and governed by `rollingMinPaymentBps` (if set globally)
    - Entire payment reduces `principalRemaining`
    - Reset missed payment counter
 
@@ -836,20 +845,23 @@ function calculatePenalty(uint256 principalAtOpen) internal pure returns (uint25
 
 **Process**:
 1. Verify penalty eligibility (missed payments or expiry)
-2. Calculate available collateral: `availableCollateral = userPrincipal - directLockedPrincipal - directOfferEscrow`
+2. Calculate available collateral from centralized encumbrance:  
+   `availableCollateral = userPrincipal - (directLocked + directLent + directOfferEscrow + indexEncumbered)`
 3. Calculate 5% penalty: `penalty = principalAtOpen * 500 / 10_000`
-4. Apply penalty cap: `penaltyApplied = min(penalty, principalRemaining, availableCollateral)`
-5. Reduce user principal by the seized principal + penalty (borrower absorbs both)
-6. Calculate distribution shares from the remaining penalty amount via the fee router
-7. Transfer enforcer and treasury shares (leave protocol accounting)
-8. Accrue FeeIndex and Active Credit shares to their indices (remains in protocol accounting)
-9. Close loan (mark as defaulted/closed)
+4. Apply penalty cap: `penaltyApplied = min(penalty, principalRemaining)`
+5. Enforce collateral coverage for full seizure:  
+   `require(availableCollateral >= principalRemaining + penaltyApplied)`
+6. Reduce user principal by the seized principal + penalty (borrower absorbs both)
+7. Calculate distribution shares from the remaining penalty amount via the fee router
+8. Transfer enforcer and treasury shares (leave protocol accounting)
+9. Accrue FeeIndex and Active Credit shares to their indices (remains in protocol accounting)
+10. Close loan (mark as defaulted/closed)
 
 **Key Properties**:
 - **Proportional Penalty**: 5% of original principal basis, regardless of utilization level
 - **Position Preservation**: Borrower retains remaining collateral after penalty
 - **Direct Commitment Protection**: Penalty respects locked collateral and escrowed offers
-- **Predictable Loss**: Maximum loss is always 5% of `principalAtOpen`
+- **Debt-First Settlement**: Default seizes remaining principal plus penalty from the borrower
 - **Fairness**: Same penalty percentage whether at 50% or 95% utilization
 
 ### 4.8 Equalis Direct - Term Loans (P2P Lending)
@@ -1265,7 +1277,7 @@ remainder = amountForDebt - lenderShare
 // Remainder routed via fee router (Treasury / Active Credit / Fee Index)
 ```
 
-### 4.11 Direct Lending Configuration
+### 4.10 Direct Lending Configuration
 
 **Term Loan Configuration**:
 ```solidity
@@ -1332,7 +1344,7 @@ directSameAssetDebt[positionKey][asset]       // Same-asset debt tracking
 - `LibEncumbrance.total(positionKey, poolId) <= userPrincipal[positionKey]` (per position, per pool)
 - `defaultLenderBps <= 10000` and global fee router splits satisfy `treasuryBps + activeCreditBps <= 10000`
 
-### 4.12 Flash Loan System
+### 4.11 Flash Loan System
 
 **Pool-Local Flash Loans**:
 - Borrow from single pool's `trackedBalance`
@@ -1355,7 +1367,7 @@ function flashLoan(uint256 pid, address receiver, uint256 amount, bytes calldata
 }
 ```
 
-### 4.13 EqualIndex (Multi-Asset Index Tokens)
+### 4.12 EqualIndex (Multi-Asset Index Tokens)
 
 **Overview**: Basket tokens holding fixed-weight portfolios of ERC20 assets.
 
@@ -1408,7 +1420,7 @@ struct Index {
 
 ### 5.1 Pool Configuration
 
-**Pool Configuration** (set at pool creation for unmanaged pools):
+**Pool Configuration** (canonical config for both managed and unmanaged pools):
 ```solidity
 struct PoolConfig {
     // Interest rates
@@ -1450,58 +1462,18 @@ struct PoolConfig {
 }
 ```
 
-**Managed Pool Configuration** (mutable by manager):
-```solidity
-struct ManagedPoolConfig {
-    // Interest rates (mutable)
-    uint16 rollingApyBps;
-
-    // LTV and collateralization (mutable)
-    uint16 depositorLTVBps;
-
-    // Maintenance and flash loan fees (mutable)
-    uint16 maintenanceRateBps;
-    uint16 flashLoanFeeBps;
-    bool flashLoanAntiSplit;
-
-    // Thresholds (mutable)
-    uint256 minDepositAmount;
-    uint256 minLoanAmount;
-    uint256 minTopupAmount;
-
-    // Caps (mutable)
-    bool isCapped;
-    uint256 depositCap;
-    uint256 maxUserCount;
-
-    // AUM fee bounds (immutable after creation)
-    uint16 aumFeeMinBps;
-    uint16 aumFeeMaxBps;
-
-    // Fixed term configs (immutable after creation)
-    FixedTermConfig[] fixedTermConfigs;
-
-    // Action fees (mutable)
-    ActionFeeSet actionFees;
-
-    // Management settings
-    address manager;
-    bool whitelistEnabled;
-}
-```
-
 **Mutable State**:
 ```solidity
 struct PoolData {
     address underlying;             // ERC20 asset
+    bool initialized;
     PoolConfig poolConfig;
     uint16 currentAumFeeBps;        // Within bounds
     bool deprecated;                // UI flag
-    
+
     // Managed pool state
     bool isManagedPool;
     address manager;
-    ManagedPoolConfig managedConfig;
     bool whitelistEnabled;
     mapping(bytes32 => bool) whitelist;  // Keyed by positionKey
     
@@ -1515,18 +1487,21 @@ struct PoolData {
     uint256 userCount;
     uint256 feeIndexRemainder;      // Precision tracking
     uint256 maintenanceIndexRemainder;
+    uint256 yieldReserve;
     uint256 trackedBalance;         // Pool's token balance
     
     // Active Credit Index state
     uint256 activeCreditIndex;
     uint256 activeCreditIndexRemainder;
     uint256 activeCreditPrincipalTotal;
+    uint256 activeCreditMaturedTotal;
     
     // Per-user mappings (keyed by position key)
     mapping(bytes32 => uint256) userPrincipal;
     mapping(bytes32 => uint256) userFeeIndex;
     mapping(bytes32 => uint256) userMaintenanceIndex;
     mapping(bytes32 => uint256) userAccruedYield;
+    mapping(bytes32 => uint256) externalCollateral;
     mapping(bytes32 => ActiveCreditState) userActiveCreditStateEncumbrance;
     mapping(bytes32 => ActiveCreditState) userActiveCreditStateDebt;
     
@@ -1537,6 +1512,7 @@ struct PoolData {
     mapping(bytes32 => uint256) fixedTermPrincipalRemaining;
     mapping(bytes32 => uint256[]) userFixedLoanIds;
     mapping(bytes32 => mapping(uint256 => uint256)) loanIdToIndex;
+    mapping(bytes32 => ActionFeeConfig) actionFees;
 }
 
 struct ActiveCreditState {
@@ -1552,30 +1528,43 @@ struct ActiveCreditState {
 struct AppStorage {
     uint256 poolCount;
     mapping(uint256 => PoolData) pools;
+    mapping(address => uint256) permissionlessPoolForToken;
+    mapping(address => uint256) assetToPoolId;
+    PoolConfig defaultPoolConfig;
+    bool defaultPoolConfigSet;
     mapping(address => mapping(uint256 => FlashAgg)) flashAgg;
     bool defaultFlashAntiSplit;
     address timelock;
     address treasury;
-    uint16 treasuryShareBps;            // Default: 2000 (20%)
-    uint16 activeCreditShareBps;        // Share to Active Credit Index
+    uint16 treasuryShareBps;            // Default: 1000 (10%)
+    uint16 activeCreditShareBps;        // Default: 7000 (70%)
+    uint16 managedPoolSystemShareBps;   // Default: 2000 (20%)
     bool treasuryShareConfigured;
+    bool activeCreditShareConfigured;
+    bool managedPoolSystemShareConfigured;
     uint128 actionFeeMin;
     uint128 actionFeeMax;
     bool actionFeeBoundsSet;
     address foundationReceiver;         // Maintenance fee recipient
     uint16 defaultMaintenanceRateBps;
     uint16 maxMaintenanceRateBps;
+    uint256 __reservedIndexCreationFee;
     uint256 indexCreationFee;
     uint256 poolCreationFee;            // Fee for unmanaged pool creation
+    uint16 rollingMinPaymentBps;
     uint256 managedPoolCreationFee;     // Fee for managed pool creation (0 = disabled)
     uint8 rollingDelinquencyEpochs;     // Default: 2
     uint8 rollingPenaltyEpochs;         // Default: 3
+    uint8 transientCacheMode;
+    uint256 nativeTrackedTotal;
+    address positionMintFeeToken;
+    uint256 positionMintFeeAmount;
 }
 ```
 
 **Treasury Split Configuration**:
 ```solidity
-// Fee distribution from LibFeeTreasury
+// Fee distribution from LibFeeRouter
 uint16 shareBps = treasurySplitBps(store);           // Treasury share
 uint16 activeShareBps = activeCreditSplitBps(store); // Active Credit share
 require(shareBps + activeShareBps <= 10_000);
@@ -1667,34 +1656,29 @@ function checkSolvency(
 
 ### 6.2 Fee Distribution Flow
 
-**Treasury Split Mechanism**:
+**Fee Router Mechanism**:
 ```solidity
-function accrueWithTreasury(
-    PoolData storage p,
+function routeManagedShare(
     uint256 pid,
     uint256 amount,
     bytes32 source
-) internal returns (uint256 toTreasury, uint256 toActiveCredit, uint256 toIndex) {
+) internal returns (uint256 toTreasury, uint256 toActiveCredit, uint256 toFeeIndex) {
     if (amount == 0) return (0, 0, 0);
-    
-    uint16 shareBps = LibAppStorage.treasurySplitBps(store);
-    uint16 activeShareBps = LibAppStorage.activeCreditSplitBps(store);
-    require(shareBps + activeShareBps <= 10_000, "splits>100%");
-    
-    toTreasury = treasury != address(0) ? (amount * shareBps) / 10_000 : 0;
-    toActiveCredit = (amount * activeShareBps) / 10_000;
-    toIndex = amount - toTreasury - toActiveCredit;
-    
-    if (toTreasury > 0) {
-        p.trackedBalance -= toTreasury;
-        IERC20(p.underlying).safeTransfer(treasury, toTreasury);
+    AppStorage storage store = LibAppStorage.s();
+    PoolData storage pool = store.pools[pid];
+    uint256 systemShare;
+    uint256 managedShare;
+
+    if (pool.isManagedPool) {
+        systemShare = amount * managedPoolSystemShareBps / 10_000;
+        managedShare = amount - systemShare;
+        // systemShare routes to canonical base pool for same underlying if available
+    } else {
+        managedShare = amount;
     }
-    if (toActiveCredit > 0) {
-        LibActiveCreditIndex.accrueWithSource(pid, toActiveCredit, source);
-    }
-    if (toIndex > 0) {
-        LibFeeIndex.accrueWithSource(pid, toIndex, source);
-    }
+
+    (toTreasury, toActiveCredit, toFeeIndex) = previewSplit(managedShare);
+    // Treasury transfers out; Active Credit and Fee Index accrue in accounting
 }
 ```
 
@@ -1870,13 +1854,14 @@ function calculateDirectInterest(
 **Position NFT (ERC-721)**:
 - Standard compliant
 - Enumerable extension
-- On-chain metadata (SVG + JSON)
+- `tokenURI` resolves through `getAgentURI(tokenId)` when diamond is configured (ERC-8004 registration file URI)
+- SVG image helpers are exposed via `PositionNFTMetadataFacet.tokenImageURI`
 - Transfer hooks block transfers while Direct offers are open (no auto-cancel)
 
 **Index Tokens (ERC-20)**:
 - Standard compliant
 - Minted/burned by EqualIndexFacetV3
-- No direct transfers (must mint/burn)
+- Direct transfers are supported (`ERC20` + `ERC20Permit`)
 
 ### 8.3 Event Emissions
 
@@ -1930,9 +1915,9 @@ event ActiveCreditTimingUpdated(uint256 indexed pid, address indexed user, bool 
 
 **Managed Pool Events**:
 ```solidity
-event PoolInitializedManaged(uint256 indexed pid, address indexed underlying, address indexed manager, ManagedPoolConfig config);
+event PoolInitializedManaged(uint256 indexed pid, address indexed underlying, address indexed manager, PoolConfig config);
 event ManagedConfigUpdated(uint256 indexed pid, string parameter, bytes oldValue, bytes newValue);
-event WhitelistUpdated(uint256 indexed pid, address indexed user, bool added);
+event WhitelistUpdated(uint256 indexed pid, bytes32 indexed user, bool added);
 event WhitelistToggled(uint256 indexed pid, bool enabled);
 event ManagerTransferred(uint256 indexed pid, address indexed oldManager, address indexed newManager);
 event ManagerRenounced(uint256 indexed pid, address indexed formerManager);
@@ -2067,6 +2052,7 @@ event ValidationUninstalled(address indexed module, uint32 indexed entityId, boo
 
 5. **Deploy View Facets**:
    - ActiveCreditViewFacet
+   - AuctionManagementViewFacet
    - ConfigViewFacet
    - EnhancedLoanViewFacet
    - LiquidityViewFacet
@@ -2075,12 +2061,18 @@ event ValidationUninstalled(address indexed module, uint32 indexed entityId, boo
    - MultiPoolPositionViewFacet
    - PoolUtilizationViewFacet
    - PositionViewFacet
+   - PositionNFTMetadataFacet
 
 6. **Deploy Derivative Facets**:
    - AmmAuctionFacet
+   - AtomicDeskFacet
+   - CommunityAuctionFacet
+   - SettlementEscrowFacet
    - OptionsFacet
    - FuturesFacet
-   - MamCurveFacet
+   - MamCurveCreationFacet
+   - MamCurveManagementFacet
+   - MamCurveExecutionFacet
    - MamCurveViewFacet
    - DerivativeViewFacet
 
@@ -2116,7 +2108,16 @@ event ValidationUninstalled(address indexed module, uint32 indexed entityId, boo
    // PositionAgentConfigFacet(diamond).setIdentityRegistry(0x8004A818BFB912233c491871b3d84c89A494BD9e);
    ```
 
-9. **Deploy Optional ERC-6900 Modules**:
+9. **Deploy/Configure Settlement Infrastructure**:
+   ```solidity
+   Mailbox mailbox = new Mailbox(address(diamond));
+   SettlementEscrowFacet(diamond).configureMailbox(address(mailbox));
+   SettlementEscrowFacet(diamond).configureAtomicDesk(address(diamond));
+   SettlementEscrowFacet(diamond).setCommittee(timelockAddress, true);
+   SettlementEscrowFacet(diamond).transferGovernor(timelockAddress);
+   ```
+
+10. **Deploy Optional ERC-6900 Modules**:
    ```solidity
    // Deploy default validation module
    OwnerValidationModule ownerModule = new OwnerValidationModule();
@@ -2125,13 +2126,13 @@ event ValidationUninstalled(address indexed module, uint32 indexed entityId, boo
    PositionAgentAmmSkillModule ammSkillModule = new PositionAgentAmmSkillModule();
    ```
 
-10. **Deploy Optional Facets**:
-   - EqualIndexFacetV3
+11. **Deploy Optional Facets**:
+   - EqualIndexPositionFacet
    - EqualIndexAdminFacetV3
    - EqualIndexActionsFacetV3
    - EqualIndexViewFacetV3
 
-9. **Configure Protocol**:
+12. **Configure Protocol**:
    ```solidity
    AdminFacet(diamond).setTimelock(timelockAddress);
    AdminGovernanceFacet(diamond).setTreasury(treasuryAddress);
@@ -2178,7 +2179,7 @@ uint256 poolId = PoolManagementFacet(diamond).initPool{value: poolCreationFee}(
 
 **Managed Pool Creation**:
 ```solidity
-ManagedPoolConfig memory config = ManagedPoolConfig({
+PoolConfig memory config = PoolConfig({
     rollingApyBps: 0,
     depositorLTVBps: 8000,
     maintenanceRateBps: 100,
@@ -2193,9 +2194,11 @@ ManagedPoolConfig memory config = ManagedPoolConfig({
     aumFeeMinBps: 50,
     aumFeeMaxBps: 500,
     fixedTermConfigs: [...],
-    actionFees: ActionFeeSet(...),
-    manager: msg.sender,           // Must be msg.sender or address(0)
-    whitelistEnabled: true         // Must be true at creation
+    borrowFee: ActionFeeConfig({amount: 0, enabled: false}),
+    repayFee: ActionFeeConfig({amount: 0, enabled: false}),
+    withdrawFee: ActionFeeConfig({amount: 0, enabled: false}),
+    flashFee: ActionFeeConfig({amount: 0, enabled: false}),
+    closeRollingFee: ActionFeeConfig({amount: 0, enabled: false})
 });
 
 uint256 poolId = PoolManagementFacet(diamond).initManagedPool{value: managedPoolCreationFee}(
@@ -2203,6 +2206,7 @@ uint256 poolId = PoolManagementFacet(diamond).initManagedPool{value: managedPool
     address(usdc),
     config
 );
+// Manager is set to msg.sender and whitelistEnabled starts as true.
 ```
 
 **Direct Lending Configuration**:
@@ -2236,180 +2240,6 @@ DirectRollingConfig memory rollingConfig = DirectRollingConfig({
 5. **Managed Pools**: Whitelist size, manager activity, config changes
 
 ---
-
-## Appendices
-
-### A.1 Glossary
-
-- **Position NFT**: ERC-721 token representing an isolated account in a pool
-- **Position Key**: Deterministic `bytes32` derived from NFT contract and token ID
-- **FeeIndex**: Cumulative yield distribution index (1e18 scale)
-- **MaintenanceIndex**: Cumulative AUM fee deduction index
-- **Active Credit Index**: Time-gated yield distribution for active credit participants
-- **Tracked Balance**: Per-pool token balance for isolation
-- **Depositor LTV**: Maximum loan-to-value ratio for deposit-backed borrowing
-- **Direct Lending**: Peer-to-peer term or rolling loans between Position NFT holders
-- **Upfront Realization**: Interest paid at loan origination, not maturity
-- **Early Exercise**: Voluntary collateral forfeiture before maturity
-- **Penalty Settlement**: Fixed 5% penalty instead of full liquidation
-- **Fee Base**: Normalized principal amount used for fee calculations
-- **Principal At Open**: Immutable penalty basis recorded at loan creation
-- **Grace Period**: Time window after due timestamp for repayment (24 hours for Direct)
-- **Arrears**: Accumulated unpaid interest in rolling loans
-- **Amortization**: Principal reduction through payments
-- **Managed Pool**: Pool with mutable configuration and whitelist gating
-- **Whitelist**: Position key-based access control for managed pools
-- **Lender Call**: Optional feature allowing lender to accelerate due timestamp
-- **Explicit Exercise**: Direct loans require an explicit `exerciseDirect` call (not automatic on acceptance)
-- **Borrower Offer**: Direct lending offer posted by borrower specifying desired terms
-- **Ratio Tranche Offer**: CLOB-style offer with price ratio for variable-size fills
-- **Borrower Ratio Tranche Offer**: Borrower-posted ratio tranche offer with collateral cap
-- **AMM Auction**: Time-bounded constant-product liquidity pool created by a Maker using assets from two pools
-- **Option Series**: Set of fungible ERC-1155 tokens representing covered call or secured put options
-- **Futures Series**: Set of fungible ERC-1155 tokens representing physical delivery futures
-- **Option Token**: ERC-1155 contract for option rights, controlled by the Diamond
-- **Futures Token**: ERC-1155 contract for futures rights, controlled by the Diamond
-- **Strike Price**: Predetermined price at which an option can be exercised (1e18 normalized)
-- **Forward Price**: Predetermined price for futures settlement (1e18 normalized)
-- **Invariant**: Constant product (k = reserveA × reserveB) maintained by AMM auctions
-- **MAM Curve**: Maker Auction Market curve - a time-bounded Dutch auction for selling base assets at linearly interpolated prices
-- **Dutch Auction**: Auction mechanism where price decreases (or increases) over time until a buyer accepts
-- **Base Asset**: The asset being sold in a MAM curve (locked by maker)
-- **Quote Asset**: The asset received by maker in exchange for base asset fills
-- **Curve Generation**: Version counter incremented on each curve update, enabling price/timing changes without cancellation
-- **Curve Commitment**: Hash of the full curve descriptor, updated on each generation change
-- **Flash Accounting**: Deferred ledger update model where userPrincipal and userFeeIndex are not updated during intermediate states
-- **Encumbered Balance**: Principal flagged as backing a derivative, preventing withdrawal but continuing to accrue fees
-- **LibEncumbrance**: Centralized library for all encumbrance tracking (directLocked, directLent, directOfferEscrow, indexEncumbered) per position and pool
-- **LibNetEquity**: Pure helper library for fee base calculations (same-asset, cross-asset, P2P borrower)
-- **LibFeeIndex**: Fee index accounting library (1e18 scale) for yield distribution
-- **LibSolvencyChecks**: Shared utilities for deterministic solvency and debt calculations
-- **LibIndexEncumbrance**: Thin wrapper around LibEncumbrance for index-specific encumbrance operations
-
-### Position Agent Terms
-- **TBA (Token Bound Account)**: ERC-6551 smart contract account controlled by an NFT, enabling Position NFTs to hold assets and execute transactions
-- **MSCA (Modular Smart Contract Account)**: ERC-6900 compliant account with modular validation and execution capabilities
-- **Position Agent**: A Position NFT registered as an ERC-8004 agent, discoverable by external indexers
-- **Validation Module**: ERC-6900 module that authorizes execution (user ops, runtime calls, signatures)
-- **Execution Module**: ERC-6900 module that adds new callable functions to the account
-- **Validation Hook**: Pre-validation checks for permissions and limits
-- **Execution Hook**: Pre/post execution checks for policy enforcement
-- **Module Entity**: Packed reference (module address 20 bytes + entity ID 4 bytes)
-- **Validation Config**: Packed validation function with flags (25 bytes)
-- **Hook Config**: Packed hook function with flags (25 bytes)
-- **Bootstrap Mode**: Initial TBA state with native EIP-712 validation before module installation
-- **Agent ID**: The ERC-721 tokenId minted by the ERC-8004 Identity Registry
-- **Agent URI**: The URI resolving to the agent's registration file (ERC-8004 tokenURI)
-- **Agent Wallet**: A verified address where the agent receives payments (set to TBA address)
-- **Skill Module**: An execution module that provides specific capabilities (e.g., AMM auction creation)
-- **EntryPoint**: The ERC-4337 singleton contract that handles UserOperation bundles
-
-### A.2 Formula Reference
-
-**Solvency Ratio**:
-```
-solvencyRatio = (availableCollateral * 10000) / totalDebt
-require(solvencyRatio >= depositorLTVBps)
-```
-
-**Simple Interest**:
-```
-interest = (principal * apyBps * timeSeconds) / (365 days * 10_000)
-```
-
-**Penalty Calculation**:
-```
-penalty = principalAtOpen * 500 / 10_000  // Fixed 5%
-penaltyApplied = min(penalty, principalRemaining, availableCollateral)
-```
-
-**Penalty Distribution**:
-```
-enforcerShare = penaltyApplied / 10                           // 10%
-remaining = penaltyApplied - enforcerShare
-feeIndexShare = (remaining * 70) / 100                        // 63% of total
-protocolShare = (remaining * 10) / 100                        // 9% of total
-activeCreditShare = remaining - feeIndexShare - protocolShare // 18% of total
-```
-
-**Fee Base Calculation**:
-```
-// Same-asset domains
-feeBase = max(0, principal - sameAssetDebt)
-
-// Cross-asset domains  
-feeBase = lockedCollateral + unlockedPrincipal
-```
-
-**FeeIndex Accrual**:
-```
-delta = (feeAmount * 1e18) / totalDeposits
-feeIndex += delta
-```
-
-**Active Credit Time Gate**:
-```
-TIME_GATE = 24 hours
-timeCredit = min(24 hours, currentTime - startTime)
-activeWeight = timeCredit >= 24 hours ? principal : 0
-```
-
-**Weighted Dilution**:
-```
-newTimeCredit = (oldPrincipal * oldTimeCredit) / (oldPrincipal + newPrincipal)
-newStartTime = currentTime - newTimeCredit
-```
-
-**Ratio Tranche Collateral**:
-```
-collateralRequired = (principalAmount * priceNumerator) / priceDenominator
-```
-
-**MAM Curve Linear Price Interpolation**:
-```
-// At time t within [startTime, startTime + duration]
-elapsed = t - startTime
-delta = |endPrice - startPrice|
-adjustment = (delta * elapsed) / duration
-
-// If endPrice >= startPrice (ascending):
-price = startPrice + adjustment
-
-// If endPrice < startPrice (descending):
-price = startPrice - adjustment
-
-// Boundary conditions:
-// t <= startTime: price = startPrice
-// t >= endTime: price = endPrice
-```
-
-**MAM Curve Fill Calculation**:
-```
-// Quote to base conversion (1e18 scaled)
-baseFill = (amountIn * 1e18) / price
-
-// Fee calculation
-feeAmount = (amountIn * feeRateBps) / 10_000
-
-// Fee distribution
-makerFee = (feeAmount * 7000) / 10_000      // 70%
-indexFee = (feeAmount * 2000) / 10_000      // 20%
-treasuryFee = feeAmount - makerFee - indexFee // 10%
-```
-
-### A.3 References
-
-- [EIP-2535: Diamond Standard](https://eips.ethereum.org/EIPS/eip-2535)
-- [EIP-721: Non-Fungible Token Standard](https://eips.ethereum.org/EIPS/eip-721)
-- [EIP-6551: Non-fungible Token Bound Accounts](https://eips.ethereum.org/EIPS/eip-6551)
-- [EIP-6900: Modular Smart Contract Accounts](https://eips.ethereum.org/EIPS/eip-6900)
-- [EIP-8004: Agent Identity](https://eips.ethereum.org/EIPS/eip-8004)
-- [EIP-4337: Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
-- [EIP-1271: Standard Signature Validation](https://eips.ethereum.org/EIPS/eip-1271)
-- [EIP-7201: Namespaced Storage Layout](https://eips.ethereum.org/EIPS/eip-7201)
-- [EIP-712: Typed Structured Data Hashing](https://eips.ethereum.org/EIPS/eip-712)
-- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
-- [Foundry Book](https://book.getfoundry.sh/)
 
 ## 11. Position NFT Derivatives
 
@@ -3450,3 +3280,177 @@ bytes32 positionKey = keccak256(abi.encodePacked(positionNFTContract, tokenId));
 7. **Agent Marketplaces**: Discoverable agents offering services via ERC-8004 registration
 
 ---
+## Appendices
+
+### A.1 Glossary
+
+- **Position NFT**: ERC-721 token representing an isolated account in a pool
+- **Position Key**: Deterministic `bytes32` derived from NFT contract and token ID
+- **FeeIndex**: Cumulative yield distribution index (1e18 scale)
+- **MaintenanceIndex**: Cumulative AUM fee deduction index
+- **Active Credit Index**: Time-gated yield distribution for active credit participants
+- **Tracked Balance**: Per-pool token balance for isolation
+- **Depositor LTV**: Maximum loan-to-value ratio for deposit-backed borrowing
+- **Direct Lending**: Peer-to-peer term or rolling loans between Position NFT holders
+- **Upfront Realization**: Interest paid at loan origination, not maturity
+- **Early Exercise**: Voluntary collateral forfeiture before maturity
+- **Penalty Settlement**: Fixed 5% penalty instead of full liquidation
+- **Fee Base**: Normalized principal amount used for fee calculations
+- **Principal At Open**: Immutable penalty basis recorded at loan creation
+- **Grace Period**: Time window after due timestamp for repayment (24 hours for Direct)
+- **Arrears**: Accumulated unpaid interest in rolling loans
+- **Amortization**: Principal reduction through payments
+- **Managed Pool**: Pool with mutable configuration and whitelist gating
+- **Whitelist**: Position key-based access control for managed pools
+- **Lender Call**: Optional feature allowing lender to accelerate due timestamp
+- **Explicit Exercise**: Direct loans require an explicit `exerciseDirect` call (not automatic on acceptance)
+- **Borrower Offer**: Direct lending offer posted by borrower specifying desired terms
+- **Ratio Tranche Offer**: CLOB-style offer with price ratio for variable-size fills
+- **Borrower Ratio Tranche Offer**: Borrower-posted ratio tranche offer with collateral cap
+- **AMM Auction**: Time-bounded constant-product liquidity pool created by a Maker using assets from two pools
+- **Option Series**: Set of fungible ERC-1155 tokens representing covered call or secured put options
+- **Futures Series**: Set of fungible ERC-1155 tokens representing physical delivery futures
+- **Option Token**: ERC-1155 contract for option rights, controlled by the Diamond
+- **Futures Token**: ERC-1155 contract for futures rights, controlled by the Diamond
+- **Strike Price**: Predetermined price at which an option can be exercised (1e18 normalized)
+- **Forward Price**: Predetermined price for futures settlement (1e18 normalized)
+- **Invariant**: Constant product (k = reserveA × reserveB) maintained by AMM auctions
+- **MAM Curve**: Maker Auction Market curve - a time-bounded Dutch auction for selling base assets at linearly interpolated prices
+- **Dutch Auction**: Auction mechanism where price decreases (or increases) over time until a buyer accepts
+- **Base Asset**: The asset being sold in a MAM curve (locked by maker)
+- **Quote Asset**: The asset received by maker in exchange for base asset fills
+- **Curve Generation**: Version counter incremented on each curve update, enabling price/timing changes without cancellation
+- **Curve Commitment**: Hash of the full curve descriptor, updated on each generation change
+- **Flash Accounting**: Deferred ledger update model where userPrincipal and userFeeIndex are not updated during intermediate states
+- **Encumbered Balance**: Principal flagged as backing a derivative, preventing withdrawal but continuing to accrue fees
+- **LibEncumbrance**: Centralized library for all encumbrance tracking (directLocked, directLent, directOfferEscrow, indexEncumbered) per position and pool
+- **LibNetEquity**: Pure helper library for fee base calculations (same-asset, cross-asset, P2P borrower)
+- **LibFeeIndex**: Fee index accounting library (1e18 scale) for yield distribution
+- **LibSolvencyChecks**: Shared utilities for deterministic solvency and debt calculations
+- **LibIndexEncumbrance**: Thin wrapper around LibEncumbrance for index-specific encumbrance operations
+
+### Position Agent Terms
+- **TBA (Token Bound Account)**: ERC-6551 smart contract account controlled by an NFT, enabling Position NFTs to hold assets and execute transactions
+- **MSCA (Modular Smart Contract Account)**: ERC-6900 compliant account with modular validation and execution capabilities
+- **Position Agent**: A Position NFT registered as an ERC-8004 agent, discoverable by external indexers
+- **Validation Module**: ERC-6900 module that authorizes execution (user ops, runtime calls, signatures)
+- **Execution Module**: ERC-6900 module that adds new callable functions to the account
+- **Validation Hook**: Pre-validation checks for permissions and limits
+- **Execution Hook**: Pre/post execution checks for policy enforcement
+- **Module Entity**: Packed reference (module address 20 bytes + entity ID 4 bytes)
+- **Validation Config**: Packed validation function with flags (25 bytes)
+- **Hook Config**: Packed hook function with flags (25 bytes)
+- **Bootstrap Mode**: Initial TBA state with native EIP-712 validation before module installation
+- **Agent ID**: The ERC-721 tokenId minted by the ERC-8004 Identity Registry
+- **Agent URI**: The URI resolving to the agent's registration file (ERC-8004 tokenURI)
+- **Agent Wallet**: A verified address where the agent receives payments (set to TBA address)
+- **Skill Module**: An execution module that provides specific capabilities (e.g., AMM auction creation)
+- **EntryPoint**: The ERC-4337 singleton contract that handles UserOperation bundles
+
+### A.2 Formula Reference
+
+**Solvency Ratio**:
+```
+solvencyRatio = (availableCollateral * 10000) / totalDebt
+require(solvencyRatio >= depositorLTVBps)
+```
+
+**Simple Interest**:
+```
+interest = (principal * apyBps * timeSeconds) / (365 days * 10_000)
+```
+
+**Penalty Calculation**:
+```
+penalty = principalAtOpen * 500 / 10_000  // Fixed 5%
+penaltyApplied = min(penalty, principalRemaining)
+require(availableCollateral >= principalRemaining + penaltyApplied)
+```
+
+**Penalty Distribution**:
+```
+enforcerShare = penaltyApplied / 10                           // 10%
+remaining = penaltyApplied - enforcerShare
+treasuryShare = remaining * treasuryBps / 10_000              // default treasuryBps = 1000
+activeCreditShare = remaining * activeCreditBps / 10_000      // default activeCreditBps = 7000
+feeIndexShare = remaining - treasuryShare - activeCreditShare
+```
+
+**Fee Base Calculation**:
+```
+// Same-asset domains
+feeBase = max(0, principal - sameAssetDebt)
+
+// Cross-asset domains  
+feeBase = lockedCollateral + unlockedPrincipal
+```
+
+**FeeIndex Accrual**:
+```
+delta = (feeAmount * 1e18) / totalDeposits
+feeIndex += delta
+```
+
+**Active Credit Time Gate**:
+```
+TIME_GATE = 24 hours
+timeCredit = min(24 hours, currentTime - startTime)
+activeWeight = timeCredit >= 24 hours ? principal : 0
+```
+
+**Weighted Dilution**:
+```
+newTimeCredit = (oldPrincipal * oldTimeCredit) / (oldPrincipal + newPrincipal)
+newStartTime = currentTime - newTimeCredit
+```
+
+**Ratio Tranche Collateral**:
+```
+collateralRequired = (principalAmount * priceNumerator) / priceDenominator
+```
+
+**MAM Curve Linear Price Interpolation**:
+```
+// At time t within [startTime, startTime + duration]
+elapsed = t - startTime
+delta = |endPrice - startPrice|
+adjustment = (delta * elapsed) / duration
+
+// If endPrice >= startPrice (ascending):
+price = startPrice + adjustment
+
+// If endPrice < startPrice (descending):
+price = startPrice - adjustment
+
+// Boundary conditions:
+// t <= startTime: price = startPrice
+// t >= endTime: price = endPrice
+```
+
+**MAM Curve Fill Calculation**:
+```
+// Quote to base conversion (1e18 scaled)
+baseFill = (amountIn * 1e18) / price
+
+// Fee calculation
+feeAmount = (amountIn * feeRateBps) / 10_000
+
+// Fee distribution
+makerFee = (feeAmount * mamMakerShareBps) / 10_000
+protocolAmount = feeAmount - makerFee
+// protocolAmount then routes via LibFeeRouter (Treasury / Active Credit / Fee Index)
+```
+
+### A.3 References
+
+- [EIP-2535: Diamond Standard](https://eips.ethereum.org/EIPS/eip-2535)
+- [EIP-721: Non-Fungible Token Standard](https://eips.ethereum.org/EIPS/eip-721)
+- [EIP-6551: Non-fungible Token Bound Accounts](https://eips.ethereum.org/EIPS/eip-6551)
+- [EIP-6900: Modular Smart Contract Accounts](https://eips.ethereum.org/EIPS/eip-6900)
+- [EIP-8004: Agent Identity](https://eips.ethereum.org/EIPS/eip-8004)
+- [EIP-4337: Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
+- [EIP-1271: Standard Signature Validation](https://eips.ethereum.org/EIPS/eip-1271)
+- [EIP-7201: Namespaced Storage Layout](https://eips.ethereum.org/EIPS/eip-7201)
+- [EIP-712: Typed Structured Data Hashing](https://eips.ethereum.org/EIPS/eip-712)
+- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
+- [Foundry Book](https://book.getfoundry.sh/)

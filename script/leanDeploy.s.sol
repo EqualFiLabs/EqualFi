@@ -78,7 +78,7 @@ contract LeanDeployScript is Script {
     address internal constant ERC8004_SEPOLIA = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
     // ERC-4337 EntryPoint v0.7 addresses
     address internal constant ENTRYPOINT_V07_MAINNET = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
-    address internal constant ENTRYPOINT_V07_SEPOLIA = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
+    address internal constant ENTRYPOINT_V07_SEPOLIA = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
 
     struct TokenSpec {
         string id;

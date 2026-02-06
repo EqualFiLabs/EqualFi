@@ -142,12 +142,12 @@ When the Position NFT transfers, the entire ownership chain automatically update
 │  │ PositionAgentTBA    │  │ PositionAgentReg    │  │ PositionAgentView   │ │
 │  │ Facet               │  │ Facet               │  │ Facet               │ │
 │  ├─────────────────────┤  ├─────────────────────┤  ├─────────────────────┤ │
-│  │ • computeTBAAddress │  │ • recordAgentReg    │  │ • getTBAAddress     │ │
-│  │ • deployTBA         │  │ • getIdentityReg    │  │ • getAgentId        │ │
-│  │ • getTBAImpl        │  │                     │  │ • isAgentRegistered │ │
-│  │ • getERC6551Reg     │  │                     │  │ • isTBADeployed     │ │
-│  └──────────┬──────────┘  └──────────┬──────────┘  │ • getCanonicalRegs  │ │
-│             │                        │             │ • getTBAInterface   │ │
+│  │ • computeTBAAddress │  │ • recordAgentRegistration │ • getTBAAddress   │ │
+│  │ • deployTBA         │  │ • getIdentityRegistry     │ • getAgentId      │ │
+│  │ • getTBAImplementation│ │                           │ • isAgentRegistered│ │
+│  │ • getERC6551Registry│  │                           │ • isTBADeployed   │ │
+│  └──────────┬──────────┘  └──────────┬──────────┘    │ • getCanonicalRegistries │
+│             │                        │                │ • getTBAInterfaceSupport │
 │             │                        │             └─────────────────────┘ │
 │             │                        │                                      │
 │             ▼                        ▼                                      │
@@ -288,6 +288,8 @@ account.installExecution(
 ### 4.3 ERC-8004: Agent Identity
 
 The system uses the canonical ERC-8004 Identity Registry for agent registration.
+ERC-8004 commonly reuses one IdentityRegistry address for many mainnet deployments and a different address for many testnet deployments.
+This document lists the Ethereum addresses used by the deployment scripts.
 
 **Registry Addresses:**
 
@@ -295,6 +297,10 @@ The system uses the canonical ERC-8004 Identity Registry for agent registration.
 |-------|---------|
 | Ethereum Mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | Ethereum Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+| Base Mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| Base Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+| Arbitrum One | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| Arbitrum Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
 
 **Key Functions:**
 - `register(agentURI)` - Mint Identity NFT with metadata URI
@@ -987,7 +993,13 @@ bytes memory signature = abi.encodePacked(r, s, v);  // Standard ECDSA
    PositionMSCAImpl msca = new PositionMSCAImpl(entryPointAddress);
    ```
 
-2. **Deploy Diamond Facets**
+2. **Deploy Beacon + ERC-6551 Implementation Proxy**
+   ```solidity
+   UpgradeableBeacon beacon = new UpgradeableBeacon(address(msca), owner);
+   ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
+   ```
+
+3. **Deploy Diamond Facets**
    ```solidity
    PositionAgentTBAFacet tbaFacet = new PositionAgentTBAFacet();
    PositionAgentRegistryFacet regFacet = new PositionAgentRegistryFacet();
@@ -995,15 +1007,17 @@ bytes memory signature = abi.encodePacked(r, s, v);  // Standard ECDSA
    PositionAgentConfigFacet configFacet = new PositionAgentConfigFacet();
    ```
 
-3. **Add Facets to Diamond**
+4. **Add Facets to Diamond**
    ```solidity
    diamond.diamondCut(facetCuts, address(0), "");
    ```
 
-4. **Configure Registry Addresses**
+5. **Configure Registry Addresses**
    ```solidity
    configFacet.setERC6551Registry(0x000000006551c19487814612e58FE06813775758);
-   configFacet.setERC6551Implementation(address(msca));
+   // Default implementation configured by scripts:
+   // the beacon-backed ERC6551 implementation proxy
+   configFacet.setERC6551Implementation(address(beaconProxy));
    configFacet.setIdentityRegistry(identityRegistryAddress);
    ```
 
@@ -1013,21 +1027,29 @@ bytes memory signature = abi.encodePacked(r, s, v);  // Standard ECDSA
 |-------|-------------------|---------------------------|------------|
 | Ethereum Mainnet | `0x000000006551c19487814612e58FE06813775758` | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
 | Ethereum Sepolia | `0x000000006551c19487814612e58FE06813775758` | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
+| Base Mainnet | `0x000000006551c19487814612e58FE06813775758` | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Set via `ENTRYPOINT_ADDRESS` env var |
+| Base Sepolia | `0x000000006551c19487814612e58FE06813775758` | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | Set via `ENTRYPOINT_ADDRESS` env var |
+| Arbitrum One | `0x000000006551c19487814612e58FE06813775758` | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Set via `ENTRYPOINT_ADDRESS` env var |
+| Arbitrum Sepolia | `0x000000006551c19487814612e58FE06813775758` | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | Set via `ENTRYPOINT_ADDRESS` env var |
+
+For additional supported chains and explorers, see `8004-addresses.md`.
+Current deployment scripts auto-resolve IdentityRegistry and EntryPoint only for Ethereum Mainnet (`chainid=1`) and Ethereum Sepolia (`chainid=11155111`); other chains should provide `IDENTITY_REGISTRY` and `ENTRYPOINT_ADDRESS`.
 
 ### 10.3 Salt Strategy
 
 The system uses a fixed salt (`bytes32(0)`) for TBA derivation:
 - **Deterministic**: Same inputs always produce same TBA address
 - **Simple**: No salt management required
-- **One TBA per Position**: Each Position NFT has exactly one TBA
+- **Per-Configuration Determinism**: Address is unique per `(implementation, salt, chainId, tokenContract, tokenId)`
 
 ### 10.4 Upgrade Strategy
 
-**Per-Account UUPS Upgrade:**
-- Each TBA can upgrade independently
-- Upgrade authorized by Position NFT owner (EIP-712 signature)
-- No protocol-wide admin required
-- Bootstrap validation serves as emergency fallback
+**Beacon-Based Upgrade Path (current deployment scripts):**
+- TBAs are deployed via ERC-6551 using a shared `ERC6551BeaconProxy` as implementation
+- The beacon points to `PositionMSCAImpl`
+- Upgrading the beacon implementation updates behavior for all TBAs using that beacon
+- Beacon ownership (deployer-configured governance owner) controls upgrades
+- `setERC6551Implementation` can swap the ERC-6551 implementation address used for future deterministic TBA computation/deployment
 
 ---
 
@@ -1038,9 +1060,10 @@ The system uses a fixed salt (`bytes32(0)`) for TBA derivation:
 | Contract | Address | Notes |
 |----------|---------|-------|
 | ERC-6551 Registry | `0x000000006551c19487814612e58FE06813775758` | Same on all EVM chains |
-| ERC-8004 Identity Registry (Mainnet) | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Chain-specific |
-| ERC-8004 Identity Registry (Sepolia) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | Chain-specific |
-| ERC-4337 EntryPoint v0.7 | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` | Same on all EVM chains |
+| ERC-8004 Identity Registry (Mainnet-family) | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Reused across many mainnet deployments |
+| ERC-8004 Identity Registry (Testnet-family) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | Reused across many testnet deployments |
+| ERC-4337 EntryPoint v0.7 (Mainnet) | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` | Script default |
+| ERC-4337 EntryPoint v0.7 (Sepolia) | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` | Script default |
 
 ### 11.2 Interface IDs
 
@@ -1059,7 +1082,6 @@ The system uses a fixed salt (`bytes32(0)`) for TBA derivation:
 ```solidity
 error PositionAgent_Unauthorized(address caller, uint256 positionTokenId);
 error PositionAgent_NotAdmin(address caller);
-error PositionAgent_NotRegistered(uint256 positionTokenId);
 error PositionAgent_AlreadyRegistered(uint256 positionTokenId);
 error PositionAgent_InvalidAgentOwner(address expected, address actual);
 ```
@@ -1150,4 +1172,3 @@ event ValidationUninstalled(address indexed module, uint32 indexed entityId, boo
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0.0 | 2026-01-30 | EqualGi Labs | Initial unified design document |
-
