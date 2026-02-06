@@ -97,14 +97,15 @@ contract EqualIndexFlashLoanFeeSplitTest is Test {
         facet.flashLoan(INDEX_ID, 1 ether, address(borrower), "");
 
         uint256 potAfter = facet.feePot(INDEX_ID, address(asset));
-        assertEq(potAfter - potBefore, 9 ether);
+        uint256 loanAmount = 1 ether;
+        uint256 fee = (loanAmount * 1000) / 10_000;
+        uint256 poolShare = fee / 10;
+        assertEq(potAfter - potBefore, fee - poolShare);
 
         uint256 feeIndexAfter = facet.feeIndex(PID);
         uint256 remainderAfter = facet.feeIndexRemainder(PID);
         uint256 scaledBefore = feeIndexBefore * 1_000 ether + remainderBefore;
         uint256 scaledAfter = feeIndexAfter * 1_000 ether + remainderAfter;
-        uint256 fee = 10 ether;
-        uint256 poolShare = fee / 10;
         uint16 treasuryBps = LibAppStorage.treasurySplitBps(LibAppStorage.s());
         uint256 activeBps = LibAppStorage.activeCreditSplitBps(LibAppStorage.s());
         address treasuryAddr = LibAppStorage.treasuryAddress(LibAppStorage.s());

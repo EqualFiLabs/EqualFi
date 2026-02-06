@@ -37,7 +37,6 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         uint256 len = idx.assets.length;
         uint256[] memory required = new uint256[](len);
         uint256[] memory fees = new uint256[](len);
-        uint256[] memory vaultBalancesBefore = new uint256[](len);
 
         LibAppStorage.AppStorage storage store = LibAppStorage.s();
         uint16 poolFeeShareBps = _poolFeeShareBps();
@@ -62,10 +61,9 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
 
             required[i] = need;
             fees[i] = fee;
-            vaultBalancesBefore[i] = s().vaultBalances[indexId][asset];
 
             LibIndexEncumbrance.encumber(positionKey, poolId, indexId, need);
-            s().vaultBalances[indexId][asset] = vaultBalancesBefore[i] + need;
+            s().vaultBalances[indexId][asset] += need;
 
             if (fee > 0) {
                 LibFeeIndex.settle(poolId, positionKey);
@@ -91,21 +89,8 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             }
         }
 
-        uint256 totalSupplyBefore = idx.totalUnits;
-        if (totalSupplyBefore == 0) {
-            minted = units;
-        } else {
-            minted = type(uint256).max;
-            for (uint256 i = 0; i < len; i++) {
-                uint256 balanceBefore = vaultBalancesBefore[i];
-                require(balanceBefore > 0, "EqualIndex: zero NAV asset");
-                uint256 mintedForAsset = (required[i] * totalSupplyBefore) / balanceBefore;
-                if (mintedForAsset < minted) minted = mintedForAsset;
-            }
-            if (minted == 0) revert InvalidUnits();
-        }
-
-        idx.totalUnits = totalSupplyBefore + minted;
+        minted = units;
+        idx.totalUnits += minted;
         IndexToken(idx.token).mintIndexUnits(address(this), minted);
         IndexToken(idx.token).recordMintDetails(msg.sender, minted, idx.assets, required, fees, 0);
 
@@ -187,15 +172,18 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
 
             uint256 vaultBalance = s().vaultBalances[indexId][asset];
             uint256 potBalance = s().feePots[indexId][asset];
-            uint256 navShare = Math.mulDiv(vaultBalance, units, totalSupply);
+            uint256 bundleOut = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            if (vaultBalance < bundleOut) {
+                revert InsufficientPoolLiquidity(bundleOut, vaultBalance);
+            }
             uint256 potShare = Math.mulDiv(potBalance, units, totalSupply);
-            uint256 gross = navShare + potShare;
+            uint256 gross = bundleOut + potShare;
             uint256 burnFee = Math.mulDiv(gross, idx.burnFeeBps[i], 10_000);
 
             uint256 poolShare = Math.mulDiv(burnFee, poolFeeShareBps, 10_000);
             uint256 potFee = burnFee - poolShare;
 
-            s().vaultBalances[indexId][asset] = vaultBalance - navShare;
+            s().vaultBalances[indexId][asset] = vaultBalance - bundleOut;
             s().feePots[indexId][asset] = potBalance - potShare + potFee;
             if (poolShare > 0) {
                 pool.trackedBalance += poolShare;
@@ -207,7 +195,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             feeAmounts[i] = burnFee;
 
             if (gross > 0) {
-                uint256 navOut = Math.mulDiv(payout, navShare, gross);
+                uint256 navOut = Math.mulDiv(payout, bundleOut, gross);
                 uint256 potOut = payout - navOut;
 
                 if (navOut > 0) {
