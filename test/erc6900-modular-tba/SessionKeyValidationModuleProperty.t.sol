@@ -561,4 +561,56 @@ contract SessionKeyValidationModulePropertyTest is Test {
         PackedUserOperation memory otherOp = _buildUserOp(address(account), otherTargetCall, otherSig);
         assertEq(module.validateUserOp(ENTITY_ID, otherOp, otherHash), 0, "other target has no inner selector constraint");
     }
+
+    function testProperty_SessionKeyPolicyWithDurationExpires(
+        uint256 ownerKey,
+        uint256 sessionKey,
+        address allowedTarget
+    ) public {
+        ownerKey = bound(ownerKey, 1, SECP256K1_N - 1);
+        sessionKey = bound(sessionKey, 1, SECP256K1_N - 1);
+        vm.assume(ownerKey != sessionKey);
+        vm.assume(allowedTarget != address(0));
+
+        address owner = vm.addr(ownerKey);
+        address sessionSigner = vm.addr(sessionKey);
+
+        SessionKeyValidationModule module = new SessionKeyValidationModule();
+        SessionMockAccount account = new SessionMockAccount(owner);
+
+        address[] memory targets = new address[](1);
+        targets[0] = allowedTarget;
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = EXECUTE_SELECTOR;
+
+        uint48 ttl = 1 hours;
+        vm.prank(owner);
+        module.setSessionKeyPolicyWithDuration(
+            address(account),
+            ENTITY_ID,
+            sessionSigner,
+            0,
+            ttl,
+            1 ether,
+            0,
+            targets,
+            selectors,
+            _emptyTargetRules()
+        );
+
+        bytes memory callData = abi.encodeWithSelector(EXECUTE_SELECTOR, allowedTarget, 0.2 ether, bytes(""));
+        bytes32 userOpHash = keccak256("session-duration");
+
+        bytes32 digestBefore = _userOpDigest(module, address(account), ENTITY_ID, userOpHash);
+        bytes memory sigBefore = _asModuleSig(sessionSigner, _sign(sessionKey, digestBefore));
+        PackedUserOperation memory opBefore = _buildUserOp(address(account), callData, sigBefore);
+        assertTrue(module.validateUserOp(ENTITY_ID, opBefore, userOpHash) != 1, "session key should validate before expiry");
+
+        vm.warp(block.timestamp + ttl + 1);
+
+        bytes32 digestAfter = _userOpDigest(module, address(account), ENTITY_ID, userOpHash);
+        bytes memory sigAfter = _asModuleSig(sessionSigner, _sign(sessionKey, digestAfter));
+        PackedUserOperation memory opAfter = _buildUserOp(address(account), callData, sigAfter);
+        assertEq(module.validateUserOp(ENTITY_ID, opAfter, userOpHash), 1, "session key should fail after expiry");
+    }
 }

@@ -52,6 +52,7 @@ contract SessionKeyValidationModule is IERC6900ValidationModule {
     error NotAccountOwner(address account, address caller, address owner);
     error InvalidSessionKey(address sessionKey);
     error InvalidPolicyWindow(uint48 validAfter, uint48 validUntil);
+    error InvalidPolicyDuration(uint48 durationSeconds);
     error SessionValidationFailed(address account, uint32 entityId, address sessionKey);
 
     event SessionKeyPolicySet(
@@ -110,6 +111,66 @@ contract SessionKeyValidationModule is IERC6900ValidationModule {
         bytes4[] calldata allowedSelectors_,
         TargetSelectorRule[] calldata targetSelectorRules
     ) external {
+        _setSessionKeyPolicy(
+            account,
+            entityId,
+            sessionKey,
+            validAfter,
+            validUntil,
+            maxValuePerCall,
+            cumulativeValueLimit,
+            allowedTargets_,
+            allowedSelectors_,
+            targetSelectorRules
+        );
+    }
+
+    function setSessionKeyPolicyWithDuration(
+        address account,
+        uint32 entityId,
+        address sessionKey,
+        uint48 validAfter,
+        uint48 durationSeconds,
+        uint256 maxValuePerCall,
+        uint256 cumulativeValueLimit,
+        address[] calldata allowedTargets_,
+        bytes4[] calldata allowedSelectors_,
+        TargetSelectorRule[] calldata targetSelectorRules
+    ) external {
+        uint48 validUntil = 0;
+        if (durationSeconds != 0) {
+            if (durationSeconds > type(uint48).max - uint48(block.timestamp)) {
+                revert InvalidPolicyDuration(durationSeconds);
+            }
+            validUntil = uint48(block.timestamp) + durationSeconds;
+        }
+
+        _setSessionKeyPolicy(
+            account,
+            entityId,
+            sessionKey,
+            validAfter,
+            validUntil,
+            maxValuePerCall,
+            cumulativeValueLimit,
+            allowedTargets_,
+            allowedSelectors_,
+            targetSelectorRules
+        );
+    }
+
+    function _setSessionKeyPolicy(
+        address account,
+        uint32 entityId,
+        address sessionKey,
+        uint48 validAfter,
+        uint48 validUntil,
+        uint256 maxValuePerCall,
+        uint256 cumulativeValueLimit,
+        address[] calldata allowedTargets_,
+        bytes4[] calldata allowedSelectors_,
+        TargetSelectorRule[] calldata targetSelectorRules
+    ) internal {
         _requireAccountOwner(account);
         if (sessionKey == address(0)) {
             revert InvalidSessionKey(sessionKey);
