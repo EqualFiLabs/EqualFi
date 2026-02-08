@@ -5,15 +5,15 @@ import {Test} from "forge-std/Test.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {PackedUserOperation} from "@openzeppelin/contracts/interfaces/draft-IERC4337.sol";
 
-import {PositionMSCA} from "../../src/erc6900/PositionMSCA.sol";
-import {ExecutionManifest, Call, HookConfig, ModuleEntity, ValidationConfig, ValidationFlags} from "../../src/erc6900/ModuleTypes.sol";
-import {HookConfigLib} from "../../src/erc6900/HookConfigLib.sol";
-import {ModuleEntityLib} from "../../src/erc6900/ModuleEntityLib.sol";
-import {ValidationConfigLib} from "../../src/erc6900/ValidationConfigLib.sol";
-import {MSCAStorage} from "../../src/erc6900/MSCAStorage.sol";
-import {IERC6900Account} from "../../src/erc6900/IERC6900Account.sol";
-import {IERC6900ValidationModule} from "../../src/erc6900/IERC6900ValidationModule.sol";
-import {IERC6900Module} from "../../src/erc6900/IERC6900Module.sol";
+import {NFTBoundMSCA} from "@agent-wallet-core/core/NFTBoundMSCA.sol";
+import {ExecutionManifest, Call, HookConfig, ModuleEntity, ValidationConfig, ValidationFlags} from "@agent-wallet-core/libraries/ModuleTypes.sol";
+import {HookConfigLib} from "@agent-wallet-core/libraries/HookConfigLib.sol";
+import {ModuleEntityLib} from "@agent-wallet-core/libraries/ModuleEntityLib.sol";
+import {ValidationConfigLib} from "@agent-wallet-core/libraries/ValidationConfigLib.sol";
+import {MSCAStorage} from "@agent-wallet-core/libraries/MSCAStorage.sol";
+import {IERC6900Account} from "@agent-wallet-core/interfaces/IERC6900Account.sol";
+import {IERC6900ValidationModule} from "@agent-wallet-core/interfaces/IERC6900ValidationModule.sol";
+import {IERC6900Module} from "@agent-wallet-core/interfaces/IERC6900Module.sol";
 
 contract MockPositionNFT is ERC721 {
     uint256 private _nextId = 1;
@@ -82,12 +82,12 @@ contract MockHookModule is IERC6900Module {
     }
 }
 
-contract PositionMSCAValidationHarness is PositionMSCA {
+contract PositionMSCAValidationHarness is NFTBoundMSCA {
     uint256 private _chainId;
     address private _tokenContract;
     uint256 private _tokenId;
 
-    constructor(address entryPoint_) PositionMSCA(entryPoint_) {}
+    constructor(address entryPoint_) NFTBoundMSCA(entryPoint_) {}
 
     function setTokenData(uint256 chainId, address tokenContract, uint256 tokenId) external {
         _chainId = chainId;
@@ -138,6 +138,22 @@ contract PositionMSCAValidationHarness is PositionMSCA {
 
     function uninstallExecution(address, ExecutionManifest calldata, bytes calldata) external override {
         revert("uninstallExecution not implemented");
+    }
+
+
+    function _owner() internal view override returns (address) {
+        (uint256 chainId, address tokenContract, uint256 tokenId) = token();
+        if (chainId != block.chainid || tokenContract == address(0)) {
+            return address(0);
+        }
+
+        (bool ok, bytes memory data) =
+            tokenContract.staticcall(abi.encodeWithSelector(bytes4(keccak256("ownerOf(uint256)")), tokenId));
+        if (!ok || data.length < 32) {
+            return address(0);
+        }
+
+        return abi.decode(data, (address));
     }
 
     function accountId() external pure override returns (string memory) {
@@ -238,7 +254,7 @@ contract PositionMSCAValidationPropertyTest is Test {
         bytes4[] memory selectors = _buildSingleSelector(bytes4(0x12345678));
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(PositionMSCA.UnauthorizedCaller.selector, caller));
+        vm.expectRevert(abi.encodeWithSelector(NFTBoundMSCA.UnauthorizedCaller.selector, caller));
         account.installValidation(config, selectors, "", new bytes[](0));
     }
 

@@ -6,7 +6,7 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
 import {PositionAgentViewFacet} from "../../src/erc6551/PositionAgentViewFacet.sol";
-import {ERC6551BeaconProxy} from "../../src/erc6551/ERC6551BeaconProxy.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {MockBeacon} from "../helpers/MockBeacon.sol";
 
 contract MockERC6551Registry {
@@ -104,7 +104,7 @@ contract PositionAgentViewFunctionPropertyTest is Test {
     MockERC6551Registry private registry;
     MockERC6551Account private implementation;
     MockBeacon private beacon;
-    ERC6551BeaconProxy private beaconProxy;
+    BeaconProxy private beaconProxy;
     PositionAgentViewFacetHarness private facet;
 
     function setUp() public {
@@ -112,7 +112,7 @@ contract PositionAgentViewFunctionPropertyTest is Test {
         registry = new MockERC6551Registry();
         implementation = new MockERC6551Account();
         beacon = new MockBeacon(address(implementation));
-        beaconProxy = new ERC6551BeaconProxy(address(beacon));
+        beaconProxy = new BeaconProxy(address(beacon));
         facet = new PositionAgentViewFacetHarness();
 
         facet.setPositionNFT(address(nft));

@@ -9,7 +9,7 @@ import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStora
 import {PositionAgentTBAFacet} from "../../src/erc6551/PositionAgentTBAFacet.sol";
 import {PositionAgentRegistryFacet} from "../../src/erc6551/PositionAgentRegistryFacet.sol";
 import {DirectError_InvalidPositionNFT} from "../../src/libraries/Errors.sol";
-import {ERC6551BeaconProxy} from "../../src/erc6551/ERC6551BeaconProxy.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {MockBeacon} from "../helpers/MockBeacon.sol";
 
 contract MockERC6551Registry {
@@ -128,7 +128,7 @@ contract PositionAgentEventEmissionPropertyTest is Test {
     MockERC6551Registry private registry;
     MockERC6551Account private implementation;
     MockBeacon private beacon;
-    ERC6551BeaconProxy private beaconProxy;
+    BeaconProxy private beaconProxy;
     MockIdentityRegistry private identity;
     PositionAgentEventHarness private facet;
     address private owner = address(0xA11CE);
@@ -142,7 +142,7 @@ contract PositionAgentEventEmissionPropertyTest is Test {
         registry = new MockERC6551Registry();
         implementation = new MockERC6551Account();
         beacon = new MockBeacon(address(implementation));
-        beaconProxy = new ERC6551BeaconProxy(address(beacon));
+        beaconProxy = new BeaconProxy(address(beacon));
         identity = new MockIdentityRegistry();
         facet = new PositionAgentEventHarness();
 

@@ -7,11 +7,11 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
 import {PositionAgentViewFacet} from "../../src/erc6551/PositionAgentViewFacet.sol";
 import {IERC165} from "../../src/interfaces/IERC165.sol";
-import {IERC6551Account} from "../../src/interfaces/IERC6551Account.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
 import {IERC6551Executable} from "../../src/interfaces/IERC6551Executable.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
-import {ERC6551BeaconProxy} from "../../src/erc6551/ERC6551BeaconProxy.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {MockBeacon} from "../helpers/MockBeacon.sol";
 
 contract MockERC6551Registry {
@@ -141,7 +141,7 @@ contract PositionAgentTBAInterfaceCompliancePropertyTest is Test {
     MockERC6551Registry private registry;
     MockERC6551Account private implementation;
     MockBeacon private beacon;
-    ERC6551BeaconProxy private beaconProxy;
+    BeaconProxy private beaconProxy;
     PositionAgentViewFacetHarness private facet;
 
     function setUp() public {
@@ -149,7 +149,7 @@ contract PositionAgentTBAInterfaceCompliancePropertyTest is Test {
         registry = new MockERC6551Registry();
         implementation = new MockERC6551Account();
         beacon = new MockBeacon(address(implementation));
-        beaconProxy = new ERC6551BeaconProxy(address(beacon));
+        beaconProxy = new BeaconProxy(address(beacon));
         facet = new PositionAgentViewFacetHarness();
 
         facet.setPositionNFT(address(nft));

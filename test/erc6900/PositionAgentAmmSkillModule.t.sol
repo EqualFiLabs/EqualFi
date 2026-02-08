@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {PositionAgentAmmSkillModule, LibAmmSkillStorage, IAmmAuctionFacet, IPositionManagementFacet} from "../../src/erc6900/PositionAgentAmmSkillModule.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
-import {IERC6551Account} from "../../src/interfaces/IERC6551Account.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
 
 /// @notice Unit tests for PositionAgentAmmSkillModule tokenId binding (one agent per NFT)
 contract PositionAgentAmmSkillModuleTest is Test {

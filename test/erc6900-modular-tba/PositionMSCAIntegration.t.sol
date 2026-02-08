@@ -6,8 +6,8 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {IAccount, IAccountExecute, PackedUserOperation} from "@openzeppelin/contracts/interfaces/draft-IERC4337.sol";
 
 import {PositionMSCAImpl} from "../../src/erc6900/PositionMSCAImpl.sol";
-import {IERC6551Account} from "../../src/interfaces/IERC6551Account.sol";
-import {IERC6900Account} from "../../src/erc6900/IERC6900Account.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
+import {IERC6900Account} from "@agent-wallet-core/interfaces/IERC6900Account.sol";
 import {
     ExecutionManifest,
     ManifestExecutionFunction,
@@ -15,17 +15,17 @@ import {
     HookConfig,
     ModuleEntity,
     ValidationConfig
-} from "../../src/erc6900/ModuleTypes.sol";
-import {ModuleEntityLib} from "../../src/erc6900/ModuleEntityLib.sol";
-import {ValidationConfigLib} from "../../src/erc6900/ValidationConfigLib.sol";
-import {HookConfigLib} from "../../src/erc6900/HookConfigLib.sol";
-import {IERC6900ExecutionModule} from "../../src/erc6900/IERC6900ExecutionModule.sol";
-import {IERC6900ExecutionHookModule} from "../../src/erc6900/IERC6900ExecutionHookModule.sol";
-import {IERC6900ValidationModule} from "../../src/erc6900/IERC6900ValidationModule.sol";
-import {IERC6900ValidationHookModule} from "../../src/erc6900/IERC6900ValidationHookModule.sol";
-import {IERC6900Module} from "../../src/erc6900/IERC6900Module.sol";
-import {OwnerValidationModule} from "../../src/erc6900/OwnerValidationModule.sol";
-import {ERC6551BeaconProxy} from "../../src/erc6551/ERC6551BeaconProxy.sol";
+} from "@agent-wallet-core/libraries/ModuleTypes.sol";
+import {ModuleEntityLib} from "@agent-wallet-core/libraries/ModuleEntityLib.sol";
+import {ValidationConfigLib} from "@agent-wallet-core/libraries/ValidationConfigLib.sol";
+import {HookConfigLib} from "@agent-wallet-core/libraries/HookConfigLib.sol";
+import {IERC6900ExecutionModule} from "@agent-wallet-core/interfaces/IERC6900ExecutionModule.sol";
+import {IERC6900ExecutionHookModule} from "@agent-wallet-core/interfaces/IERC6900ExecutionHookModule.sol";
+import {IERC6900ValidationModule} from "@agent-wallet-core/interfaces/IERC6900ValidationModule.sol";
+import {IERC6900ValidationHookModule} from "@agent-wallet-core/interfaces/IERC6900ValidationHookModule.sol";
+import {IERC6900Module} from "@agent-wallet-core/interfaces/IERC6900Module.sol";
+import {OwnerValidationModule} from "@agent-wallet-core/modules/validation/OwnerValidationModule.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {MockBeacon} from "../helpers/MockBeacon.sol";
 
 contract MockERC6551Registry {
@@ -327,7 +327,7 @@ contract PositionMSCAIntegrationTest is Test {
     function _deployAccount(
         address owner,
         MockERC6551Registry registry,
-        ERC6551BeaconProxy beaconProxy,
+        BeaconProxy beaconProxy,
         MockPositionNFT nft
     ) internal returns (address account) {
         uint256 tokenId = nft.mint(owner);
@@ -341,7 +341,7 @@ contract PositionMSCAIntegrationTest is Test {
         MockERC6551Registry registry = new MockERC6551Registry();
         PositionMSCAImpl implementation = new PositionMSCAImpl(address(entryPoint));
         MockBeacon beacon = new MockBeacon(address(implementation));
-        ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
+        BeaconProxy beaconProxy = new BeaconProxy(address(beacon));
         MockPositionNFT nft = new MockPositionNFT();
 
         address owner = address(0xA11CE);
@@ -373,7 +373,7 @@ contract PositionMSCAIntegrationTest is Test {
         MockERC6551Registry registry = new MockERC6551Registry();
         PositionMSCAImpl implementation = new PositionMSCAImpl(address(entryPoint));
         MockBeacon beacon = new MockBeacon(address(implementation));
-        ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
+        BeaconProxy beaconProxy = new BeaconProxy(address(beacon));
         MockPositionNFT nft = new MockPositionNFT();
         address account = _deployAccount(owner, registry, beaconProxy, nft);
 
@@ -421,7 +421,7 @@ contract PositionMSCAIntegrationTest is Test {
         MockERC6551Registry registry = new MockERC6551Registry();
         PositionMSCAImpl implementation = new PositionMSCAImpl(address(entryPoint));
         MockBeacon beacon = new MockBeacon(address(implementation));
-        ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
+        BeaconProxy beaconProxy = new BeaconProxy(address(beacon));
         MockPositionNFT nft = new MockPositionNFT();
         address account = _deployAccount(owner, registry, beaconProxy, nft);
 
@@ -507,7 +507,7 @@ contract PositionMSCAIntegrationTest is Test {
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 EIP712_DOMAIN_TYPEHASH,
-                keccak256(bytes("EqualLend Owner Validation")),
+                keccak256(bytes("Agent Wallet Owner Validation")),
                 keccak256(bytes("1.0.0")),
                 block.chainid,
                 account

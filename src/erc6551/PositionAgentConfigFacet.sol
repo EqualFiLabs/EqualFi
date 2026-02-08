@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {LibAccess} from "../libraries/LibAccess.sol";
 import {LibPositionAgentStorage} from "../libraries/LibPositionAgentStorage.sol";
 import {PositionAgent_NotAdmin} from "../libraries/PositionAgentErrors.sol";
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 /// @title PositionAgentConfigFacet
 /// @notice Admin configuration for ERC-6551 Position Agent integration
@@ -16,7 +17,7 @@ contract PositionAgentConfigFacet {
         _requireAdmin();
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
         address previous = ds.erc6551Registry;
-        ds.erc6551Registry = newRegistry;
+        ds.erc6551Registry = address(IERC6551Registry(newRegistry));
         emit ERC6551RegistryUpdated(previous, newRegistry);
     }
 

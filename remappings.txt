@@ -1,1 +1,2 @@
 @aave-v3-origin/=lib/aave-v3-origin/src/
+@agent-wallet-core/=lib/agent-wallet-core/src/

@@ -4,18 +4,18 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-import {PositionMSCA} from "../../src/erc6900/PositionMSCA.sol";
+import {NFTBoundMSCA} from "@agent-wallet-core/core/NFTBoundMSCA.sol";
 import {
     ExecutionManifest,
     ManifestExecutionFunction,
     ManifestExecutionHook,
     ModuleEntity,
     ValidationConfig
-} from "../../src/erc6900/ModuleTypes.sol";
-import {MSCAStorage} from "../../src/erc6900/MSCAStorage.sol";
-import {IERC6900Account} from "../../src/erc6900/IERC6900Account.sol";
-import {IERC6900ExecutionModule} from "../../src/erc6900/IERC6900ExecutionModule.sol";
-import {IERC6900Module} from "../../src/erc6900/IERC6900Module.sol";
+} from "@agent-wallet-core/libraries/ModuleTypes.sol";
+import {MSCAStorage} from "@agent-wallet-core/libraries/MSCAStorage.sol";
+import {IERC6900Account} from "@agent-wallet-core/interfaces/IERC6900Account.sol";
+import {IERC6900ExecutionModule} from "@agent-wallet-core/interfaces/IERC6900ExecutionModule.sol";
+import {IERC6900Module} from "@agent-wallet-core/interfaces/IERC6900Module.sol";
 import {PackedUserOperation} from "@openzeppelin/contracts/interfaces/draft-IERC4337.sol";
 
 contract MockPositionNFT is ERC721 {
@@ -60,12 +60,12 @@ contract MockExecutionModule is IERC6900ExecutionModule {
     }
 }
 
-contract PositionMSCAExecutionModuleHarness is PositionMSCA {
+contract PositionMSCAExecutionModuleHarness is NFTBoundMSCA {
     uint256 private _chainId;
     address private _tokenContract;
     uint256 private _tokenId;
 
-    constructor(address entryPoint_) PositionMSCA(entryPoint_) {}
+    constructor(address entryPoint_) NFTBoundMSCA(entryPoint_) {}
 
     function setTokenData(uint256 chainId, address tokenContract, uint256 tokenId) external {
         _chainId = chainId;
@@ -113,6 +113,22 @@ contract PositionMSCAExecutionModuleHarness is PositionMSCA {
 
     function uninstallValidation(ModuleEntity, bytes calldata, bytes[] calldata) external override {
         revert("uninstallValidation not implemented");
+    }
+
+
+    function _owner() internal view override returns (address) {
+        (uint256 chainId, address tokenContract, uint256 tokenId) = token();
+        if (chainId != block.chainid || tokenContract == address(0)) {
+            return address(0);
+        }
+
+        (bool ok, bytes memory data) =
+            tokenContract.staticcall(abi.encodeWithSelector(bytes4(keccak256("ownerOf(uint256)")), tokenId));
+        if (!ok || data.length < 32) {
+            return address(0);
+        }
+
+        return abi.decode(data, (address));
     }
 
     function accountId() external pure override returns (string memory) {

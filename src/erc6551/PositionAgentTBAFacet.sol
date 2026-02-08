@@ -4,24 +4,7 @@ pragma solidity ^0.8.20;
 import {LibPositionAgentStorage} from "../libraries/LibPositionAgentStorage.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {DirectError_InvalidPositionNFT} from "../libraries/Errors.sol";
-
-interface IERC6551Registry {
-    function createAccount(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    ) external returns (address account);
-
-    function account(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    ) external view returns (address account);
-}
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 /// @title PositionAgentTBAFacet
 /// @notice Computes and deploys ERC-6551 TBAs for Position NFTs

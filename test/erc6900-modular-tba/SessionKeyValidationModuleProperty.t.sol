@@ -5,12 +5,12 @@ import {Test} from "forge-std/Test.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {PackedUserOperation} from "@openzeppelin/contracts/interfaces/draft-IERC4337.sol";
 
-import {SessionKeyValidationModule} from "../../src/erc6900/SessionKeyValidationModule.sol";
-import {PositionMSCA} from "../../src/erc6900/PositionMSCA.sol";
-import {IERC6551Account} from "../../src/interfaces/IERC6551Account.sol";
-import {ModuleEntity, ValidationConfig} from "../../src/erc6900/ModuleTypes.sol";
-import {ModuleEntityLib} from "../../src/erc6900/ModuleEntityLib.sol";
-import {ValidationConfigLib} from "../../src/erc6900/ValidationConfigLib.sol";
+import {SessionKeyValidationModule} from "@agent-wallet-core/modules/validation/SessionKeyValidationModule.sol";
+import {NFTBoundMSCA} from "@agent-wallet-core/core/NFTBoundMSCA.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
+import {ModuleEntity, ValidationConfig} from "@agent-wallet-core/libraries/ModuleTypes.sol";
+import {ModuleEntityLib} from "@agent-wallet-core/libraries/ModuleEntityLib.sol";
+import {ValidationConfigLib} from "@agent-wallet-core/libraries/ValidationConfigLib.sol";
 
 contract SessionMockAccount is IERC6551Account {
     address private _owner;
@@ -52,12 +52,12 @@ contract SessionMockPositionNFT is ERC721 {
     }
 }
 
-contract PositionMSCASessionHarness is PositionMSCA {
+contract PositionMSCASessionHarness is NFTBoundMSCA {
     uint256 private _chainId;
     address private _tokenContract;
     uint256 private _tokenId;
 
-    constructor(address entryPoint_) PositionMSCA(entryPoint_) {}
+    constructor(address entryPoint_) NFTBoundMSCA(entryPoint_) {}
 
     function setTokenData(uint256 chainId, address tokenContract, uint256 tokenId) external {
         _chainId = chainId;
@@ -71,6 +71,22 @@ contract PositionMSCASessionHarness is PositionMSCA {
 
     function ping() external pure returns (bytes4) {
         return 0x11223344;
+    }
+
+
+    function _owner() internal view override returns (address) {
+        (uint256 chainId, address tokenContract, uint256 tokenId) = token();
+        if (chainId != block.chainid || tokenContract == address(0)) {
+            return address(0);
+        }
+
+        (bool ok, bytes memory data) =
+            tokenContract.staticcall(abi.encodeWithSelector(bytes4(keccak256("ownerOf(uint256)")), tokenId));
+        if (!ok || data.length < 32) {
+            return address(0);
+        }
+
+        return abi.decode(data, (address));
     }
 
     function accountId() external pure override returns (string memory) {
@@ -89,9 +105,9 @@ contract SessionKeyValidationModulePropertyTest is Test {
     bytes4 private constant INNER_ALLOWED_SELECTOR = bytes4(keccak256("allowedInner()"));
     bytes4 private constant INNER_BLOCKED_SELECTOR = bytes4(keccak256("blockedInner()"));
 
-    bytes32 private constant USER_OP_TAG = keccak256("EQUALIS_SESSION_USEROP_V1");
-    bytes32 private constant RUNTIME_TAG = keccak256("EQUALIS_SESSION_RUNTIME_V1");
-    bytes32 private constant SIGNATURE_TAG = keccak256("EQUALIS_SESSION_SIG_V1");
+    bytes32 private constant USER_OP_TAG = keccak256("AGENT_WALLET_SESSION_USEROP_V1");
+    bytes32 private constant RUNTIME_TAG = keccak256("AGENT_WALLET_SESSION_RUNTIME_V1");
+    bytes32 private constant SIGNATURE_TAG = keccak256("AGENT_WALLET_SESSION_SIG_V1");
 
     uint256 private constant SECP256K1_N =
         0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
@@ -131,10 +147,21 @@ contract SessionKeyValidationModulePropertyTest is Test {
         uint32 entityId,
         address sender,
         uint256 value,
-        bytes memory data
+        bytes memory data,
+        bytes32 replayProtection
     ) internal view returns (bytes32) {
         bytes32 payloadHash = keccak256(
-            abi.encode(RUNTIME_TAG, block.chainid, address(module), account, entityId, sender, value, keccak256(data))
+            abi.encode(
+                RUNTIME_TAG,
+                block.chainid,
+                address(module),
+                account,
+                entityId,
+                sender,
+                value,
+                keccak256(data),
+                replayProtection
+            )
         );
         return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", payloadHash));
     }
@@ -286,6 +313,8 @@ contract SessionKeyValidationModulePropertyTest is Test {
 
         SessionKeyValidationModule module = new SessionKeyValidationModule();
         SessionMockAccount account = new SessionMockAccount(owner);
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = PING_SELECTOR;
 
         vm.prank(nonOwner);
         vm.expectRevert(
@@ -300,7 +329,7 @@ contract SessionKeyValidationModulePropertyTest is Test {
             0,
             0,
             new address[](0),
-            new bytes4[](0),
+            selectors,
             _emptyTargetRules()
         );
 
@@ -314,7 +343,7 @@ contract SessionKeyValidationModulePropertyTest is Test {
             0,
             0,
             new address[](0),
-            new bytes4[](0),
+            selectors,
             _emptyTargetRules()
         );
 
@@ -326,6 +355,15 @@ contract SessionKeyValidationModulePropertyTest is Test {
 
         vm.prank(owner);
         module.revokeSessionKey(address(account), ENTITY_ID, sessionSigner);
+
+        vm.prank(nonOwner);
+        vm.expectRevert(
+            abi.encodeWithSelector(SessionKeyValidationModule.NotAccountOwner.selector, address(account), nonOwner, owner)
+        );
+        module.revokeAllSessionKeys(address(account), ENTITY_ID);
+
+        vm.prank(owner);
+        module.revokeAllSessionKeys(address(account), ENTITY_ID);
     }
 
     function testProperty_SessionKeyRuntimeAndERC1271Validation(uint256 ownerKey, uint256 sessionKey, address target)
@@ -363,8 +401,9 @@ contract SessionKeyValidationModulePropertyTest is Test {
 
         bytes memory data = abi.encodeWithSelector(EXECUTE_SELECTOR, target, 0.25 ether, bytes(""));
         address runtimeSender = address(0xCAFE);
-        bytes32 runtimeDigest = _runtimeDigest(module, address(account), ENTITY_ID, runtimeSender, 0, data);
-        bytes memory runtimeAuth = _asModuleSig(sessionSigner, _sign(sessionKey, runtimeDigest));
+        bytes32 replayProtection = keccak256("runtime-1");
+        bytes32 runtimeDigest = _runtimeDigest(module, address(account), ENTITY_ID, runtimeSender, 0, data, replayProtection);
+        bytes memory runtimeAuth = abi.encode(sessionSigner, replayProtection, _sign(sessionKey, runtimeDigest));
 
         module.validateRuntime(address(account), ENTITY_ID, runtimeSender, 0, data, runtimeAuth);
 
@@ -391,7 +430,126 @@ contract SessionKeyValidationModulePropertyTest is Test {
         module.validateRuntime(address(account), ENTITY_ID, runtimeSender, 0, data, runtimeAuth);
     }
 
-    /// @notice **Feature: erc6900-modular-tba, Session Key Integration with PositionMSCA**
+    function test_SessionKeyPolicyRejectsEmptySelectors() public {
+        address owner = vm.addr(1);
+        address sessionSigner = vm.addr(2);
+
+        SessionKeyValidationModule module = new SessionKeyValidationModule();
+        SessionMockAccount account = new SessionMockAccount(owner);
+
+        vm.prank(owner);
+        vm.expectRevert(SessionKeyValidationModule.EmptySelectorPolicy.selector);
+        module.setSessionKeyPolicy(
+            address(account),
+            ENTITY_ID,
+            sessionSigner,
+            0,
+            0,
+            0,
+            0,
+            new address[](0),
+            new bytes4[](0),
+            _emptyTargetRules()
+        );
+    }
+
+    function test_SessionKeyPolicyRejectsExecutionSelectorWithoutTargets() public {
+        address owner = vm.addr(3);
+        address sessionSigner = vm.addr(4);
+
+        SessionKeyValidationModule module = new SessionKeyValidationModule();
+        SessionMockAccount account = new SessionMockAccount(owner);
+
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = EXECUTE_SELECTOR;
+
+        vm.prank(owner);
+        vm.expectRevert(SessionKeyValidationModule.MissingTargetAllowlistForExecutionSelectors.selector);
+        module.setSessionKeyPolicy(
+            address(account),
+            ENTITY_ID,
+            sessionSigner,
+            0,
+            0,
+            1 ether,
+            0,
+            new address[](0),
+            selectors,
+            _emptyTargetRules()
+        );
+    }
+
+    function test_SessionKeyRevokeAllInvalidatesExistingPolicies() public {
+        uint256 ownerKey = 11;
+        uint256 sessionKey = 12;
+        address owner = vm.addr(ownerKey);
+        address sessionSigner = vm.addr(sessionKey);
+        address target = address(0xCAFE);
+
+        SessionKeyValidationModule module = new SessionKeyValidationModule();
+        SessionMockAccount account = new SessionMockAccount(owner);
+
+        address[] memory targets = new address[](1);
+        targets[0] = target;
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = EXECUTE_SELECTOR;
+
+        vm.prank(owner);
+        module.setSessionKeyPolicy(
+            address(account),
+            ENTITY_ID,
+            sessionSigner,
+            0,
+            0,
+            1 ether,
+            0,
+            targets,
+            selectors,
+            _emptyTargetRules()
+        );
+
+        bytes memory callData = abi.encodeWithSelector(EXECUTE_SELECTOR, target, 0.1 ether, bytes(""));
+        bytes32 hashBefore = keccak256("epoch-before");
+        bytes memory sigBefore =
+            _asModuleSig(sessionSigner, _sign(sessionKey, _userOpDigest(module, address(account), ENTITY_ID, hashBefore)));
+        PackedUserOperation memory opBefore = _buildUserOp(address(account), callData, sigBefore);
+        assertEq(module.validateUserOp(ENTITY_ID, opBefore, hashBefore), 0, "policy should validate before revokeAll");
+
+        assertEq(module.getSessionPolicyEpoch(address(account), ENTITY_ID), 0, "initial epoch");
+        vm.prank(owner);
+        module.revokeAllSessionKeys(address(account), ENTITY_ID);
+        assertEq(module.getSessionPolicyEpoch(address(account), ENTITY_ID), 1, "epoch should increment");
+
+        bytes32 hashAfterRevoke = keccak256("epoch-after-revoke");
+        bytes memory sigAfterRevoke = _asModuleSig(
+            sessionSigner, _sign(sessionKey, _userOpDigest(module, address(account), ENTITY_ID, hashAfterRevoke))
+        );
+        PackedUserOperation memory opAfterRevoke = _buildUserOp(address(account), callData, sigAfterRevoke);
+        assertEq(module.validateUserOp(ENTITY_ID, opAfterRevoke, hashAfterRevoke), 1, "policy should fail after revokeAll");
+
+        vm.prank(owner);
+        module.setSessionKeyPolicy(
+            address(account),
+            ENTITY_ID,
+            sessionSigner,
+            0,
+            0,
+            1 ether,
+            0,
+            targets,
+            selectors,
+            _emptyTargetRules()
+        );
+
+        bytes32 hashAfterReissue = keccak256("epoch-after-reissue");
+        bytes memory sigAfterReissue = _asModuleSig(
+            sessionSigner, _sign(sessionKey, _userOpDigest(module, address(account), ENTITY_ID, hashAfterReissue))
+        );
+        PackedUserOperation memory opAfterReissue = _buildUserOp(address(account), callData, sigAfterReissue);
+        assertEq(module.validateUserOp(ENTITY_ID, opAfterReissue, hashAfterReissue), 0, "policy should validate after reissue");
+    }
+
+    /// @notice **Feature: erc6900-modular-tba, Session Key Integration with NFTBoundMSCA**
     /// @notice Account-level validateUserOp accepts wrapped ModuleEntity + session signature
     function testIntegration_PositionMSCAWithSessionValidation(uint256 ownerKey, uint256 sessionKey) public {
         ownerKey = bound(ownerKey, 1, SECP256K1_N - 1);

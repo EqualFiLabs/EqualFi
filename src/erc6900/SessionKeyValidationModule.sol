@@ -48,11 +48,14 @@ contract SessionKeyValidationModule is IERC6900ValidationModule {
     mapping(bytes32 => mapping(bytes4 => bool)) private _allowedSelectors;
     mapping(bytes32 => mapping(address => uint256)) private _targetSelectorCounts;
     mapping(bytes32 => mapping(address => mapping(bytes4 => bool))) private _allowedTargetSelectors;
+    mapping(address => mapping(uint32 => uint64)) private _accountEntityEpoch;
 
     error NotAccountOwner(address account, address caller, address owner);
     error InvalidSessionKey(address sessionKey);
     error InvalidPolicyWindow(uint48 validAfter, uint48 validUntil);
     error InvalidPolicyDuration(uint48 durationSeconds);
+    error EmptySelectorPolicy();
+    error MissingTargetAllowlistForExecutionSelectors();
     error SessionValidationFailed(address account, uint32 entityId, address sessionKey);
 
     event SessionKeyPolicySet(
@@ -84,6 +87,8 @@ contract SessionKeyValidationModule is IERC6900ValidationModule {
         uint256 amount,
         uint256 cumulativeValueUsed
     );
+
+    event SessionKeyEpochRevoked(address indexed account, uint32 indexed entityId, uint64 epoch);
 
     function onInstall(bytes calldata) external pure override {}
 
@@ -175,6 +180,12 @@ contract SessionKeyValidationModule is IERC6900ValidationModule {
         if (sessionKey == address(0)) {
             revert InvalidSessionKey(sessionKey);
         }
+        if (allowedSelectors_.length == 0) {
+            revert EmptySelectorPolicy();
+        }
+        if (_hasExecutionSelector(allowedSelectors_) && allowedTargets_.length == 0) {
+            revert MissingTargetAllowlistForExecutionSelectors();
+        }
         if (validUntil != 0 && validUntil <= validAfter) {
             revert InvalidPolicyWindow(validAfter, validUntil);
         }
@@ -242,6 +253,17 @@ contract SessionKeyValidationModule is IERC6900ValidationModule {
         _policyNonce[baseKey] = nonce;
 
         emit SessionKeyRevoked(account, entityId, sessionKey, nonce);
+    }
+
+    function revokeAllSessionKeys(address account, uint32 entityId) external {
+        _requireAccountOwner(account);
+        uint64 nextEpoch = _accountEntityEpoch[account][entityId] + 1;
+        _accountEntityEpoch[account][entityId] = nextEpoch;
+        emit SessionKeyEpochRevoked(account, entityId, nextEpoch);
+    }
+
+    function getSessionPolicyEpoch(address account, uint32 entityId) external view returns (uint64) {
+        return _accountEntityEpoch[account][entityId];
     }
 
     function getSessionKeyPolicy(address account, uint32 entityId, address sessionKey)
@@ -481,8 +503,8 @@ contract SessionKeyValidationModule is IERC6900ValidationModule {
         }
     }
 
-    function _basePolicyKey(address account, uint32 entityId, address sessionKey) internal pure returns (bytes32) {
-        return keccak256(abi.encode(account, entityId, sessionKey));
+    function _basePolicyKey(address account, uint32 entityId, address sessionKey) internal view returns (bytes32) {
+        return keccak256(abi.encode(account, entityId, sessionKey, _accountEntityEpoch[account][entityId]));
     }
 
     function _resolvedPolicyKey(bytes32 baseKey, uint64 nonce) internal pure returns (bytes32) {
@@ -545,5 +567,17 @@ contract SessionKeyValidationModule is IERC6900ValidationModule {
         returns (uint256)
     {
         return uint256(uint160(authorizer)) | (uint256(validUntil) << 160) | (uint256(validAfter) << 208);
+    }
+
+    function _hasExecutionSelector(bytes4[] calldata selectors) internal pure returns (bool) {
+        for (uint256 i = 0; i < selectors.length; i++) {
+            bytes4 selector = selectors[i];
+            if (
+                selector == EXECUTE_SELECTOR || selector == EXECUTE_BATCH_SELECTOR || selector == EXECUTE_OPERATION_SELECTOR
+            ) {
+                return true;
+            }
+        }
+        return false;
     }
 }

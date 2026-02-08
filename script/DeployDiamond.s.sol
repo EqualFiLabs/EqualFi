@@ -66,7 +66,7 @@ import {PositionAgentRegistryFacet} from "../src/erc6551/PositionAgentRegistryFa
 import {PositionAgentViewFacet} from "../src/erc6551/PositionAgentViewFacet.sol";
 import {PositionAgentConfigFacet} from "../src/erc6551/PositionAgentConfigFacet.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import {ERC6551BeaconProxy} from "../src/erc6551/ERC6551BeaconProxy.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/erc6900/PositionMSCAImpl.sol";
 
 interface IPoolManagementFacetInitDefault {
@@ -262,7 +262,7 @@ contract DeployDiamondScript is Script {
         address entryPoint = _resolveEntryPoint();
         PositionMSCAImpl mscaImplementation = new PositionMSCAImpl(entryPoint);
         UpgradeableBeacon beacon = new UpgradeableBeacon(address(mscaImplementation), owner);
-        ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
+        BeaconProxy beaconProxy = new BeaconProxy(address(beacon));
 
         console2.log("EntryPoint", entryPoint);
         console2.log("MSCAImplementation", address(mscaImplementation));

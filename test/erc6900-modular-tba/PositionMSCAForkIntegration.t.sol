@@ -5,8 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 import {PositionMSCAImpl} from "../../src/erc6900/PositionMSCAImpl.sol";
-import {IERC6551Account} from "../../src/interfaces/IERC6551Account.sol";
-import {IERC6900Account} from "../../src/erc6900/IERC6900Account.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
+import {IERC6900Account} from "@agent-wallet-core/interfaces/IERC6900Account.sol";
 
 interface IERC6551Registry {
     function createAccount(

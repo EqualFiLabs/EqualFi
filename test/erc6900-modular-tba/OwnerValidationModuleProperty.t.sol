@@ -5,8 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {PackedUserOperation} from "@openzeppelin/contracts/interfaces/draft-IERC4337.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
-import {IERC6551Account} from "../../src/interfaces/IERC6551Account.sol";
-import {OwnerValidationModule} from "../../src/erc6900/OwnerValidationModule.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
+import {OwnerValidationModule} from "@agent-wallet-core/modules/validation/OwnerValidationModule.sol";
 
 contract MockAccount is IERC6551Account {
     address private _owner;
@@ -44,7 +44,7 @@ contract OwnerValidationModulePropertyTest is Test {
     bytes32 private constant USER_OP_TYPEHASH = keccak256("UserOp(bytes32 userOpHash)");
     bytes32 private constant MESSAGE_TYPEHASH = keccak256("Message(bytes32 hash)");
 
-    string private constant NAME = "EqualLend Owner Validation";
+    string private constant NAME = "Agent Wallet Owner Validation";
     string private constant VERSION = "1.0.0";
 
     bytes4 private constant ERC1271_MAGIC = 0x1626ba7e;

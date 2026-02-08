@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {IERC165} from "../interfaces/IERC165.sol";
-import {IERC6900ExecutionModule} from "./IERC6900ExecutionModule.sol";
-import {IERC6900Module} from "./IERC6900Module.sol";
-import {ExecutionManifest, ManifestExecutionFunction} from "./ModuleTypes.sol";
+import {IERC165} from "@agent-wallet-core/interfaces/IERC165.sol";
+import {IERC6900ExecutionModule} from "@agent-wallet-core/interfaces/IERC6900ExecutionModule.sol";
+import {IERC6900Module} from "@agent-wallet-core/interfaces/IERC6900Module.sol";
+import {ExecutionManifest, ManifestExecutionFunction} from "@agent-wallet-core/libraries/ModuleTypes.sol";
 import {DerivativeTypes} from "../libraries/DerivativeTypes.sol";
-import {IERC6551Account} from "../interfaces/IERC6551Account.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
 
 interface IAmmAuctionFacet {
     function createAuction(DerivativeTypes.CreateAuctionParams calldata params) external returns (uint256 auctionId);
