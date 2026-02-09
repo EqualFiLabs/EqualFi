@@ -134,37 +134,37 @@ When the Position NFT transfers, the entire ownership chain automatically update
 ### 2.3 Component Interaction Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DIAMOND PROXY                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐ │
-│  │ PositionAgentTBA    │  │ PositionAgentReg    │  │ PositionAgentView   │ │
-│  │ Facet               │  │ Facet               │  │ Facet               │ │
-│  ├─────────────────────┤  ├─────────────────────┤  ├─────────────────────┤ │
-│  │ • computeTBAAddress │  │ • recordAgentRegistration │ • getTBAAddress   │ │
-│  │ • deployTBA         │  │ • getIdentityRegistry     │ • getAgentId      │ │
-│  │ • getTBAImplementation│ │                           │ • isAgentRegistered│ │
-│  │ • getERC6551Registry│  │                           │ • isTBADeployed   │ │
-│  └──────────┬──────────┘  └──────────┬──────────┘    │ • getCanonicalRegistries │
-│             │                        │                │ • getTBAInterfaceSupport │
-│             │                        │             └─────────────────────┘ │
-│             │                        │                                      │
-│             ▼                        ▼                                      │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    LibPositionAgentStorage                          │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  • erc6551Registry        • positionToAgentId (mapping)             │   │
-│  │  • erc6551Implementation  • tbaDeployed (mapping)                   │   │
-│  │  • identityRegistry       • tbaSalt                                 │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────┐                                                    │
-│  │ PositionAgentConfig │  (Admin functions for registry configuration)     │
-│  │ Facet               │                                                    │
-│  └─────────────────────┘                                                    │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           DIAMOND PROXY                                             │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌───────────────────────┐┌──────────────────────────┐┌─────────────────────────┐   │
+│  │ PositionAgentTBA      ││ PositionAgentReg         ││ PositionAgentView       │   │
+│  │ Facet                 ││ Facet                    ││ Facet                   │   │
+│  ├───────────────────────┤├──────────────────────────┤├─────────────────────────┤   │
+│  │ • computeTBAAddress   ││ • recordAgentRegistration|│ • getTBAAddress         │   │
+│  │ • deployTBA           ││ • getIdentityRegistry    |│ • getAgentId            │   │
+│  │ • getTBAImplementation││                          |│ • isAgentRegistered     │   |
+│  │ • getERC6551Registry  ││                          |│ • isTBADeployed         │   │
+│  └──────────┬────────────┘└──────────┬───────────────┘│ • getCanonicalRegistries|   │
+│             │                        │                │ • getTBAInterfaceSupport|   │
+│             │                        │                └─────────────────────────┘   │
+│             │                        │                   |                          │
+│             ▼                        ▼                   ▼                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐            │
+│  │                    LibPositionAgentStorage                          │            │
+│  ├─────────────────────────────────────────────────────────────────────┤            │
+│  │  • erc6551Registry        • positionToAgentId (mapping)             │            │
+│  │  • erc6551Implementation  • tbaDeployed (mapping)                   │            │
+│  │  • identityRegistry       • tbaSalt                                 │            │
+│  └─────────────────────────────────────────────────────────────────────┘            │
+│                                                                                     │
+│  ┌─────────────────────┐                                                            │
+│  │ PositionAgentConfig │  (Admin functions for registry configuration)              │
+│  │ Facet               │                                                            │
+│  └─────────────────────┘                                                            │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---

@@ -735,10 +735,13 @@ function _checkAndConsumeTranche(
         offer.cancelled = true;
         offer.filled = true;
         uint256 amountReturned = trancheRemaining;
+        if (amountReturned > offerEscrow) {
+            amountReturned = offerEscrow;
+        }
         uint256 trancheAmount = offer.trancheAmount;
         ds.trancheRemaining[offerId] = 0;
         uint256 lenderEncBefore = LibEncumbrance.totalForActiveCredit(lenderKey, offer.lenderPoolId);
-        LibEncumbrance.position(lenderKey, offer.lenderPoolId).directOfferEscrow = 0;
+        LibEncumbrance.position(lenderKey, offer.lenderPoolId).directOfferEscrow = offerEscrow - amountReturned;
         LibActiveCreditIndex.applyEncumbranceDelta(
             lenderPool,
             offer.lenderPoolId,
@@ -796,6 +799,10 @@ function _checkAndConsumeTranche(
 
         uint256 lenderPrincipalBefore = lenderPool.userPrincipal[lenderKey];
         if (lenderPrincipalBefore < principalAmount) revert InsufficientPrincipal(principalAmount, lenderPrincipalBefore);
+        uint256 offerEscrow = LibEncumbrance.position(lenderKey, offer.lenderPoolId).directOfferEscrow;
+        if (offerEscrow > lenderPrincipalBefore) revert InsufficientPrincipal(offerEscrow, lenderPrincipalBefore);
+        uint256 lenderAvailable = lenderPrincipalBefore - offerEscrow;
+        if (principalAmount > lenderAvailable) revert InsufficientPrincipal(principalAmount, lenderAvailable);
 
         bytes32 borrowerKey = nft.getPositionKey(offer.borrowerPositionId);
         LibFeeIndex.settle(offer.collateralPoolId, borrowerKey);
@@ -807,6 +814,22 @@ function _checkAndConsumeTranche(
         // Collateral was already locked when offer was posted, verify it's still locked
         uint256 locked = LibEncumbrance.position(borrowerKey, offer.collateralPoolId).directLocked;
         if (locked < collateralAmount) revert InsufficientPrincipal(collateralAmount, locked);
+        uint256 borrowerPrincipal = collateralPool.userPrincipal[borrowerKey];
+
+        if (offer.borrowAsset == offer.collateralAsset) {
+            uint256 currentBorrowerDebt =
+                LibSolvencyChecks.calculateTotalDebt(collateralPool, borrowerKey, offer.lenderPoolId);
+            uint256 newBorrowerDebt = currentBorrowerDebt + principalAmount;
+            require(
+                LibSolvencyChecks.checkSolvency(
+                    collateralPool,
+                    borrowerKey,
+                    borrowerPrincipal,
+                    newBorrowerDebt
+                ),
+                "SolvencyViolation: Borrower LTV"
+            );
+        }
 
         DirectTypes.DirectConfig storage cfg = ds.config;
         (uint256 platformFee, uint256 interestAmount, uint256 totalFee, uint64 dueTimestamp) =

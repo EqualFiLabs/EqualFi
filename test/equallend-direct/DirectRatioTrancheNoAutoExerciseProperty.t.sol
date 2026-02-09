@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {InsufficientPrincipal} from "../../src/libraries/Errors.sol";
 import {DirectDiamondTestBase} from "./DirectDiamondTestBase.sol";
 
 /// @notice Feature: direct-limit-orders, Property 11: Auto-Exercise Removal
@@ -125,5 +126,244 @@ contract DirectRatioTrancheNoAutoExercisePropertyTest is DirectDiamondTestBase {
         DirectTypes.DirectAgreement memory agreement = views.getAgreement(agreementId);
         assertEq(uint8(agreement.status), uint8(DirectTypes.DirectStatus.Active), "agreement should be active");
         assertEq(views.directLocked(borrowerKey, COLLATERAL_POOL), collateralCap, "collateral remains locked");
+    }
+
+    function test_BorrowerRatioAcceptance_RevertsWhenEscrowCommitsCapacity() public {
+        address lenderOwner = address(0xA11CE);
+        address borrowerOwner = address(0xB0B);
+
+        uint256 lenderPos = nft.mint(lenderOwner, LENDER_POOL);
+        uint256 borrowerPos = nft.mint(borrowerOwner, COLLATERAL_POOL);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPos);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPos);
+
+        harness.seedPoolWithLtv(LENDER_POOL, address(tokenA), lenderKey, 100 ether, 10_000, true);
+        harness.seedPoolWithLtv(COLLATERAL_POOL, address(tokenB), borrowerKey, 100 ether, 10_000, true);
+
+        DirectTypes.DirectOfferParams memory escrowOffer = DirectTypes.DirectOfferParams({
+            lenderPositionId: lenderPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenB),
+            borrowAsset: address(tokenA),
+            principal: 80 ether,
+            aprBps: 0,
+            durationSeconds: 1 days,
+            collateralLockAmount: 10 ether,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(lenderOwner);
+        offers.postOffer(escrowOffer);
+
+        DirectTypes.DirectBorrowerRatioTrancheParams memory params = DirectTypes.DirectBorrowerRatioTrancheParams({
+            borrowerPositionId: borrowerPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenB),
+            borrowAsset: address(tokenA),
+            collateralCap: 50 ether,
+            priceNumerator: 1,
+            priceDenominator: 1,
+            minCollateralPerFill: 1 ether,
+            aprBps: 0,
+            durationSeconds: 1 days,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(borrowerOwner);
+        uint256 offerId = offers.postBorrowerRatioTrancheOffer(params);
+
+        vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, 30 ether, 20 ether));
+        vm.prank(lenderOwner);
+        agreements.acceptBorrowerRatioTrancheOffer(offerId, lenderPos, 30 ether);
+    }
+
+    function test_BorrowerRatioAcceptance_SucceedsAtUnencumberedCapacity() public {
+        address lenderOwner = address(0xA11CE);
+        address borrowerOwner = address(0xB0B);
+
+        uint256 lenderPos = nft.mint(lenderOwner, LENDER_POOL);
+        uint256 borrowerPos = nft.mint(borrowerOwner, COLLATERAL_POOL);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPos);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPos);
+
+        harness.seedPoolWithLtv(LENDER_POOL, address(tokenA), lenderKey, 100 ether, 10_000, true);
+        harness.seedPoolWithLtv(COLLATERAL_POOL, address(tokenB), borrowerKey, 100 ether, 10_000, true);
+
+        DirectTypes.DirectOfferParams memory escrowOffer = DirectTypes.DirectOfferParams({
+            lenderPositionId: lenderPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenB),
+            borrowAsset: address(tokenA),
+            principal: 80 ether,
+            aprBps: 0,
+            durationSeconds: 1 days,
+            collateralLockAmount: 10 ether,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(lenderOwner);
+        offers.postOffer(escrowOffer);
+
+        DirectTypes.DirectBorrowerRatioTrancheParams memory params = DirectTypes.DirectBorrowerRatioTrancheParams({
+            borrowerPositionId: borrowerPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenB),
+            borrowAsset: address(tokenA),
+            collateralCap: 50 ether,
+            priceNumerator: 1,
+            priceDenominator: 1,
+            minCollateralPerFill: 1 ether,
+            aprBps: 0,
+            durationSeconds: 1 days,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(borrowerOwner);
+        uint256 offerId = offers.postBorrowerRatioTrancheOffer(params);
+
+        vm.prank(lenderOwner);
+        uint256 agreementId = agreements.acceptBorrowerRatioTrancheOffer(offerId, lenderPos, 20 ether);
+        assertGt(agreementId, 0, "agreement created at available capacity");
+
+        DirectTypes.DirectAgreement memory agreement = views.getAgreement(agreementId);
+        assertEq(agreement.principal, 20 ether, "principal matches accepted fill");
+        assertEq(views.offerEscrow(lenderKey, LENDER_POOL), 80 ether, "existing offer escrow preserved");
+        assertEq(
+            views.getBorrowerRatioTrancheOffer(offerId).collateralRemaining,
+            30 ether,
+            "borrower ratio collateral remaining decremented"
+        );
+    }
+
+    function test_BorrowerRatioSameAsset_RevertsWhenFillBreachesBorrowerLtv() public {
+        address lenderOwner = address(0xA11CE);
+        address borrowerOwner = address(0xB0B);
+
+        uint256 lenderPos = nft.mint(lenderOwner, LENDER_POOL);
+        uint256 borrowerPos = nft.mint(borrowerOwner, COLLATERAL_POOL);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPos);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPos);
+
+        harness.seedPoolWithLtv(LENDER_POOL, address(tokenA), lenderKey, 200 ether, 10_000, true);
+        harness.seedPoolWithLtv(COLLATERAL_POOL, address(tokenA), borrowerKey, 100 ether, 5_000, true);
+        harness.setDirectBorrowed(borrowerKey, LENDER_POOL, 40 ether);
+
+        DirectTypes.DirectBorrowerRatioTrancheParams memory params = DirectTypes.DirectBorrowerRatioTrancheParams({
+            borrowerPositionId: borrowerPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenA),
+            borrowAsset: address(tokenA),
+            collateralCap: 30 ether,
+            priceNumerator: 1,
+            priceDenominator: 1,
+            minCollateralPerFill: 1 ether,
+            aprBps: 0,
+            durationSeconds: 1 days,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(borrowerOwner);
+        uint256 offerId = offers.postBorrowerRatioTrancheOffer(params);
+
+        vm.expectRevert(bytes("SolvencyViolation: Borrower LTV"));
+        vm.prank(lenderOwner);
+        agreements.acceptBorrowerRatioTrancheOffer(offerId, lenderPos, 20 ether);
+    }
+
+    function test_BorrowerRatioSameAsset_SucceedsWhenWithinBorrowerLtv() public {
+        address lenderOwner = address(0xA11CE);
+        address borrowerOwner = address(0xB0B);
+
+        uint256 lenderPos = nft.mint(lenderOwner, LENDER_POOL);
+        uint256 borrowerPos = nft.mint(borrowerOwner, COLLATERAL_POOL);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPos);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPos);
+
+        harness.seedPoolWithLtv(LENDER_POOL, address(tokenA), lenderKey, 200 ether, 10_000, true);
+        harness.seedPoolWithLtv(COLLATERAL_POOL, address(tokenA), borrowerKey, 100 ether, 5_000, true);
+        harness.setDirectBorrowed(borrowerKey, LENDER_POOL, 20 ether);
+
+        DirectTypes.DirectBorrowerRatioTrancheParams memory params = DirectTypes.DirectBorrowerRatioTrancheParams({
+            borrowerPositionId: borrowerPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenA),
+            borrowAsset: address(tokenA),
+            collateralCap: 30 ether,
+            priceNumerator: 1,
+            priceDenominator: 1,
+            minCollateralPerFill: 1 ether,
+            aprBps: 0,
+            durationSeconds: 1 days,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(borrowerOwner);
+        uint256 offerId = offers.postBorrowerRatioTrancheOffer(params);
+
+        vm.prank(lenderOwner);
+        uint256 agreementId = agreements.acceptBorrowerRatioTrancheOffer(offerId, lenderPos, 20 ether);
+        assertGt(agreementId, 0, "agreement created within borrower LTV");
+        assertEq(views.getBorrowerRatioTrancheOffer(offerId).collateralRemaining, 10 ether, "remaining decremented");
+    }
+
+    function test_BorrowerRatioDifferentAsset_AllowsFillWithoutSameAssetSolvencyGate() public {
+        address lenderOwner = address(0xA11CE);
+        address borrowerOwner = address(0xB0B);
+
+        uint256 lenderPos = nft.mint(lenderOwner, LENDER_POOL);
+        uint256 borrowerPos = nft.mint(borrowerOwner, COLLATERAL_POOL);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPos);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPos);
+
+        harness.seedPoolWithLtv(LENDER_POOL, address(tokenA), lenderKey, 200 ether, 10_000, true);
+        harness.seedPoolWithLtv(COLLATERAL_POOL, address(tokenB), borrowerKey, 100 ether, 1_000, true);
+        harness.setDirectBorrowed(borrowerKey, LENDER_POOL, 90 ether);
+
+        DirectTypes.DirectBorrowerRatioTrancheParams memory params = DirectTypes.DirectBorrowerRatioTrancheParams({
+            borrowerPositionId: borrowerPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenB),
+            borrowAsset: address(tokenA),
+            collateralCap: 30 ether,
+            priceNumerator: 1,
+            priceDenominator: 1,
+            minCollateralPerFill: 1 ether,
+            aprBps: 0,
+            durationSeconds: 1 days,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(borrowerOwner);
+        uint256 offerId = offers.postBorrowerRatioTrancheOffer(params);
+
+        vm.prank(lenderOwner);
+        uint256 agreementId = agreements.acceptBorrowerRatioTrancheOffer(offerId, lenderPos, 20 ether);
+        assertGt(agreementId, 0, "different-asset fill remains allowed");
     }
 }

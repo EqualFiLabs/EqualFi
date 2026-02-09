@@ -89,6 +89,28 @@ interface IDirectTestHarness {
 
 /// @notice Interface for test view functions
 interface IDirectTestView {
+    struct DirectOfferSummary {
+        uint256 offerId;
+        address lender;
+        address borrower;
+        uint256 lenderPositionId;
+        uint256 borrowerPositionId;
+        uint256 lenderPoolId;
+        uint256 collateralPoolId;
+        address collateralAsset;
+        address borrowAsset;
+        uint256 principal;
+        uint16 aprBps;
+        uint64 durationSeconds;
+        uint256 collateralLockAmount;
+        bool allowEarlyRepay;
+        bool allowEarlyExercise;
+        bool allowLenderCall;
+        bool cancelled;
+        bool filled;
+        bool isBorrowerOffer;
+    }
+
     function trancheRemaining(uint256 offerId) external view returns (uint256);
     function offerEscrow(bytes32 positionKey, uint256 pid) external view returns (uint256);
     function enforceFixedSizeFills() external view returns (bool);
@@ -131,6 +153,8 @@ interface IDirectTestView {
     function getAgreement(uint256 agreementId) external view returns (DirectTypes.DirectAgreement memory);
     function getBorrowerOffer(uint256 offerId) external view returns (DirectTypes.DirectBorrowerOffer memory);
     function getOffer(uint256 offerId) external view returns (DirectTypes.DirectOffer memory);
+    function getOfferKind(uint256 offerId) external view returns (DirectTypes.OfferKind);
+    function getOfferSummary(uint256 offerId) external view returns (DirectOfferSummary memory);
     function getBorrowerAgreements(uint256 positionId, uint256 offset, uint256 limit) external view returns (uint256[] memory);
     function directLocked(bytes32 positionKey, uint256 pid) external view returns (uint256);
     function getRatioTrancheOffer(uint256 offerId) external view returns (DirectTypes.DirectRatioTrancheOffer memory);
@@ -500,7 +524,7 @@ abstract contract DirectDiamondTestBase is Test {
     }
 
     function _selectorsView() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](50);
+        s = new bytes4[](52);
         s[0] = DirectTestViewFacet.trancheRemaining.selector;
         s[1] = DirectTestViewFacet.offerEscrow.selector;
         s[2] = DirectTestViewFacet.enforceFixedSizeFills.selector;
@@ -551,5 +575,7 @@ abstract contract DirectDiamondTestBase is Test {
         s[47] = DirectTestViewFacet.directLocked.selector;
         s[48] = DirectTestViewFacet.pendingActiveCredit.selector;
         s[49] = DirectTestViewFacet.getActiveCreditIndex.selector;
+        s[50] = DirectTestViewFacet.getOfferKind.selector;
+        s[51] = DirectTestViewFacet.getOfferSummary.selector;
     }
 }

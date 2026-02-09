@@ -223,7 +223,7 @@ contract DirectTrancheAcceptancePropertyTest is DirectDiamondTestBase {
         assertTrue(stored.cancelled, "offer cancelled on insufficiency");
         assertTrue(stored.filled, "offer closed on insufficiency");
         assertEq(views.trancheRemaining(offerId), 0, "tranche zeroed");
-        assertEq(views.offerEscrow(lenderKey, LENDER_POOL), 0, "escrow cleared");
+        assertEq(views.offerEscrow(lenderKey, LENDER_POOL), 1, "only remaining tranche amount released");
     }
 
     /// @notice Feature: tranche-backed-offers, Property 6: Active credit integration consistency
@@ -340,5 +340,84 @@ contract DirectTrancheAcceptancePropertyTest is DirectDiamondTestBase {
         assertEq(views.trancheRemaining(offerId), 0, "tranche remains zeroed");
         vm.expectRevert();
         agreements.acceptOffer(offerId, borrowerPosA);
+    }
+
+    function test_AutoCancelPreservesUnrelatedEscrowInSamePool() public {
+        address lenderOwner = address(0xA11CE);
+        address borrowerOwner = address(0xB0B);
+
+        uint256 lenderPos = nft.mint(lenderOwner, LENDER_POOL);
+        uint256 borrowerPos = nft.mint(borrowerOwner, COLLATERAL_POOL);
+        bytes32 lenderKey = nft.getPositionKey(lenderPos);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPos);
+        _finalizeMinter();
+
+        harness.seedPoolWithMembership(LENDER_POOL, address(tokenA), lenderKey, 1_000 ether, true);
+        harness.seedPoolWithMembership(COLLATERAL_POOL, address(tokenB), borrowerKey, 1_000 ether, true);
+
+        DirectTypes.DirectOfferParams memory trancheParams = DirectTypes.DirectOfferParams({
+            lenderPositionId: lenderPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenB),
+            borrowAsset: address(tokenA),
+            principal: 100 ether,
+            aprBps: 1000,
+            durationSeconds: 7 days,
+            collateralLockAmount: 200 ether,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        DirectTypes.DirectTrancheOfferParams memory tranche =
+            DirectTypes.DirectTrancheOfferParams({isTranche: true, trancheAmount: 200 ether});
+
+        vm.prank(lenderOwner);
+        uint256 trancheOfferId = offers.postOffer(trancheParams, tranche);
+
+        DirectTypes.DirectRatioTrancheParams memory ratioParams = DirectTypes.DirectRatioTrancheParams({
+            lenderPositionId: lenderPos,
+            lenderPoolId: LENDER_POOL,
+            collateralPoolId: COLLATERAL_POOL,
+            collateralAsset: address(tokenB),
+            borrowAsset: address(tokenA),
+            principalCap: 300 ether,
+            priceNumerator: 2 ether,
+            priceDenominator: 1 ether,
+            minPrincipalPerFill: 50 ether,
+            aprBps: 1000,
+            durationSeconds: 7 days,
+            allowEarlyRepay: false,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(lenderOwner);
+        uint256 ratioOfferId = offers.postRatioTrancheOffer(ratioParams);
+
+        assertEq(views.offerEscrow(lenderKey, LENDER_POOL), 500 ether, "aggregate escrow at post");
+
+        // Keep aggregate escrow consistent with two live offers: 99 remaining tranche + 300 ratio cap.
+        harness.setTrancheState(lenderKey, LENDER_POOL, trancheOfferId, 99 ether, 399 ether);
+
+        vm.prank(borrowerOwner);
+        uint256 agreementId = agreements.acceptOffer(trancheOfferId, borrowerPos);
+        assertEq(agreementId, 0, "insufficient tranche auto-cancels and returns no agreement");
+
+        DirectTypes.DirectOffer memory trancheOffer = views.getOffer(trancheOfferId);
+        assertTrue(trancheOffer.cancelled, "tranche offer cancelled");
+        assertTrue(trancheOffer.filled, "tranche offer closed");
+        assertEq(views.trancheRemaining(trancheOfferId), 0, "tranche remaining zeroed");
+
+        DirectTypes.DirectRatioTrancheOffer memory ratioOffer = views.getRatioTrancheOffer(ratioOfferId);
+        assertFalse(ratioOffer.cancelled, "ratio offer remains live");
+        assertEq(ratioOffer.principalRemaining, 300 ether, "ratio remaining unchanged");
+        assertEq(views.offerEscrow(lenderKey, LENDER_POOL), 300 ether, "unrelated escrow preserved");
+
+        vm.prank(borrowerOwner);
+        uint256 ratioAgreementId = agreements.acceptRatioTrancheOffer(ratioOfferId, borrowerPos, 100 ether);
+        assertGt(ratioAgreementId, 0, "ratio offer still fillable");
+        assertEq(views.offerEscrow(lenderKey, LENDER_POOL), 200 ether, "ratio fill consumes preserved escrow");
     }
 }
