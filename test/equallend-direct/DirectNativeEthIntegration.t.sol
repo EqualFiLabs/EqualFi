@@ -109,8 +109,12 @@ contract DirectNativeEthIntegrationTest is DirectDiamondTestBase {
             "native tracked after accept"
         );
 
+        // Top up borrower so they can repay full principal (maxPayment must equal msg.value for native)
+        vm.deal(borrowerOwner, borrowerOwner.balance + totalFee);
+        uint256 maxPayment = _maxPayment(agreementId);
+
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay{value: maxPayment}(agreementId, maxPayment);
 
         assertEq(views.getTrackedBalance(LENDER_POOL), lenderTrackedBefore, "lender tracked restored");
         assertEq(

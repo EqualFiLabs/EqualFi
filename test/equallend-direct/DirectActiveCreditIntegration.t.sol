@@ -110,8 +110,9 @@ contract DirectActiveCreditIntegrationTest is DirectDiamondTestBase {
 
         // Mature gate then repay
         vm.warp(block.timestamp + 2 days);
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         Types.PoolData storage pool = LibAppStorage.s().pools[1];
         assertEq(pool.activeCreditPrincipalTotal, 0, "active principal cleared after repay");
@@ -158,8 +159,9 @@ contract DirectActiveCreditIntegrationTest is DirectDiamondTestBase {
 
         tokenA.transfer(borrowerOwner, 200 ether);
         vm.warp(block.timestamp + 2 days);
+        uint256 maxPayment = _maxPayment(crossAgreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(crossAgreementId);
+        lifecycle.repay(crossAgreementId, maxPayment);
 
         assertEq(poolA.userAccruedYield[borrowerKey], 0, "no active credit on cross-asset debt");
         uint256 indexBefore = poolA.activeCreditIndex;
@@ -195,8 +197,9 @@ contract DirectActiveCreditIntegrationTest is DirectDiamondTestBase {
         harness.accrueActiveCredit(1, activeShare2, keccak256("DIRECT_PLATFORM_FEE"));
         tokenA.transfer(borrowerOwner, 150 ether);
         vm.warp(block.timestamp + 2 days);
+        maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         poolA = LibAppStorage.s().pools[1];
         assertGe(poolA.activeCreditIndex, indexBefore, "active credit index tracked for same-asset");

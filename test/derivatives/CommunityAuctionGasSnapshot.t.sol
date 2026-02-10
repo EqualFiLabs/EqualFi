@@ -71,7 +71,7 @@ contract CommunityAuctionGasSnapshot is Test {
         tokenA.approve(address(harness), amountIn);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
     }
 
     function testGasSwapWithFee() public {
@@ -82,7 +82,7 @@ contract CommunityAuctionGasSnapshot is Test {
         tokenA.approve(address(harness), amountIn);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
     }
 }
 

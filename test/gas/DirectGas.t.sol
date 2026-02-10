@@ -441,9 +441,9 @@ contract DirectRollingGasTest is DirectDiamondTestBase {
         uint256 payAmount = 10 ether;
         asset.mint(borrowerOwner, payAmount);
         vm.startPrank(borrowerOwner);
-        asset.approve(address(diamond), payAmount);
+        asset.approve(address(diamond), type(uint256).max);
         vm.resumeGasMetering();
-        rollingPayments.makeRollingPayment(agreementId, payAmount);
+        rollingPayments.makeRollingPayment(agreementId, payAmount, _rollingMaxPayment(agreementId));
         vm.stopPrank();
     }
 
@@ -464,7 +464,7 @@ contract DirectRollingGasTest is DirectDiamondTestBase {
         vm.startPrank(borrowerOwner);
         asset.approve(address(diamond), type(uint256).max);
         vm.resumeGasMetering();
-        rollingLifecycle.repayRollingInFull(agreementId);
+        rollingLifecycle.repayRollingInFull(agreementId, _rollingMaxPayment(agreementId));
         vm.stopPrank();
     }
 

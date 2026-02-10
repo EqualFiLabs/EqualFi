@@ -80,6 +80,6 @@ contract IndexEncumbranceBlocksWithdrawalPropertyTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, withdrawAmount, available));
         vm.prank(owner);
-        facet.withdrawFromPosition(tokenId, pid, withdrawAmount);
+        facet.withdrawFromPosition(tokenId, pid, withdrawAmount, 0);
     }
 }

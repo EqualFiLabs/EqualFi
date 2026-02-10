@@ -51,6 +51,6 @@ contract PositionManagementGasTest is Test {
     function test_gas_MintPositionWithDeposit() public {
         vm.prank(user);
         vm.resumeGasMetering();
-        facet.mintPositionWithDeposit(PID, 10 ether);
+        facet.mintPositionWithDeposit(PID, 10 ether, 10 ether, 0);
     }
 }

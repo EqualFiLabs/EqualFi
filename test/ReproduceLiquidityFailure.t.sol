@@ -71,7 +71,7 @@ contract ReproLendingHarness is LendingFacet {
     }
 
     function action_borrow(uint128 amount) public {
-        super.openRollingFromPosition(TOKEN_ID, PID, amount);
+        super.openRollingFromPosition(TOKEN_ID, PID, amount, amount);
     }
 
     function echidna_liquidity_invariant() public view returns (bool) {

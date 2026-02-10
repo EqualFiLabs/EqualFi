@@ -102,8 +102,9 @@ contract DirectIntegrationWorkflowTest is DirectDiamondTestBase {
         vm.prank(borrowerOwner);
         uint256 agreementId = agreements.acceptOffer(offerId, borrowerPos);
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
     }
 
     function _setupWorkflowContext() internal returns (PositionContext memory ctx) {
@@ -138,8 +139,9 @@ contract DirectIntegrationWorkflowTest is DirectDiamondTestBase {
             assertEq(lenderLent, offerRepay.principal, "lender lent tracked");
         }
 
+        uint256 maxPayment = _maxPayment(agreementRepayId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementRepayId);
+        lifecycle.repay(agreementRepayId, maxPayment);
         {
             (uint256 borrowerLocked, uint256 borrowerLent) = views.getPositionDirectState(ctx.borrowerPos, 2);
             (, uint256 lenderLent) = views.getPositionDirectState(ctx.lenderPos, 1);

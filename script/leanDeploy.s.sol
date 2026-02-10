@@ -457,27 +457,21 @@ contract LeanDeployScript is Script {
         s = new bytes4[](7);
         s[0] = PositionManagementFacet.mintPosition.selector;
         s[1] = PositionManagementFacet.mintPositionWithDeposit.selector;
-        s[2] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256)"));
+        s[2] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256,uint256)"));
+        s[3] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256,uint256)"));
         s[4] = bytes4(keccak256("rollYieldToPosition(uint256,uint256)"));
-        s[5] = bytes4(keccak256("closePoolPosition(uint256,uint256)"));
+        s[5] = bytes4(keccak256("closePoolPosition(uint256,uint256,uint256)"));
         s[6] = PositionManagementFacet.cleanupMembership.selector;
     }
 
     function _selectors(LendingFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](12);
-        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256)"));
-        s[1] = bytes4(keccak256("openRollingFromPosition(uint256,uint256)"));
-        s[2] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256)"));
-        s[4] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256)"));
-        s[5] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256)"));
-        s[6] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256)"));
-        s[7] = bytes4(keccak256("closeRollingCreditFromPosition(uint256)"));
-        s[8] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256)"));
-        s[9] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256)"));
-        s[10] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256)"));
-        s[11] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256)"));
+        s = new bytes4[](6);
+        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256,uint256)"));
+        s[1] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256,uint256)"));
+        s[2] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256,uint256)"));
+        s[3] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256,uint256)"));
+        s[4] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
+        s[5] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
     }
 
     function _selectors(PenaltyFacet) internal pure returns (bytes4[] memory s) {

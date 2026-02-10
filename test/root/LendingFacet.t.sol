@@ -176,7 +176,7 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
 
         LendingSnapshot memory snap = facet.snapshot(PID, key);
         assertEq(snap.rollingLoan.principalRemaining, 20 ether, "principal remaining");
@@ -188,7 +188,7 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
 
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
         assertEq(debtState.principal, 20 ether, "active credit principal");
@@ -203,7 +203,7 @@ contract LendingFacetUnitTest is Test {
         vm.prank(user);
         vm.expectEmit(true, true, true, true);
         emit AutoYieldRolledForBorrow(tokenId, PID, key, 5 ether);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
 
         LendingSnapshot memory snap = facet.snapshot(PID, key);
         assertEq(snap.accruedYield, 0, "accrued yield cleared");
@@ -216,11 +216,11 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
         vm.warp(block.timestamp + 30 days);
 
         uint256 payAmount = 5 ether;
-        facet.makePaymentFromPosition(tokenId, PID, payAmount);
+        facet.makePaymentFromPosition(tokenId, PID, payAmount, payAmount);
         vm.stopPrank();
 
         LendingSnapshot memory snap = facet.snapshot(PID, key);
@@ -232,11 +232,11 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
         vm.warp(block.timestamp + 30 days);
 
         uint256 payAmount = 5 ether;
-        facet.makePaymentFromPosition(tokenId, PID, payAmount);
+        facet.makePaymentFromPosition(tokenId, PID, payAmount, payAmount);
         vm.stopPrank();
 
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
@@ -249,7 +249,7 @@ contract LendingFacetUnitTest is Test {
         facet.setRollingMinPaymentBps(500);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
         vm.warp(block.timestamp + 30 days);
 
         uint256 payAmount = 0.5 ether;
@@ -257,7 +257,7 @@ contract LendingFacetUnitTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(RollingError_MinPayment.selector, payAmount, minPayment)
         );
-        facet.makePaymentFromPosition(tokenId, PID, payAmount);
+        facet.makePaymentFromPosition(tokenId, PID, payAmount, payAmount);
         vm.stopPrank();
     }
 
@@ -265,8 +265,8 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 40 ether);
-        facet.expandRollingFromPosition(tokenId, PID, 10 ether);
+        facet.openRollingFromPosition(tokenId, PID, 40 ether, 40 ether);
+        facet.expandRollingFromPosition(tokenId, PID, 10 ether, 10 ether);
         vm.stopPrank();
 
         LendingSnapshot memory snap = facet.snapshot(PID, key);
@@ -278,8 +278,8 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 40 ether);
-        facet.expandRollingFromPosition(tokenId, PID, 10 ether);
+        facet.openRollingFromPosition(tokenId, PID, 40 ether, 40 ether);
+        facet.expandRollingFromPosition(tokenId, PID, 10 ether, 10 ether);
         vm.stopPrank();
 
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
@@ -291,9 +291,9 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
         vm.warp(block.timestamp + 15 days);
-        facet.closeRollingCreditFromPosition(tokenId, PID);
+        facet.closeRollingCreditFromPosition(tokenId, PID, 20 ether);
         vm.stopPrank();
 
         LendingSnapshot memory snap = facet.snapshot(PID, key);
@@ -305,9 +305,9 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
         vm.warp(block.timestamp + 15 days);
-        facet.closeRollingCreditFromPosition(tokenId, PID);
+        facet.closeRollingCreditFromPosition(tokenId, PID, 20 ether);
         vm.stopPrank();
 
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
@@ -319,7 +319,7 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
         vm.prank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0, 50 ether);
 
         LendingSnapshot memory snap = facet.snapshot(PID, key);
         assertEq(loanId, 1, "loan id");
@@ -333,7 +333,7 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
         vm.prank(user);
-        facet.openFixedFromPosition(tokenId, PID, 50 ether, 0);
+        facet.openFixedFromPosition(tokenId, PID, 50 ether, 0, 50 ether);
 
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
         assertEq(debtState.principal, 50 ether, "active credit principal");
@@ -344,8 +344,8 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
         vm.startPrank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0);
-        facet.repayFixedFromPosition(tokenId, PID, loanId, 20 ether);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0, 50 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 20 ether, 20 ether);
         vm.stopPrank();
 
         Types.FixedTermLoan memory loan = facet.getFixedLoan(PID, loanId);
@@ -357,8 +357,8 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
         vm.startPrank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0);
-        facet.repayFixedFromPosition(tokenId, PID, loanId, 20 ether);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0, 50 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 20 ether, 20 ether);
         vm.stopPrank();
 
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
@@ -371,11 +371,11 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId,) = _seedPosition(200 ether);
 
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, PID, 50 ether);
+        facet.openRollingFromPosition(tokenId, PID, 50 ether, 50 ether);
 
         vm.warp(block.timestamp + 30 days);
         vm.prank(user);
-        facet.makePaymentFromPosition(tokenId, PID, 10 ether);
+        facet.makePaymentFromPosition(tokenId, PID, 10 ether, 10 ether);
     }
 
     /// @dev Deterministic success-path for gas reporting: fixed lifecycle (open + repay).
@@ -383,8 +383,8 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId,) = _seedPosition(300 ether);
 
         vm.startPrank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 100 ether, 0);
-        facet.repayFixedFromPosition(tokenId, PID, loanId, 50 ether);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 100 ether, 0, 100 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 50 ether, 50 ether);
         vm.stopPrank();
 
         Types.FixedTermLoan memory loan = facet.getFixedLoan(PID, loanId);
@@ -399,16 +399,16 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId,) = _seedPosition(200 ether);
         vm.expectRevert(abi.encodeWithSelector(LoanBelowMinimum.selector, 20 ether, 50 ether));
         vm.prank(user);
-        facet.openFixedFromPosition(tokenId, PID, 20 ether, 0);
+        facet.openFixedFromPosition(tokenId, PID, 20 ether, 0, 20 ether);
     }
 
     function test_repayFixed_supportsMultiplePartialRepaymentsAndCloses() public {
         (uint256 tokenId, bytes32 key) = _seedPosition(300 ether);
 
         vm.startPrank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 90 ether, 0);
-        facet.repayFixedFromPosition(tokenId, PID, loanId, 30 ether);
-        facet.repayFixedFromPosition(tokenId, PID, loanId, 60 ether);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 90 ether, 0, 90 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 30 ether, 30 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 60 ether, 60 ether);
         vm.stopPrank();
 
         Types.FixedTermLoan memory loan = facet.getFixedLoan(PID, loanId);
@@ -430,7 +430,7 @@ contract LendingFacetUnitTest is Test {
         facet.seedPosition(pid2, key, 100 ether);
 
         vm.prank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, pid2, 40 ether, 0);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, pid2, 40 ether, 0, 40 ether);
 
         Types.FixedTermLoan memory loan = facet.getFixedLoan(pid2, loanId);
         LendingSnapshot memory snap = facet.snapshot(pid2, key);
@@ -451,7 +451,7 @@ contract LendingFacetUnitTest is Test {
         facet.seedPosition(pid2, key, 200 ether);
 
         vm.prank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, pid2, 40 ether, 0);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, pid2, 40 ether, 0, 40 ether);
 
         Types.FixedTermLoan memory loan = facet.getFixedLoan(pid2, loanId);
         assertEq(loan.fullInterest, 0, "fixed fullInterest zero");
@@ -474,7 +474,7 @@ contract LendingFacetUnitTest is Test {
         facet.seedPosition(pid2, key, depositAmount);
 
         vm.prank(user);
-        facet.openFixedFromPosition(tokenId, pid2, borrowAmount, 0);
+        facet.openFixedFromPosition(tokenId, pid2, borrowAmount, 0, borrowAmount);
 
         LendingSnapshot memory snap = facet.snapshot(pid2, key);
         assertEq(snap.principal, depositAmount, "principal unchanged after fixed borrow");
@@ -490,7 +490,7 @@ contract LendingFacetUnitTest is Test {
         facet.seedPosition(pid2, key, 100 ether);
 
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, pid2, 20 ether);
+        facet.openRollingFromPosition(tokenId, pid2, 20 ether, 20 ether);
 
         Types.RollingCreditLoan memory loan = facet.snapshot(pid2, key).rollingLoan;
         assertEq(loan.apyBps, 0, "rolling apy forced to zero");
@@ -503,8 +503,8 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, borrowAmount);
-        facet.makePaymentFromPosition(tokenId, PID, paymentAmount);
+        facet.openRollingFromPosition(tokenId, PID, borrowAmount, borrowAmount);
+        facet.makePaymentFromPosition(tokenId, PID, paymentAmount, paymentAmount);
         vm.stopPrank();
 
         uint256 expectedRemaining = borrowAmount > paymentAmount ? borrowAmount - paymentAmount : 0;
@@ -522,7 +522,7 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(depositAmount);
 
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, PID, borrowAmount);
+        facet.openRollingFromPosition(tokenId, PID, borrowAmount, borrowAmount);
 
         Types.RollingCreditLoan memory loan = facet.snapshot(PID, key).rollingLoan;
         assertEq(loan.principalAtOpen, depositAmount, "rolling principalAtOpen");
@@ -538,7 +538,7 @@ contract LendingFacetUnitTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(depositAmount);
 
         vm.prank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, borrowAmount, 0);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, borrowAmount, 0, borrowAmount);
 
         Types.FixedTermLoan memory loan = facet.getFixedLoan(PID, loanId);
         assertEq(loan.principalAtOpen, depositAmount, "fixed principalAtOpen");
@@ -566,7 +566,7 @@ contract LendingFacetUnitTest is Test {
         vm.assume(borrow1 > 0);
 
         vm.startPrank(user);
-        uint256 loanId1 = facet.openFixedFromPosition(tokenId, pid2, borrow1, 0);
+        uint256 loanId1 = facet.openFixedFromPosition(tokenId, pid2, borrow1, 0, borrow1);
         vm.stopPrank();
 
         facet.bumpPrincipal(pid2, key, extraDeposit);
@@ -576,7 +576,7 @@ contract LendingFacetUnitTest is Test {
         vm.assume(borrow2 > 0);
 
         vm.startPrank(user);
-        uint256 loanId2 = facet.openFixedFromPosition(tokenId, pid2, borrow2, 0);
+        uint256 loanId2 = facet.openFixedFromPosition(tokenId, pid2, borrow2, 0, borrow2);
         vm.stopPrank();
 
         Types.FixedTermLoan memory loan1 = facet.getFixedLoan(pid2, loanId1);
@@ -653,11 +653,11 @@ contract LendingFacetPropertyTest is Test {
         mirror.seedPosition(PID, mirrorKey, depositAmount);
 
         if (rollingBorrow > 0) {
-            try facet.openRollingFromPosition(tokenId, PID, rollingBorrow) {
-                mirror.openRollingFromPosition(mirrorTokenId, PID, rollingBorrow);
+            try facet.openRollingFromPosition(tokenId, PID, rollingBorrow, rollingBorrow) {
+                mirror.openRollingFromPosition(mirrorTokenId, PID, rollingBorrow, rollingBorrow);
             } catch (bytes memory err) {
                 vm.expectRevert(err);
-                mirror.openRollingFromPosition(mirrorTokenId, PID, rollingBorrow);
+                mirror.openRollingFromPosition(mirrorTokenId, PID, rollingBorrow, rollingBorrow);
                 return;
             }
         }
@@ -669,43 +669,44 @@ contract LendingFacetPropertyTest is Test {
         if (remaining > 0) {
             uint256 pay = remaining / 10;
             if (pay == 0) pay = 1;
-            try facet.makePaymentFromPosition(tokenId, PID, pay) {
-                mirror.makePaymentFromPosition(mirrorTokenId, PID, pay);
+            try facet.makePaymentFromPosition(tokenId, PID, pay, pay) {
+                mirror.makePaymentFromPosition(mirrorTokenId, PID, pay, pay);
             } catch (bytes memory err) {
                 vm.expectRevert(err);
-                mirror.makePaymentFromPosition(mirrorTokenId, PID, pay);
+                mirror.makePaymentFromPosition(mirrorTokenId, PID, pay, pay);
                 return;
             }
         }
 
         snapBefore = facet.snapshot(PID, key);
         if (snapBefore.rollingLoan.active && expandAmount > 0) {
-            try facet.expandRollingFromPosition(tokenId, PID, expandAmount) {
-                mirror.expandRollingFromPosition(mirrorTokenId, PID, expandAmount);
+            try facet.expandRollingFromPosition(tokenId, PID, expandAmount, expandAmount) {
+                mirror.expandRollingFromPosition(mirrorTokenId, PID, expandAmount, expandAmount);
             } catch (bytes memory err) {
                 vm.expectRevert(err);
-                mirror.expandRollingFromPosition(mirrorTokenId, PID, expandAmount);
+                mirror.expandRollingFromPosition(mirrorTokenId, PID, expandAmount, expandAmount);
                 return;
             }
         }
 
         snapBefore = facet.snapshot(PID, key);
         if (closeRolling && snapBefore.rollingLoan.active) {
-            try facet.closeRollingCreditFromPosition(tokenId, PID) {
-                mirror.closeRollingCreditFromPosition(mirrorTokenId, PID);
+            uint256 remaining = snapBefore.rollingLoan.principalRemaining;
+            try facet.closeRollingCreditFromPosition(tokenId, PID, remaining) {
+                mirror.closeRollingCreditFromPosition(mirrorTokenId, PID, remaining);
             } catch (bytes memory err) {
                 vm.expectRevert(err);
-                mirror.closeRollingCreditFromPosition(mirrorTokenId, PID);
+                mirror.closeRollingCreditFromPosition(mirrorTokenId, PID, remaining);
                 return;
             }
         }
 
         if (fixedBorrow > 0) {
-            try facet.openFixedFromPosition(tokenId, PID, fixedBorrow, 0) {
-                mirror.openFixedFromPosition(mirrorTokenId, PID, fixedBorrow, 0);
+            try facet.openFixedFromPosition(tokenId, PID, fixedBorrow, 0, fixedBorrow) {
+                mirror.openFixedFromPosition(mirrorTokenId, PID, fixedBorrow, 0, fixedBorrow);
             } catch (bytes memory err) {
                 vm.expectRevert(err);
-                mirror.openFixedFromPosition(mirrorTokenId, PID, fixedBorrow, 0);
+                mirror.openFixedFromPosition(mirrorTokenId, PID, fixedBorrow, 0, fixedBorrow);
                 return;
             }
         }
@@ -714,11 +715,11 @@ contract LendingFacetPropertyTest is Test {
         if (fixedBorrow > 0) {
             fixedRepay = bound(fixedRepay, 0, fixedBorrow);
             if (fixedRepay > 0) {
-                try facet.repayFixedFromPosition(tokenId, PID, 1, fixedRepay) {
-                    mirror.repayFixedFromPosition(mirrorTokenId, PID, 1, fixedRepay);
+                try facet.repayFixedFromPosition(tokenId, PID, 1, fixedRepay, fixedRepay) {
+                    mirror.repayFixedFromPosition(mirrorTokenId, PID, 1, fixedRepay, fixedRepay);
                 } catch (bytes memory err) {
                     vm.expectRevert(err);
-                    mirror.repayFixedFromPosition(mirrorTokenId, PID, 1, fixedRepay);
+                    mirror.repayFixedFromPosition(mirrorTokenId, PID, 1, fixedRepay, fixedRepay);
                     return;
                 }
             }

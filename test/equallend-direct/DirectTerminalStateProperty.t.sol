@@ -50,9 +50,10 @@ contract DirectTerminalStatePropertyTest is DirectDiamondTestBase {
         agreement.status = terminalStatus;
         harness.setAgreement(agreement);
 
+        uint256 maxPayment = _maxPayment(agreement.agreementId);
         vm.prank(borrower);
         vm.expectRevert(DirectError_InvalidAgreementState.selector);
-        lifecycle.repay(agreement.agreementId);
+        lifecycle.repay(agreement.agreementId, maxPayment);
 
         vm.prank(borrower);
         vm.expectRevert(DirectError_InvalidAgreementState.selector);

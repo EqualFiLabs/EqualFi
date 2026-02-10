@@ -222,10 +222,11 @@ contract DirectDocsScenarioTest is DirectDiamondTestBase {
         );
 
         vm.warp(block.timestamp + 1 days); // early repay allowed by flag
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.expectEmit(true, true, true, true, address(diamond));
         emit DirectAgreementRepaid(agreementId, borrowerOwner, params.principal);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         (lockedAfter, borrowerLentAfter) = views.getPositionDirectState(borrowerPos, COLLATERAL_POOL);
         (, lenderLentAfter) = views.getPositionDirectState(lenderPos, LENDER_POOL);

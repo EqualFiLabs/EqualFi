@@ -77,9 +77,10 @@ contract DirectAccessControlPropertyTest is DirectDiamondTestBase {
         vm.prank(borrowerOwner);
         uint256 agreementId = agreements.acceptOffer(offerId, borrowerPositionId);
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(NotNFTOwner.selector, stranger, borrowerPositionId));
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         vm.prank(borrowerOwner);
         nft.approve(operator, borrowerPositionId);
@@ -87,8 +88,9 @@ contract DirectAccessControlPropertyTest is DirectDiamondTestBase {
         asset.transfer(operator, 100 ether);
         vm.prank(operator);
         asset.approve(address(diamond), type(uint256).max);
+        maxPayment = _maxPayment(agreementId);
         vm.prank(operator);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         vm.prank(lenderOwner);
         uint256 offerIdExercise =

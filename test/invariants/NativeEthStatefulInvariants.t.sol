@@ -91,7 +91,7 @@ contract NativeEthStatefulHandler is Test {
         }
         uint256 amount = bound(amountSeed, 1, available);
         vm.prank(user);
-        position.depositToPosition(tokenId, pid, amount);
+        position.depositToPosition(tokenId, pid, amount, amount);
     }
 
     function withdraw(uint256 amountSeed) external {
@@ -105,7 +105,7 @@ contract NativeEthStatefulHandler is Test {
         }
         uint256 amount = bound(amountSeed, 1, principal);
         vm.prank(user);
-        position.withdrawFromPosition(tokenId, pid, amount);
+        position.withdrawFromPosition(tokenId, pid, amount, 0);
     }
 
     function borrow(uint256 amountSeed) external {
@@ -125,7 +125,7 @@ contract NativeEthStatefulHandler is Test {
         }
         uint256 amount = bound(amountSeed, 1, capacity);
         vm.prank(user);
-        lending.openRollingFromPosition(tokenId, pid, amount);
+        lending.openRollingFromPosition(tokenId, pid, amount, amount);
     }
 
     function repay(uint256 amountSeed) external {
@@ -143,7 +143,7 @@ contract NativeEthStatefulHandler is Test {
         }
         uint256 amount = bound(amountSeed, 1, maxPay);
         vm.prank(user);
-        lending.makePaymentFromPosition(tokenId, pid, amount);
+        lending.makePaymentFromPosition(tokenId, pid, amount, amount);
     }
 
     function _nativeAvailable() internal view returns (uint256) {
@@ -212,7 +212,7 @@ contract NativeEthStatefulInvariantTest is StdInvariant, Test {
 
         uint256 depositAmount = 50 ether;
         vm.prank(user);
-        tokenId = positionFacet.mintPositionWithDeposit(PID, depositAmount);
+        tokenId = positionFacet.mintPositionWithDeposit(PID, depositAmount, depositAmount, 0);
         positionKey = nft.getPositionKey(tokenId);
 
         handler = new NativeEthStatefulHandler(

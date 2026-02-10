@@ -144,23 +144,17 @@ contract MamCurveGasTest is Test {
     function testGasExecuteCurveSwap() public {
         vm.pauseGasMetering();
         uint256 amountIn = 2e18;
-        uint256 feeAmount = (amountIn * 100) / 10_000;
-        tokenB.mint(taker, amountIn + feeAmount);
-        vm.prank(taker);
-        tokenB.approve(address(harness), amountIn + feeAmount);
+        uint256 maxQuote = harness.previewCurveQuote(curveId, amountIn);
+        tokenB.mint(taker, maxQuote);
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), maxQuote);
         vm.resumeGasMetering();
 
-        vm.prank(taker);
         uint256 gasStart = gasleft();
-        harness.executeCurveSwap(
-            curveId,
-            amountIn,
-            1e18,
-            uint64(block.timestamp + 1 days),
-            taker
-        );
+        harness.executeCurveSwap(curveId, amountIn, maxQuote, 1e18, uint64(block.timestamp + 1 days), taker);
         uint256 swapOnlyGas = gasStart - gasleft();
         emit log_named_uint("MAM swap_only gas", swapOnlyGas);
+        vm.stopPrank();
     }
 
     function testGasCreateCurvesBatch() public {

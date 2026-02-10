@@ -131,6 +131,8 @@ contract PositionAgentTransferPropertyTest is Test {
         vm.assume(owner != address(0));
         vm.assume(newOwner != address(0));
         vm.assume(owner != newOwner);
+        // Ensure newOwner is an EOA so safeTransferFrom doesn't revert on missing onERC721Received
+        vm.assume(newOwner.code.length == 0);
 
         poolId = bound(poolId, 1, 1_000_000);
         agentId = bound(agentId, 1, type(uint256).max - 1);

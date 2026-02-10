@@ -78,8 +78,8 @@ interface IFixedTermPenaltyHarness {
     ) external;
     function principalOf(uint256 pid, bytes32 key) external view returns (uint256);
     function activeFixedLoanCount(uint256 pid, bytes32 key) external view returns (uint256);
-    function mintPosition(uint256 pid) external returns (uint256);
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
+    function mintPosition(uint256 pid, uint256 maxFee) external returns (uint256);
+    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external;
 }
 
 contract FixedTermPenaltyIntegrationTest is Test {
@@ -144,9 +144,9 @@ contract FixedTermPenaltyIntegrationTest is Test {
 
     function testFixedTermDefaultAfterExpiryAppliesPenalty() public {
         vm.startPrank(user);
-        uint256 tokenId = harness.mintPosition(PID);
-        harness.depositToPosition(tokenId, PID, PRINCIPAL);
-        uint256 loanId = lending.openFixedFromPosition(tokenId, PID, LOAN_AMOUNT, 0);
+        uint256 tokenId = harness.mintPosition(PID, 0);
+        harness.depositToPosition(tokenId, PID, PRINCIPAL, PRINCIPAL);
+        uint256 loanId = lending.openFixedFromPosition(tokenId, PID, LOAN_AMOUNT, 0, LOAN_AMOUNT);
         vm.stopPrank();
 
         bytes32 key = nft.getPositionKey(tokenId);
@@ -200,12 +200,12 @@ contract FixedTermPenaltyIntegrationTest is Test {
         s[2] = FixedTermPenaltyHarnessFacet.principalOf.selector;
         s[3] = FixedTermPenaltyHarnessFacet.activeFixedLoanCount.selector;
         s[4] = PositionManagementFacet.mintPosition.selector;
-        s[5] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
+        s[5] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256,uint256)"));
     }
 
     function _selectors(LendingFacet) internal pure returns (bytes4[] memory s) {
         s = new bytes4[](1);
-        s[0] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256)"));
+        s[0] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
     }
 
     function _selectors(PenaltyFacet) internal pure returns (bytes4[] memory s) {

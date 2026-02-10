@@ -91,8 +91,9 @@ contract DirectInternalSettlementPropertyTest is DirectTestBase {
         // Repay internally
         vm.prank(borrower);
         asset.approve(address(facet), type(uint256).max);
+        uint256 maxPayment = facet.getAgreement(agreementId).principal;
         vm.prank(borrower);
-        facet.repay(agreementId);
+        facet.repay(agreementId, maxPayment);
 
         {
             (uint256 borrowerFinal, uint256 totalFinal, uint256 trackedFinal,,) = facet.poolState(1, ctx.borrowerKey);

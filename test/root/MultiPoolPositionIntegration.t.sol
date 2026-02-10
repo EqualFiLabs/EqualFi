@@ -63,10 +63,10 @@ interface IPositionManagementHarness {
     function configurePositionNFT(address nft) external;
     function initPool(uint256 pid, address underlying, uint256 minDeposit, uint256 minLoan, uint16 ltvBps) external;
     function isMember(bytes32 key, uint256 pid) external view returns (bool);
-    function mintPosition(uint256 pid) external returns (uint256);
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
-    function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
-    function closePoolPosition(uint256 tokenId, uint256 pid) external;
+    function mintPosition(uint256 pid, uint256 maxFee) external returns (uint256);
+    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external;
+    function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 minReceived) external;
+    function closePoolPosition(uint256 tokenId, uint256 pid, uint256 minReceived) external;
     function cleanupMembership(uint256 tokenId, uint256 pid) external;
     function principalOf(uint256 pid, bytes32 key) external view returns (uint256);
     function rollingOf(uint256 pid, bytes32 key) external view returns (Types.RollingCreditLoan memory);
@@ -74,9 +74,9 @@ interface IPositionManagementHarness {
 }
 
 interface ILendingFacetHarness {
-    function openRollingFromPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
-    function makePaymentFromPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
-    function closeRollingCreditFromPosition(uint256 tokenId, uint256 pid) external;
+    function openRollingFromPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 minReceived) external;
+    function makePaymentFromPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxPayment) external;
+    function closeRollingCreditFromPosition(uint256 tokenId, uint256 pid, uint256 maxPayment) external;
 }
 
 contract MultiPoolPositionIntegrationTest is Test {
@@ -136,15 +136,15 @@ contract MultiPoolPositionIntegrationTest is Test {
 
     function test_multiPoolWorkflowIsolatedAndCleansUpMembership() public {
         vm.startPrank(user);
-        uint256 tokenId = pm.mintPosition(PID1);
+        uint256 tokenId = pm.mintPosition(PID1, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
         // Deposit into both pools
-        pm.depositToPosition(tokenId, PID1, 100 ether);
-        pm.depositToPosition(tokenId, PID2, 50 ether);
+        pm.depositToPosition(tokenId, PID1, 100 ether, 100 ether);
+        pm.depositToPosition(tokenId, PID2, 50 ether, 50 ether);
 
         // Borrow only in PID1
-        lending.openRollingFromPosition(tokenId, PID1, 30 ether);
+        lending.openRollingFromPosition(tokenId, PID1, 30 ether, 30 ether);
         vm.stopPrank();
 
         assertEq(pm.principalOf(PID1, key), 100 ether, "pid1 principal");
@@ -154,7 +154,7 @@ contract MultiPoolPositionIntegrationTest is Test {
 
         // Withdraw and cleanup membership in PID2
         vm.prank(user);
-        pm.withdrawFromPosition(tokenId, PID2, 50 ether);
+        pm.withdrawFromPosition(tokenId, PID2, 50 ether, 0);
         assertEq(pm.principalOf(PID2, key), 0, "pid2 principal cleared");
 
         vm.prank(user);
@@ -164,8 +164,8 @@ contract MultiPoolPositionIntegrationTest is Test {
 
         // Repay and cleanup PID1
         vm.startPrank(user);
-        lending.makePaymentFromPosition(tokenId, PID1, 30 ether);
-        pm.withdrawFromPosition(tokenId, PID1, 100 ether);
+        lending.makePaymentFromPosition(tokenId, PID1, 30 ether, 30 ether);
+        pm.withdrawFromPosition(tokenId, PID1, 100 ether, 0);
         pm.cleanupMembership(tokenId, PID1);
         vm.stopPrank();
 
@@ -175,13 +175,13 @@ contract MultiPoolPositionIntegrationTest is Test {
 
     function test_closePoolPositionWithdrawsAllAvailablePrincipal() public {
         vm.startPrank(user);
-        uint256 tokenId = pm.mintPosition(PID1);
+        uint256 tokenId = pm.mintPosition(PID1, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
-        pm.depositToPosition(tokenId, PID1, 100 ether);
+        pm.depositToPosition(tokenId, PID1, 100 ether, 100 ether);
         uint256 balanceAfterDeposit = token.balanceOf(user);
 
-        pm.closePoolPosition(tokenId, PID1);
+        pm.closePoolPosition(tokenId, PID1, 0);
         vm.stopPrank();
 
         assertEq(pm.principalOf(PID1, key), 0, "principal cleared after close");
@@ -191,17 +191,17 @@ contract MultiPoolPositionIntegrationTest is Test {
 
     function test_closePoolPositionKeepsMembershipWithDirectCommitments() public {
         vm.startPrank(user);
-        uint256 tokenId = pm.mintPosition(PID1);
+        uint256 tokenId = pm.mintPosition(PID1, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
-        pm.depositToPosition(tokenId, PID1, 100 ether);
+        pm.depositToPosition(tokenId, PID1, 100 ether, 100 ether);
         uint256 balanceAfterDeposit = token.balanceOf(user);
         vm.stopPrank();
 
         pm.setDirectLocks(key, PID1, 30 ether, 10 ether);
 
         vm.prank(user);
-        pm.closePoolPosition(tokenId, PID1);
+        pm.closePoolPosition(tokenId, PID1, 0);
 
         assertEq(pm.principalOf(PID1, key), 40 ether, "principal left for commitments");
         assertEq(token.balanceOf(user), balanceAfterDeposit + 60 ether, "user received available principal");
@@ -210,16 +210,16 @@ contract MultiPoolPositionIntegrationTest is Test {
 
     function test_closePoolPosition_withCommitments_blocksCleanup() public {
         vm.startPrank(user);
-        uint256 tokenId = pm.mintPosition(PID1);
+        uint256 tokenId = pm.mintPosition(PID1, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
-        pm.depositToPosition(tokenId, PID1, 100 ether);
+        pm.depositToPosition(tokenId, PID1, 100 ether, 100 ether);
         vm.stopPrank();
 
         pm.setDirectLocks(key, PID1, 30 ether, 10 ether);
 
         vm.prank(user);
-        pm.closePoolPosition(tokenId, PID1);
+        pm.closePoolPosition(tokenId, PID1, 0);
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(CannotClearMembership.selector, key, PID1, "principal>0"));
@@ -228,21 +228,21 @@ contract MultiPoolPositionIntegrationTest is Test {
 
     function test_closePoolPosition_cleanupSucceedsAfterCommitmentsCleared() public {
         vm.startPrank(user);
-        uint256 tokenId = pm.mintPosition(PID1);
+        uint256 tokenId = pm.mintPosition(PID1, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
-        pm.depositToPosition(tokenId, PID1, 100 ether);
+        pm.depositToPosition(tokenId, PID1, 100 ether, 100 ether);
         vm.stopPrank();
 
         pm.setDirectLocks(key, PID1, 30 ether, 10 ether);
 
         vm.prank(user);
-        pm.closePoolPosition(tokenId, PID1);
+        pm.closePoolPosition(tokenId, PID1, 0);
 
         pm.setDirectLocks(key, PID1, 0, 0);
 
         vm.prank(user);
-        pm.withdrawFromPosition(tokenId, PID1, 40 ether);
+        pm.withdrawFromPosition(tokenId, PID1, 40 ether, 0);
 
         vm.prank(user);
         pm.cleanupMembership(tokenId, PID1);
@@ -284,9 +284,9 @@ contract MultiPoolPositionIntegrationTest is Test {
         s[2] = PositionManagementHarnessFacet.isMember.selector;
         s[3] = PositionManagementFacet.mintPosition.selector;
         s[4] = PositionManagementFacet.mintPositionWithDeposit.selector;
-        s[5] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
-        s[6] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256)"));
-        s[7] = bytes4(keccak256("closePoolPosition(uint256,uint256)"));
+        s[5] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256,uint256)"));
+        s[6] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256,uint256)"));
+        s[7] = bytes4(keccak256("closePoolPosition(uint256,uint256,uint256)"));
         s[8] = bytes4(keccak256("rollYieldToPosition(uint256,uint256)"));
         s[9] = bytes4(keccak256("cleanupMembership(uint256,uint256)"));
         s[10] = PositionManagementHarnessFacet.principalOf.selector;
@@ -296,11 +296,11 @@ contract MultiPoolPositionIntegrationTest is Test {
 
     function _selectors(LendingFacet) internal pure returns (bytes4[] memory s) {
         s = new bytes4[](6);
-        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256)"));
-        s[1] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256)"));
-        s[2] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256)"));
-        s[4] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256)"));
-        s[5] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256)"));
+        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256,uint256)"));
+        s[1] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256,uint256)"));
+        s[2] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256,uint256)"));
+        s[3] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256,uint256)"));
+        s[4] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
+        s[5] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
     }
 }

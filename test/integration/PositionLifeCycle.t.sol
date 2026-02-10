@@ -11,9 +11,9 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 
 // Define local interfaces
 interface IPositionManagement {
-    function mintPosition(uint256 pid) external payable returns (uint256 tokenId);
-    function mintPositionWithDeposit(uint256 pid, uint256 amount) external payable returns (uint256 tokenId);
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external payable;
+    function mintPosition(uint256 pid, uint256 maxFee) external payable returns (uint256 tokenId);
+    function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee) external payable returns (uint256 tokenId);
+    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external payable;
 }
 
 interface IPositionNFT {
@@ -37,6 +37,7 @@ interface IAmmAuctionFacet {
         uint256 auctionId,
         address tokenIn,
         uint256 amountIn,
+        uint256 maxIn,
         uint256 minOut,
         address recipient
     ) external returns (uint256 amountOut, bool finalized);
@@ -84,12 +85,12 @@ contract PositionLifeCycleTest is Test {
         MockERC20(rETH).approve(sys.diamond, type(uint256).max);
         MockERC20(USDC).approve(sys.diamond, type(uint256).max);
         
-        posId = IPositionManagement(sys.diamond).mintPositionWithDeposit(1, 100 ether);
+        posId = IPositionManagement(sys.diamond).mintPositionWithDeposit(1, 100 ether, 100 ether, 0);
         
         // Deposit USDC for MAM/AMM
         // Need enough for MAM (3000 * 5 = 15000) + AMM (30000)
         // Let's deposit 100,000 USDC
-        IPositionManagement(sys.diamond).depositToPosition(posId, 5, 100_000 * 1e6);
+        IPositionManagement(sys.diamond).depositToPosition(posId, 5, 100_000 * 1e6, 100_000 * 1e6);
     }
 
     function _stepDirectLending() internal {
@@ -164,6 +165,7 @@ contract PositionLifeCycleTest is Test {
         (uint256 amountOut, ) = IAmmAuctionFacet(sys.diamond).swapExactInOrFinalize(
             activeAmmId,
             rETH,
+            amountIn,
             amountIn,
             0, // Min out (slippage)
             user

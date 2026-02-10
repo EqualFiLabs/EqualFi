@@ -71,7 +71,7 @@ contract EqualLendDirectLifecycleFacet is ReentrancyGuardModifiers {
         LibDirectExercise.clearAgreementState(ds, agreement, borrowerKey, lenderKey);
     }
 
-    function repay(uint256 agreementId) external payable nonReentrant {
+    function repay(uint256 agreementId, uint256 maxPayment) external payable nonReentrant {
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.DirectAgreement storage agreement = ds.agreements[agreementId];
         if (agreement.status != DirectTypes.DirectStatus.Active) revert DirectError_InvalidAgreementState();
@@ -98,15 +98,13 @@ contract EqualLendDirectLifecycleFacet is ReentrancyGuardModifiers {
         LibActiveCreditIndex.settle(agreement.lenderPoolId, lenderKey);
 
         uint256 principal = agreement.principal;
-        LibCurrency.assertMsgValue(agreement.borrowAsset, principal);
-        uint256 received = LibCurrency.pull(agreement.borrowAsset, msg.sender, principal);
-        require(received == principal, "Direct: insufficient amount received");
+        uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, principal, maxPayment);
 
         uint256 borrowedBefore = ds.directBorrowedPrincipal[borrowerKey][agreement.lenderPoolId];
         uint256 lentBefore = LibEncumbrance.position(lenderKey, agreement.lenderPoolId).directLent;
-        lenderPool.trackedBalance += principal;
-        lenderPool.userPrincipal[lenderKey] += principal;
-        lenderPool.totalDeposits += principal;
+        lenderPool.trackedBalance += received;
+        lenderPool.userPrincipal[lenderKey] += received;
+        lenderPool.totalDeposits += received;
         uint256 activeLent = ds.activeDirectLentPerPool[agreement.lenderPoolId];
         if (activeLent >= principal) {
             ds.activeDirectLentPerPool[agreement.lenderPoolId] = activeLent - principal;

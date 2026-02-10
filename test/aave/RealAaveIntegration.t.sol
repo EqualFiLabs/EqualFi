@@ -10,9 +10,9 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 
 // Interfaces (Renamed to avoid conflicts)
 interface ILocalPositionManagement {
-    function mintPosition(uint256 pid) external payable returns (uint256 tokenId);
-    function mintPositionWithDeposit(uint256 pid, uint256 amount) external payable returns (uint256 tokenId);
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external payable;
+    function mintPosition(uint256 pid, uint256 maxFee) external payable returns (uint256 tokenId);
+    function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee) external payable returns (uint256 tokenId);
+    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external payable;
 }
 
 interface ILocalPoolManagement {
@@ -25,7 +25,7 @@ interface ILocalPoolManagement {
 }
 
 interface ILocalLendingFacet {
-    function openRollingFromPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
+    function openRollingFromPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 minReceived) external;
 }
 
 contract AaveOriginForkTest is Test {
@@ -112,13 +112,13 @@ contract AaveOriginForkTest is Test {
         weth.approve(sys.diamond, type(uint256).max);
         uint256 depositAmount = 20 ether;
         
-        positionId = equalfiPosition.mintPositionWithDeposit(REAL_WETH_POOL_ID, depositAmount);
+        positionId = equalfiPosition.mintPositionWithDeposit(REAL_WETH_POOL_ID, depositAmount, depositAmount, 0);
         
         // 2. Real Borrow: 9.5 WETH (Same-Asset / Self-Secured)
         uint256 borrowAmount = 9.5 ether;
         
         // Call openRollingFromPosition
-        lendingFacet.openRollingFromPosition(positionId, REAL_WETH_POOL_ID, borrowAmount);
+        lendingFacet.openRollingFromPosition(positionId, REAL_WETH_POOL_ID, borrowAmount, borrowAmount);
         
         // 3. Deposit the Borrowed WETH to Aave
         weth.approve(address(aavePool), type(uint256).max);

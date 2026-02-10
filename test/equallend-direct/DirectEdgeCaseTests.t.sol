@@ -86,13 +86,15 @@ contract DirectEdgeCaseTests is DirectDiamondTestBase {
         uint256 dueTimestamp = DirectTestUtils.dueTimestamp(acceptTimestamp, 3 days);
 
         vm.warp(dueTimestamp - 1 days - 1);
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
         vm.expectRevert(DirectError_EarlyRepayNotAllowed.selector);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         vm.warp(dueTimestamp - 1 days);
+        maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
     }
 
     function testEdge_GracePeriodRepayAndRecover() public {
@@ -100,8 +102,9 @@ contract DirectEdgeCaseTests is DirectDiamondTestBase {
         uint256 dueTimestamp = DirectTestUtils.dueTimestamp(acceptTimestamp, 3 days);
 
         vm.warp(dueTimestamp + 1 days);
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         (agreementId,, acceptTimestamp) = _setupOffer(false, false);
         dueTimestamp = DirectTestUtils.dueTimestamp(acceptTimestamp, 3 days);
@@ -117,9 +120,10 @@ contract DirectEdgeCaseTests is DirectDiamondTestBase {
         finalizePositionNFT();
         dueTimestamp = DirectTestUtils.dueTimestamp(acceptTimestamp, 3 days);
         vm.warp(dueTimestamp + 1 days + 1);
+        maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
         vm.expectRevert(DirectError_GracePeriodExpired.selector);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
     }
 
     function testEdge_ExerciseTimingAndFlags() public {
@@ -158,12 +162,14 @@ contract DirectEdgeCaseTests is DirectDiamondTestBase {
         vm.prank(operator);
         asset.approve(address(diamond), type(uint256).max);
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(operator);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
+        maxPayment = _maxPayment(agreementId);
         vm.expectRevert(DirectError_InvalidAgreementState.selector);
         vm.prank(operator);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
     }
 
     function testEdge_AccessControlUnauthorizedExercise() public {

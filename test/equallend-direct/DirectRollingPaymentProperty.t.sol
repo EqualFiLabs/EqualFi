@@ -73,7 +73,7 @@ contract DirectRollingPaymentPropertyTest is DirectDiamondTestBase {
 
         vm.startPrank(borrowerOwner);
         asset.approve(address(diamond), payAmount);
-        rollingPayments.makeRollingPayment(agreementId, payAmount);
+        rollingPayments.makeRollingPayment(agreementId, payAmount, payAmount);
         vm.stopPrank();
 
         DirectTypes.DirectRollingAgreement memory afterPay = rollingAgreements.getRollingAgreement(agreementId);
@@ -91,7 +91,7 @@ contract DirectRollingPaymentPropertyTest is DirectDiamondTestBase {
         vm.startPrank(borrowerOwner);
         asset.approve(address(diamond), payAmount);
         vm.expectRevert(RollingError_AmortizationDisabled.selector);
-        rollingPayments.makeRollingPayment(agreementId, payAmount);
+        rollingPayments.makeRollingPayment(agreementId, payAmount, payAmount);
         vm.stopPrank();
     }
 
@@ -102,7 +102,7 @@ contract DirectRollingPaymentPropertyTest is DirectDiamondTestBase {
         vm.startPrank(borrowerOwner);
         asset.approve(address(diamond), 1);
         vm.expectRevert(abi.encodeWithSelector(RollingError_DustPayment.selector, 0, minPayment));
-        rollingPayments.makeRollingPayment(agreementId, 0);
+        rollingPayments.makeRollingPayment(agreementId, 0, 0);
         vm.stopPrank();
     }
 }

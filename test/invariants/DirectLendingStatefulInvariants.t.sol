@@ -143,7 +143,8 @@ contract DirectLendingStatefulHandler is Test {
             borrowAsset.mint(borrowerOwner, agreement.principal);
         }
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        uint256 maxP = views.getAgreement(agreementId).principal;
+        lifecycle.repay(agreementId, maxP);
         agreementId = 0;
     }
 

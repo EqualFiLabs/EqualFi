@@ -8,9 +8,11 @@ import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {DirectTestUtils} from "./DirectTestUtils.sol";
 import {DirectDiamondTestBase} from "./DirectDiamondTestBase.sol";
 
+interface IDirectTestView { function getAgreement(uint256 agreementId) external view returns (DirectTypes.DirectAgreement memory); }
+
 interface IDirectFacet {
     function acceptOffer(uint256 offerId, uint256 borrowerPositionId) external returns (uint256);
-    function repay(uint256 agreementId) external;
+    function repay(uint256 agreementId, uint256 maxPayment) external;
     function recover(uint256 agreementId) external;
 }
 
@@ -52,7 +54,9 @@ contract ReenteringERC20 is MockERC20 {
         if (mode == Mode.Accept) {
             target.acceptOffer(offerId, borrowerPositionId);
         } else if (mode == Mode.Repay) {
-            target.repay(agreementId);
+            IDirectTestView viewFacet = IDirectTestView(address(target));
+            uint256 maxP = viewFacet.getAgreement(agreementId).principal;
+            target.repay(agreementId, maxP);
         } else if (mode == Mode.Recover) {
             target.recover(agreementId);
         }
@@ -283,9 +287,10 @@ contract DirectConfigEdgeTest is DirectDiamondTestBase {
         assertEq(locked, 5 ether, "collateral locked");
 
         token.setReentrancyTarget(IDirectFacet(address(diamond)), ReenteringERC20.Mode.Repay, 0, 0, agreementId);
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrower);
         vm.expectRevert();
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         DirectTypes.DirectAgreement memory agreement = views.getAgreement(agreementId);
         assertEq(uint8(agreement.status), uint8(DirectTypes.DirectStatus.Active), "agreement should remain active");

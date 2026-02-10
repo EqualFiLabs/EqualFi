@@ -123,7 +123,7 @@ contract CommunityAuctionGasTest is Test {
         vm.resumeGasMetering();
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, 1, taker);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 1, taker);
     }
 
     function testGasFinalizeCommunityAuction() public {
@@ -145,7 +145,7 @@ contract CommunityAuctionGasTest is Test {
         vm.prank(taker);
         tokenA.approve(address(harness), amountIn);
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, 1, taker);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 1, taker);
         vm.resumeGasMetering();
 
         vm.prank(maker);

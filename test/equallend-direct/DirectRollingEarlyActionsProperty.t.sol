@@ -120,7 +120,7 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
 
         vm.startPrank(borrowerOwner);
         asset.approve(address(diamond), type(uint256).max);
-        rollingLifecycle.repayRollingInFull(agreementId);
+        rollingLifecycle.repayRollingInFull(agreementId, _rollingMaxPayment(agreementId));
         vm.stopPrank();
 
         DirectTypes.DirectRollingAgreement memory afterState = rollingAgreements.getRollingAgreement(agreementId);
@@ -136,10 +136,11 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
     function testProperty_EarlyRepayNotAllowedReverts() public {
         (uint256 agreementId,,) = _setupAgreement(false, false);
         asset.mint(borrowerOwner, 200 ether);
+        uint256 maxPayment = _rollingMaxPayment(agreementId);
         vm.startPrank(borrowerOwner);
         asset.approve(address(diamond), type(uint256).max);
         vm.expectRevert(DirectError_EarlyRepayNotAllowed.selector);
-        rollingLifecycle.repayRollingInFull(agreementId);
+        rollingLifecycle.repayRollingInFull(agreementId, maxPayment);
         vm.stopPrank();
     }
 }

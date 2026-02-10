@@ -85,11 +85,11 @@ contract NativeEthFlowIntegrationTest is Test {
 
         uint256 depositAmount = 10 ether;
         uint256 borrowAmount = 4 ether;
-        uint256 funding = depositAmount + borrowAmount + 1 ether;
-        vm.deal(address(diamond), funding);
+        // User must have ETH to deposit/repay. Diamond needs none initially (only receives).
+        vm.deal(user, depositAmount + borrowAmount + 1 ether);
 
         vm.prank(user);
-        uint256 tokenId = positionFacet.mintPositionWithDeposit(PID, depositAmount);
+        uint256 tokenId = positionFacet.mintPositionWithDeposit{value: depositAmount}(PID, depositAmount, depositAmount, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
         assertEq(viewFacet.trackedBalance(PID), depositAmount, "tracked after deposit");
@@ -98,21 +98,21 @@ contract NativeEthFlowIntegrationTest is Test {
 
         uint256 userBalanceBefore = user.balance;
         vm.prank(user);
-        lendingFacet.openRollingFromPosition(tokenId, PID, borrowAmount);
+        lendingFacet.openRollingFromPosition(tokenId, PID, borrowAmount, borrowAmount);
 
         assertEq(user.balance - userBalanceBefore, borrowAmount, "user received borrow");
         assertEq(viewFacet.trackedBalance(PID), depositAmount - borrowAmount, "tracked after borrow");
         assertEq(viewFacet.nativeTrackedTotal(), depositAmount - borrowAmount, "native tracked after borrow");
 
         vm.prank(user);
-        lendingFacet.makePaymentFromPosition(tokenId, PID, borrowAmount);
+        lendingFacet.makePaymentFromPosition{value: borrowAmount}(tokenId, PID, borrowAmount, borrowAmount);
 
         assertEq(viewFacet.trackedBalance(PID), depositAmount, "tracked after repay");
         assertEq(viewFacet.nativeTrackedTotal(), depositAmount, "native tracked after repay");
 
         userBalanceBefore = user.balance;
         vm.prank(user);
-        positionFacet.withdrawFromPosition(tokenId, PID, depositAmount);
+        positionFacet.withdrawFromPosition(tokenId, PID, depositAmount, 0);
 
         assertEq(user.balance - userBalanceBefore, depositAmount, "user received withdraw");
         assertEq(viewFacet.trackedBalance(PID), 0, "tracked after withdraw");

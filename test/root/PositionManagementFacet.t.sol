@@ -167,7 +167,7 @@ contract PositionManagementFacetUnitTest is Test {
         emit PositionManagementFacet.PositionMinted(1, user, PID);
 
         vm.prank(user);
-        uint256 tokenId = facet.mintPosition(PID);
+        uint256 tokenId = facet.mintPosition(PID, 0);
 
         assertEq(nft.ownerOf(tokenId), user, "owner mismatch");
         assertEq(tokenId, 1, "tokenId mismatch");
@@ -182,7 +182,7 @@ contract PositionManagementFacetUnitTest is Test {
 
         uint256 treasuryBefore = treasury.balance;
         vm.prank(user);
-        facet.mintPosition{value: feeAmount}(PID);
+        facet.mintPosition{value: feeAmount}(PID, feeAmount);
 
         assertEq(treasury.balance - treasuryBefore, feeAmount, "treasury fee mismatch");
     }
@@ -195,7 +195,7 @@ contract PositionManagementFacetUnitTest is Test {
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 0));
-        facet.mintPosition(PID);
+        facet.mintPosition(PID, 0);
     }
 
     function test_mintPositionWithDeposit_chargesEthFee() public {
@@ -208,7 +208,7 @@ contract PositionManagementFacetUnitTest is Test {
 
         uint256 treasuryBefore = treasury.balance;
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit{value: feeAmount}(PID, depositAmount);
+        uint256 tokenId = facet.mintPositionWithDeposit{value: feeAmount}(PID, depositAmount, depositAmount, feeAmount);
 
         bytes32 key = nft.getPositionKey(tokenId);
         PositionSnapshot memory snap = facet.snapshot(PID, key);
@@ -224,7 +224,7 @@ contract PositionManagementFacetUnitTest is Test {
 
         uint256 treasuryBefore = token.balanceOf(treasury);
         vm.prank(user);
-        facet.mintPosition(PID);
+        facet.mintPosition(PID, feeAmount);
 
         assertEq(token.balanceOf(treasury) - treasuryBefore, feeAmount, "erc20 fee mismatch");
     }
@@ -238,7 +238,7 @@ contract PositionManagementFacetUnitTest is Test {
 
         uint256 treasuryBefore = token.balanceOf(treasury);
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, depositAmount);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, depositAmount, depositAmount, feeAmount);
 
         bytes32 key = nft.getPositionKey(tokenId);
         PositionSnapshot memory snap = facet.snapshot(PID, key);
@@ -252,15 +252,15 @@ contract PositionManagementFacetUnitTest is Test {
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(DepositBelowMinimum.selector, 1, 5));
-        facet.mintPositionWithDeposit(PID, 1);
+        facet.mintPositionWithDeposit(PID, 1, 1, 0);
     }
 
     function test_depositToPosition_updatesBalances() public {
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 10 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 10 ether, 10 ether, 0);
 
         vm.prank(user);
-        facet.depositToPosition(tokenId, PID, 5 ether);
+        facet.depositToPosition(tokenId, PID, 5 ether, 5 ether);
 
         PositionSnapshot memory snap = facet.snapshot(PID, nft.getPositionKey(tokenId));
         assertEq(snap.principal, 15 ether, "principal incorrect");
@@ -270,13 +270,13 @@ contract PositionManagementFacetUnitTest is Test {
 
     function test_withdrawFromPosition_respectsSolvencyAndUpdatesState() public {
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 20 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 20 ether, 20 ether, 0);
 
         bytes32 positionKey = nft.getPositionKey(tokenId);
         facet.setAccruedYield(PID, positionKey, 4 ether);
 
         vm.prank(user);
-        facet.withdrawFromPosition(tokenId, PID, 5 ether);
+        facet.withdrawFromPosition(tokenId, PID, 5 ether, 0);
 
         PositionSnapshot memory snap = facet.snapshot(PID, positionKey);
         assertEq(snap.principal, 15 ether, "principal after withdraw");
@@ -287,7 +287,7 @@ contract PositionManagementFacetUnitTest is Test {
 
     function test_rollYieldToPosition_movesYieldToPrincipal() public {
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 10 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 10 ether, 10 ether, 0);
 
         bytes32 positionKey = nft.getPositionKey(tokenId);
         facet.setAccruedYield(PID, positionKey, 3 ether);
@@ -303,7 +303,7 @@ contract PositionManagementFacetUnitTest is Test {
 
     function test_rollYieldToPosition_revertsWhenYieldExceedsTrackedBalance() public {
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 10 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 10 ether, 10 ether, 0);
 
         bytes32 positionKey = nft.getPositionKey(tokenId);
         facet.setAccruedYieldNoBalance(PID, positionKey, 3 ether);
@@ -315,7 +315,7 @@ contract PositionManagementFacetUnitTest is Test {
 
     function test_rollYieldToPosition_consumesYieldReserve() public {
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 10 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 10 ether, 10 ether, 0);
 
         bytes32 positionKey = nft.getPositionKey(tokenId);
         facet.setAccruedYield(PID, positionKey, 3 ether);
@@ -332,10 +332,10 @@ contract PositionManagementFacetUnitTest is Test {
 
     function test_cleanupMembership_succeedsWhenNoObligations() public {
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 5 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 5 ether, 5 ether, 0);
 
         vm.prank(user);
-        facet.withdrawFromPosition(tokenId, PID, 5 ether);
+        facet.withdrawFromPosition(tokenId, PID, 5 ether, 0);
 
         vm.prank(user);
         facet.cleanupMembership(tokenId, PID);
@@ -351,7 +351,7 @@ contract PositionManagementFacetUnitTest is Test {
         facet.setDefaultMaintenanceRate(3650); // 10% annualized for easier math
 
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 100 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 100 ether, 100 ether, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
         vm.warp(20 days);
@@ -361,7 +361,7 @@ contract PositionManagementFacetUnitTest is Test {
         uint256 foundationBefore = token.balanceOf(foundation);
 
         vm.prank(user);
-        facet.withdrawFromPosition(tokenId, PID, 10 ether);
+        facet.withdrawFromPosition(tokenId, PID, 10 ether, 0);
 
         PositionSnapshot memory afterSnap = facet.snapshot(PID, key);
         uint256 foundationPaid = token.balanceOf(foundation) - foundationBefore;
@@ -380,7 +380,7 @@ contract PositionManagementFacetUnitTest is Test {
 
     function test_withdrawRespectsDirectLocksAndUserCount() public {
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 40 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 40 ether, 40 ether, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
         facet.setDirectLocks(key, PID, 10 ether, 5 ether); // locked + lent = 15
@@ -391,10 +391,10 @@ contract PositionManagementFacetUnitTest is Test {
         // With LTV 80%, direct debt 15 requires at least 18.75 principal to remain
         vm.prank(user);
         vm.expectRevert(); // exceeds solvency
-        facet.withdrawFromPosition(tokenId, PID, 25 ether);
+        facet.withdrawFromPosition(tokenId, PID, 25 ether, 0);
 
         vm.prank(user);
-        facet.withdrawFromPosition(tokenId, PID, 20 ether);
+        facet.withdrawFromPosition(tokenId, PID, 20 ether, 0);
 
         PositionSnapshot memory snap = facet.snapshot(PID, key);
         assertEq(snap.principal, 20 ether, "principal reduced respecting solvency");
@@ -402,12 +402,12 @@ contract PositionManagementFacetUnitTest is Test {
 
         vm.prank(user);
         vm.expectRevert(); // would violate solvency given remaining debt
-        facet.withdrawFromPosition(tokenId, PID, 6 ether);
+        facet.withdrawFromPosition(tokenId, PID, 6 ether, 0);
     }
 
     function test_closePoolPosition_skipsMembershipClearWhenDirectCommitmentsExist() public {
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 100 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 100 ether, 100 ether, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
         facet.setDirectLocks(key, PID, 30 ether, 0);
@@ -416,7 +416,7 @@ contract PositionManagementFacetUnitTest is Test {
         uint256 balanceBefore = token.balanceOf(user);
 
         vm.prank(user);
-        facet.closePoolPosition(tokenId, PID);
+        facet.closePoolPosition(tokenId, PID, 0);
 
         PositionSnapshot memory snap = facet.snapshot(PID, key);
         assertEq(snap.principal, 40 ether, "principal left for direct commitments");
@@ -428,17 +428,17 @@ contract PositionManagementFacetUnitTest is Test {
         facet.setDepositCap(PID, true, 50 ether);
 
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, 40 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 40 ether, 40 ether, 0);
         bytes32 key = nft.getPositionKey(tokenId);
         facet.setDirectLocks(key, PID, 30 ether, 0);
 
         vm.prank(user);
-        facet.depositToPosition(tokenId, PID, 9 ether);
+        facet.depositToPosition(tokenId, PID, 9 ether, 9 ether);
         assertEq(facet.snapshot(PID, key).principal, 49 ether, "principal after deposit");
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(DepositCapExceeded.selector, 60 ether, 50 ether));
-        facet.depositToPosition(tokenId, PID, 11 ether);
+        facet.depositToPosition(tokenId, PID, 11 ether, 11 ether);
     }
 
     function test_deposit_feeOnTransferCreditsReceived() public {
@@ -454,17 +454,22 @@ contract PositionManagementFacetUnitTest is Test {
         feeToken.approve(address(facet), type(uint256).max);
 
         vm.prank(user);
-        uint256 tokenId = facet.mintPosition(feePid);
+        uint256 tokenId = facet.mintPosition(feePid, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
-        // Deposit 10 ether; with 5% fee only 9.5 should be credited
+        // Deposit 10 ether gross; with 5% fee only 9.5 should be credited
+        uint256 grossAmount = 10 ether;
+        // 5% fee means receiver gets 95%
+        uint256 expectedNet = grossAmount * 9500 / 10000;
+        
         vm.prank(user);
-        facet.depositToPosition(tokenId, feePid, 10 ether);
+        // depositToPosition(tokenId, pid, minAmount, maxAmount)
+        facet.depositToPosition(tokenId, feePid, expectedNet, grossAmount);
 
         PositionSnapshot memory snap = facet.snapshot(feePid, key);
-        assertEq(snap.principal, 9.5 ether, "principal credits received amount");
-        assertEq(snap.totalDeposits, 9.5 ether, "totalDeposits aligns");
-        assertEq(snap.trackedBalance, 9.5 ether, "trackedBalance aligns");
+        assertEq(snap.principal, expectedNet, "principal credits received amount");
+        assertEq(snap.totalDeposits, expectedNet, "totalDeposits aligns");
+        assertEq(snap.trackedBalance, expectedNet, "trackedBalance aligns");
     }
 }
 
@@ -519,12 +524,12 @@ contract PositionManagementFacetPropertyTest is Test {
         yieldAccrued = bound(yieldAccrued, 0, 50_000 ether);
 
         vm.startPrank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, deposit1);
-        uint256 mirrorTokenId = mirror.mintPositionWithDeposit(PID, deposit1);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, deposit1, deposit1, 0);
+        uint256 mirrorTokenId = mirror.mintPositionWithDeposit(PID, deposit1, deposit1, 0);
 
         if (deposit2 > 0) {
-            facet.depositToPosition(tokenId, PID, deposit2);
-            mirror.depositToPosition(mirrorTokenId, PID, deposit2);
+            facet.depositToPosition(tokenId, PID, deposit2, deposit2);
+            mirror.depositToPosition(mirrorTokenId, PID, deposit2, deposit2);
         }
 
         bytes32 key = nft.getPositionKey(tokenId);
@@ -564,8 +569,8 @@ contract PositionManagementFacetPropertyTest is Test {
         uint256 withdrawCap = available < maxWithdrawForSolvency ? available : maxWithdrawForSolvency;
         withdrawPrincipal = bound(withdrawPrincipal, 0, withdrawCap);
         if (withdrawPrincipal > 0) {
-            facet.withdrawFromPosition(tokenId, PID, withdrawPrincipal);
-            mirror.withdrawFromPosition(mirrorTokenId, PID, withdrawPrincipal);
+            facet.withdrawFromPosition(tokenId, PID, withdrawPrincipal, 0);
+            mirror.withdrawFromPosition(mirrorTokenId, PID, withdrawPrincipal, 0);
         }
 
         // Attempt cleanup if emptied
@@ -624,7 +629,7 @@ contract PositionMintFeePropertyTest is Test {
 
         uint256 treasuryBefore = treasury.balance;
         vm.prank(user);
-        facet.mintPosition{value: feeAmount}(PID);
+        facet.mintPosition{value: feeAmount}(PID, feeAmount);
 
         assertEq(treasury.balance - treasuryBefore, feeAmount, "treasury fee mismatch");
     }
@@ -636,7 +641,7 @@ contract PositionMintFeePropertyTest is Test {
 
         uint256 treasuryBefore = token.balanceOf(treasury);
         vm.prank(user);
-        facet.mintPosition(PID);
+        facet.mintPosition(PID, feeAmount);
 
         assertEq(token.balanceOf(treasury) - treasuryBefore, feeAmount, "erc20 fee mismatch");
     }

@@ -61,7 +61,7 @@ contract LendingStatefulHandler is Test {
             return;
         }
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, pid, amount);
+        facet.openRollingFromPosition(tokenId, pid, amount, amount);
     }
 
     function expandRolling(uint256 amountSeed) external {
@@ -87,7 +87,7 @@ contract LendingStatefulHandler is Test {
             return;
         }
         vm.prank(user);
-        facet.expandRollingFromPosition(tokenId, pid, amount);
+        facet.expandRollingFromPosition(tokenId, pid, amount, amount);
     }
 
     function makePayment(uint256 amountSeed) external {
@@ -104,7 +104,7 @@ contract LendingStatefulHandler is Test {
             token.mint(user, amount);
         }
         vm.prank(user);
-        facet.makePaymentFromPosition(tokenId, pid, amount);
+        facet.makePaymentFromPosition(tokenId, pid, amount, amount);
     }
 
     function closeRolling() external {
@@ -117,7 +117,7 @@ contract LendingStatefulHandler is Test {
             token.mint(user, remaining);
         }
         vm.prank(user);
-        facet.closeRollingCreditFromPosition(tokenId, pid);
+        facet.closeRollingCreditFromPosition(tokenId, pid, remaining);
     }
 
     function openFixed(uint256 amountSeed, uint256 termSeed) external {
@@ -141,7 +141,7 @@ contract LendingStatefulHandler is Test {
         }
         uint256 termIndex = termSeed % termDurations.length;
         vm.prank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, pid, amount, termIndex);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, pid, amount, termIndex, amount);
         expectedExpiry[loanId] = uint40(block.timestamp + termDurations[termIndex]);
     }
 
@@ -160,7 +160,7 @@ contract LendingStatefulHandler is Test {
             token.mint(user, amount);
         }
         vm.prank(user);
-        facet.repayFixedFromPosition(tokenId, pid, loanId, amount);
+        facet.repayFixedFromPosition(tokenId, pid, loanId, amount, amount);
         Types.FixedTermLoan memory updated = facet.getFixedLoan(pid, loanId);
         if (updated.principalRemaining == 0 || updated.closed) {
             delete expectedExpiry[loanId];

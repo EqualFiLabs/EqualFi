@@ -103,8 +103,9 @@ contract AccountingErrorHandlingDirectTest is DirectDiamondTestBase {
 
         harness.setDirectBorrowed(borrowerKey, 1, 0);
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.expectRevert(DirectError_InvalidAgreementState.selector);
         vm.prank(borrower);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
     }
 }

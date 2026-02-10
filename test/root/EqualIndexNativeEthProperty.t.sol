@@ -8,6 +8,7 @@ import {EqualIndexBaseV3, IEqualIndexFlashReceiver} from "../../src/equalindex/E
 import {IndexToken} from "../../src/equalindex/IndexToken.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
+import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {UnexpectedMsgValue} from "../../src/libraries/Errors.sol";
 
@@ -57,6 +58,17 @@ contract EqualIndexNativeHarness is EqualIndexActionsFacetV3 {
     function setActiveCreditShare(uint16 shareBps) external {
         LibAppStorage.s().activeCreditShareConfigured = true;
         LibAppStorage.s().activeCreditShareBps = shareBps;
+    }
+
+    function previewMintInputs(uint256 indexId, uint256 units) external view returns (uint256[] memory maxInputs) {
+        Index storage idx = s().indexes[indexId];
+        uint256 len = idx.assets.length;
+        maxInputs = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
+            maxInputs[i] = need + fee;
+        }
     }
 
     function setNativeTrackedTotal(uint256 amount) external {
@@ -164,7 +176,12 @@ contract EqualIndexNativeEthPropertyTest is Test {
 
         vm.deal(address(this), total);
 
-        uint256 minted = facet.mint{value: total}(INDEX_ID, units, address(this));
+        uint256 minted = facet.mint{value: total}(
+            INDEX_ID,
+            units,
+            address(this),
+            facet.previewMintInputs(INDEX_ID, units)
+        );
         assertEq(minted, units);
         assertEq(facet.getVaultBalance(INDEX_ID, address(0)), need);
         assertEq(facet.getFeePot(INDEX_ID, address(0)), potFee);
@@ -197,7 +214,7 @@ contract EqualIndexNativeEthPropertyTest is Test {
     /// Feature: native-eth-support, Property 10: EqualIndex Native ETH Correctness
     function test_nativeFlashLoanFeeAccounting() public {
         uint256 units = 1 * SCALE;
-        facet.mint(INDEX_ID, units, address(this));
+        facet.mint(INDEX_ID, units, address(this), facet.previewMintInputs(INDEX_ID, units));
 
         uint256 vaultBefore = facet.getVaultBalance(INDEX_ID, address(0));
         uint256 totalSupply = indexToken.totalSupply();

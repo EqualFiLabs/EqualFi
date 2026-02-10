@@ -29,8 +29,19 @@ contract FlashLoanFacet is ReentrancyGuardModifiers {
         return p;
     }
 
+    function previewFlashLoanRepayment(uint256 pid, uint256 amount) external view returns (uint256) {
+        Types.PoolData storage p = _pool(pid);
+        uint256 fee = (amount * p.poolConfig.flashLoanFeeBps) / 10_000;
+        return amount + fee;
+    }
 
-    function flashLoan(uint256 pid, address receiver, uint256 amount, bytes calldata data) external payable nonReentrant {
+    function flashLoan(
+        uint256 pid,
+        address receiver,
+        uint256 amount,
+        bytes calldata data,
+        uint256 maxRepayment
+    ) external payable nonReentrant {
         LibCurrency.assertZeroMsgValue();
         Types.PoolData storage p = _pool(pid);
         require(amount > 0, "Flash: amount=0");
@@ -61,7 +72,11 @@ contract FlashLoanFacet is ReentrancyGuardModifiers {
             require(balAfter >= balBefore + fee, "Flash: not repaid");
         } else {
             // Pull repayment explicitly from the receiver to prevent cross-pool balance spoofing
-            LibCurrency.pull(p.underlying, receiver, amount + fee);
+            uint256 received = LibCurrency.pullAtLeast(p.underlying, receiver, amount + fee, maxRepayment);
+            // FoT tokens on flash loan repayment: user must cover the fee + principal post-tax.
+            // We use maxRepayment to cap the input amount, but ensure we receive at least amount + fee.
+            // If received < amount + fee, it reverts in pullAtLeast.
+
             uint256 balAfter = LibCurrency.balanceOfSelf(p.underlying);
             require(balAfter >= balBefore + fee, "Flash: not repaid");
         }

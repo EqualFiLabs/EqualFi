@@ -278,6 +278,7 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         LibDirectStorage.addRollingLenderAgreement(ds, lenderKey, agreementId);
 
         if (offer.upfrontPremium > 0) {
+            // Internal transfer/payment flow, assume no slippage param for premium on acceptance
             LibCurrency.transfer(offer.borrowAsset, nft.ownerOf(lenderPositionId), offer.upfrontPremium);
         }
         uint256 netToBorrower = offer.principal - offer.upfrontPremium;

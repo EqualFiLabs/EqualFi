@@ -134,8 +134,9 @@ contract ActiveCreditSettlementPropertyTest is DirectDiamondTestBase {
         harness.accrueActive(1, 15 ether);
         uint256 delta = views.poolActiveCreditIndex(1) - snapshotBefore;
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         uint256 expectedYield = Math.mulDiv(
             params.principal + params.collateralLockAmount,

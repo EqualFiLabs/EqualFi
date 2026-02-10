@@ -85,8 +85,9 @@ contract DirectAgreementLifecyclePropertyTest is DirectDiamondTestBase {
         uint256 lenderBefore = asset.balanceOf(lenderOwner);
         uint256 borrowerBefore = asset.balanceOf(borrowerOwner);
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
         agreement = views.getAgreement(agreementId);
         assertEq(uint8(agreement.status), uint8(DirectTypes.DirectStatus.Repaid), "repaid status");
 
@@ -99,9 +100,10 @@ contract DirectAgreementLifecyclePropertyTest is DirectDiamondTestBase {
         assertEq(asset.balanceOf(lenderOwner), lenderBefore, "lender balance unchanged on repay");
         assertEq(asset.balanceOf(borrowerOwner), borrowerBefore - params.principal, "borrower paid principal");
 
+        maxPayment = _maxPayment(agreementId);
         vm.expectRevert(DirectError_InvalidAgreementState.selector);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         // New agreement to exercise default path
         params.durationSeconds = 1 days;

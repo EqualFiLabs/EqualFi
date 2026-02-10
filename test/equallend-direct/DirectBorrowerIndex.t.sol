@@ -58,8 +58,9 @@ contract DirectBorrowerIndexTest is DirectTestBase {
         borrowToken.mint(borrower, 20 ether);
         vm.prank(borrower);
         borrowToken.approve(address(facet), type(uint256).max);
+        uint256 maxPayment = facet.getAgreement(agreementId).principal;
         vm.prank(borrower);
-        facet.repay(agreementId);
+        facet.repay(agreementId, maxPayment);
 
         agreements = facet.getBorrowerAgreements(ctx.borrowerPos, 0, 10);
         assertEq(agreements.length, 0, "agreement removed after repay");

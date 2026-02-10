@@ -108,12 +108,17 @@ contract DirectNativeEthPropertyTest is DirectDiamondTestBase {
             "nativeTrackedTotal updated"
         );
 
-        vm.prank(borrowerOwner);
-        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
-        lifecycle.repay{value: 1}(agreementId);
+        // Top up borrower so they can repay full principal (maxPayment must equal msg.value for native)
+        vm.deal(borrowerOwner, borrowerOwner.balance + totalFee);
+
+        uint256 maxPayment = _maxPayment(agreementId);
 
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        lifecycle.repay{value: 1}(agreementId, maxPayment);
+
+        vm.prank(borrowerOwner);
+        lifecycle.repay{value: maxPayment}(agreementId, maxPayment);
 
         assertEq(views.getTrackedBalance(LENDER_POOL), lenderTrackedBefore, "lender tracked restored");
         assertEq(

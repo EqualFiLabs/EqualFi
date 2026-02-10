@@ -214,15 +214,17 @@ contract DerivativeAccessControlPropertyTest is Test {
         vm.prank(holder);
         quote.approve(address(optionsHarness), strikeAmount);
 
+        uint256 optionPayment = optionsHarness.previewExercisePayment(optionSeriesId, 1e18);
+
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(Options_NotTokenHolder.selector, attacker, optionSeriesId));
-        optionsHarness.exerciseOptionsFor(optionSeriesId, 1e18, holder, holder);
+        optionsHarness.exerciseOptionsFor(optionSeriesId, 1e18, holder, holder, optionPayment);
 
         vm.prank(holder);
         optionToken.setApprovalForAll(operator, true);
 
         vm.prank(operator);
-        optionsHarness.exerciseOptionsFor(optionSeriesId, 1e18, holder, holder);
+        optionsHarness.exerciseOptionsFor(optionSeriesId, 1e18, holder, holder, optionPayment);
 
         uint256 futuresTokenId = nft.mint(maker, 1);
         bytes32 futuresKey = nft.getPositionKey(futuresTokenId);
@@ -253,15 +255,17 @@ contract DerivativeAccessControlPropertyTest is Test {
         vm.prank(holder);
         quote.approve(address(futuresHarness), quoteAmount);
 
+        uint256 futuresPayment = futuresHarness.previewSettlePayment(futuresSeriesId, 1e18);
+
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(Futures_NotTokenHolder.selector, attacker, futuresSeriesId));
-        futuresHarness.settleFuturesFor(futuresSeriesId, 1e18, holder, holder);
+        futuresHarness.settleFuturesFor(futuresSeriesId, 1e18, holder, holder, futuresPayment);
 
         vm.prank(holder);
         futuresToken.setApprovalForAll(operator, true);
 
         vm.prank(operator);
-        futuresHarness.settleFuturesFor(futuresSeriesId, 1e18, holder, holder);
+        futuresHarness.settleFuturesFor(futuresSeriesId, 1e18, holder, holder, futuresPayment);
     }
 
     function testProperty_ReclaimAuthorization() public {
@@ -452,11 +456,21 @@ contract DerivativeAccessControlPropertyTest is Test {
             })
         );
 
-        vm.prank(holder);
-        optionsHarness.exerciseOptions(optionSeriesId, 1e18, holder);
+        uint256 payment = optionsHarness.previewExercisePayment(optionSeriesId, 1e18);
+
 
         vm.prank(holder);
-        futuresHarness.settleFutures(futuresSeriesId, 1e18, holder);
+
+
+        optionsHarness.exerciseOptions(optionSeriesId, 1e18, holder, payment);
+
+        payment = futuresHarness.previewSettlePayment(futuresSeriesId, 1e18);
+
+
+        vm.prank(holder);
+
+
+        futuresHarness.settleFutures(futuresSeriesId, 1e18, holder, payment);
 
         vm.warp(block.timestamp + 2 days);
         ammHarness.finalizeAuction(auctionId);

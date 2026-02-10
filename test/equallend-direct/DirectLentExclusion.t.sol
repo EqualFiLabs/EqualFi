@@ -9,7 +9,7 @@ import {DirectDiamondTestBase} from "./DirectDiamondTestBase.sol";
 import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 
 interface IPositionManagement {
-    function mintPositionWithDeposit(uint256 pid, uint256 amount) external returns (uint256);
+    function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee) external returns (uint256);
 }
 
 contract DirectLentExclusionTest is DirectDiamondTestBase {
@@ -37,7 +37,7 @@ contract DirectLentExclusionTest is DirectDiamondTestBase {
 
     function test_directLentPrincipalNotCountedAsDebt() public {
         vm.startPrank(user);
-        uint256 tokenId = pm.mintPositionWithDeposit(PID, 100 ether);
+        uint256 tokenId = pm.mintPositionWithDeposit(PID, 100 ether, 100 ether, 0);
         bytes32 key = nft.getPositionKey(tokenId);
         vm.stopPrank();
 

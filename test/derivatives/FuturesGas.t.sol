@@ -99,8 +99,11 @@ contract FuturesGasTest is Test {
         futuresToken.safeTransferFrom(maker, holder, seriesId, 1e18, "");
 
         vm.resumeGasMetering();
+        uint256 payment = harness.previewSettlePayment(seriesId, 1e18);
+
         vm.prank(holder);
-        harness.settleFutures(seriesId, 1e18, holder);
+
+        harness.settleFutures(seriesId, 1e18, holder, payment);
     }
 }
 

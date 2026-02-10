@@ -120,7 +120,7 @@ contract LendingLifecycleIntegrationTest is Test {
         uint256 feeIndexStart = facet.feeIndex(PID);
 
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
 
         Types.RollingCreditLoan memory loan = facet.rollingLoan(PID, key);
         assertEq(loan.apyBps, 0, "rolling apy forced to zero");
@@ -131,7 +131,7 @@ contract LendingLifecycleIntegrationTest is Test {
         uint256 trackedBefore = facet.trackedBalance(PID);
         uint256 remainingBefore = loan.principalRemaining;
         vm.prank(user);
-        facet.makePaymentFromPosition(tokenId, PID, 1);
+        facet.makePaymentFromPosition(tokenId, PID, 1, 1);
         loan = facet.rollingLoan(PID, key);
 
         assertEq(loan.principalRemaining, remainingBefore - 1, "tiny payment reduces principal");
@@ -141,7 +141,7 @@ contract LendingLifecycleIntegrationTest is Test {
         trackedBefore = facet.trackedBalance(PID);
         remainingBefore = loan.principalRemaining;
         vm.prank(user);
-        facet.makePaymentFromPosition(tokenId, PID, 5 ether);
+        facet.makePaymentFromPosition(tokenId, PID, 5 ether, 5 ether);
         loan = facet.rollingLoan(PID, key);
 
         assertEq(loan.principalRemaining, remainingBefore - 5 ether, "principal reduced by payment");
@@ -153,7 +153,7 @@ contract LendingLifecycleIntegrationTest is Test {
         trackedBefore = facet.trackedBalance(PID);
 
         vm.prank(user);
-        facet.closeRollingCreditFromPosition(tokenId, PID);
+        facet.closeRollingCreditFromPosition(tokenId, PID, remaining);
 
         assertEq(token.balanceOf(user), userBalanceBefore - remaining, "close pays remaining principal only");
         assertEq(facet.trackedBalance(PID), trackedBefore + remaining, "tracked balance credits close");
@@ -170,7 +170,7 @@ contract LendingLifecycleIntegrationTest is Test {
         uint256 totalDepositsBefore = facet.totalDeposits(PID);
 
         vm.prank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 40 ether, 0);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 40 ether, 0, 40 ether);
 
         Types.FixedTermLoan memory loan = facet.fixedLoan(PID, loanId);
         assertEq(loan.fullInterest, 0, "fixed fullInterest zero");
@@ -180,13 +180,13 @@ contract LendingLifecycleIntegrationTest is Test {
         assertEq(facet.trackedBalance(PID), totalDepositsBefore - 40 ether, "tracked balance debited");
 
         vm.prank(user);
-        facet.repayFixedFromPosition(tokenId, PID, loanId, 10 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 10 ether, 10 ether);
         loan = facet.fixedLoan(PID, loanId);
         assertEq(loan.principalRemaining, 30 ether, "principal remaining after repay");
         assertEq(facet.trackedBalance(PID), totalDepositsBefore - 30 ether, "tracked balance after repay");
 
         vm.prank(user);
-        facet.repayFixedFromPosition(tokenId, PID, loanId, 30 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 30 ether, 30 ether);
         loan = facet.fixedLoan(PID, loanId);
         assertEq(loan.principalRemaining, 0, "principal fully repaid");
         assertTrue(loan.closed, "loan closed");

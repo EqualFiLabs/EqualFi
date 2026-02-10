@@ -194,7 +194,7 @@ interface IDirectAgreement {
 
 /// @notice Interface for lifecycle facet functions
 interface IDirectLifecycle {
-    function repay(uint256 agreementId) external payable;
+    function repay(uint256 agreementId, uint256 maxPayment) external payable;
     function exerciseDirect(uint256 agreementId) external payable;
     function callDirect(uint256 agreementId) external payable;
     function recover(uint256 agreementId) external payable;
@@ -219,12 +219,12 @@ interface IDirectRollingAgreement {
 interface IDirectRollingLifecycle {
     function recoverRolling(uint256 agreementId) external;
     function exerciseRolling(uint256 agreementId) external;
-    function repayRollingInFull(uint256 agreementId) external;
+    function repayRollingInFull(uint256 agreementId, uint256 maxPayment) external;
 }
 
 /// @notice Interface for rolling payment facet functions
 interface IDirectRollingPayment {
-    function makeRollingPayment(uint256 agreementId, uint256 amount) external;
+    function makeRollingPayment(uint256 agreementId, uint256 amount, uint256 maxPayment) external;
 }
 
 /// @notice Interface for rolling view facet functions
@@ -331,6 +331,15 @@ abstract contract DirectDiamondTestBase is Test {
         rollingLifecycle = IDirectRollingLifecycle(address(diamond));
         rollingPayments = IDirectRollingPayment(address(diamond));
         rollingViews = IDirectRollingView(address(diamond));
+    }
+
+    function _maxPayment(uint256 agreementId) internal view returns (uint256) {
+        return views.getAgreement(agreementId).principal;
+    }
+
+    function _rollingMaxPayment(uint256 agreementId) internal view returns (uint256) {
+        DirectTypes.DirectRollingAgreement memory agreement = rollingAgreements.getRollingAgreement(agreementId);
+        return agreement.outstandingPrincipal + agreement.arrears;
     }
 
     function _deployTestNft() internal {

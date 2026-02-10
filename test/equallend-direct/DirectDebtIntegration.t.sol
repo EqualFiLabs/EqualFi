@@ -8,9 +8,9 @@ import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {DirectDiamondTestBase} from "./DirectDiamondTestBase.sol";
 
 interface IPositionManagement {
-    function mintPositionWithDeposit(uint256 pid, uint256 amount) external returns (uint256);
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
-    function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
+    function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee) external returns (uint256);
+    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external;
+    function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 minReceived) external;
 }
 
 /// @notice Property tests ensuring direct debt participates in solvency/withdrawal guards
@@ -58,7 +58,7 @@ contract DirectDebtIntegrationPropertyTest is DirectDiamondTestBase {
 
     function test_DirectBorrowedCountsAsDebt() public {
         vm.startPrank(user);
-        uint256 tokenId = pm.mintPositionWithDeposit(PID, 100 ether);
+        uint256 tokenId = pm.mintPositionWithDeposit(PID, 100 ether, 100 ether, 0);
         bytes32 key = nft.getPositionKey(tokenId);
         vm.stopPrank();
 
@@ -71,7 +71,7 @@ contract DirectDebtIntegrationPropertyTest is DirectDiamondTestBase {
 
     function _mintPosition(uint256 depositAmount) internal returns (DebtContext memory ctx) {
         vm.startPrank(user);
-        ctx.tokenId = pm.mintPositionWithDeposit(PID, depositAmount);
+        ctx.tokenId = pm.mintPositionWithDeposit(PID, depositAmount, depositAmount, 0);
         ctx.key = nft.getPositionKey(ctx.tokenId);
         vm.stopPrank();
         ctx.principal = views.getUserPrincipal(PID, ctx.key);
@@ -96,7 +96,7 @@ contract DirectDebtIntegrationPropertyTest is DirectDiamondTestBase {
         if (boundedWithdraw == 0) return;
 
         vm.startPrank(user);
-        try pm.withdrawFromPosition(ctx.tokenId, PID, boundedWithdraw) {
+        try pm.withdrawFromPosition(ctx.tokenId, PID, boundedWithdraw, 0) {
             vm.stopPrank();
         } catch {
             vm.stopPrank();
@@ -120,8 +120,8 @@ contract DirectDebtIntegrationPropertyTest is DirectDiamondTestBase {
     function _selectorsPositionManagement() internal pure returns (bytes4[] memory s) {
         s = new bytes4[](3);
         s[0] = PositionManagementFacet.mintPositionWithDeposit.selector;
-        s[1] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
-        s[2] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256)"));
+        s[1] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256,uint256)"));
+        s[2] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256,uint256)"));
     }
 }
 
@@ -161,8 +161,8 @@ contract DirectGlobalLockIntegrationTest is DirectDiamondTestBase {
 
     function test_GlobalDirectLockDoesNotBlockOtherPoolWithdraw() public {
         vm.startPrank(user);
-        uint256 tokenId = pm.mintPositionWithDeposit(PID_A, 1000 ether);
-        pm.depositToPosition(tokenId, PID_C, 800 ether);
+        uint256 tokenId = pm.mintPositionWithDeposit(PID_A, 1000 ether, 1000 ether, 0);
+        pm.depositToPosition(tokenId, PID_C, 800 ether, 800 ether);
 
         DirectTypes.DirectBorrowerOfferParams memory params = DirectTypes.DirectBorrowerOfferParams({
             borrowerPositionId: tokenId,
@@ -181,7 +181,7 @@ contract DirectGlobalLockIntegrationTest is DirectDiamondTestBase {
         offers.postBorrowerOffer(params);
 
         uint256 balanceBefore = token.balanceOf(user);
-        pm.withdrawFromPosition(tokenId, PID_C, 800 ether);
+        pm.withdrawFromPosition(tokenId, PID_C, 800 ether, 0);
         assertEq(token.balanceOf(user), balanceBefore + 800 ether, "pool C withdraw succeeds");
         vm.stopPrank();
     }
@@ -195,7 +195,7 @@ contract DirectGlobalLockIntegrationTest is DirectDiamondTestBase {
     function _selectorsPositionManagement() internal pure returns (bytes4[] memory s) {
         s = new bytes4[](3);
         s[0] = PositionManagementFacet.mintPositionWithDeposit.selector;
-        s[1] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
-        s[2] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256)"));
+        s[1] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256,uint256)"));
+        s[2] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256,uint256)"));
     }
 }

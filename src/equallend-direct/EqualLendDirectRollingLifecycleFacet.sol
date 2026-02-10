@@ -209,7 +209,7 @@ contract EqualLendDirectRollingLifecycleFacet is ReentrancyGuardModifiers {
     }
 
     /// @notice Borrower repays outstanding principal + arrears in full (early or scheduled) to close agreement.
-    function repayRollingInFull(uint256 agreementId) external payable nonReentrant {
+    function repayRollingInFull(uint256 agreementId, uint256 maxPayment) external payable nonReentrant {
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.DirectRollingAgreement storage agreement = ds.rollingAgreements[agreementId];
         if (agreement.status != DirectTypes.DirectStatus.Active || !agreement.isRolling) {
@@ -241,12 +241,10 @@ contract EqualLendDirectRollingLifecycleFacet is ReentrancyGuardModifiers {
         uint256 arrearsDue = agreement.arrears;
         uint256 principalDue = agreement.outstandingPrincipal;
         uint256 repaymentAmount = principalDue + arrearsDue;
-        LibCurrency.assertMsgValue(agreement.borrowAsset, repaymentAmount);
-        uint256 received = LibCurrency.pull(agreement.borrowAsset, msg.sender, repaymentAmount);
-        require(received == repaymentAmount, "Direct: insufficient amount received");
-        LibCurrency.transfer(agreement.borrowAsset, agreement.lender, repaymentAmount);
-        if (LibCurrency.isNative(agreement.borrowAsset) && repaymentAmount > 0) {
-            LibAppStorage.s().nativeTrackedTotal -= repaymentAmount;
+        uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, repaymentAmount, maxPayment);
+        LibCurrency.transfer(agreement.borrowAsset, agreement.lender, received);
+        if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {
+            LibAppStorage.s().nativeTrackedTotal -= received;
         }
 
         _clearRollingState(
@@ -254,7 +252,7 @@ contract EqualLendDirectRollingLifecycleFacet is ReentrancyGuardModifiers {
         );
 
         emit RollingAgreementRepaid(
-            agreementId, msg.sender, repaymentAmount, arrearsDue, principalDue
+            agreementId, msg.sender, received, arrearsDue, principalDue
         );
     }
 

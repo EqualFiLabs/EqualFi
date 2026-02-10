@@ -111,8 +111,8 @@ contract PositionAgentAerodromeHarnessFacet is PositionManagementFacet {
 interface IAerodromeHarness {
     function configurePositionNFT(address nft) external;
     function initPool(uint256 pid, address underlying, uint256 minDeposit, uint256 minLoan, uint16 ltvBps) external;
-    function mintPosition(uint256 pid) external returns (uint256);
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
+    function mintPosition(uint256 pid, uint256 maxFee) external returns (uint256);
+    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external;
 }
 
 contract PositionAgentAerodromeSlipstreamForkTest is Test {
@@ -217,9 +217,9 @@ contract PositionAgentAerodromeSlipstreamForkTest is Test {
         IERC20(USDC).approve(address(diamond), type(uint256).max);
         IERC20(WETH).approve(address(diamond), type(uint256).max);
 
-        uint256 tokenId = harness.mintPosition(USDC_POOL);
-        harness.depositToPosition(tokenId, USDC_POOL, usdcDeposit);
-        harness.depositToPosition(tokenId, WETH_POOL, wethDeposit);
+        uint256 tokenId = harness.mintPosition(USDC_POOL, 0);
+        harness.depositToPosition(tokenId, USDC_POOL, usdcDeposit, usdcDeposit);
+        harness.depositToPosition(tokenId, WETH_POOL, wethDeposit, wethDeposit);
 
         address tba = tbaFacet.deployTBA(tokenId);
 
@@ -229,7 +229,7 @@ contract PositionAgentAerodromeSlipstreamForkTest is Test {
         assertEq(IERC721(ERC8004_IDENTITY).ownerOf(agentId), tba, "agent owner is tba");
         registryFacet.recordAgentRegistration(tokenId, agentId);
 
-        lending.openRollingFromPosition(tokenId, USDC_POOL, borrowAmount);
+        lending.openRollingFromPosition(tokenId, USDC_POOL, borrowAmount, borrowAmount);
 
         IERC20(USDC).transfer(tba, borrowAmount);
         IERC20(WETH).transfer(tba, 0.25 ether);

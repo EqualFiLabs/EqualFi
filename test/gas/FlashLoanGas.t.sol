@@ -50,6 +50,6 @@ contract FlashLoanGasTest is Test {
 
     function test_gas_FlashLoan() public {
         vm.resumeGasMetering();
-        facet.flashLoan(PID, address(receiver), LOAN_AMOUNT, bytes(""));
+        facet.flashLoan(PID, address(receiver), LOAN_AMOUNT, bytes(""), facet.previewFlashLoanRepayment(PID, LOAN_AMOUNT));
     }
 }

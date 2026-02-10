@@ -18,7 +18,7 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
     bytes32 internal constant INDEX_FEE_SOURCE = keccak256("INDEX_FEE");
 
     /// @notice Mint index tokens. `units` must be a multiple of 1e18 (INDEX_SCALE).
-    function mint(uint256 indexId, uint256 units, address to)
+    function mint(uint256 indexId, uint256 units, address to, uint256[] calldata maxInputAmounts)
         external
         payable
         nonReentrant
@@ -30,6 +30,8 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         _requireIndexActive(idx, indexId);
 
         uint256 len = idx.assets.length;
+        if (maxInputAmounts.length != len) revert InvalidArrayLength();
+
         uint256 nativeTotal;
         bool hasNative;
         uint256[] memory required = new uint256[](len);
@@ -44,9 +46,13 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
             if (LibCurrency.isNative(asset)) {
                 hasNative = true;
                 nativeTotal += total;
+                // Check native max input
+                if (maxInputAmounts[i] < total) revert LibCurrency.LibCurrency_InvalidMax(maxInputAmounts[i], total);
             } else {
-                uint256 received = LibCurrency.pull(asset, msg.sender, total);
-                if (received < total) revert InvalidBundleDefinition();
+                uint256 received = LibCurrency.pullAtLeast(asset, msg.sender, total, maxInputAmounts[i]);
+                // For ERC20, we don't return excess here to keep it simple, similar to pullAtLeast behavior.
+                // We only ensure we received enough.
+                if (received < total) revert LibCurrency.LibCurrency_InsufficientReceived(received, total);
             }
             required[i] = need;
             fees[i] = fee;
@@ -54,6 +60,9 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         if (hasNative) {
             _pullNativeMint(nativeTotal);
         } else {
+            // For pure ERC20 mints, we usually assert zero msg.value, but pullAtLeast might handle native/ERC20 mixed.
+            // If the user sends native value for an ERC20-only index, it would be caught by pullAtLeast if we used it for native.
+            // But here we branch. If no native assets in index, ensure no ETH sent.
             LibCurrency.assertZeroMsgValue();
         }
         for (uint256 i = 0; i < len; i++) {

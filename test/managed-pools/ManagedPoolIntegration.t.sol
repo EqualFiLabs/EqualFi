@@ -175,22 +175,22 @@ contract ManagedPoolIntegrationTest is Test {
         // Manager can create position and deposit in managed pool
         _mintAndApprove(manager, 10 ether);
         vm.prank(manager);
-        uint256 managedTokenId = harness.mintPositionWithDeposit(MANAGED_PID, 5 ether);
+        uint256 managedTokenId = harness.mintPositionWithDeposit(MANAGED_PID, 5 ether, 5 ether, 0);
         assertEq(nft.ownerOf(managedTokenId), manager, "manager owns token");
 
         // Non-whitelisted user blocked from joining managed pool
         _mintAndApprove(user, 5 ether);
         vm.prank(user);
         vm.expectRevert();
-        harness.mintPositionWithDeposit(MANAGED_PID, 1 ether);
+        harness.mintPositionWithDeposit(MANAGED_PID, 1 ether, 1 ether, 0);
 
         // User mints position, manager whitelists by tokenId, deposit now succeeds
         vm.prank(user);
-        uint256 userTokenId = harness.mintPosition(MANAGED_PID);
+        uint256 userTokenId = harness.mintPosition(MANAGED_PID, 0);
         vm.prank(manager);
         harness.addToWhitelist(MANAGED_PID, userTokenId);
         vm.prank(user);
-        harness.depositToPosition(userTokenId, MANAGED_PID, 2 ether);
+        harness.depositToPosition(userTokenId, MANAGED_PID, 2 ether, 2 ether);
         assertEq(nft.ownerOf(userTokenId), user, "user owns managed token");
 
         // Managed pool lending flows still work for members
@@ -200,7 +200,7 @@ contract ManagedPoolIntegrationTest is Test {
         // Unmanaged pool remains permissionless
         _mintAndApprove(outsider, 5 ether);
         vm.prank(outsider);
-        uint256 unmanagedTokenId = harness.mintPositionWithDeposit(UNMANAGED_PID, 3 ether);
+        uint256 unmanagedTokenId = harness.mintPositionWithDeposit(UNMANAGED_PID, 3 ether, 3 ether, 0);
         assertEq(nft.ownerOf(unmanagedTokenId), outsider, "outsider owns unmanaged token");
 
         // Unmanaged borrow works and is unaffected by managed whitelist

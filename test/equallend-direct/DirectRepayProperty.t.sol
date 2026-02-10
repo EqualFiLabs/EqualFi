@@ -70,13 +70,15 @@ contract DirectRepayTimingPropertyTest is DirectDiamondTestBase {
         uint256 acceptTimestamp = block.timestamp;
         uint256 dueTimestamp = DirectTestUtils.dueTimestamp(acceptTimestamp, disallowedParams.durationSeconds);
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
         vm.expectRevert(DirectError_EarlyRepayNotAllowed.selector);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         vm.warp(dueTimestamp - 12 hours);
+        maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         DirectTypes.DirectOfferParams memory allowedParams = DirectTypes.DirectOfferParams({
             lenderPositionId: lenderPositionId,
@@ -97,8 +99,9 @@ contract DirectRepayTimingPropertyTest is DirectDiamondTestBase {
         vm.prank(borrowerOwner);
         uint256 allowedAgreementId = agreements.acceptOffer(allowedOfferId, borrowerPositionId);
 
+        maxPayment = _maxPayment(allowedAgreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(allowedAgreementId);
+        lifecycle.repay(allowedAgreementId, maxPayment);
 
         vm.prank(lenderOwner);
         uint256 expiredOfferId = offers.postOffer(allowedParams);
@@ -107,9 +110,10 @@ contract DirectRepayTimingPropertyTest is DirectDiamondTestBase {
         uint256 expiredDue = DirectTestUtils.dueTimestamp(block.timestamp, allowedParams.durationSeconds);
 
         vm.warp(expiredDue + 1 days + 1);
+        maxPayment = _maxPayment(expiredAgreementId);
         vm.prank(borrowerOwner);
         vm.expectRevert(DirectError_GracePeriodExpired.selector);
-        lifecycle.repay(expiredAgreementId);
+        lifecycle.repay(expiredAgreementId, maxPayment);
     }
 }
 
@@ -176,8 +180,9 @@ contract DirectRepayFunctionalityPropertyTest is DirectDiamondTestBase {
         uint256 interest = DirectTestUtils.annualizedInterest(params);
 
         vm.warp(block.timestamp + 1 hours);
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         DirectTypes.DirectAgreement memory agreement = views.getAgreement(agreementId);
         assertEq(uint8(agreement.status), uint8(DirectTypes.DirectStatus.Repaid), "status repaid");

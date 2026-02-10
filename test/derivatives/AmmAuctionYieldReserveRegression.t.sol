@@ -135,13 +135,13 @@ contract AmmAuctionYieldReserveRegressionTest is Test {
         tokenA.mint(taker, 1 ether);
         vm.startPrank(taker);
         tokenA.approve(address(harness), 1 ether);
-        harness.swapExactIn(auctionId, address(tokenA), 1 ether, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenA), 1 ether, 1 ether, 0, taker);
 
         // Swap USDC -> rETH
         uint256 usdcIn = 3_200 * 1e18;
         tokenB.mint(taker, usdcIn);
         tokenB.approve(address(harness), usdcIn);
-        harness.swapExactIn(auctionId, address(tokenB), usdcIn, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenB), usdcIn, usdcIn, 0, taker);
         vm.stopPrank();
 
         DerivativeTypes.AmmAuction memory auctionAfter = harness.getAuction(auctionId);

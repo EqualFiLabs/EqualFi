@@ -80,7 +80,7 @@ contract CommunityAuctionIndexFeeRegressionTest is Test {
         tokenA.mint(taker, swapAmount);
         vm.startPrank(taker);
         tokenA.approve(address(harness), swapAmount);
-        harness.swapExactIn(auctionId, address(tokenA), swapAmount, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenA), swapAmount, swapAmount, 0, taker);
         vm.stopPrank();
 
         // Check index fees were accrued
@@ -164,7 +164,7 @@ contract CommunityAuctionIndexFeeRegressionTest is Test {
         tokenA.mint(taker, swapAmount);
         vm.startPrank(taker);
         tokenA.approve(address(harness), swapAmount);
-        harness.swapExactIn(auctionId, address(tokenA), swapAmount, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenA), swapAmount, swapAmount, 0, taker);
         vm.stopPrank();
 
         // First maker leaves
@@ -231,7 +231,7 @@ contract CommunityAuctionIndexFeeRegressionTest is Test {
         tokenA.mint(taker, swapAmount);
         vm.startPrank(taker);
         tokenA.approve(address(harness), swapAmount);
-        harness.swapExactIn(auctionId, address(tokenA), swapAmount, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenA), swapAmount, swapAmount, 0, taker);
         vm.stopPrank();
 
         // Check index fee was tracked

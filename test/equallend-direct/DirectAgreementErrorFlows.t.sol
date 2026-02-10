@@ -82,9 +82,10 @@ contract DirectAgreementErrorFlowsTest is DirectDiamondTestBase {
 
     function testEarlyRepayPathBlockedWhenDisallowed() public {
         (uint256 agreementId,) = _postAndAccept(false, true);
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(borrowerOwner);
         vm.expectRevert(DirectError_EarlyRepayNotAllowed.selector);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
     }
 
     function testRecoverRespectsGraceWindow() public {

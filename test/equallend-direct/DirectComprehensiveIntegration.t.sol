@@ -228,9 +228,10 @@ contract DirectComprehensiveIntegrationTest is DirectDiamondTestBase {
         vm.prank(borrowerOwner);
         uint256 agreementId = agreements.acceptOffer(offerId, borrowerPos);
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(NotNFTOwner.selector, stranger, borrowerPos));
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
 
         vm.prank(borrowerOwner);
         nft.setApprovalForAll(operator, true);
@@ -238,7 +239,8 @@ contract DirectComprehensiveIntegrationTest is DirectDiamondTestBase {
         tokenA.transfer(operator, 100 ether);
         vm.prank(operator);
         tokenA.approve(address(diamond), type(uint256).max);
+        maxPayment = _maxPayment(agreementId);
         vm.prank(operator);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
     }
 }
