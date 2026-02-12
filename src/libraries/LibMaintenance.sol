@@ -161,7 +161,7 @@ library LibMaintenance {
         if (LibCurrency.isNative(p.underlying)) {
             LibAppStorage.s().nativeTrackedTotal -= paid;
         }
-        LibCurrency.transfer(p.underlying, receiver, paid);
+        LibCurrency.transferWithMin(p.underlying, receiver, paid, paid);
         return paid;
     }
 

@@ -40,7 +40,8 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
     function makeRollingPayment(
         uint256 agreementId,
         uint256 amount,
-        uint256 maxPayment
+        uint256 maxPayment,
+        uint256 minReceived
     ) external payable nonReentrant {
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
 
@@ -137,7 +138,7 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         }
 
         // Pay lender
-        LibCurrency.transfer(agreement.borrowAsset, agreement.lender, received);
+        LibCurrency.transferWithMin(agreement.borrowAsset, agreement.lender, received, minReceived);
         if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {
             LibAppStorage.s().nativeTrackedTotal -= received;
         }

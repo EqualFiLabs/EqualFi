@@ -58,7 +58,8 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         address indexed holder,
         address indexed recipient,
         uint256 amount,
-        uint256 strikeAmount
+        uint256 strikeAmount,
+        uint256 paymentReceived
     );
 
     event Reclaimed(
@@ -196,9 +197,10 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 seriesId,
         uint256 amount,
         address recipient,
-        uint256 maxPayment
+        uint256 maxPayment,
+        uint256 minReceived
     ) external payable nonReentrant {
-        _exerciseOptions(seriesId, amount, msg.sender, recipient, maxPayment);
+        _exerciseOptions(seriesId, amount, msg.sender, recipient, maxPayment, minReceived);
     }
 
     function exerciseOptionsFor(
@@ -206,9 +208,10 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 amount,
         address holder,
         address recipient,
-        uint256 maxPayment
+        uint256 maxPayment,
+        uint256 minReceived
     ) external payable nonReentrant {
-        _exerciseOptions(seriesId, amount, holder, recipient, maxPayment);
+        _exerciseOptions(seriesId, amount, holder, recipient, maxPayment, minReceived);
     }
 
     /// @notice Preview the required payment for exercising options (strike asset amount for Calls, underlying for Puts).
@@ -228,7 +231,8 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 amount,
         address holder,
         address recipient,
-        uint256 maxPayment
+        uint256 maxPayment,
+        uint256 minReceived
     ) internal {
         if (amount == 0) revert Options_InvalidAmount(amount);
         if (holder == address(0)) revert Options_InvalidRecipient(holder);
@@ -260,10 +264,11 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         );
         if (strikeAmount == 0) revert Options_InvalidAmount(strikeAmount);
 
+        uint256 paymentReceived;
         if (series.isCall) {
-            _exerciseCall(series, makerKey, holder, amount, strikeAmount, recipient, maxPayment);
+            paymentReceived = _exerciseCall(series, makerKey, holder, amount, strikeAmount, recipient, maxPayment, minReceived);
         } else {
-            _exercisePut(series, makerKey, holder, amount, strikeAmount, recipient, maxPayment);
+            paymentReceived = _exercisePut(series, makerKey, holder, amount, strikeAmount, recipient, maxPayment, minReceived);
         }
 
         series.remaining -= amount;
@@ -273,7 +278,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
             series.collateralLocked -= strikeAmount;
         }
 
-        emit Exercised(seriesId, holder, recipient, amount, strikeAmount);
+        emit Exercised(seriesId, holder, recipient, amount, strikeAmount, paymentReceived);
     }
 
     function reclaimOptions(uint256 seriesId) external nonReentrant {
@@ -399,8 +404,9 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 amount,
         uint256 strikeAmount,
         address recipient,
-        uint256 maxPayment
-    ) internal {
+        uint256 maxPayment,
+        uint256 minReceived
+    ) internal returns (uint256 paymentReceived) {
         LibDerivativeHelpers._unlockCollateral(makerKey, series.underlyingPoolId, amount);
 
         Types.PoolData storage underlyingPool = LibAppStorage.s().pools[series.underlyingPoolId];
@@ -436,7 +442,8 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         strikePool.userPrincipal[makerKey] += netStrike;
         strikePool.totalDeposits += netStrike;
 
-        LibCurrency.transfer(series.underlyingAsset, recipient, amount);
+        LibCurrency.transferWithMin(series.underlyingAsset, recipient, amount, minReceived);
+        return received;
     }
 
     function _exercisePut(
@@ -446,8 +453,9 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 amount,
         uint256 strikeAmount,
         address recipient,
-        uint256 maxPayment
-    ) internal {
+        uint256 maxPayment,
+        uint256 minReceived
+    ) internal returns (uint256 paymentReceived) {
         LibDerivativeHelpers._unlockCollateral(makerKey, series.strikePoolId, strikeAmount);
 
         Types.PoolData storage underlyingPool = LibAppStorage.s().pools[series.underlyingPoolId];
@@ -483,7 +491,8 @@ contract OptionsFacet is ReentrancyGuardModifiers {
             LibAppStorage.s().nativeTrackedTotal -= strikeAmount;
         }
 
-        LibCurrency.transfer(series.strikeAsset, recipient, strikeAmount);
+        LibCurrency.transferWithMin(series.strikeAsset, recipient, strikeAmount, minReceived);
+        return received;
     }
 
     function _resolveFeeBps(

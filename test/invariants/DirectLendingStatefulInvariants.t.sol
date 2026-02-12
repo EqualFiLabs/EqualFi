@@ -124,7 +124,7 @@ contract DirectLendingStatefulHandler is Test {
             return;
         }
         vm.prank(borrowerOwner);
-        agreementId = agreements.acceptOffer(offerId, borrowerPos);
+        agreementId = agreements.acceptOffer(offerId, borrowerPos, 0);
         if (agreementId != 0) {
             offerId = 0;
         }

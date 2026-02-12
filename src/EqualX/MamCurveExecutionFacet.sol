@@ -22,6 +22,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         address indexed taker,
         address indexed recipient,
         uint256 amountIn,
+        uint256 actualIn,
         uint256 amountOut,
         uint256 feeAmount,
         uint256 remainingVolume
@@ -155,7 +156,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
 
         uint256 remaining = _consumeCurve(curveId, uint128(baseFill));
 
-        emit CurveFilled(curveId, msg.sender, recipient, amountIn, amountOut, feeAmount, remaining);
+        emit CurveFilled(curveId, msg.sender, recipient, amountIn, received, amountOut, feeAmount, remaining);
     }
 
     function _consumeCurve(uint256 curveId, uint128 baseFill) internal returns (uint128 remainingAfter) {

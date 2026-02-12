@@ -714,7 +714,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         vm.prank(holder);
 
 
-        options.exerciseOptions(seriesId, 1e18, holder, payment);
+        options.exerciseOptions(seriesId, 1e18, holder, payment, 0);
 
         uint256 expectedLocked = isCall ? 1e18 : _strikeAmount(1e18, 2e18);
         assertEq(harness.getDirectLocked(key, isCall ? poolUnderlying : poolStrike), expectedLocked, "locked after exercise");
@@ -776,7 +776,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         vm.prank(holder);
 
 
-        futures.settleFutures(seriesId, 1e18, holder, payment);
+        futures.settleFutures(seriesId, 1e18, holder, payment, 0);
 
         assertEq(harness.getDirectLocked(key, poolUnderlying), 1e18, "futures locked after settlement");
 
@@ -858,7 +858,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
 
         vm.prank(holder);
 
-        options.exerciseOptions(optionId, 1e18, holder, payment);
+        options.exerciseOptions(optionId, 1e18, holder, payment, 0);
 
         vm.prank(maker);
         futuresToken.safeTransferFrom(maker, holder, futuresId, 1e18, "");
@@ -870,7 +870,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
 
         vm.prank(holder);
 
-        futures.settleFutures(futuresId, 1e18, holder, payment);
+        futures.settleFutures(futuresId, 1e18, holder, payment, 0);
 
         vm.warp(block.timestamp + 2 days);
         (, bool finalized) = amm.swapExactInOrFinalize(auctionId, address(tokenA), 1, 1, 0, swapper);

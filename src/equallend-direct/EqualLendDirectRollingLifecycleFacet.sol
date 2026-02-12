@@ -209,7 +209,7 @@ contract EqualLendDirectRollingLifecycleFacet is ReentrancyGuardModifiers {
     }
 
     /// @notice Borrower repays outstanding principal + arrears in full (early or scheduled) to close agreement.
-    function repayRollingInFull(uint256 agreementId, uint256 maxPayment) external payable nonReentrant {
+    function repayRollingInFull(uint256 agreementId, uint256 maxPayment, uint256 minReceived) external payable nonReentrant {
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.DirectRollingAgreement storage agreement = ds.rollingAgreements[agreementId];
         if (agreement.status != DirectTypes.DirectStatus.Active || !agreement.isRolling) {
@@ -242,7 +242,7 @@ contract EqualLendDirectRollingLifecycleFacet is ReentrancyGuardModifiers {
         uint256 principalDue = agreement.outstandingPrincipal;
         uint256 repaymentAmount = principalDue + arrearsDue;
         uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, repaymentAmount, maxPayment);
-        LibCurrency.transfer(agreement.borrowAsset, agreement.lender, received);
+        LibCurrency.transferWithMin(agreement.borrowAsset, agreement.lender, received, minReceived);
         if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {
             LibAppStorage.s().nativeTrackedTotal -= received;
         }

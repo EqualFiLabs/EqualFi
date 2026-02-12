@@ -95,7 +95,7 @@ contract DirectAmmRatioLoopIntegrationTest is DirectDiamondTestBase {
 
         for (uint256 i = 0; i < 3; i++) {
             vm.prank(userA);
-            agreements.acceptRatioTrancheOffer(offerId, aPositionId, borrowAmount);
+            agreements.acceptRatioTrancheOffer(offerId, aPositionId, borrowAmount, 0);
 
             vm.prank(userA);
             uint256 amountOut = amm.swapExactIn(auctionId, address(token2), borrowAmount, borrowAmount, 0, userA);

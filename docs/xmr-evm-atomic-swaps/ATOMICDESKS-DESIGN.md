@@ -417,7 +417,7 @@ escrow.setHashlock(reservationId, keccak256(abi.encodePacked(tau)));
 mailbox.publishPreSig(reservationId, encryptedPresig);
 
 // 5. Settle when ready
-escrow.settle(reservationId, tau);
+escrow.settle(reservationId, tau, minReceived);
 ```
 
 ### 8.2 Taker Integration

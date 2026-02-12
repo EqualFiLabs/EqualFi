@@ -218,13 +218,13 @@ contract DerivativeAccessControlPropertyTest is Test {
 
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(Options_NotTokenHolder.selector, attacker, optionSeriesId));
-        optionsHarness.exerciseOptionsFor(optionSeriesId, 1e18, holder, holder, optionPayment);
+        optionsHarness.exerciseOptionsFor(optionSeriesId, 1e18, holder, holder, optionPayment, 0);
 
         vm.prank(holder);
         optionToken.setApprovalForAll(operator, true);
 
         vm.prank(operator);
-        optionsHarness.exerciseOptionsFor(optionSeriesId, 1e18, holder, holder, optionPayment);
+        optionsHarness.exerciseOptionsFor(optionSeriesId, 1e18, holder, holder, optionPayment, 0);
 
         uint256 futuresTokenId = nft.mint(maker, 1);
         bytes32 futuresKey = nft.getPositionKey(futuresTokenId);
@@ -259,13 +259,13 @@ contract DerivativeAccessControlPropertyTest is Test {
 
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(Futures_NotTokenHolder.selector, attacker, futuresSeriesId));
-        futuresHarness.settleFuturesFor(futuresSeriesId, 1e18, holder, holder, futuresPayment);
+        futuresHarness.settleFuturesFor(futuresSeriesId, 1e18, holder, holder, futuresPayment, 0);
 
         vm.prank(holder);
         futuresToken.setApprovalForAll(operator, true);
 
         vm.prank(operator);
-        futuresHarness.settleFuturesFor(futuresSeriesId, 1e18, holder, holder, futuresPayment);
+        futuresHarness.settleFuturesFor(futuresSeriesId, 1e18, holder, holder, futuresPayment, 0);
     }
 
     function testProperty_ReclaimAuthorization() public {
@@ -462,7 +462,7 @@ contract DerivativeAccessControlPropertyTest is Test {
         vm.prank(holder);
 
 
-        optionsHarness.exerciseOptions(optionSeriesId, 1e18, holder, payment);
+        optionsHarness.exerciseOptions(optionSeriesId, 1e18, holder, payment, 0);
 
         payment = futuresHarness.previewSettlePayment(futuresSeriesId, 1e18);
 
@@ -470,7 +470,7 @@ contract DerivativeAccessControlPropertyTest is Test {
         vm.prank(holder);
 
 
-        futuresHarness.settleFutures(futuresSeriesId, 1e18, holder, payment);
+        futuresHarness.settleFutures(futuresSeriesId, 1e18, holder, payment, 0);
 
         vm.warp(block.timestamp + 2 days);
         ammHarness.finalizeAuction(auctionId);

@@ -57,7 +57,7 @@ contract P2PBalanceSheetConsistencyPropertyTest is DirectDiamondTestBase {
         // The error implies `repay` might be checking ownership incorrectly or against a different token.
         // Let's review the `repay` call context.
         
-        uint256 agreementId = agreements.acceptOffer(offerId, borrowerTokenId);
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerTokenId, 0);
 
         (, uint256 lentAfter,) = views.directBalances(lenderKey, 1);
         uint256 lenderPrincipalAfter = views.getUserPrincipal(1, lenderKey);

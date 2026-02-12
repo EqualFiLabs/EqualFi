@@ -58,7 +58,7 @@ contract DirectPrincipalConservationPropertyTest is DirectDiamondTestBase {
         uint256 offerId = offers.postOffer(params);
 
         vm.prank(address(0xCAFE));
-        agreements.acceptOffer(offerId, borrowerTokenId);
+        agreements.acceptOffer(offerId, borrowerTokenId, 0);
 
         uint256 lenderAfter = views.getUserPrincipal(1, lenderKey);
         uint256 borrowerDebt = views.directBorrowed(borrowerKey, 1);

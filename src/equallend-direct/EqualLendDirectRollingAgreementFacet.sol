@@ -21,7 +21,12 @@ import {DirectError_InvalidAsset, DirectError_InvalidOffer, DirectError_InvalidT
 contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
     event RollingOfferAccepted(uint256 indexed offerId, uint256 indexed agreementId, address indexed borrower);
 
-    function acceptRollingOffer(uint256 offerId, uint256 callerPositionId)
+    function acceptRollingOffer(
+        uint256 offerId,
+        uint256 callerPositionId,
+        uint256 minReceivedLender,
+        uint256 minReceivedBorrower
+    )
         external
         payable
         nonReentrant
@@ -38,11 +43,25 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
 
         address borrower;
         if (isLenderOffer) {
-            agreementId = _acceptLenderRollingOffer(nft, ds, lenderOffer, callerPositionId);
+            agreementId = _acceptLenderRollingOffer(
+                nft,
+                ds,
+                lenderOffer,
+                callerPositionId,
+                minReceivedLender,
+                minReceivedBorrower
+            );
             borrower = nft.ownerOf(callerPositionId);
         } else {
             DirectTypes.DirectRollingBorrowerOffer storage borrowerOffer = ds.rollingBorrowerOffers[offerId];
-            agreementId = _acceptBorrowerRollingOffer(nft, ds, borrowerOffer, callerPositionId);
+            agreementId = _acceptBorrowerRollingOffer(
+                nft,
+                ds,
+                borrowerOffer,
+                callerPositionId,
+                minReceivedLender,
+                minReceivedBorrower
+            );
             borrower = borrowerOffer.borrower;
         }
 
@@ -57,7 +76,9 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         PositionNFT nft,
         DirectTypes.DirectStorage storage ds,
         DirectTypes.DirectRollingOffer storage offer,
-        uint256 borrowerPositionId
+        uint256 borrowerPositionId,
+        uint256 minReceivedLender,
+        uint256 minReceivedBorrower
     ) internal returns (uint256 agreementId) {
         if (offer.lender == address(0) || offer.cancelled || offer.filled) {
             revert DirectError_InvalidOffer();
@@ -169,18 +190,20 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
 
         // Transfers: upfront premium to lender, remainder to borrower
         if (offer.upfrontPremium > 0) {
-            LibCurrency.transfer(offer.borrowAsset, offer.lender, offer.upfrontPremium);
+            LibCurrency.transferWithMin(offer.borrowAsset, offer.lender, offer.upfrontPremium, minReceivedLender);
         }
         uint256 netToBorrower = offer.principal - offer.upfrontPremium;
-        LibCurrency.transfer(offer.borrowAsset, nft.ownerOf(borrowerPositionId), netToBorrower);
+        LibCurrency.transferWithMin(offer.borrowAsset, nft.ownerOf(borrowerPositionId), netToBorrower, minReceivedBorrower);
     }
 
     function _acceptBorrowerRollingOffer(
         PositionNFT nft,
         DirectTypes.DirectStorage storage ds,
         DirectTypes.DirectRollingBorrowerOffer storage offer,
-        uint256 lenderPositionId
-    ) internal returns (uint256 agreementId) {
+        uint256 lenderPositionId,
+        uint256 minReceivedLender,
+        uint256 minReceivedBorrower
+    ) internal returns (uint256 agreementId) { 
         if (offer.borrower == address(0) || offer.cancelled || offer.filled) {
             revert DirectError_InvalidOffer();
         }
@@ -278,10 +301,14 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         LibDirectStorage.addRollingLenderAgreement(ds, lenderKey, agreementId);
 
         if (offer.upfrontPremium > 0) {
-            // Internal transfer/payment flow, assume no slippage param for premium on acceptance
-            LibCurrency.transfer(offer.borrowAsset, nft.ownerOf(lenderPositionId), offer.upfrontPremium);
+            LibCurrency.transferWithMin(
+                offer.borrowAsset,
+                nft.ownerOf(lenderPositionId),
+                offer.upfrontPremium,
+                minReceivedLender
+            );
         }
         uint256 netToBorrower = offer.principal - offer.upfrontPremium;
-        LibCurrency.transfer(offer.borrowAsset, offer.borrower, netToBorrower);
+        LibCurrency.transferWithMin(offer.borrowAsset, offer.borrower, netToBorrower, minReceivedBorrower);
     }
 }

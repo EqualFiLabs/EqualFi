@@ -640,7 +640,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         vm.stopPrank();
 
         vm.prank(user);
-        uint256 agreementId = agreements.acceptOffer(offerId, borrowerTokenId);
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerTokenId, 0);
 
         vm.prank(user);
         lifecycle.repay(agreementId, 50000000000000000000);
@@ -730,7 +730,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
 
         vm.prank(user);
         vm.resumeGasMetering();
-        agreements.acceptOffer(offerId, borrowerTokenId);
+        agreements.acceptOffer(offerId, borrowerTokenId, 0);
     }
 
     function test_gas_DirectPostBorrowerOfferOnly() public {
@@ -817,7 +817,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
 
         vm.prank(lender);
         vm.resumeGasMetering();
-        agreements.acceptBorrowerOffer(offerId, lenderTokenId);
+        agreements.acceptBorrowerOffer(offerId, lenderTokenId, 0);
     }
 
     function _configureDirect(address protocolTreasury) internal {

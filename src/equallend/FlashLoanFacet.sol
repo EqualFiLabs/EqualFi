@@ -60,7 +60,7 @@ contract FlashLoanFacet is ReentrancyGuardModifiers {
 
         uint256 balBefore = LibCurrency.balanceOfSelf(p.underlying);
         require(balBefore >= amount, "Flash: insufficient contract balance");
-        LibCurrency.transfer(p.underlying, receiver, amount);
+        LibCurrency.transferWithMin(p.underlying, receiver, amount, amount);
 
         require(
             IFlashLoanReceiver(receiver).onFlashLoan(msg.sender, p.underlying, amount, data) == FLASH_CALLBACK_SUCCESS,

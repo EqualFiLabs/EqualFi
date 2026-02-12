@@ -60,7 +60,7 @@ contract SettlementEscrowFacet is ReentrancyGuardModifiers {
         emit HashlockSet(reservationId, hashlock);
     }
 
-    function settle(bytes32 reservationId, bytes32 tau) external nonReentrant {
+    function settle(bytes32 reservationId, bytes32 tau, uint256 minReceived) external nonReentrant {
         AtomicTypes.Reservation storage r = LibAtomicStorage.atomicStorage().reservations[reservationId];
         if (r.status != AtomicTypes.ReservationStatus.Active) {
             revert SettlementEscrow_ReservationInactive(reservationId);
@@ -114,7 +114,7 @@ contract SettlementEscrowFacet is ReentrancyGuardModifiers {
             LibFeeRouter.routeSamePool(basePoolId, protocolFee, ATOMIC_SWAP_FEE_SOURCE, true, 0);
         }
 
-        LibCurrency.transfer(r.asset, r.taker, payout);
+        LibCurrency.transferWithMin(r.asset, r.taker, payout, minReceived);
         _revokeMailboxSlot(reservationId, st.mailbox);
 
         emit ReservationSettled(reservationId, tau);

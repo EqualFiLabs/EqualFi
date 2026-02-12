@@ -103,7 +103,7 @@ contract FuturesGasTest is Test {
 
         vm.prank(holder);
 
-        harness.settleFutures(seriesId, 1e18, holder, payment);
+        harness.settleFutures(seriesId, 1e18, holder, payment, 0);
     }
 }
 

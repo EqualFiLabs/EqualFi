@@ -106,7 +106,7 @@ contract DirectAmmRollingLoopIntegrationTest is DirectDiamondTestBase {
             uint256 offerId = _postRollingOffer(collateralPerFill);
 
             vm.prank(userA);
-            rollingAgreements.acceptRollingOffer(offerId, aPositionId);
+            rollingAgreements.acceptRollingOffer(offerId, aPositionId, 0, 0);
 
             vm.prank(userA);
             uint256 amountOut = amm.swapExactIn(auctionId, address(token2), BORROW_AMOUNT, BORROW_AMOUNT, 0, userA);

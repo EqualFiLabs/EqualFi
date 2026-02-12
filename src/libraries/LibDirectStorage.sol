@@ -285,6 +285,13 @@ library LibDirectStorage {
     /// @notice Cancel all outstanding lender and borrower offers for a position (used on NFT transfer).
     function cancelOffersForPosition(bytes32 positionKey) internal {
         DirectTypes.DirectStorage storage ds = directStorage();
+        _cancelLenderOffersForPosition(ds, positionKey);
+        _cancelBorrowerOffersForPosition(ds, positionKey);
+        _cancelRatioLenderOffersForPosition(ds, positionKey);
+        _cancelBorrowerRatioOffersForPosition(ds, positionKey);
+    }
+
+    function _cancelLenderOffersForPosition(DirectTypes.DirectStorage storage ds, bytes32 positionKey) internal {
         (uint256[] memory lenderList, ) = ds.lenderOffers.page(positionKey, 0, 0);
         for (uint256 i = 0; i < lenderList.length; i++) {
             uint256 offerId = lenderList[i];
@@ -312,7 +319,9 @@ library LibDirectStorage {
                 ds.trancheRemaining[offerId] = 0;
             }
         }
+    }
 
+    function _cancelBorrowerOffersForPosition(DirectTypes.DirectStorage storage ds, bytes32 positionKey) internal {
         (uint256[] memory borrowerList, ) = ds.borrowerOffersByPosition.page(positionKey, 0, 0);
         for (uint256 i = 0; i < borrowerList.length; i++) {
             uint256 offerId = borrowerList[i];
@@ -337,7 +346,9 @@ library LibDirectStorage {
                 collateralPool, offer.collateralPoolId, positionKey, encBefore, encAfter
             );
         }
+    }
 
+    function _cancelRatioLenderOffersForPosition(DirectTypes.DirectStorage storage ds, bytes32 positionKey) internal {
         (uint256[] memory ratioList, ) = ds.ratioLenderOffers.page(positionKey, 0, 0);
         for (uint256 i = 0; i < ratioList.length; i++) {
             uint256 offerId = ratioList[i];
@@ -364,7 +375,9 @@ library LibDirectStorage {
                 lenderPool, offer.lenderPoolId, positionKey, encBefore, encAfter
             );
         }
+    }
 
+    function _cancelBorrowerRatioOffersForPosition(DirectTypes.DirectStorage storage ds, bytes32 positionKey) internal {
         // Cancel borrower ratio tranche offers
         (uint256[] memory borrowerRatioList, ) = ds.ratioBorrowerOffers.page(positionKey, 0, 0);
         for (uint256 i = 0; i < borrowerRatioList.length; i++) {
@@ -392,6 +405,7 @@ library LibDirectStorage {
                 collateralPool, offer.collateralPoolId, positionKey, encBefore, encAfter
             );
         }
-
     }
+
 }
+

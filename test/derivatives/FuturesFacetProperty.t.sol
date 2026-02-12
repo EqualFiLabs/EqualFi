@@ -143,7 +143,7 @@ contract FuturesFacetPropertyTest is Test {
         vm.prank(holder);
 
 
-        harness.settleFutures(seriesId, settleAmount, holder, payment);
+        harness.settleFutures(seriesId, settleAmount, holder, payment, 0);
 
         assertEq(
             harness.getPrincipal(positionKey, 1),

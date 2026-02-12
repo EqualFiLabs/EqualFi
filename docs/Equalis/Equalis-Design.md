@@ -1023,7 +1023,7 @@ enum DirectStatus {
    - Store offer with unique ID
    - Emit `BorrowerOfferPosted` event
 
-3. **Accept Lender Offer**: `acceptOffer(offerId, borrowerPositionId)`
+3. **Accept Lender Offer**: `acceptOffer(offerId, borrowerPositionId, minReceived)`
    - Verify borrower owns Position NFT
    - Check borrower has sufficient collateral
    - Lock collateral per pool: `directLockedPrincipal[borrowerKey][collateralPoolId] += collateralLockAmount`
@@ -1033,7 +1033,7 @@ enum DirectStatus {
    - Transfer principal from lender pool to borrower
    - Create agreement with status Active
 
-4. **Accept Borrower Offer**: `acceptBorrowerOffer(offerId, lenderPositionId)`
+4. **Accept Borrower Offer**: `acceptBorrowerOffer(offerId, lenderPositionId, minReceived)`
    - Verify lender owns Position NFT
    - Check lender has sufficient available principal
    - Verify borrower's collateral is still locked (from posting)
@@ -1084,7 +1084,7 @@ Lenders can post CLOB-style offers with a price ratio for variable-size fills:
 
 ```solidity
 function postRatioTrancheOffer(DirectRatioTrancheParams calldata params) external returns (uint256 offerId);
-function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount) 
+function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount, uint256 minReceived) 
     external returns (uint256 agreementId);
 ```
 
@@ -1099,7 +1099,7 @@ Borrowers can post CLOB-style offers specifying collateral they're willing to lo
 ```solidity
 function postBorrowerRatioTrancheOffer(DirectBorrowerRatioTrancheParams calldata params) 
     external returns (uint256 offerId);
-function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount) 
+function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount, uint256 minReceived) 
     external returns (uint256 agreementId);
 ```
 
@@ -1205,7 +1205,7 @@ struct DirectRollingConfig {
    - Lock collateral: `directLockedPrincipal[borrowerKey][collateralPoolId] += collateralLockAmount`
    - Store offer and emit event
 
-3. **Accept Offer**: `acceptRollingOffer(offerId, callerPositionId)`
+3. **Accept Offer**: `acceptRollingOffer(offerId, callerPositionId, minReceivedLender, minReceivedBorrower)`
    - Works for both lender and borrower offers
    - Verify counterparty has required assets
    - Transfer principal from lender pool to borrower (minus upfront premium)
@@ -1213,14 +1213,14 @@ struct DirectRollingConfig {
    - Create agreement with `nextDue = block.timestamp + paymentIntervalSeconds`
    - Track in both borrower and lender agreement lists
 
-4. **Make Payment**: `makeRollingPayment(agreementId, amount)`
+4. **Make Payment**: `makeRollingPayment(agreementId, amount, maxPayment, minReceived)`
    - Accrue interest since last accrual to arrears
    - Apply payment in order: arrears → current interest → principal (if amortization allowed)
    - Advance `nextDue` only if arrears cleared and current interest fully paid
    - Increment `paymentCount`
    - Transfer payment to lender
 
-5. **Repay in Full**: `repayRollingInFull(agreementId)`
+5. **Repay in Full**: `repayRollingInFull(agreementId, maxPayment, minReceived)`
    - Requires `allowEarlyRepay = true` or at payment cap
    - Accrue final interest to arrears
    - Pay `outstandingPrincipal + arrears` to lender
@@ -2329,7 +2329,7 @@ struct OptionSeries {
 
 **Lifecycle**:
 1. **Create**: `createOptionSeries(params)` - Lock collateral via `directLockedPrincipal`, mint ERC-1155 tokens to maker
-2. **Exercise**: `exerciseOptions(seriesId, amount, recipient)` - Holder burns tokens, atomic swap of strike for collateral
+2. **Exercise**: `exerciseOptions(seriesId, amount, recipient, maxPayment, minReceived)` - Holder burns tokens, atomic swap of strike for collateral
 3. **Reclaim**: `reclaimOptions(seriesId)` - Maker burns remaining supply after expiry to reclaim collateral
 
 #### C. Futures (Physical Delivery)
@@ -2364,7 +2364,7 @@ struct FuturesSeries {
 
 **Lifecycle**:
 1. **Create**: `createFuturesSeries(params)` - Lock underlying via `directLockedPrincipal`, mint ERC-1155 tokens
-2. **Settle**: `settleFutures(seriesId, amount, recipient)` - Holder burns tokens, pays forward price, receives underlying
+2. **Settle**: `settleFutures(seriesId, amount, recipient, maxPayment, minReceived)` - Holder burns tokens, pays forward price, receives underlying
 3. **Reclaim**: `reclaimFutures(seriesId)` - Maker burns remaining supply after grace period to reclaim underlying
 
 #### D. Maker Auction Markets (MAM Curves)

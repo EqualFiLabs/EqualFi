@@ -105,7 +105,7 @@ contract OptionsGasTest is Test {
 
         vm.prank(holder);
 
-        harness.exerciseOptions(seriesId, 1e18, holder, payment);
+        harness.exerciseOptions(seriesId, 1e18, holder, payment, 0);
     }
 }
 

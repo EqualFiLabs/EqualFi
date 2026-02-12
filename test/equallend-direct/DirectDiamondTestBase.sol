@@ -186,10 +186,10 @@ interface IDirectOffer {
 
 /// @notice Interface for agreement facet functions
 interface IDirectAgreement {
-    function acceptOffer(uint256 offerId, uint256 borrowerPositionId) external returns (uint256);
-    function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId) external returns (uint256);
-    function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount) external returns (uint256);
-    function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount) external returns (uint256);
+    function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived) external returns (uint256);
+    function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId, uint256 minReceived) external returns (uint256);
+    function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount, uint256 minReceived) external returns (uint256);
+    function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount, uint256 minReceived) external returns (uint256);
 }
 
 /// @notice Interface for lifecycle facet functions
@@ -211,7 +211,12 @@ interface IDirectRollingOffer {
 
 /// @notice Interface for rolling agreement facet functions
 interface IDirectRollingAgreement {
-    function acceptRollingOffer(uint256 offerId, uint256 callerPositionId) external returns (uint256);
+    function acceptRollingOffer(
+        uint256 offerId,
+        uint256 callerPositionId,
+        uint256 minReceivedLender,
+        uint256 minReceivedBorrower
+    ) external returns (uint256);
     function getRollingAgreement(uint256 agreementId) external view returns (DirectTypes.DirectRollingAgreement memory);
 }
 
@@ -219,12 +224,12 @@ interface IDirectRollingAgreement {
 interface IDirectRollingLifecycle {
     function recoverRolling(uint256 agreementId) external;
     function exerciseRolling(uint256 agreementId) external;
-    function repayRollingInFull(uint256 agreementId, uint256 maxPayment) external;
+    function repayRollingInFull(uint256 agreementId, uint256 maxPayment, uint256 minReceived) external;
 }
 
 /// @notice Interface for rolling payment facet functions
 interface IDirectRollingPayment {
-    function makeRollingPayment(uint256 agreementId, uint256 amount, uint256 maxPayment) external;
+    function makeRollingPayment(uint256 agreementId, uint256 amount, uint256 maxPayment, uint256 minReceived) external;
 }
 
 /// @notice Interface for rolling view facet functions

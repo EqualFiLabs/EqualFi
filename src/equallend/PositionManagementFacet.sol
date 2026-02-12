@@ -165,11 +165,11 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
             revert InvalidFeeReceiver();
         }
         if (LibCurrency.isNative(feeToken)) {
-            LibCurrency.transfer(address(0), treasury, feeAmount);
+            LibCurrency.transferWithMin(address(0), treasury, feeAmount, feeAmount);
             return;
         }
         uint256 received = LibCurrency.pullAtLeast(feeToken, payer, feeAmount, maxFee);
-        LibCurrency.transfer(feeToken, treasury, received);
+        LibCurrency.transferWithMin(feeToken, treasury, received, received);
     }
 
     function _pullMintDeposit(address token, uint256 amount, uint256 maxAmount)

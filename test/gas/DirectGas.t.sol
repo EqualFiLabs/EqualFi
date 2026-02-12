@@ -367,7 +367,7 @@ contract DirectRollingGasTest is DirectDiamondTestBase {
         vm.prank(lenderOwner);
         uint256 offerId = rollingOffers.postRollingOffer(params);
         vm.prank(borrowerOwner);
-        agreementId = rollingAgreements.acceptRollingOffer(offerId, borrowerPos);
+        agreementId = rollingAgreements.acceptRollingOffer(offerId, borrowerPos, 0, 0);
     }
 
     function test_gas_PostRollingOffer() public {
@@ -432,7 +432,7 @@ contract DirectRollingGasTest is DirectDiamondTestBase {
 
         vm.prank(borrowerOwner);
         vm.resumeGasMetering();
-        rollingAgreements.acceptRollingOffer(offerId, borrowerPos);
+        rollingAgreements.acceptRollingOffer(offerId, borrowerPos, 0, 0);
     }
 
     function test_gas_MakeRollingPayment() public {
@@ -443,7 +443,7 @@ contract DirectRollingGasTest is DirectDiamondTestBase {
         vm.startPrank(borrowerOwner);
         asset.approve(address(diamond), type(uint256).max);
         vm.resumeGasMetering();
-        rollingPayments.makeRollingPayment(agreementId, payAmount, _rollingMaxPayment(agreementId));
+        rollingPayments.makeRollingPayment(agreementId, payAmount, _rollingMaxPayment(agreementId), 0);
         vm.stopPrank();
     }
 
@@ -464,7 +464,7 @@ contract DirectRollingGasTest is DirectDiamondTestBase {
         vm.startPrank(borrowerOwner);
         asset.approve(address(diamond), type(uint256).max);
         vm.resumeGasMetering();
-        rollingLifecycle.repayRollingInFull(agreementId, _rollingMaxPayment(agreementId));
+        rollingLifecycle.repayRollingInFull(agreementId, _rollingMaxPayment(agreementId), 0);
         vm.stopPrank();
     }
 

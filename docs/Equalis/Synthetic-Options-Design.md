@@ -316,12 +316,12 @@ function postBorrowerOffer(DirectBorrowerOfferParams calldata params) external r
 
 **Borrower accepts lender offer:**
 ```solidity
-function acceptOffer(uint256 offerId, uint256 borrowerPositionId) external returns (uint256 agreementId);
+function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived) external returns (uint256 agreementId);
 ```
 
 **Lender accepts borrower offer:**
 ```solidity
-function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId) external returns (uint256 agreementId);
+function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId, uint256 minReceived) external returns (uint256 agreementId);
 ```
 
 **What happens at acceptance:**

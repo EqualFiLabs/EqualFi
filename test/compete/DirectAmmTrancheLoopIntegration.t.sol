@@ -95,7 +95,7 @@ contract DirectAmmTrancheLoopIntegrationTest is DirectDiamondTestBase {
 
         for (uint256 i = 0; i < 3; i++) {
             vm.prank(userA);
-            agreements.acceptOffer(offerId, aPositionId);
+            agreements.acceptOffer(offerId, aPositionId, 0);
 
             vm.prank(userA);
             uint256 amountOut = amm.swapExactIn(auctionId, address(token2), BORROW_AMOUNT, BORROW_AMOUNT, 0, userA);

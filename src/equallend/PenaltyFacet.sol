@@ -155,7 +155,7 @@ contract PenaltyFacet is ReentrancyGuardModifiers {
 
         // Distribute enforcer share
         if (enforcerShare > 0) {
-            LibCurrency.transfer(p.underlying, enforcer, enforcerShare);
+            LibCurrency.transferWithMin(p.underlying, enforcer, enforcerShare, enforcerShare);
         }
 
         if (protocolAmount > 0) {
@@ -261,7 +261,7 @@ contract PenaltyFacet is ReentrancyGuardModifiers {
 
         // Distribute enforcer share
         if (enforcerShare > 0) {
-            LibCurrency.transfer(p.underlying, enforcer, enforcerShare);
+            LibCurrency.transferWithMin(p.underlying, enforcer, enforcerShare, enforcerShare);
         }
 
         if (protocolAmount > 0) {

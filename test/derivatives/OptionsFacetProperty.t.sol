@@ -112,7 +112,7 @@ contract OptionsFacetPropertyTest is Test {
             vm.prank(holder);
 
 
-            harness.exerciseOptions(seriesId, exerciseAmount, holder, payment);
+            harness.exerciseOptions(seriesId, exerciseAmount, holder, payment, 0);
         }
 
         DerivativeTypes.OptionSeries memory series = harness.getOptionSeries(seriesId);
@@ -177,11 +177,11 @@ contract OptionsFacetPropertyTest is Test {
         vm.warp(expiry - 101);
         vm.prank(holder);
         vm.expectRevert(abi.encodeWithSelector(Options_ExerciseWindowClosed.selector, seriesId));
-        harness.exerciseOptions(seriesId, totalSize, holder, payment);
+        harness.exerciseOptions(seriesId, totalSize, holder, payment, 0);
 
         vm.warp(expiry);
         vm.prank(holder);
-        harness.exerciseOptions(seriesId, totalSize, holder, payment);
+        harness.exerciseOptions(seriesId, totalSize, holder, payment, 0);
 
         uint256 makerTokenIdLate = nft.mint(maker, 1);
         bytes32 lateKey = nft.getPositionKey(makerTokenIdLate);
@@ -219,7 +219,7 @@ contract OptionsFacetPropertyTest is Test {
         vm.warp(expiryLate + 101);
         vm.prank(holder);
         vm.expectRevert(abi.encodeWithSelector(Options_ExerciseWindowClosed.selector, lateSeriesId));
-        harness.exerciseOptions(lateSeriesId, totalSize, holder, latePayment);
+        harness.exerciseOptions(lateSeriesId, totalSize, holder, latePayment, 0);
     }
 
     /// @notice Property: American style timing
@@ -269,7 +269,7 @@ contract OptionsFacetPropertyTest is Test {
         vm.prank(holder);
 
 
-        harness.exerciseOptions(seriesId, totalSize, holder, payment);
+        harness.exerciseOptions(seriesId, totalSize, holder, payment, 0);
 
         uint256 makerTokenIdLate = nft.mint(maker, 1);
         bytes32 lateKey = nft.getPositionKey(makerTokenIdLate);
@@ -306,7 +306,7 @@ contract OptionsFacetPropertyTest is Test {
         uint256 latePayment = harness.previewExercisePayment(lateSeriesId, totalSize);
         vm.prank(holder);
         vm.expectRevert(abi.encodeWithSelector(Options_ExerciseWindowClosed.selector, lateSeriesId));
-        harness.exerciseOptions(lateSeriesId, totalSize, holder, latePayment);
+        harness.exerciseOptions(lateSeriesId, totalSize, holder, latePayment, 0);
     }
 
     /// @notice Property: token supply consistency
@@ -359,7 +359,7 @@ contract OptionsFacetPropertyTest is Test {
 
             vm.prank(holder);
 
-            harness.exerciseOptions(seriesId, exerciseAmount, holder, payment);
+            harness.exerciseOptions(seriesId, exerciseAmount, holder, payment, 0);
         }
 
         DerivativeTypes.OptionSeries memory series = harness.getOptionSeries(seriesId);

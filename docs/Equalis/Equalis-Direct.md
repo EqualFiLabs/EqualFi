@@ -294,7 +294,7 @@ function postBorrowerOffer(DirectBorrowerOfferParams calldata params) external r
 
 #### 3. Accept Lender Offer
 ```solidity
-function acceptOffer(uint256 offerId, uint256 borrowerPositionId) external returns (uint256 agreementId);
+function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived) external returns (uint256 agreementId);
 ```
 - Validate borrower Position NFT and collateral availability
 - Lock collateral via LibEncumbrance: `enc.directLocked += collateralLockAmount`
@@ -306,7 +306,7 @@ function acceptOffer(uint256 offerId, uint256 borrowerPositionId) external retur
 
 #### 4. Accept Borrower Offer
 ```solidity
-function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId) external returns (uint256 agreementId);
+function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId, uint256 minReceived) external returns (uint256 agreementId);
 ```
 - Validate lender Position NFT and principal availability
 - Verify borrower's collateral is still locked (from posting)
@@ -432,7 +432,7 @@ function postRatioTrancheOffer(DirectRatioTrancheParams calldata params) externa
 
 **Acceptance**:
 ```solidity
-function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount) 
+function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount, uint256 minReceived) 
     external returns (uint256 agreementId);
 ```
 
@@ -459,7 +459,7 @@ function postBorrowerRatioTrancheOffer(DirectBorrowerRatioTrancheParams calldata
 
 **Acceptance**:
 ```solidity
-function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount) 
+function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount, uint256 minReceived) 
     external returns (uint256 agreementId);
 ```
 
@@ -595,7 +595,7 @@ function postBorrowerRollingOffer(DirectRollingBorrowerOfferParams calldata para
 
 #### 3. Accept Offer
 ```solidity
-function acceptRollingOffer(uint256 offerId, uint256 callerPositionId) external returns (uint256 agreementId);
+function acceptRollingOffer(uint256 offerId, uint256 callerPositionId, uint256 minReceivedLender, uint256 minReceivedBorrower) external returns (uint256 agreementId);
 ```
 - Works for both lender and borrower offers
 - Verify counterparty has required assets
@@ -606,7 +606,7 @@ function acceptRollingOffer(uint256 offerId, uint256 callerPositionId) external 
 
 #### 4. Make Payment
 ```solidity
-function makeRollingPayment(uint256 agreementId, uint256 amount) external;
+function makeRollingPayment(uint256 agreementId, uint256 amount, uint256 maxPayment, uint256 minReceived) external;
 ```
 - Accrue interest since last accrual to arrears
 - Apply payment in order:
@@ -619,7 +619,7 @@ function makeRollingPayment(uint256 agreementId, uint256 amount) external;
 
 #### 5. Repay in Full
 ```solidity
-function repayRollingInFull(uint256 agreementId) external;
+function repayRollingInFull(uint256 agreementId, uint256 maxPayment, uint256 minReceived) external;
 ```
 - Requires `allowEarlyRepay = true` or at payment cap
 - Accrue final interest to arrears

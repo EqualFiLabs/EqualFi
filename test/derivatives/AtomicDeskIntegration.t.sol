@@ -299,7 +299,7 @@ contract AtomicDeskIntegrationTest is AtomicDeskDiamondTestBase {
         uint256 trackedBefore = harness.getTracked(POOL_A);
 
         vm.prank(maker);
-        escrow.settle(reservationId, tau);
+        escrow.settle(reservationId, tau, 0);
 
         assertEq(harness.getDirectLocked(positionKey, POOL_A), 0, "collateral unlocked");
         assertEq(harness.getPrincipal(POOL_A, positionKey), principalBefore - amount, "principal reduced");
@@ -413,7 +413,7 @@ contract AtomicDeskIntegrationTest is AtomicDeskDiamondTestBase {
         uint256 takerBalBefore = tokenA.balanceOf(taker);
 
         vm.prank(maker);
-        escrow.settle(reservationId, tau);
+        escrow.settle(reservationId, tau, 0);
 
         uint256 feeAmount = (amount * feeBps) / 10_000;
         uint256 makerShare = (feeAmount * 7000) / 10_000;

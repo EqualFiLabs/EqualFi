@@ -742,6 +742,6 @@ contract AtomicDeskFacet is ReentrancyGuardModifiers {
         }
         address treasury = LibAppStorage.treasuryAddress(LibAppStorage.s());
         if (treasury == address(0)) revert InvalidTreasuryAddress();
-        LibCurrency.transfer(address(0), treasury, feeWei);
+        LibCurrency.transferWithMin(address(0), treasury, feeWei, feeWei);
     }
 }

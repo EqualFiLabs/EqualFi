@@ -137,7 +137,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
                 if (LibCurrency.isNative(feePool.underlying)) {
                     LibAppStorage.s().nativeTrackedTotal -= toTreasury;
                 }
-                LibCurrency.transfer(feePool.underlying, treasury, toTreasury);
+                LibCurrency.transferWithMin(feePool.underlying, treasury, toTreasury, toTreasury);
             }
         }
         if (toActiveCredit > 0) {
@@ -148,7 +148,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         }
     }
 
-    function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId)
+    function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId, uint256 minReceived)
         external
         nonReentrant
         returns (uint256 agreementId)
@@ -302,7 +302,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         LibDirectStorage.addBorrowerAgreement(ds, borrowerKey, agreementId);
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
-        LibCurrency.transfer(offer.borrowAsset, offer.borrower, offer.principal - totalFee);
+        LibCurrency.transferWithMin(offer.borrowAsset, offer.borrower, offer.principal - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(
@@ -321,7 +321,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         emit BorrowerOfferAccepted(offerId, agreementId, lenderPositionId);
     }
 
-    function acceptOffer(uint256 offerId, uint256 borrowerPositionId)
+    function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived)
         external
         nonReentrant
         returns (uint256 agreementId)
@@ -503,7 +503,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
         // Transfer net principal from lender pool liquidity to the borrower
-        LibCurrency.transfer(offer.borrowAsset, msg.sender, offer.principal - totalFee);
+        LibCurrency.transferWithMin(offer.borrowAsset, msg.sender, offer.principal - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(
@@ -534,7 +534,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
     
 
 
-function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount)
+function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount, uint256 minReceived)
         external
         nonReentrant
         returns (uint256 agreementId)
@@ -679,7 +679,7 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         LibDirectStorage.addBorrowerAgreement(ds, borrowerKey, agreementId);
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
-        LibCurrency.transfer(offer.borrowAsset, msg.sender, principalAmount - totalFee);
+        LibCurrency.transferWithMin(offer.borrowAsset, msg.sender, principalAmount - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(
@@ -767,7 +767,7 @@ function _checkAndConsumeTranche(
     /// @param offerId The borrower ratio tranche offer to accept
     /// @param lenderPositionId The lender's position NFT providing principal
     /// @param collateralAmount The amount of collateral to fill (borrower's collateral)
-    function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount)
+    function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount, uint256 minReceived)
         external
         nonReentrant
         returns (uint256 agreementId)
@@ -909,7 +909,7 @@ function _checkAndConsumeTranche(
         LibDirectStorage.addBorrowerAgreement(ds, borrowerKey, agreementId);
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
-        LibCurrency.transfer(offer.borrowAsset, offer.borrower, principalAmount - totalFee);
+        LibCurrency.transferWithMin(offer.borrowAsset, offer.borrower, principalAmount - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(

@@ -171,7 +171,7 @@ library LibFeeRouter {
                 LibAppStorage.s().nativeTrackedTotal -= amount;
             }
         }
-        LibCurrency.transfer(pool.underlying, treasury, amount);
+        LibCurrency.transferWithMin(pool.underlying, treasury, amount, amount);
     }
 
     function _transferTreasury(Types.PoolData storage pool, uint256 amount, bool pullFromTracked) private {
@@ -191,7 +191,7 @@ library LibFeeRouter {
                 LibAppStorage.s().nativeTrackedTotal -= amount;
             }
         }
-        LibCurrency.transfer(pool.underlying, treasury, amount);
+        LibCurrency.transferWithMin(pool.underlying, treasury, amount, amount);
     }
 
     function _accrueActiveCredit(

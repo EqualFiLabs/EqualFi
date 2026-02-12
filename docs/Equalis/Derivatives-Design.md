@@ -218,7 +218,9 @@ struct CreateOptionSeriesParams {
 function exerciseOptions(
     uint256 seriesId,
     uint256 amount,
-    address recipient
+    address recipient,
+    uint256 maxPayment,
+    uint256 minReceived
 ) external;
 
 // Exercise on behalf of another holder (requires approval)
@@ -226,7 +228,9 @@ function exerciseOptionsFor(
     uint256 seriesId,
     uint256 amount,
     address holder,
-    address recipient
+    address recipient,
+    uint256 maxPayment,
+    uint256 minReceived
 ) external;
 ```
 
@@ -339,14 +343,18 @@ Unlike options, futures are obligations. The holder must settle by paying the fo
 function settleFutures(
     uint256 seriesId,
     uint256 amount,
-    address recipient
+    address recipient,
+    uint256 maxPayment,
+    uint256 minReceived
 ) external;
 
 function settleFuturesFor(
     uint256 seriesId,
     uint256 amount,
     address holder,
-    address recipient
+    address recipient,
+    uint256 maxPayment,
+    uint256 minReceived
 ) external;
 ```
 
@@ -612,8 +620,10 @@ IERC20(usdc).approve(diamond, type(uint256).max);
 // 2. Exercise
 OptionsFacet(diamond).exerciseOptions(
     seriesId,
-    5e18,           // Exercise 5 options
-    msg.sender      // Receive underlying here
+    5e18,               // Exercise 5 options
+    msg.sender,         // Receive underlying here
+    maxPayment,         // Gross max (FoT-safe)
+    minReceived         // Minimum acceptable payout
 );
 ```
 
@@ -694,7 +704,7 @@ Bob decides to exercise (profitable since $3000 > $2500):
 usdc.approve(diamond, 25000e6);  // 10 × $2500 = $25,000
 
 // Bob exercises all 10 options
-optionsFacet.exerciseOptions(1, 10e18, bob);
+optionsFacet.exerciseOptions(1, 10e18, bob, maxPayment, minReceived);
 ```
 
 **Settlement:**
@@ -742,7 +752,7 @@ Diana exercises (profitable since $1500 < $1800):
 weth.approve(diamond, 10e18);
 
 // Diana exercises
-optionsFacet.exerciseOptions(seriesId, 10e18, diana);
+optionsFacet.exerciseOptions(seriesId, 10e18, diana, maxPayment, minReceived);
 ```
 
 **Settlement:**
@@ -782,7 +792,7 @@ Frank must settle (futures are obligations):
 ```solidity
 usdc.approve(diamond, 11000e6);  // 5 × $2200
 
-futuresFacet.settleFutures(seriesId, 5e18, frank);
+futuresFacet.settleFutures(seriesId, 5e18, frank, maxPayment, minReceived);
 ```
 
 **Settlement:**

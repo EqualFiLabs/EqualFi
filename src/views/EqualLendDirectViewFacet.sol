@@ -94,103 +94,137 @@ contract EqualLendDirectViewFacet {
     function getOfferSummary(uint256 offerId) external view returns (DirectOfferSummary memory summary) {
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.OfferKind kind = getOfferKind(offerId);
+
         if (kind == DirectTypes.OfferKind.Borrower) {
-            DirectTypes.DirectBorrowerOffer storage borrowerOffer = ds.borrowerOffers[offerId];
-            return DirectOfferSummary({
-                offerId: borrowerOffer.offerId,
-                lender: address(0),
-                borrower: borrowerOffer.borrower,
-                lenderPositionId: 0,
-                borrowerPositionId: borrowerOffer.borrowerPositionId,
-                lenderPoolId: borrowerOffer.lenderPoolId,
-                collateralPoolId: borrowerOffer.collateralPoolId,
-                collateralAsset: borrowerOffer.collateralAsset,
-                borrowAsset: borrowerOffer.borrowAsset,
-                principal: borrowerOffer.principal,
-                aprBps: borrowerOffer.aprBps,
-                durationSeconds: borrowerOffer.durationSeconds,
-                collateralLockAmount: borrowerOffer.collateralLockAmount,
-                allowEarlyRepay: borrowerOffer.allowEarlyRepay,
-                allowEarlyExercise: borrowerOffer.allowEarlyExercise,
-                allowLenderCall: borrowerOffer.allowLenderCall,
-                cancelled: borrowerOffer.cancelled,
-                filled: borrowerOffer.filled,
-                isBorrowerOffer: true
-            });
+            return _borrowerOfferSummary(ds, offerId);
         }
         if (kind == DirectTypes.OfferKind.Lender) {
-            DirectTypes.DirectOffer storage offer = ds.offers[offerId];
-            return DirectOfferSummary({
-                offerId: offer.offerId,
-                lender: offer.lender,
-                borrower: address(0),
-                lenderPositionId: offer.lenderPositionId,
-                borrowerPositionId: 0,
-                lenderPoolId: offer.lenderPoolId,
-                collateralPoolId: offer.collateralPoolId,
-                collateralAsset: offer.collateralAsset,
-                borrowAsset: offer.borrowAsset,
-                principal: offer.principal,
-                aprBps: offer.aprBps,
-                durationSeconds: offer.durationSeconds,
-                collateralLockAmount: offer.collateralLockAmount,
-                allowEarlyRepay: offer.allowEarlyRepay,
-                allowEarlyExercise: offer.allowEarlyExercise,
-                allowLenderCall: offer.allowLenderCall,
-                cancelled: offer.cancelled,
-                filled: offer.filled,
-                isBorrowerOffer: false
-            });
+            return _lenderOfferSummary(ds, offerId);
         }
         if (kind == DirectTypes.OfferKind.RatioLender) {
-            DirectTypes.DirectRatioTrancheOffer storage ratioOffer = ds.ratioOffers[offerId];
-            return DirectOfferSummary({
-                offerId: ratioOffer.offerId,
-                lender: ratioOffer.lender,
-                borrower: address(0),
-                lenderPositionId: ratioOffer.lenderPositionId,
-                borrowerPositionId: 0,
-                lenderPoolId: ratioOffer.lenderPoolId,
-                collateralPoolId: ratioOffer.collateralPoolId,
-                collateralAsset: ratioOffer.collateralAsset,
-                borrowAsset: ratioOffer.borrowAsset,
-                principal: ratioOffer.principalRemaining,
-                aprBps: ratioOffer.aprBps,
-                durationSeconds: ratioOffer.durationSeconds,
-                collateralLockAmount: ratioOffer.priceNumerator,
-                allowEarlyRepay: ratioOffer.allowEarlyRepay,
-                allowEarlyExercise: ratioOffer.allowEarlyExercise,
-                allowLenderCall: ratioOffer.allowLenderCall,
-                cancelled: ratioOffer.cancelled,
-                filled: ratioOffer.filled,
-                isBorrowerOffer: false
-            });
+            return _ratioLenderOfferSummary(ds, offerId);
         }
         if (kind == DirectTypes.OfferKind.RatioBorrower) {
-            DirectTypes.DirectBorrowerRatioTrancheOffer storage ratioBorrowerOffer = ds.borrowerRatioOffers[offerId];
-            return DirectOfferSummary({
-                offerId: ratioBorrowerOffer.offerId,
-                lender: address(0),
-                borrower: ratioBorrowerOffer.borrower,
-                lenderPositionId: 0,
-                borrowerPositionId: ratioBorrowerOffer.borrowerPositionId,
-                lenderPoolId: ratioBorrowerOffer.lenderPoolId,
-                collateralPoolId: ratioBorrowerOffer.collateralPoolId,
-                collateralAsset: ratioBorrowerOffer.collateralAsset,
-                borrowAsset: ratioBorrowerOffer.borrowAsset,
-                principal: ratioBorrowerOffer.collateralRemaining,
-                aprBps: ratioBorrowerOffer.aprBps,
-                durationSeconds: ratioBorrowerOffer.durationSeconds,
-                collateralLockAmount: ratioBorrowerOffer.priceNumerator,
-                allowEarlyRepay: ratioBorrowerOffer.allowEarlyRepay,
-                allowEarlyExercise: ratioBorrowerOffer.allowEarlyExercise,
-                allowLenderCall: ratioBorrowerOffer.allowLenderCall,
-                cancelled: ratioBorrowerOffer.cancelled,
-                filled: ratioBorrowerOffer.filled,
-                isBorrowerOffer: true
-            });
+            return _ratioBorrowerOfferSummary(ds, offerId);
         }
+
         revert DirectError_InvalidOffer();
+    }
+
+    function _borrowerOfferSummary(DirectTypes.DirectStorage storage ds, uint256 offerId)
+        internal
+        view
+        returns (DirectOfferSummary memory summary)
+    {
+        DirectTypes.DirectBorrowerOffer storage borrowerOffer = ds.borrowerOffers[offerId];
+        return DirectOfferSummary({
+            offerId: borrowerOffer.offerId,
+            lender: address(0),
+            borrower: borrowerOffer.borrower,
+            lenderPositionId: 0,
+            borrowerPositionId: borrowerOffer.borrowerPositionId,
+            lenderPoolId: borrowerOffer.lenderPoolId,
+            collateralPoolId: borrowerOffer.collateralPoolId,
+            collateralAsset: borrowerOffer.collateralAsset,
+            borrowAsset: borrowerOffer.borrowAsset,
+            principal: borrowerOffer.principal,
+            aprBps: borrowerOffer.aprBps,
+            durationSeconds: borrowerOffer.durationSeconds,
+            collateralLockAmount: borrowerOffer.collateralLockAmount,
+            allowEarlyRepay: borrowerOffer.allowEarlyRepay,
+            allowEarlyExercise: borrowerOffer.allowEarlyExercise,
+            allowLenderCall: borrowerOffer.allowLenderCall,
+            cancelled: borrowerOffer.cancelled,
+            filled: borrowerOffer.filled,
+            isBorrowerOffer: true
+        });
+    }
+
+    function _lenderOfferSummary(DirectTypes.DirectStorage storage ds, uint256 offerId)
+        internal
+        view
+        returns (DirectOfferSummary memory summary)
+    {
+        DirectTypes.DirectOffer storage offer = ds.offers[offerId];
+        return DirectOfferSummary({
+            offerId: offer.offerId,
+            lender: offer.lender,
+            borrower: address(0),
+            lenderPositionId: offer.lenderPositionId,
+            borrowerPositionId: 0,
+            lenderPoolId: offer.lenderPoolId,
+            collateralPoolId: offer.collateralPoolId,
+            collateralAsset: offer.collateralAsset,
+            borrowAsset: offer.borrowAsset,
+            principal: offer.principal,
+            aprBps: offer.aprBps,
+            durationSeconds: offer.durationSeconds,
+            collateralLockAmount: offer.collateralLockAmount,
+            allowEarlyRepay: offer.allowEarlyRepay,
+            allowEarlyExercise: offer.allowEarlyExercise,
+            allowLenderCall: offer.allowLenderCall,
+            cancelled: offer.cancelled,
+            filled: offer.filled,
+            isBorrowerOffer: false
+        });
+    }
+
+    function _ratioLenderOfferSummary(DirectTypes.DirectStorage storage ds, uint256 offerId)
+        internal
+        view
+        returns (DirectOfferSummary memory summary)
+    {
+        DirectTypes.DirectRatioTrancheOffer storage ratioOffer = ds.ratioOffers[offerId];
+        return DirectOfferSummary({
+            offerId: ratioOffer.offerId,
+            lender: ratioOffer.lender,
+            borrower: address(0),
+            lenderPositionId: ratioOffer.lenderPositionId,
+            borrowerPositionId: 0,
+            lenderPoolId: ratioOffer.lenderPoolId,
+            collateralPoolId: ratioOffer.collateralPoolId,
+            collateralAsset: ratioOffer.collateralAsset,
+            borrowAsset: ratioOffer.borrowAsset,
+            principal: ratioOffer.principalRemaining,
+            aprBps: ratioOffer.aprBps,
+            durationSeconds: ratioOffer.durationSeconds,
+            collateralLockAmount: ratioOffer.priceNumerator,
+            allowEarlyRepay: ratioOffer.allowEarlyRepay,
+            allowEarlyExercise: ratioOffer.allowEarlyExercise,
+            allowLenderCall: ratioOffer.allowLenderCall,
+            cancelled: ratioOffer.cancelled,
+            filled: ratioOffer.filled,
+            isBorrowerOffer: false
+        });
+    }
+
+    function _ratioBorrowerOfferSummary(DirectTypes.DirectStorage storage ds, uint256 offerId)
+        internal
+        view
+        returns (DirectOfferSummary memory summary)
+    {
+        DirectTypes.DirectBorrowerRatioTrancheOffer storage ratioBorrowerOffer = ds.borrowerRatioOffers[offerId];
+        return DirectOfferSummary({
+            offerId: ratioBorrowerOffer.offerId,
+            lender: address(0),
+            borrower: ratioBorrowerOffer.borrower,
+            lenderPositionId: 0,
+            borrowerPositionId: ratioBorrowerOffer.borrowerPositionId,
+            lenderPoolId: ratioBorrowerOffer.lenderPoolId,
+            collateralPoolId: ratioBorrowerOffer.collateralPoolId,
+            collateralAsset: ratioBorrowerOffer.collateralAsset,
+            borrowAsset: ratioBorrowerOffer.borrowAsset,
+            principal: ratioBorrowerOffer.collateralRemaining,
+            aprBps: ratioBorrowerOffer.aprBps,
+            durationSeconds: ratioBorrowerOffer.durationSeconds,
+            collateralLockAmount: ratioBorrowerOffer.priceNumerator,
+            allowEarlyRepay: ratioBorrowerOffer.allowEarlyRepay,
+            allowEarlyExercise: ratioBorrowerOffer.allowEarlyExercise,
+            allowLenderCall: ratioBorrowerOffer.allowLenderCall,
+            cancelled: ratioBorrowerOffer.cancelled,
+            filled: ratioBorrowerOffer.filled,
+            isBorrowerOffer: true
+        });
     }
 
     function getAgreement(uint256 agreementId) external view returns (DirectTypes.DirectAgreement memory) {

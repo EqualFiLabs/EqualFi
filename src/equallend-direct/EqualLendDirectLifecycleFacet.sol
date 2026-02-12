@@ -24,7 +24,7 @@ import {
 
 /// @notice Agreement lifecycle entrypoints for EqualLend direct lending
 contract EqualLendDirectLifecycleFacet is ReentrancyGuardModifiers {
-    event DirectAgreementRepaid(uint256 indexed agreementId, address indexed borrower, uint256 principalRepaid);
+    event DirectAgreementRepaid(uint256 indexed agreementId, address indexed borrower, uint256 paymentReceived);
 
     event DirectAgreementRecovered(
         uint256 indexed agreementId,
@@ -172,7 +172,7 @@ contract EqualLendDirectLifecycleFacet is ReentrancyGuardModifiers {
         LibDirectStorage.removeBorrowerAgreement(ds, borrowerKey, agreementId);
         LibDirectStorage.removeLenderAgreement(ds, lenderKey, agreementId);
 
-        emit DirectAgreementRepaid(agreementId, msg.sender, agreement.principal);
+        emit DirectAgreementRepaid(agreementId, msg.sender, received);
     }
 
     function exerciseDirect(uint256 agreementId) external payable nonReentrant {

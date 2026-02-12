@@ -99,7 +99,7 @@ contract AccountingErrorHandlingDirectTest is DirectDiamondTestBase {
         vm.prank(lender);
         uint256 offerId = offers.postOffer(params);
         vm.prank(borrower);
-        uint256 agreementId = agreements.acceptOffer(offerId, borrowerId);
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerId, 0);
 
         harness.setDirectBorrowed(borrowerKey, 1, 0);
 

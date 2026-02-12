@@ -102,7 +102,7 @@ contract DerivativeCollateralUnlockPropertyTest is Test {
 
         vm.prank(holder);
 
-        optionsHarness.exerciseOptions(seriesId, 1e18, holder, payment);
+        optionsHarness.exerciseOptions(seriesId, 1e18, holder, payment, 0);
 
         assertEq(optionsHarness.getLocked(positionKey, 1), 1e18, "options unlock on exercise");
 
@@ -149,7 +149,7 @@ contract DerivativeCollateralUnlockPropertyTest is Test {
 
         vm.prank(holder);
 
-        futuresHarness.settleFutures(seriesId, 1e18, holder, payment);
+        futuresHarness.settleFutures(seriesId, 1e18, holder, payment, 0);
 
         assertEq(futuresHarness.getLocked(positionKey, 3), 1e18, "futures unlock on settlement");
 

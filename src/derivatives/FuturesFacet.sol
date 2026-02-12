@@ -58,7 +58,8 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         address indexed holder,
         address indexed recipient,
         uint256 amount,
-        uint256 quoteAmount
+        uint256 quoteAmount,
+        uint256 paymentReceived
     );
 
     event Reclaimed(
@@ -182,9 +183,10 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 seriesId,
         uint256 amount,
         address recipient,
-        uint256 maxPayment
+        uint256 maxPayment,
+        uint256 minReceived
     ) external payable nonReentrant {
-        _settleFutures(seriesId, amount, msg.sender, recipient, maxPayment);
+        _settleFutures(seriesId, amount, msg.sender, recipient, maxPayment, minReceived);
     }
 
     function settleFuturesFor(
@@ -192,9 +194,10 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 amount,
         address holder,
         address recipient,
-        uint256 maxPayment
+        uint256 maxPayment,
+        uint256 minReceived
     ) external payable nonReentrant {
-        _settleFutures(seriesId, amount, holder, recipient, maxPayment);
+        _settleFutures(seriesId, amount, holder, recipient, maxPayment, minReceived);
     }
 
     /// @notice Preview the required payment for settling futures (quote asset amount).
@@ -210,7 +213,8 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 amount,
         address holder,
         address recipient,
-        uint256 maxPayment
+        uint256 maxPayment,
+        uint256 minReceived
     ) internal {
         if (amount == 0) revert Futures_InvalidAmount(amount);
         if (holder == address(0)) revert Futures_InvalidRecipient(holder);
@@ -277,12 +281,12 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         quotePool.userPrincipal[makerKey] += netQuote;
         quotePool.totalDeposits += netQuote;
 
-        LibCurrency.transfer(series.underlyingAsset, recipient, amount);
+        LibCurrency.transferWithMin(series.underlyingAsset, recipient, amount, minReceived);
 
         series.remaining -= amount;
         series.underlyingLocked -= amount;
 
-        emit Settled(seriesId, holder, recipient, amount, quoteAmount);
+        emit Settled(seriesId, holder, recipient, amount, quoteAmount, received);
     }
 
     function reclaimFutures(uint256 seriesId) external nonReentrant {

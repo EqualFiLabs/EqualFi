@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {PositionNFT} from "../nft/PositionNFT.sol";
 import {LibPositionNFT} from "./LibPositionNFT.sol";
 import {LibAppStorage} from "./LibAppStorage.sol";
+import {LibCurrency} from "./LibCurrency.sol";
 import {Types} from "./Types.sol";
 import {PoolNotInitialized, NotNFTOwner} from "./Errors.sol";
 import {DirectTypes} from "./DirectTypes.sol";
@@ -20,7 +19,6 @@ import {
 
 /// @notice Shared internal helpers for EqualLend direct facets
 library LibDirectHelpers {
-    using SafeERC20 for IERC20;
 
     /// @notice Require msg.sender to own the PositionNFT
     function _requireNFTOwnership(PositionNFT nft, uint256 tokenId) internal view {
@@ -120,17 +118,20 @@ library LibDirectHelpers {
         if (config.defaultLenderBps > 10_000) revert DirectError_InvalidConfiguration();
     }
 
-    /// @notice Pull tokens and require the exact amount was received (guards fee-on-transfer tokens)
-    function _pullExact(address token, uint256 amount) internal {
-        _pullExactFrom(msg.sender, token, amount);
+    /// @notice Pull tokens and require at least minAmount received (FoT-safe)
+    function _pullAtLeast(address token, uint256 minAmount, uint256 maxAmount)
+        internal
+        returns (uint256 received)
+    {
+        return LibCurrency.pullAtLeast(token, msg.sender, minAmount, maxAmount);
     }
 
-    /// @notice Pull tokens from a specified address and require the exact amount was received
-    function _pullExactFrom(address from, address token, uint256 amount) internal {
-        uint256 balanceBefore = IERC20(token).balanceOf(address(this));
-        IERC20(token).safeTransferFrom(from, address(this), amount);
-        uint256 received = IERC20(token).balanceOf(address(this)) - balanceBefore;
-        require(received == amount, "Direct: insufficient amount received");
+    /// @notice Pull tokens from a specified address and require at least minAmount received (FoT-safe)
+    function _pullAtLeastFrom(address from, address token, uint256 minAmount, uint256 maxAmount)
+        internal
+        returns (uint256 received)
+    {
+        return LibCurrency.pullAtLeast(token, from, minAmount, maxAmount);
     }
 
     /// @notice Return the PositionNFT instance and validate configuration
