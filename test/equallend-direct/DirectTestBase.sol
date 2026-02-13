@@ -75,13 +75,14 @@ contract DirectFixture is DirectFacetHarness {
         address underlying,
         bytes32 positionKey,
         uint256 principal,
-        uint16 depositorLtvBps,
+        uint256 depositorLtvBps,
         bool mintToHarness
     ) external {
+        if (depositorLtvBps > type(uint16).max) revert();
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = underlying;
         p.initialized = true;
-        p.poolConfig.depositorLTVBps = depositorLtvBps;
+        p.poolConfig.depositorLTVBps = uint16(depositorLtvBps);
         p.userPrincipal[positionKey] = principal;
         p.totalDeposits = principal;
         p.trackedBalance = principal;

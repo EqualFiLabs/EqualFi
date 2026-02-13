@@ -194,12 +194,13 @@ contract FeeOnTransferDerivativesTest is Test {
         harness.joinPool(positionKey, 1);
         harness.joinPool(positionKey, 2);
 
+        uint64 expiry = uint64(block.timestamp + 1 days);
         DerivativeTypes.CreateFuturesSeriesParams memory params = DerivativeTypes.CreateFuturesSeriesParams({
             positionId: makerTokenId,
             underlyingPoolId: 1,
             quotePoolId: 2,
             forwardPrice: 2e18,
-            expiry: uint64(block.timestamp + 1 days),
+            expiry: expiry,
             totalSize: 1e18,
             isEuropean: true,
             useCustomFees: false,
@@ -221,6 +222,7 @@ contract FeeOnTransferDerivativesTest is Test {
         quote.approve(address(harness), gross);
 
         uint256 sinkBefore = quote.balanceOf(feeSink);
+        vm.warp(expiry);
         vm.prank(holder);
         harness.settleFutures(seriesId, 1e18, holder, gross, 1e18);
 

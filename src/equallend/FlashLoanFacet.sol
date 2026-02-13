@@ -60,7 +60,9 @@ contract FlashLoanFacet is ReentrancyGuardModifiers {
 
         uint256 balBefore = LibCurrency.balanceOfSelf(p.underlying);
         require(balBefore >= amount, "Flash: insufficient contract balance");
-        LibCurrency.transferWithMin(p.underlying, receiver, amount, amount);
+        // Do not enforce exact recipient delta here: fee-on-transfer tokens can credit
+        // less than `amount` to receiver while still allowing safe repayment.
+        LibCurrency.transfer(p.underlying, receiver, amount);
 
         require(
             IFlashLoanReceiver(receiver).onFlashLoan(msg.sender, p.underlying, amount, data) == FLASH_CALLBACK_SUCCESS,
@@ -72,7 +74,7 @@ contract FlashLoanFacet is ReentrancyGuardModifiers {
             require(balAfter >= balBefore + fee, "Flash: not repaid");
         } else {
             // Pull repayment explicitly from the receiver to prevent cross-pool balance spoofing
-            uint256 received = LibCurrency.pullAtLeast(p.underlying, receiver, amount + fee, maxRepayment);
+            LibCurrency.pullAtLeast(p.underlying, receiver, amount + fee, maxRepayment);
             // FoT tokens on flash loan repayment: user must cover the fee + principal post-tax.
             // We use maxRepayment to cap the input amount, but ensure we receive at least amount + fee.
             // If received < amount + fee, it reverts in pullAtLeast.

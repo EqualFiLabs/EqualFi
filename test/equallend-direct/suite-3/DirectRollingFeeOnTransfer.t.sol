@@ -27,6 +27,17 @@ contract DirectRollingFeeOnTransferTest is DirectDiamondTestBase {
         });
         harness.setConfig(cfg);
 
+        DirectTypes.DirectRollingConfig memory rollingCfg = DirectTypes.DirectRollingConfig({
+            minPaymentIntervalSeconds: 604_800,
+            maxPaymentCount: 520,
+            maxUpfrontPremiumBps: 5_000,
+            minRollingApyBps: 1,
+            maxRollingApyBps: 10_000,
+            defaultPenaltyBps: 1_000,
+            minPaymentBps: 1
+        });
+        harness.setRollingConfig(rollingCfg);
+
         uint256 lenderPos = nft.mint(lenderOwner, 1);
         uint256 borrowerPos = nft.mint(borrowerOwner, 2);
         finalizePositionNFT();
@@ -36,8 +47,8 @@ contract DirectRollingFeeOnTransferTest is DirectDiamondTestBase {
         harness.seedPoolWithMembership(1, address(token), lenderKey, 500 ether, true);
         harness.seedPoolWithMembership(2, address(token), borrowerKey, 200 ether, true);
 
-        token.transfer(lenderOwner, 500 ether);
-        token.transfer(borrowerOwner, 200 ether);
+        token.mint(lenderOwner, 500 ether);
+        token.mint(borrowerOwner, 200 ether);
 
         vm.prank(lenderOwner);
         token.approve(address(diamond), type(uint256).max);
@@ -91,10 +102,11 @@ contract DirectRollingFeeOnTransferTest is DirectDiamondTestBase {
 
         uint256 payNet = 10 ether;
         uint256 maxPayment = _gross(payNet);
+        uint256 minReceived = _net(payNet);
         uint256 sinkBefore = token.balanceOf(feeSink);
 
         vm.prank(borrowerOwner);
-        rollingPayments.makeRollingPayment(agreementId, payNet, maxPayment, payNet);
+        rollingPayments.makeRollingPayment(agreementId, payNet, maxPayment, minReceived);
 
         assertGt(token.balanceOf(feeSink), sinkBefore, "fee charged");
     }
