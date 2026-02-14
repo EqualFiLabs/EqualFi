@@ -51,7 +51,7 @@ contract LeanDeployTest is Test {
         assertTrue(loupe.facetAddress(MamCurveCreationFacet.createCurve.selector) != address(0));
         assertTrue(loupe.facetAddress(PositionManagementFacet.mintPosition.selector) != address(0));
         assertTrue(
-            loupe.facetAddress(bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256)")))
+            loupe.facetAddress(bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256,uint256)")))
                 != address(0)
         );
     }

@@ -60,7 +60,7 @@ contract OptionsFacetPropertyTest is Test {
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
 
         uint256 strikePrice = 2e18;
-        uint256 requiredStrike = _strikeAmount(totalSize, strikePrice);
+        uint256 requiredStrike = Math.mulDiv(totalSize, strikePrice, 10 ** 18) * (10 ** 18) / (10 ** 18);
 
         uint256 underlyingPrincipal = totalSize + 1e6;
         uint256 strikePrincipal = requiredStrike + 1e6;
@@ -96,7 +96,7 @@ contract OptionsFacetPropertyTest is Test {
             optionToken.safeTransferFrom(maker, holder, seriesId, exerciseAmount, "");
 
             if (isCall) {
-                uint256 strikeAmount = _strikeAmount(exerciseAmount, strikePrice);
+                uint256 strikeAmount = harness.previewExercisePayment(seriesId, exerciseAmount); if (strikeAmount == 0) strikeAmount = 1;
                 strike.mint(holder, strikeAmount);
                 vm.prank(holder);
                 strike.approve(address(harness), strikeAmount);
@@ -106,8 +106,13 @@ contract OptionsFacetPropertyTest is Test {
                 underlying.approve(address(harness), exerciseAmount);
             }
 
+            uint256 payment = harness.previewExercisePayment(seriesId, exerciseAmount);
+
+
             vm.prank(holder);
-            harness.exerciseOptions(seriesId, exerciseAmount, holder);
+
+
+            harness.exerciseOptions(seriesId, exerciseAmount, holder, payment, 0);
         }
 
         DerivativeTypes.OptionSeries memory series = harness.getOptionSeries(seriesId);
@@ -133,7 +138,7 @@ contract OptionsFacetPropertyTest is Test {
 
         uint256 totalSize = 1e18;
         uint256 strikePrice = 2e18;
-        uint256 requiredStrike = _strikeAmount(totalSize, strikePrice);
+        uint256 requiredStrike = Math.mulDiv(totalSize, strikePrice, 10 ** 18) * (10 ** 18) / (10 ** 18);
 
         harness.seedPool(1, address(underlying), positionKey, totalSize + 1e6, totalSize + 1e6);
         harness.seedPool(2, address(strike), positionKey, requiredStrike + 1e6, requiredStrike + 1e6);
@@ -167,14 +172,16 @@ contract OptionsFacetPropertyTest is Test {
         vm.prank(holder);
         strike.approve(address(harness), strikeAmount);
 
+        uint256 payment = harness.previewExercisePayment(seriesId, totalSize);
+
         vm.warp(expiry - 101);
         vm.prank(holder);
         vm.expectRevert(abi.encodeWithSelector(Options_ExerciseWindowClosed.selector, seriesId));
-        harness.exerciseOptions(seriesId, totalSize, holder);
+        harness.exerciseOptions(seriesId, totalSize, holder, payment, 0);
 
         vm.warp(expiry);
         vm.prank(holder);
-        harness.exerciseOptions(seriesId, totalSize, holder);
+        harness.exerciseOptions(seriesId, totalSize, holder, payment, 0);
 
         uint256 makerTokenIdLate = nft.mint(maker, 1);
         bytes32 lateKey = nft.getPositionKey(makerTokenIdLate);
@@ -207,10 +214,12 @@ contract OptionsFacetPropertyTest is Test {
         vm.prank(holder);
         strike.approve(address(harness), strikeAmount);
 
+        uint256 latePayment = harness.previewExercisePayment(lateSeriesId, totalSize);
+
         vm.warp(expiryLate + 101);
         vm.prank(holder);
         vm.expectRevert(abi.encodeWithSelector(Options_ExerciseWindowClosed.selector, lateSeriesId));
-        harness.exerciseOptions(lateSeriesId, totalSize, holder);
+        harness.exerciseOptions(lateSeriesId, totalSize, holder, latePayment, 0);
     }
 
     /// @notice Property: American style timing
@@ -221,7 +230,7 @@ contract OptionsFacetPropertyTest is Test {
 
         uint256 totalSize = 1e18;
         uint256 strikePrice = 2e18;
-        uint256 requiredStrike = _strikeAmount(totalSize, strikePrice);
+        uint256 requiredStrike = Math.mulDiv(totalSize, strikePrice, 10 ** 18) * (10 ** 18) / (10 ** 18);
 
         harness.seedPool(1, address(underlying), positionKey, totalSize + 1e6, totalSize + 1e6);
         harness.seedPool(2, address(strike), positionKey, requiredStrike + 1e6, requiredStrike + 1e6);
@@ -254,8 +263,13 @@ contract OptionsFacetPropertyTest is Test {
         vm.prank(holder);
         underlying.approve(address(harness), totalSize);
 
+        uint256 payment = harness.previewExercisePayment(seriesId, totalSize);
+
+
         vm.prank(holder);
-        harness.exerciseOptions(seriesId, totalSize, holder);
+
+
+        harness.exerciseOptions(seriesId, totalSize, holder, payment, 0);
 
         uint256 makerTokenIdLate = nft.mint(maker, 1);
         bytes32 lateKey = nft.getPositionKey(makerTokenIdLate);
@@ -289,9 +303,10 @@ contract OptionsFacetPropertyTest is Test {
         underlying.approve(address(harness), totalSize);
 
         vm.warp(expiryLate + 1);
+        uint256 latePayment = harness.previewExercisePayment(lateSeriesId, totalSize);
         vm.prank(holder);
         vm.expectRevert(abi.encodeWithSelector(Options_ExerciseWindowClosed.selector, lateSeriesId));
-        harness.exerciseOptions(lateSeriesId, totalSize, holder);
+        harness.exerciseOptions(lateSeriesId, totalSize, holder, latePayment, 0);
     }
 
     /// @notice Property: token supply consistency
@@ -304,7 +319,7 @@ contract OptionsFacetPropertyTest is Test {
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
 
         uint256 strikePrice = 2e18;
-        uint256 requiredStrike = _strikeAmount(totalSize, strikePrice);
+        uint256 requiredStrike = Math.mulDiv(totalSize, strikePrice, 10 ** 18) * (10 ** 18) / (10 ** 18);
 
         harness.seedPool(1, address(underlying), positionKey, totalSize + 1e6, totalSize + 1e6);
         harness.seedPool(2, address(strike), positionKey, requiredStrike + 1e6, requiredStrike + 1e6);
@@ -336,12 +351,15 @@ contract OptionsFacetPropertyTest is Test {
         if (exerciseAmount > 0) {
             vm.prank(maker);
             optionToken.safeTransferFrom(maker, holder, seriesId, exerciseAmount, "");
-            uint256 strikeAmount = _strikeAmount(exerciseAmount, strikePrice);
+            uint256 strikeAmount = harness.previewExercisePayment(seriesId, exerciseAmount); if (strikeAmount == 0) strikeAmount = 1;
             strike.mint(holder, strikeAmount);
             vm.prank(holder);
             strike.approve(address(harness), strikeAmount);
+            uint256 payment = harness.previewExercisePayment(seriesId, exerciseAmount);
+
             vm.prank(holder);
-            harness.exerciseOptions(seriesId, exerciseAmount, holder);
+
+            harness.exerciseOptions(seriesId, exerciseAmount, holder, payment, 0);
         }
 
         DerivativeTypes.OptionSeries memory series = harness.getOptionSeries(seriesId);
@@ -357,7 +375,7 @@ contract OptionsFacetPropertyTest is Test {
 
         uint256 totalSize = 1e18;
         uint256 strikePrice = 2e18;
-        uint256 requiredStrike = _strikeAmount(totalSize, strikePrice);
+        uint256 requiredStrike = Math.mulDiv(totalSize, strikePrice, 10 ** 18) * (10 ** 18) / (10 ** 18);
 
         harness.seedPool(1, address(underlying), positionKey, totalSize + 1e6, totalSize + 1e6);
         harness.seedPool(2, address(strike), positionKey, requiredStrike + 1e6, requiredStrike + 1e6);

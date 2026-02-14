@@ -8,20 +8,8 @@ import {
     PositionAgent_AlreadyRegistered,
     PositionAgent_InvalidAgentOwner
 } from "../libraries/PositionAgentErrors.sol";
-
-interface IERC6551Registry {
-    function account(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    ) external view returns (address account);
-}
-
-interface IERC8004IdentityRegistry {
-    function ownerOf(uint256 tokenId) external view returns (address);
-}
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
+import {IERC8004IdentityRegistry} from "@agent-wallet-core/adapters/ERC8004IdentityAdapter.sol";
 
 /// @title PositionAgentRegistryFacet
 /// @notice Records Position NFT agent registrations after external TBA execution

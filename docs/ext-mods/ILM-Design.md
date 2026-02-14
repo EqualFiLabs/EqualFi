@@ -15,16 +15,16 @@ graph TB
     subgraph "Diamond Contract"
         ILM[IsolatedLendingMarketFacet]
         ILML[IsolatedLendingLiquidationFacet]
+        ILA[IsolatedLiquidationAuctionFacet]
         ILMV[IsolatedLendingViewFacet]
         PSF[PositionSplitFacet]
-        MAM[MamCurveFacet]
     end
     
     subgraph "Storage Libraries"
         LIS[LibIsolatedLendingStorage]
+        LLA[LibIsolatedLiquidationAuction]
         LENC[LibEncumbrance]
         LAS[LibAppStorage]
-        LDS[LibDerivativeStorage]
     end
     
     subgraph "External Dependencies"
@@ -38,8 +38,8 @@ graph TB
     ILM --> LENC
     ILM --> LAS
     ILML --> LIS
-    ILML --> MAM
-    ILML --> LDS
+    ILML --> ILA
+    ILML --> LLA
     PSF --> LENC
     PSF --> LAS
     
@@ -60,9 +60,9 @@ sequenceDiagram
     participant Encumbrance
     participant Pool
     participant Oracle
-    participant MAMCurve
+    participant AuctionEngine
     
-    Note over User,MAMCurve: Lender Supply Flow
+    Note over User,AuctionEngine: Lender Supply Flow
     User->>ILMFacet: supply(positionId, marketId, amount)
     ILMFacet->>Storage: getMarket(marketId)
     ILMFacet->>Pool: decreaseWithdrawable(positionId, loanPoolId, amount)
@@ -70,7 +70,7 @@ sequenceDiagram
     ILMFacet->>Storage: recordLenderAllocation(positionKey, marketId, amount)
     ILMFacet->>Storage: updateMarketLiquidity(+amount)
     
-    Note over User,MAMCurve: Borrower Open Flow
+    Note over User,AuctionEngine: Borrower Open Flow
     User->>ILMFacet: openBorrow(positionId, marketId, collateral, borrow)
     ILMFacet->>Oracle: getPrice(collateralAsset, loanAsset)
     ILMFacet->>ILMFacet: validateHealth(collateral, borrow, price, lltv)
@@ -79,13 +79,13 @@ sequenceDiagram
     ILMFacet->>Storage: createBorrowPosition(principal, collateral)
     ILMFacet->>Pool: creditAvailable(positionId, loanPoolId, borrow)
     
-    Note over User,MAMCurve: Liquidation Flow
+    Note over User,AuctionEngine: Liquidation Flow
     User->>ILMFacet: liquidate(marketId, borrowerPositionId)
     ILMFacet->>Oracle: getPrice(collateralAsset, loanAsset)
     ILMFacet->>ILMFacet: verifyLiquidatable(debt, collateralValue, lltv)
     ILMFacet->>Storage: moveCollateralToMarketEscrow(positionKey, marketId)
-    ILMFacet->>MAMCurve: createForcedCurve(collateral, targetRaise)
-    MAMCurve-->>ILMFacet: curveId
+    ILMFacet->>AuctionEngine: startForcedAuction(collateralToSellB, targetRaiseA)
+    AuctionEngine-->>ILMFacet: auctionId
 ```
 
 ## Components and Interfaces
@@ -118,13 +118,15 @@ interface IIsolatedLendingMarketFacet {
 
 ### IsolatedLendingLiquidationFacet
 
-Handles liquidation initiation, MAM curve creation, and settlement.
+Handles liquidation initiation, dedicated non-cancelable auction creation, and settlement.
+`settleLiquidation` and `retryLiquidation` are permissionless.
+Auctions stop once target raise is met and unsold collateral is returned to the borrower position.
 
 ```solidity
 interface IIsolatedLendingLiquidationFacet {
-    function liquidate(uint256 marketId, uint256 borrowerPositionId) external returns (uint256 curveId);
+    function liquidate(uint256 marketId, uint256 borrowerPositionId) external returns (uint256 auctionId);
     function settleLiquidation(uint256 marketId, uint256 borrowerPositionId) external;
-    function retryLiquidation(uint256 marketId, uint256 borrowerPositionId) external returns (uint256 curveId);
+    function retryLiquidation(uint256 marketId, uint256 borrowerPositionId) external returns (uint256 auctionId);
 }
 ```
 
@@ -239,8 +241,24 @@ library IsolatedLendingTypes {
         uint64 openedAt;
         uint64 lastAccrualTimestamp;
         uint256 accruedInterest;
+        // Per-borrow fee snapshots (non-retroactive)
+        uint16 borrowFeeBpsSnapshot;
+        uint16 liquidationFeeBpsSnapshot;
+        uint16 liquidationPenaltyBpsSnapshot;
         BorrowStatus status;
-        uint256 liquidationCurveId; // Set when InLiquidation
+        uint256 liquidationAuctionId; // Set when InLiquidation
+    }
+
+    struct LiquidationAuctionState {
+        uint256 marketId;
+        bytes32 borrowerPositionKey;
+        uint256 escrowedCollateralB;
+        uint256 targetRaiseA;
+        uint256 raisedA;
+        uint256 soldCollateralB;
+        uint64 startedAt;
+        uint64 endAt;
+        bool active;
     }
     
     struct IsolatedMarketParams {
@@ -296,6 +314,8 @@ library LibIsolatedLendingStorage {
         mapping(uint256 => mapping(bytes32 => uint256)) lenderAllocations;
         mapping(uint256 => mapping(bytes32 => uint256)) borrowerCollateral;
         mapping(uint256 => mapping(bytes32 => uint256)) liquidationEscrow;
+        mapping(uint256 => LiquidationAuctionState) liquidationAuctions;
+        uint256 nextLiquidationAuctionId;
         
         // Tracking lists
         LibPositionList.List marketsByLoanPool;
@@ -327,6 +347,20 @@ Market-specific state is tracked in the isolated lending storage ledger:
 * `liquidationEscrow[marketId][positionKey]` for collateral under liquidation
 
 The ledger is authoritative for per-market accounting and liquidation escrow, while direct principals preserve pool withdrawal safety.
+
+### Unit Normalization (1e18 Internal WAD)
+
+All cross-asset valuation in ILM uses 1e18 internal WAD values with explicit conversions:
+
+* `amountWad = amountRaw * 1e18 / 10**assetDecimals`
+* `priceWad` is normalized to 1e18 quote-per-base
+* `valueQuoteWad = amountBaseWad * priceWad / 1e18`
+* `valueQuoteRaw = valueQuoteWad * 10**quoteDecimals / 1e18`
+
+Rounding policy:
+
+* Health checks and liquidation eligibility use conservative rounding against safety (debt up, collateral value down)
+* `collateralToSellB` uses ceiling division before clamping to escrowed collateral
 
 ### Interest Calculation
 
@@ -432,6 +466,7 @@ library LibIsolatedInterest {
 - borrower debt principal increases by borrowAmountA
 - market.availableLiquidityA decreases by borrowAmountA
 - borrower withdrawable principal in loanPoolId increases by (borrowAmountA - fees)
+- borrow fee, liquidation fee, and liquidation penalty snapshots are captured on the borrow position
 
 **Validates: Requirements 4.3, 4.4, 4.5, 4.6**
 
@@ -474,7 +509,7 @@ library LibIsolatedInterest {
 
 *For any* borrow position, the health factor calculation shall correctly compute:
 - DebtA = principal + accruedInterest + unpaidFees
-- CollateralValueA = collateralEncumberedB * oraclePrice
+- CollateralValueA is computed via explicit decimal conversion to 1e18 WAD then back to loan asset units
 - ThresholdA = CollateralValueA * lltvBps / 10000
 - isLiquidatable = (DebtA > ThresholdA)
 
@@ -499,22 +534,24 @@ library LibIsolatedInterest {
 *For any* liquidation, the collateral to sell shall be calculated as:
 - P_eff = P_oracle * (1 - discountBps/10000)
 - D = DebtA + liquidationPenaltyA + liquidationFeesA
-- B_to_sell = min(D / P_eff * (1 + bufferBps/10000), totalCollateralInEscrow)
+- B_to_sell = min(ceil(D / P_eff * (1 + bufferBps/10000)), totalCollateralInEscrow)
 
 **Validates: Requirements 8.4, 9.1, 9.2, 9.3**
 
-### Property 20: Forced Curve Parameter Derivation
+### Property 20: Forced Auction Parameter Derivation
 
-*For any* liquidation curve created:
+*For any* liquidation auction created:
 - startPrice = P_oracle * startPriceBps / 10000
 - endPrice = P_oracle * endPriceBps / 10000
 - duration = template.durationSeconds
 
 **Validates: Requirements 10.2, 10.3, 10.4**
 
-### Property 21: Forced Curve Borrower Restriction
+### Property 21: Forced Auction Access Rules
 
-*For any* forced liquidation curve, the borrower shall not be able to cancel or modify the curve.
+*For any* forced liquidation auction:
+- the borrower shall not be able to cancel or modify the auction
+- `settleLiquidation` and `retryLiquidation` are permissionless and callable by any address
 
 **Validates: Requirements 10.5, 14.4**
 
@@ -557,7 +594,7 @@ library LibIsolatedInterest {
 
 ### Property 27: Fee Non-Retroactivity
 
-*For any* fee configuration change, existing borrow positions shall continue using their original fee configuration.
+*For any* fee configuration change, existing borrow positions shall continue using their original snapshotted fee configuration from `openBorrow`.
 
 **Validates: Requirements 13.5**
 
@@ -601,7 +638,7 @@ error PositionInLiquidation(uint256 marketId, uint256 positionId);
 error PositionHealthy(uint256 healthFactor);
 error LiquidationAlreadyStarted(uint256 marketId, uint256 positionId);
 error LiquidationNotStarted(uint256 marketId, uint256 positionId);
-error NotLiquidationCurveOwner(uint256 curveId, address caller);
+error LiquidationAuctionNotCancelable(uint256 auctionId, address caller);
 
 // Position Split Errors
 error InvalidSplitPlan();
@@ -630,6 +667,8 @@ Unit tests will cover:
 - Interest accrual timing and precision
 - Health factor calculations at boundary conditions
 - Liquidation trigger conditions
+- Dedicated liquidation auction behavior (non-cancelable path, early stop, collateral return)
+- Permissionless `settleLiquidation` and `retryLiquidation`
 - Position split with various plan configurations
 - Fee routing calculations
 

@@ -156,8 +156,6 @@ contract ConfigViewHarness is ConfigViewFacet {
         p.isManagedPool = true;
         p.manager = manager;
         p.whitelistEnabled = true;
-        p.managedConfig.manager = manager;
-        p.managedConfig.whitelistEnabled = true;
     }
 
     function setWhitelist(uint256 pid, bytes32 positionKey, bool enabled) external {

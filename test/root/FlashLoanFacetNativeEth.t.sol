@@ -114,7 +114,7 @@ contract FlashLoanFacetNativeEthTest is Test {
         uint256 feeIndexBefore = facet.feeIndex(PID);
         uint256 nativeTrackedBefore = facet.nativeTrackedTotal();
 
-        facet.flashLoan(PID, address(receiver), amount, "native");
+        facet.flashLoan(PID, address(receiver), amount, "native", facet.previewFlashLoanRepayment(PID, amount));
 
         assertEq(receiver.lastToken(), address(0));
         assertEq(receiver.lastAmount(), amount);
@@ -137,8 +137,9 @@ contract FlashLoanFacetNativeEthTest is Test {
         receiver.setFeeBps(feeBps);
         receiver.setUnderpay(true);
 
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, amount);
         vm.expectRevert(bytes("Flash: not repaid"));
-        facet.flashLoan(PID, address(receiver), amount, "");
+        facet.flashLoan(PID, address(receiver), amount, "", repayment);
     }
 
     function testFlashLoanNativeRejectsMsgValue() public {
@@ -146,7 +147,8 @@ contract FlashLoanFacetNativeEthTest is Test {
         facet.setNativeTrackedTotal(1 ether);
         vm.deal(address(facet), 1 ether);
 
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, 1 ether);
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
-        facet.flashLoan{value: 1}(PID, address(receiver), 1 ether, "");
+        facet.flashLoan{value: 1}(PID, address(receiver), 1 ether, "", repayment);
     }
 }

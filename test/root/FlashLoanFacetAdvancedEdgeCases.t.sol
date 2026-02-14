@@ -188,7 +188,7 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
         token.approve(address(facet), type(uint256).max);
 
         // Should succeed if receiver has enough funds despite manipulation
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(PID, 100 ether));
     }
 
     function testFlashLoanStateManipulationWithSufficientFunds() public {
@@ -201,7 +201,7 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
         token.approve(address(facet), type(uint256).max);
 
         // Should succeed if receiver has enough funds
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(PID, 100 ether));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -218,7 +218,7 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
         token.approve(address(facet), type(uint256).max);
 
         // Should succeed with moderate gas usage
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(PID, 100 ether));
     }
 
     function testFlashLoanWithHighGasUsage() public {
@@ -232,7 +232,7 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
 
         // Should still succeed but use more gas
         uint256 gasBefore = gasleft();
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(PID, 100 ether));
         uint256 gasUsed = gasBefore - gasleft();
 
         // Verify significant gas was used
@@ -245,6 +245,7 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
 
     function testFlashLoanWithDeflationaryToken() public {
         DeflationaryToken deflToken = new DeflationaryToken();
+        deflToken.setTransferFeeBps(100);
         deflToken.mint(address(facet), 1_000_000 ether);
 
         facet.initPool(2, address(deflToken), 50, false);
@@ -256,12 +257,20 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
         vm.prank(address(receiver));
         deflToken.approve(address(facet), type(uint256).max);
 
-        // Pull-based repayment succeeds despite deflationary burn
-        facet.flashLoan(2, address(receiver), 100 ether, "");
+        uint256 amount = 100 ether;
+        uint256 fee = (amount * 50) / 10_000;
+        uint256 total = amount + fee;
+        uint256 feeBps = deflToken.transferFeeBps();
+        uint256 maxRepayment = (total * 10_000) / (10_000 - feeBps);
+        if ((total * 10_000) % (10_000 - feeBps) != 0) {
+            maxRepayment += 1;
+        }
+        facet.flashLoan(2, address(receiver), amount, "", maxRepayment);
     }
 
     function testFlashLoanWithDeflationaryTokenStillFails() public {
         DeflationaryToken deflToken = new DeflationaryToken();
+        deflToken.setTransferFeeBps(100);
         deflToken.mint(address(facet), 1_000_000 ether);
 
         facet.initPool(2, address(deflToken), 50, false);
@@ -276,8 +285,15 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
         deflToken.approve(address(facet), type(uint256).max);
 
         // Extra deflation plus intentional burn keeps repayment short
-        vm.expectRevert("Flash: not repaid");
-        facet.flashLoan(2, address(receiver), 100 ether, "");
+        uint256 amount = 100 ether;
+        uint256 fee = (amount * 50) / 10_000;
+        uint256 total = amount + fee;
+        uint256 feeBps = deflToken.transferFeeBps();
+        uint256 maxRepayment = (total * 10_000) / (10_000 - feeBps);
+        if ((total * 10_000) % (10_000 - feeBps) != 0) {
+            maxRepayment += 1;
+        }
+        facet.flashLoan(2, address(receiver), amount, "", maxRepayment);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -295,7 +311,7 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
         vm.prank(address(receiver));
         token.approve(address(facet), type(uint256).max);
 
-        facet.flashLoan(PID, address(receiver), amount, "");
+        facet.flashLoan(PID, address(receiver), amount, "", facet.previewFlashLoanRepayment(PID, amount));
 
         // Verify fee was collected
         uint256 expectedFee = (amount * 50) / 10_000;
@@ -318,7 +334,7 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
         token.approve(address(facet), type(uint256).max);
 
         uint256 amount = 100 ether;
-        facet.flashLoan(2, address(receiver), amount, "");
+        facet.flashLoan(2, address(receiver), amount, "", facet.previewFlashLoanRepayment(2, amount));
 
         // Verify correct fee was collected
         uint256 expectedFee = (amount * feeBps) / 10_000;
@@ -344,7 +360,7 @@ contract FlashLoanFacetAdvancedEdgeCasesTest is Test {
         vm.expectEmit(true, true, false, true);
         emit FlashLoanFacet.FlashLoan(PID, address(receiver), amount, expectedFee, 50);
 
-        facet.flashLoan(PID, address(receiver), amount, "");
+        facet.flashLoan(PID, address(receiver), amount, "", facet.previewFlashLoanRepayment(PID, amount));
     }
 }
 

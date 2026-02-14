@@ -70,10 +70,13 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
         assertLt(totalCostInB, navInB, "amm discount below nav");
 
         vm.startPrank(arbitrageur);
-        uint256 swappedOut = amm.swapExactIn(auctionId, address(tokenB), AMM_AMOUNT_IN, requiredA, arbitrageur);
+        uint256 swappedOut = amm.swapExactIn(auctionId, address(tokenB), AMM_AMOUNT_IN, AMM_AMOUNT_IN, requiredA, arbitrageur);
         assertGe(swappedOut, requiredA, "swap output");
 
-        uint256 minted = indexActions.mint(indexId, INDEX_UNITS, arbitrageur);
+        uint256[] memory maxInputs = new uint256[](2);
+        maxInputs[0] = INDEX_UNITS;
+        maxInputs[1] = INDEX_UNITS;
+        uint256 minted = indexActions.mint(indexId, INDEX_UNITS, arbitrageur, maxInputs);
         vm.stopPrank();
 
         assertEq(minted, INDEX_UNITS, "minted index");
@@ -125,8 +128,8 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
 
     function _createMakerPosition() internal {
         vm.startPrank(maker);
-        makerPositionId = pm.mintPositionWithDeposit(POOL_TOKEN_A, 50 ether);
-        pm.depositToPosition(makerPositionId, POOL_TOKEN_B, 50 ether);
+        makerPositionId = pm.mintPositionWithDeposit(POOL_TOKEN_A, 50 ether, 50 ether, 0);
+        pm.depositToPosition(makerPositionId, POOL_TOKEN_B, 50 ether, 50 ether);
         vm.stopPrank();
     }
 

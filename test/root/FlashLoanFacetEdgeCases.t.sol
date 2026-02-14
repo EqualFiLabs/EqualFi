@@ -64,7 +64,7 @@ contract ReentrantReceiver is IFlashLoanReceiver {
 
     function onFlashLoan(address, address token, uint256 amount, bytes calldata) external override returns (bytes32) {
         // Try to reenter
-        facet.flashLoan(pid, address(this), 1 ether, "");
+        facet.flashLoan(pid, address(this), 1 ether, "", facet.previewFlashLoanRepayment(pid, 1 ether));
 
         uint256 fee = (amount * feeBps) / 10_000;
         MockERC20(token).transfer(msg.sender, amount + fee);
@@ -136,25 +136,27 @@ contract FlashLoanFacetEdgeCasesTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     function testFlashLoanZeroAmountReverts() public {
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, 0);
         vm.expectRevert("Flash: amount=0");
-        facet.flashLoan(PID, address(receiver), 0, "");
+        facet.flashLoan(PID, address(receiver), 0, "", repayment);
     }
 
     function testFlashLoanMinimumAmount() public {
-        facet.flashLoan(PID, address(receiver), 1, "");
+        facet.flashLoan(PID, address(receiver), 1, "", facet.previewFlashLoanRepayment(PID, 1));
         // Should succeed with 1 wei
     }
 
     function testFlashLoanMaximumAmount() public {
         uint256 maxAmount = token.balanceOf(address(facet));
-        facet.flashLoan(PID, address(receiver), maxAmount, "");
+        facet.flashLoan(PID, address(receiver), maxAmount, "", facet.previewFlashLoanRepayment(PID, maxAmount));
         // Should succeed
     }
 
     function testFlashLoanExceedsBalance() public {
         uint256 balance = token.balanceOf(address(facet));
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, balance + 1);
         vm.expectRevert();
-        facet.flashLoan(PID, address(receiver), balance + 1, "");
+        facet.flashLoan(PID, address(receiver), balance + 1, "", repayment);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -163,20 +165,25 @@ contract FlashLoanFacetEdgeCasesTest is Test {
 
     function testFlashLoanCallbackReturnsWrongHash() public {
         receiver.setReturnWrongHash(true);
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, 100 ether);
         vm.expectRevert("Flash: callback");
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", repayment);
     }
 
     function testFlashLoanReceiverReverts() public {
         receiver.setShouldRevert(true);
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, 100 ether);
         vm.expectRevert("Receiver reverted");
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", repayment);
     }
 
     function testFlashLoanReceiverIsEOA() public {
         address eoa = address(0xBEEF);
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, 100 ether);
+
         vm.expectRevert();
-        facet.flashLoan(PID, eoa, 100 ether, "");
+
+        facet.flashLoan(PID, eoa, 100 ether, "", repayment);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -187,8 +194,9 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         facet.initPool(2, address(token), 0, false);
         token.mint(address(facet), 1_000_000 ether);
 
+        uint256 repayment = facet.previewFlashLoanRepayment(2, 100 ether);
         vm.expectRevert("Flash: fee not set");
-        facet.flashLoan(2, address(receiver), 100 ether, "");
+        facet.flashLoan(2, address(receiver), 100 ether, "", repayment);
     }
 
     function testFlashLoanWithMaxFeeBps() public {
@@ -196,7 +204,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         token.mint(address(facet), 1_000_000 ether);
         receiver.setFeeBps(10000);
 
-        facet.flashLoan(2, address(receiver), 100 ether, "");
+        facet.flashLoan(2, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(2, 100 ether));
         // Should succeed with 100% fee
     }
 
@@ -207,7 +215,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         receiver.setFeeBps(1);
 
         // 99 wei * 1 / 10000 = 0 (rounds down)
-        facet.flashLoan(2, address(receiver), 99, "");
+        facet.flashLoan(2, address(receiver), 99, "", facet.previewFlashLoanRepayment(2, 99));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -218,14 +226,14 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         facet.setTreasury(address(0));
 
         // Should still work, just no treasury transfer
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(PID, 100 ether));
     }
 
     function testFlashLoanTreasuryShareZeroPercent() public {
         facet.setTreasuryShare(0);
 
         uint256 treasuryBefore = token.balanceOf(TREASURY);
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(PID, 100 ether));
         uint256 treasuryAfter = token.balanceOf(TREASURY);
 
         // Treasury should get nothing
@@ -236,7 +244,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         facet.setTreasuryShare(10000); // 100%
 
         uint256 treasuryBefore = token.balanceOf(TREASURY);
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(PID, 100 ether));
         uint256 treasuryAfter = token.balanceOf(TREASURY);
 
         uint256 fee = (100 ether * 50) / 10_000;
@@ -259,7 +267,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         token2.approve(address(facet), type(uint256).max);
 
         // First flash loan on PID 1
-        facet.flashLoan(PID, address(receiver), 10 ether, "");
+        facet.flashLoan(PID, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(PID, 10 ether));
 
         // Second flash loan on PID 2 same block should work (different pool)
         FlashLoanReceiverMock receiver2 = new FlashLoanReceiverMock();
@@ -268,7 +276,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         vm.prank(address(receiver2));
         token2.approve(address(facet), type(uint256).max);
 
-        facet.flashLoan(2, address(receiver2), 10 ether, "");
+        facet.flashLoan(2, address(receiver2), 10 ether, "", facet.previewFlashLoanRepayment(2, 10 ether));
     }
 
     function testAntiSplitDifferentReceiversSamePool() public {
@@ -279,10 +287,10 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         token.approve(address(facet), type(uint256).max);
 
         // First flash loan
-        facet.flashLoan(PID, address(receiver), 10 ether, "");
+        facet.flashLoan(PID, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(PID, 10 ether));
 
         // Second flash loan same block, different receiver should work
-        facet.flashLoan(PID, address(receiver2), 10 ether, "");
+        facet.flashLoan(PID, address(receiver2), 10 ether, "", facet.previewFlashLoanRepayment(PID, 10 ether));
     }
 
     function testAntiSplitDisabled() public {
@@ -290,19 +298,19 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         token.mint(address(facet), 1_000_000 ether);
 
         // Multiple flash loans same block should work
-        facet.flashLoan(2, address(receiver), 10 ether, "");
-        facet.flashLoan(2, address(receiver), 10 ether, "");
+        facet.flashLoan(2, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(2, 10 ether));
+        facet.flashLoan(2, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(2, 10 ether));
     }
 
     function testAntiSplitNextBlock() public {
         // First flash loan
-        facet.flashLoan(PID, address(receiver), 10 ether, "");
+        facet.flashLoan(PID, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(PID, 10 ether));
 
         // Move to next block
         vm.roll(block.number + 1);
 
         // Second flash loan should work
-        facet.flashLoan(PID, address(receiver), 10 ether, "");
+        facet.flashLoan(PID, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(PID, 10 ether));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -316,8 +324,9 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         vm.prank(address(reentrant));
         token.approve(address(facet), type(uint256).max);
 
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, 100 ether);
         vm.expectRevert(); // ReentrancyGuard custom error
-        facet.flashLoan(PID, address(reentrant), 100 ether, "");
+        facet.flashLoan(PID, address(reentrant), 100 ether, "", repayment);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -326,7 +335,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
 
     function testFlashLoanNonExistentPoolReverts() public {
         vm.expectRevert("Flash: pool not initialized");
-        facet.flashLoan(999, address(receiver), 100 ether, "");
+        facet.flashLoan(999, address(receiver), 100 ether, "", 0);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -340,7 +349,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         uint256 feeToPool = fee - treasuryShare;
 
         uint256 balBefore = token.balanceOf(address(facet));
-        facet.flashLoan(PID, address(receiver), amount, "");
+        facet.flashLoan(PID, address(receiver), amount, "", facet.previewFlashLoanRepayment(PID, amount));
         uint256 balAfter = token.balanceOf(address(facet));
 
         // Should have fee minus treasury share
@@ -351,7 +360,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         // Receiver pays more than required - should succeed
         receiver.setFeeBps(100); // Pay double the fee
 
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(PID, 100 ether));
         // Should succeed
     }
 
@@ -364,7 +373,7 @@ contract FlashLoanFacetEdgeCasesTest is Test {
         token.mint(address(facet), 1_000_000 ether);
 
         for (uint256 i = 0; i < 5; i++) {
-            facet.flashLoan(2, address(receiver), 10 ether, "");
+            facet.flashLoan(2, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(2, 10 ether));
         }
         // All should succeed
     }
@@ -376,9 +385,9 @@ contract FlashLoanFacetEdgeCasesTest is Test {
 
         uint256 treasuryBefore = token.balanceOf(TREASURY);
 
-        facet.flashLoan(2, address(receiver), 100 ether, "");
-        facet.flashLoan(2, address(receiver), 100 ether, "");
-        facet.flashLoan(2, address(receiver), 100 ether, "");
+        facet.flashLoan(2, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(2, 100 ether));
+        facet.flashLoan(2, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(2, 100 ether));
+        facet.flashLoan(2, address(receiver), 100 ether, "", facet.previewFlashLoanRepayment(2, 100 ether));
 
         uint256 treasuryAfter = token.balanceOf(TREASURY);
 

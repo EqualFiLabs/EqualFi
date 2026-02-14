@@ -58,7 +58,8 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         address indexed holder,
         address indexed recipient,
         uint256 amount,
-        uint256 strikeAmount
+        uint256 strikeAmount,
+        uint256 paymentReceived
     );
 
     event Reclaimed(
@@ -192,20 +193,47 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         );
     }
 
-    function exerciseOptions(uint256 seriesId, uint256 amount, address recipient) external payable nonReentrant {
-        _exerciseOptions(seriesId, amount, msg.sender, recipient);
+    function exerciseOptions(
+        uint256 seriesId,
+        uint256 amount,
+        address recipient,
+        uint256 maxPayment,
+        uint256 minReceived
+    ) external payable nonReentrant {
+        _exerciseOptions(seriesId, amount, msg.sender, recipient, maxPayment, minReceived);
     }
 
     function exerciseOptionsFor(
         uint256 seriesId,
         uint256 amount,
         address holder,
-        address recipient
+        address recipient,
+        uint256 maxPayment,
+        uint256 minReceived
     ) external payable nonReentrant {
-        _exerciseOptions(seriesId, amount, holder, recipient);
+        _exerciseOptions(seriesId, amount, holder, recipient, maxPayment, minReceived);
     }
 
-    function _exerciseOptions(uint256 seriesId, uint256 amount, address holder, address recipient) internal {
+    /// @notice Preview the required payment for exercising options (strike asset amount for Calls, underlying for Puts).
+    function previewExercisePayment(uint256 seriesId, uint256 amount) external view returns (uint256 payment) {
+        LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
+        DerivativeTypes.OptionSeries storage series = ds.optionSeries[seriesId];
+        if (series.makerPositionKey == bytes32(0)) revert Options_InvalidSeries(seriesId);
+        if (series.isCall) {
+            payment = _normalizeStrikeAmount(amount, series.strikePrice, series.underlyingAsset, series.strikeAsset);
+        } else {
+            payment = amount;
+        }
+    }
+
+    function _exerciseOptions(
+        uint256 seriesId,
+        uint256 amount,
+        address holder,
+        address recipient,
+        uint256 maxPayment,
+        uint256 minReceived
+    ) internal {
         if (amount == 0) revert Options_InvalidAmount(amount);
         if (holder == address(0)) revert Options_InvalidRecipient(holder);
         if (recipient == address(0)) revert Options_InvalidRecipient(recipient);
@@ -235,15 +263,12 @@ contract OptionsFacet is ReentrancyGuardModifiers {
             series.strikeAsset
         );
         if (strikeAmount == 0) revert Options_InvalidAmount(strikeAmount);
-        LibCurrency.assertMsgValue(
-            series.isCall ? series.strikeAsset : series.underlyingAsset,
-            series.isCall ? strikeAmount : amount
-        );
 
+        uint256 paymentReceived;
         if (series.isCall) {
-            _exerciseCall(series, makerKey, holder, amount, strikeAmount, recipient);
+            paymentReceived = _exerciseCall(series, makerKey, holder, amount, strikeAmount, recipient, maxPayment, minReceived);
         } else {
-            _exercisePut(series, makerKey, holder, amount, strikeAmount, recipient);
+            paymentReceived = _exercisePut(series, makerKey, holder, amount, strikeAmount, recipient, maxPayment, minReceived);
         }
 
         series.remaining -= amount;
@@ -253,7 +278,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
             series.collateralLocked -= strikeAmount;
         }
 
-        emit Exercised(seriesId, holder, recipient, amount, strikeAmount);
+        emit Exercised(seriesId, holder, recipient, amount, strikeAmount, paymentReceived);
     }
 
     function reclaimOptions(uint256 seriesId) external nonReentrant {
@@ -350,8 +375,8 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         address underlying,
         address strike
     ) internal view returns (uint256) {
-        uint8 underlyingDecimals = IERC20Metadata(underlying).decimals();
-        uint8 strikeDecimals = IERC20Metadata(strike).decimals();
+        uint8 underlyingDecimals = LibCurrency.decimals(underlying);
+        uint8 strikeDecimals = LibCurrency.decimals(strike);
         return LibDerivativeHelpers._normalizePrice(amount, strikePrice, underlyingDecimals, strikeDecimals);
     }
 
@@ -378,8 +403,10 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         address holder,
         uint256 amount,
         uint256 strikeAmount,
-        address recipient
-    ) internal {
+        address recipient,
+        uint256 maxPayment,
+        uint256 minReceived
+    ) internal returns (uint256 paymentReceived) {
         LibDerivativeHelpers._unlockCollateral(makerKey, series.underlyingPoolId, amount);
 
         Types.PoolData storage underlyingPool = LibAppStorage.s().pools[series.underlyingPoolId];
@@ -401,20 +428,22 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         }
 
         DerivativeTypes.DerivativeConfig storage cfg = LibDerivativeStorage.derivativeStorage().config;
-        uint256 exerciseFee = _chargeExerciseFee(
+        (uint256 exerciseFee, uint256 received) = _chargeExerciseFee(
             holder,
             strikePool,
             series.strikePoolId,
             series.strikeAsset,
             strikeAmount,
+            maxPayment,
             series.exerciseFeeBps,
             cfg.defaultExerciseFeeFlatWad
         );
-        uint256 netStrike = strikeAmount - exerciseFee;
+        uint256 netStrike = received - exerciseFee;
         strikePool.userPrincipal[makerKey] += netStrike;
         strikePool.totalDeposits += netStrike;
 
-        LibCurrency.transfer(series.underlyingAsset, recipient, amount);
+        LibCurrency.transferWithMin(series.underlyingAsset, recipient, amount, minReceived);
+        return received;
     }
 
     function _exercisePut(
@@ -423,24 +452,27 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         address holder,
         uint256 amount,
         uint256 strikeAmount,
-        address recipient
-    ) internal {
+        address recipient,
+        uint256 maxPayment,
+        uint256 minReceived
+    ) internal returns (uint256 paymentReceived) {
         LibDerivativeHelpers._unlockCollateral(makerKey, series.strikePoolId, strikeAmount);
 
         Types.PoolData storage underlyingPool = LibAppStorage.s().pools[series.underlyingPoolId];
         Types.PoolData storage strikePool = LibAppStorage.s().pools[series.strikePoolId];
 
         DerivativeTypes.DerivativeConfig storage cfg = LibDerivativeStorage.derivativeStorage().config;
-        uint256 exerciseFee = _chargeExerciseFee(
+        (uint256 exerciseFee, uint256 received) = _chargeExerciseFee(
             holder,
             underlyingPool,
             series.underlyingPoolId,
             series.underlyingAsset,
             amount,
+            maxPayment,
             series.exerciseFeeBps,
             cfg.defaultExerciseFeeFlatWad
         );
-        uint256 netUnderlying = amount - exerciseFee;
+        uint256 netUnderlying = received - exerciseFee;
         underlyingPool.userPrincipal[makerKey] += netUnderlying;
         underlyingPool.totalDeposits += netUnderlying;
 
@@ -459,7 +491,8 @@ contract OptionsFacet is ReentrancyGuardModifiers {
             LibAppStorage.s().nativeTrackedTotal -= strikeAmount;
         }
 
-        LibCurrency.transfer(series.strikeAsset, recipient, strikeAmount);
+        LibCurrency.transferWithMin(series.strikeAsset, recipient, strikeAmount, minReceived);
+        return received;
     }
 
     function _resolveFeeBps(
@@ -519,14 +552,14 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 poolId,
         address paymentAsset,
         uint256 paymentAmount,
+        uint256 maxPaymentAmount,
         uint16 feeBps,
         uint128 flatFeeWad
-    ) internal returns (uint256 feeAmount) {
-        uint256 received = LibCurrency.pull(paymentAsset, payer, paymentAmount);
-        require(received == paymentAmount, "Direct: insufficient amount received");
-        pool.trackedBalance += paymentAmount;
+    ) internal returns (uint256 feeAmount, uint256 received) {
+        received = LibCurrency.pullAtLeast(paymentAsset, payer, paymentAmount, maxPaymentAmount);
+        pool.trackedBalance += received;
         if (feeBps == 0 && flatFeeWad == 0) {
-            return 0;
+            return (0, received);
         }
         feeAmount = LibDerivativeFees.computeFeeAmount(paymentAmount, feeBps, flatFeeWad, paymentAsset);
         LibDerivativeFees.enforceFeeWithinPayment(feeAmount, paymentAmount);

@@ -52,7 +52,7 @@ The EqualLend Direct lending rail enables option-like payoffs through a clever u
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-The "strike price" is not computed on-chain. It's implied by the fixed quantities the offer sets: `(principal, collateralLockAmount)` and expiry. There's no on-chain LTV check or price conversion—the lender chooses collateral size explicitly.
+The "strike price" is not computed on-chain. It's implied by the fixed quantities the offer sets: `(principal, collateralLockAmount)` and expiry. There is no oracle-based price conversion; the lender chooses collateral size explicitly. Same-asset paths still enforce on-chain solvency/LTV checks.
 
 ---
 
@@ -316,12 +316,12 @@ function postBorrowerOffer(DirectBorrowerOfferParams calldata params) external r
 
 **Borrower accepts lender offer:**
 ```solidity
-function acceptOffer(uint256 offerId, uint256 borrowerPositionId) external returns (uint256 agreementId);
+function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived) external returns (uint256 agreementId);
 ```
 
 **Lender accepts borrower offer:**
 ```solidity
-function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId) external returns (uint256 agreementId);
+function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId, uint256 minReceived) external returns (uint256 agreementId);
 ```
 
 **What happens at acceptance:**
@@ -338,7 +338,7 @@ The borrower holds the borrowed asset and can use it freely. The collateral rema
 
 **Option A: Repay (Don't Exercise)**
 ```solidity
-function repay(uint256 agreementId) external;
+function repay(uint256 agreementId, uint256 maxPayment) external payable;
 ```
 - Borrower returns the principal
 - Collateral is unlocked
@@ -346,7 +346,7 @@ function repay(uint256 agreementId) external;
 
 **Option B: Exercise**
 ```solidity
-function exerciseDirect(uint256 agreementId) external;
+function exerciseDirect(uint256 agreementId) external payable;
 ```
 - Borrower keeps the borrowed asset
 - Collateral is transferred to lender
@@ -354,10 +354,10 @@ function exerciseDirect(uint256 agreementId) external;
 
 **Option C: Default (After Grace Period)**
 ```solidity
-function recover(uint256 agreementId) external;
+function recover(uint256 agreementId) external payable;
 ```
 - Anyone can call after grace period expires
-- Collateral is distributed (lender, protocol, fee index)
+- Collateral is distributed (lender, treasury/protocol, active credit, fee index)
 - Agreement status → `Defaulted`
 
 ### 5. Timing Windows
@@ -493,7 +493,7 @@ directLifecycleFacet.exerciseDirect(agreementId);
 ```solidity
 // At expiry, if ETH < $2500, borrower repays
 weth.approve(diamond, 1e18);
-directLifecycleFacet.repay(agreementId);
+directLifecycleFacet.repay(agreementId, 1e18);
 
 // Borrower returns 1 ETH, recovers 2500 USDC
 ```
@@ -582,7 +582,7 @@ directLifecycleFacet.exerciseDirect(agreementId);
 ```solidity
 // Alice repays
 weth.approve(diamond, 1e18);
-directLifecycleFacet.repay(agreementId);
+directLifecycleFacet.repay(agreementId, 1e18);
 ```
 - Alice returns 1 ETH
 - Alice recovers 2000 USDC
@@ -634,7 +634,7 @@ directLifecycleFacet.exerciseDirect(agreementId);
 ```solidity
 // Charlie repays
 usdc.approve(diamond, 3600e6);
-directLifecycleFacet.repay(agreementId);
+directLifecycleFacet.repay(agreementId, 3600e6);
 ```
 - Charlie returns $3600 USDC
 - Charlie recovers 2 ETH (worth $4400)

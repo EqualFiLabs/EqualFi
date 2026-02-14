@@ -104,7 +104,7 @@ The system integrates with existing Equalis infrastructure:
 3. **Withdrawal Logic**: Enforces encumbrance constraints via `LibSolvencyChecks.calculateAvailablePrincipal()`
 4. **Fee Router / FeeIndex**: Platform fee remainders route via the fee router into Treasury, Fee Index, and Active Credit Index
 5. **Active Credit Index**: Time-gated subsidies via `LibActiveCreditIndex` for encumbrance and same-asset debt states
-6. **Treasury System**: Treasury share is paid via the fee router when configured
+6. **Treasury System**: Treasury share is paid via the fee router when configured (default-share application requires treasury when protocol share is non-zero)
 7. **Enforcement Safety**: Default recovery respects locked collateral and escrowed offers via `LibEncumbrance`
 8. **Position Transfer Guard**: NFT transfer hook blocks transfers while outstanding Direct offers exist (no auto-cancel)
 9. **Encumbrance System**: Centralized tracking via `LibEncumbrance` for all position locks
@@ -294,7 +294,7 @@ function postBorrowerOffer(DirectBorrowerOfferParams calldata params) external r
 
 #### 3. Accept Lender Offer
 ```solidity
-function acceptOffer(uint256 offerId, uint256 borrowerPositionId) external returns (uint256 agreementId);
+function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived) external returns (uint256 agreementId);
 ```
 - Validate borrower Position NFT and collateral availability
 - Lock collateral via LibEncumbrance: `enc.directLocked += collateralLockAmount`
@@ -306,7 +306,7 @@ function acceptOffer(uint256 offerId, uint256 borrowerPositionId) external retur
 
 #### 4. Accept Borrower Offer
 ```solidity
-function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId) external returns (uint256 agreementId);
+function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId, uint256 minReceived) external returns (uint256 agreementId);
 ```
 - Validate lender Position NFT and principal availability
 - Verify borrower's collateral is still locked (from posting)
@@ -318,7 +318,7 @@ function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId) external
 
 #### 5. Repay
 ```solidity
-function repay(uint256 agreementId) external;
+function repay(uint256 agreementId, uint256 maxPayment) external payable;
 ```
 - Validate timing based on `allowEarlyRepay` flag:
   - If disabled: Only allow from 24h before due until 24h after due
@@ -330,7 +330,7 @@ function repay(uint256 agreementId) external;
 
 #### 6. Exercise Early
 ```solidity
-function exerciseDirect(uint256 agreementId) external;
+function exerciseDirect(uint256 agreementId) external payable;
 ```
 - Only callable by borrower
 - Before due: requires `allowEarlyExercise = true`
@@ -341,7 +341,7 @@ function exerciseDirect(uint256 agreementId) external;
 
 #### 7. Recover (Default)
 ```solidity
-function recover(uint256 agreementId) external;
+function recover(uint256 agreementId) external payable;
 ```
 - Only callable 24+ hours after due timestamp
 - Seize locked collateral from borrower
@@ -364,7 +364,7 @@ function recover(uint256 agreementId) external;
 The `allowLenderCall` flag enables lenders to accelerate the loan's due timestamp, effectively "calling" the loan. This is analogous to a callable bond where the issuer can demand early repayment.
 
 ```solidity
-function callDirect(uint256 agreementId) external;
+function callDirect(uint256 agreementId) external payable;
 ```
 
 **Mechanics**:
@@ -432,7 +432,7 @@ function postRatioTrancheOffer(DirectRatioTrancheParams calldata params) externa
 
 **Acceptance**:
 ```solidity
-function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount) 
+function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount, uint256 minReceived) 
     external returns (uint256 agreementId);
 ```
 
@@ -459,7 +459,7 @@ function postBorrowerRatioTrancheOffer(DirectBorrowerRatioTrancheParams calldata
 
 **Acceptance**:
 ```solidity
-function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount) 
+function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount, uint256 minReceived) 
     external returns (uint256 agreementId);
 ```
 
@@ -595,7 +595,7 @@ function postBorrowerRollingOffer(DirectRollingBorrowerOfferParams calldata para
 
 #### 3. Accept Offer
 ```solidity
-function acceptRollingOffer(uint256 offerId, uint256 callerPositionId) external returns (uint256 agreementId);
+function acceptRollingOffer(uint256 offerId, uint256 callerPositionId, uint256 minReceivedLender, uint256 minReceivedBorrower) external payable returns (uint256 agreementId);
 ```
 - Works for both lender and borrower offers
 - Verify counterparty has required assets
@@ -606,7 +606,7 @@ function acceptRollingOffer(uint256 offerId, uint256 callerPositionId) external 
 
 #### 4. Make Payment
 ```solidity
-function makeRollingPayment(uint256 agreementId, uint256 amount) external;
+function makeRollingPayment(uint256 agreementId, uint256 amount, uint256 maxPayment, uint256 minReceived) external payable;
 ```
 - Accrue interest since last accrual to arrears
 - Apply payment in order:
@@ -619,7 +619,7 @@ function makeRollingPayment(uint256 agreementId, uint256 amount) external;
 
 #### 5. Repay in Full
 ```solidity
-function repayRollingInFull(uint256 agreementId) external;
+function repayRollingInFull(uint256 agreementId, uint256 maxPayment, uint256 minReceived) external payable;
 ```
 - Requires `allowEarlyRepay = true` or at payment cap
 - Accrue final interest to arrears
@@ -629,7 +629,7 @@ function repayRollingInFull(uint256 agreementId) external;
 
 #### 6. Exercise
 ```solidity
-function exerciseRolling(uint256 agreementId) external;
+function exerciseRolling(uint256 agreementId) external payable;
 ```
 - Requires `allowEarlyExercise = true`
 - Borrower forfeits collateral without penalty
@@ -639,7 +639,7 @@ function exerciseRolling(uint256 agreementId) external;
 
 #### 7. Recover (Default)
 ```solidity
-function recoverRolling(uint256 agreementId) external;
+function recoverRolling(uint256 agreementId) external payable;
 ```
 - Only callable after `nextDue + gracePeriodSeconds`
 - Seize collateral and apply penalty
@@ -701,7 +701,7 @@ function getRollingStatus(uint256 agreementId)
     external view returns (RollingStatus memory);
 
 // Aggregate borrower exposure
-function aggregateRollingExposure(address borrowerKey) 
+function aggregateRollingExposure(bytes32 borrowerKey) 
     external view returns (RollingExposure memory);
 
 struct RollingStatus {
@@ -980,7 +980,7 @@ function getPositionDirectState(uint256 positionId, uint256 poolId)
 
 ### Platform Fee and Interest Split (Implementation)
 
-Direct agreements realize interest and platform fees upfront. Lenders receive configured shares; remaining amounts route through the standard fee router (Treasury / Active Credit / Fee Index).
+Direct agreements realize interest and platform fees upfront. Lenders receive configured shares; remainders are split by fee-router rules (Treasury / Active Credit / Fee Index). The treasury leg is transferred only when treasury is configured.
 
 ```solidity
 // Interest and platform fee shares to lender
@@ -994,13 +994,15 @@ platformRemainder = platformFee - lenderPlatformShare;
 
 ### Default Shares (Implementation)
 
-On default, the lender receives a configured collateral share and the remainder is routed via the fee router:
+On default, the lender receives a configured collateral share and the remainder is split into protocol, fee-index, and active-credit shares:
 
 ```solidity
 lenderShare = (collateralAmount * cfg.defaultLenderBps) / 10_000;
 remainder = collateralAmount - lenderShare;
-// remainder routed via LibFeeRouter (Treasury / ACI / Fee Index)
+// remainder split into protocolShare / feeIndexShare / activeCreditShare
 ```
+
+If `protocolShare > 0` in default/exercise settlement, treasury must be configured or execution reverts.
 
 ### Interest Calculation
 

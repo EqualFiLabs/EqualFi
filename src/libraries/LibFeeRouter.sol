@@ -171,6 +171,8 @@ library LibFeeRouter {
                 LibAppStorage.s().nativeTrackedTotal -= amount;
             }
         }
+        // Treasury transfers should tolerate fee-on-transfer tokens; accounting already
+        // debits the full routed amount from tracked balance.
         LibCurrency.transfer(pool.underlying, treasury, amount);
     }
 
@@ -191,6 +193,8 @@ library LibFeeRouter {
                 LibAppStorage.s().nativeTrackedTotal -= amount;
             }
         }
+        // Treasury transfers should tolerate fee-on-transfer tokens; accounting already
+        // debits the full routed amount from tracked balance.
         LibCurrency.transfer(pool.underlying, treasury, amount);
     }
 

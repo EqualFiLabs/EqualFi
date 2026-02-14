@@ -32,11 +32,11 @@ contract PositionRevertingReceiver {
     constructor(PositionManagementNativeHarness facet_, uint256 pid_, uint256 depositAmount) {
         facet = facet_;
         pid = pid_;
-        tokenId = facet.mintPositionWithDeposit(pid, depositAmount);
+        tokenId = facet.mintPositionWithDeposit(pid, depositAmount, depositAmount, 0);
     }
 
     function attemptWithdraw(uint256 amount) external {
-        facet.withdrawFromPosition(tokenId, pid, amount);
+        facet.withdrawFromPosition(tokenId, pid, amount, 0);
     }
 
     receive() external payable {
@@ -68,11 +68,27 @@ contract PositionManagementNativeEthPropertyTest is Test {
         vm.deal(user, value);
 
         vm.prank(user);
-        uint256 tokenId = facet.mintPosition(PID);
+        uint256 tokenId = facet.mintPosition(PID, 0);
 
-        vm.prank(user);
+        vm.startPrank(user);
+        // The ERC20 pool treats msg.value as stray ETH and should revert with UnexpectedMsgValue.
+        // However, if the pool underlying is ERC20 (mock token), calling `depositToPosition` with value
+        // might trigger `LibCurrency.assertMsgValue`.
+        // If the pool is not native, any msg.value > 0 is rejected.
+        // The failure trace showed: ERC20InsufficientAllowance != UnexpectedMsgValue.
+        // This implies it tried to pull tokens because `depositToPosition` calls `LibCurrency.pullAtLeast`.
+        // The `pullAtLeast` function likely checks allowance before `assertMsgValue` or `assertMsgValue` is missing.
+        // Let's ensure we are testing the stray ETH check specifically.
+        
+        // Approve first to ensure we pass the transferFrom check if it happens before msg.value check
+        token.approve(address(facet), type(uint256).max);
+        
+        // Mint tokens to user so transferFrom succeeds
+        token.mint(user, 1 ether); 
+
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, value));
-        facet.depositToPosition{value: value}(tokenId, PID, 1);
+        facet.depositToPosition{value: value}(tokenId, PID, 1, 1);
+        vm.stopPrank();
     }
 
     /// Feature: native-eth-support, Property 4: Stray ETH Rejection
@@ -81,11 +97,11 @@ contract PositionManagementNativeEthPropertyTest is Test {
         vm.deal(user, value);
 
         vm.prank(user);
-        uint256 tokenId = facet.mintPosition(PID);
+        uint256 tokenId = facet.mintPosition(PID, 0);
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, value));
-        facet.withdrawFromPosition{value: value}(tokenId, PID, 1);
+        facet.withdrawFromPosition{value: value}(tokenId, PID, 1, 0);
     }
 
     /// Feature: native-eth-support, Property 5: Native Transfer Failure Handling

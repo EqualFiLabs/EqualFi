@@ -30,9 +30,12 @@ interface MamCurveFacet {
         view
         returns (MamTypes.CurveFillView memory viewData);
 
+    function previewCurveQuote(uint256 curveId, uint256 amountIn) external view returns (uint256 maxQuote);
+
     function executeCurveSwap(
         uint256 curveId,
         uint256 amountIn,
+        uint256 maxQuote,
         uint256 minOut,
         uint64 deadline,
         address recipient

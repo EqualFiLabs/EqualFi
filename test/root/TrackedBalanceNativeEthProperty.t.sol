@@ -152,7 +152,7 @@ contract TrackedBalanceNativeEthPropertyTest is Test {
         facet.setNativeTrackedTotal(0);
 
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, depositAmount);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, depositAmount, depositAmount, 0);
 
         assertEq(facet.trackedBalance(PID), depositAmount, "tracked after deposit");
         assertEq(facet.totalDeposits(PID), depositAmount, "deposits after deposit");
@@ -161,7 +161,7 @@ contract TrackedBalanceNativeEthPropertyTest is Test {
 
         uint256 userBalanceBefore = user.balance;
         vm.prank(user);
-        facet.withdrawFromPosition(tokenId, PID, withdrawAmount);
+        facet.withdrawFromPosition(tokenId, PID, withdrawAmount, 0);
 
         assertEq(facet.trackedBalance(PID), depositAmount - withdrawAmount, "tracked after withdraw");
         assertEq(facet.totalDeposits(PID), depositAmount - withdrawAmount, "deposits after withdraw");
@@ -191,15 +191,17 @@ contract TrackedBalanceNativeEthPropertyTest is Test {
 
         uint256 userBalanceBefore = user.balance;
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, PID, borrowAmount);
+        facet.openRollingFromPosition(tokenId, PID, borrowAmount, borrowAmount);
 
         assertEq(facet.trackedBalance(PID), depositAmount - borrowAmount, "tracked after borrow");
         assertEq(facet.nativeTrackedTotal(), depositAmount - borrowAmount, "native tracked after borrow");
         assertEq(user.balance - userBalanceBefore, borrowAmount, "user received borrow");
         assertLe(facet.nativeTrackedTotal(), address(facet).balance, "native tracked <= balance");
 
+        // Repayment requires msg.value
+        vm.deal(user, borrowAmount); // Ensure user has funds if they spent them (e.g., fuzzing context)
         vm.prank(user);
-        facet.makePaymentFromPosition(tokenId, PID, borrowAmount);
+        facet.makePaymentFromPosition{value: borrowAmount}(tokenId, PID, borrowAmount, borrowAmount);
 
         assertEq(facet.trackedBalance(PID), depositAmount, "tracked after repay");
         assertEq(facet.nativeTrackedTotal(), depositAmount, "native tracked after repay");
@@ -224,7 +226,7 @@ contract TrackedBalanceNativeEthPropertyTest is Test {
         uint256 trackedBefore = facet.trackedBalance(PID);
         uint256 nativeTrackedBefore = facet.nativeTrackedTotal();
 
-        facet.flashLoan(PID, address(receiver), amount, "");
+        facet.flashLoan(PID, address(receiver), amount, "", facet.previewFlashLoanRepayment(PID, amount));
 
         assertEq(facet.trackedBalance(PID), trackedBefore + fee, "tracked after flash");
         assertEq(facet.nativeTrackedTotal(), nativeTrackedBefore + fee, "native tracked after flash");

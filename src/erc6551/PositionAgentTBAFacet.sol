@@ -4,24 +4,7 @@ pragma solidity ^0.8.20;
 import {LibPositionAgentStorage} from "../libraries/LibPositionAgentStorage.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {DirectError_InvalidPositionNFT} from "../libraries/Errors.sol";
-
-interface IERC6551Registry {
-    function createAccount(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    ) external returns (address account);
-
-    function account(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    ) external view returns (address account);
-}
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 /// @title PositionAgentTBAFacet
 /// @notice Computes and deploys ERC-6551 TBAs for Position NFTs
@@ -57,6 +40,8 @@ contract PositionAgentTBAFacet {
             return tbaAddress;
         }
 
+        ds.tbaDeployed[positionTokenId] = true;
+
         address registry = ds.erc6551Registry;
         address implementation = ds.erc6551Implementation;
         address positionNFT = _positionNFTAddress();
@@ -69,11 +54,11 @@ contract PositionAgentTBAFacet {
             positionTokenId
         );
 
-        ds.tbaDeployed[positionTokenId] = true;
         emit TBADeployed(positionTokenId, deployed);
         return deployed;
     }
 
+    /// @notice Returns the ERC-6551 account implementation (beacon proxy implementation)
     function getTBAImplementation() external view returns (address) {
         return LibPositionAgentStorage.s().erc6551Implementation;
     }

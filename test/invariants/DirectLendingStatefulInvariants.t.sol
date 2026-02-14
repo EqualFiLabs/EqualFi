@@ -124,7 +124,7 @@ contract DirectLendingStatefulHandler is Test {
             return;
         }
         vm.prank(borrowerOwner);
-        agreementId = agreements.acceptOffer(offerId, borrowerPos);
+        agreementId = agreements.acceptOffer(offerId, borrowerPos, 0);
         if (agreementId != 0) {
             offerId = 0;
         }
@@ -143,7 +143,8 @@ contract DirectLendingStatefulHandler is Test {
             borrowAsset.mint(borrowerOwner, agreement.principal);
         }
         vm.prank(borrowerOwner);
-        lifecycle.repay(agreementId);
+        uint256 maxP = views.getAgreement(agreementId).principal;
+        lifecycle.repay(agreementId, maxP);
         agreementId = 0;
     }
 

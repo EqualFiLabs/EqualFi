@@ -37,7 +37,12 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
     uint256 internal constant YEAR_IN_SECONDS = 365 days;
     uint256 internal constant BPS_DENOMINATOR = 10_000;
 
-    function makeRollingPayment(uint256 agreementId, uint256 amount) external payable nonReentrant {
+    function makeRollingPayment(
+        uint256 agreementId,
+        uint256 amount,
+        uint256 maxPayment,
+        uint256 minReceived
+    ) external payable nonReentrant {
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
 
         DirectTypes.DirectRollingAgreement storage agreement = ds.rollingAgreements[agreementId];
@@ -63,7 +68,6 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         );
         if (amount == 0) revert RollingError_DustPayment(amount, minPayment);
         if (amount < minPayment) revert RollingError_DustPayment(amount, minPayment);
-        LibCurrency.assertMsgValue(agreement.borrowAsset, amount);
 
         // Accrue arrears for elapsed time since last accrual (multi-miss)
         uint256 elapsed = block.timestamp - agreement.lastAccrualTimestamp;
@@ -77,10 +81,9 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
             _rollingInterest(agreement.outstandingPrincipal, agreement.rollingApyBps, agreement.paymentIntervalSeconds);
 
         // Pull funds
-        uint256 received = LibCurrency.pull(agreement.borrowAsset, msg.sender, amount);
-        require(received == amount, "Direct: insufficient amount received");
+        uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, amount, maxPayment);
 
-        uint256 remaining = amount;
+        uint256 remaining = received;
         uint256 arrearsPaid = _min(remaining, agreement.arrears);
         agreement.arrears -= arrearsPaid;
         remaining -= arrearsPaid;
@@ -135,15 +138,15 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         }
 
         // Pay lender
-        LibCurrency.transfer(agreement.borrowAsset, agreement.lender, amount);
-        if (LibCurrency.isNative(agreement.borrowAsset) && amount > 0) {
-            LibAppStorage.s().nativeTrackedTotal -= amount;
+        LibCurrency.transferWithMin(agreement.borrowAsset, agreement.lender, received, minReceived);
+        if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {
+            LibAppStorage.s().nativeTrackedTotal -= received;
         }
 
         emit RollingPaymentMade(
             agreementId,
             msg.sender,
-            amount,
+            received,
             arrearsPaid,
             interestPaid,
             principalPaid,

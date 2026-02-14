@@ -98,8 +98,11 @@ contract DerivativeCollateralUnlockPropertyTest is Test {
         quote.mint(holder, strikeAmount);
         vm.prank(holder);
         quote.approve(address(optionsHarness), strikeAmount);
+        uint256 payment = optionsHarness.previewExercisePayment(seriesId, 1e18);
+
         vm.prank(holder);
-        optionsHarness.exerciseOptions(seriesId, 1e18, holder);
+
+        optionsHarness.exerciseOptions(seriesId, 1e18, holder, payment, 0);
 
         assertEq(optionsHarness.getLocked(positionKey, 1), 1e18, "options unlock on exercise");
 
@@ -142,8 +145,11 @@ contract DerivativeCollateralUnlockPropertyTest is Test {
         quote.mint(holder, quoteAmount);
         vm.prank(holder);
         quote.approve(address(futuresHarness), quoteAmount);
+        uint256 payment = futuresHarness.previewSettlePayment(seriesId, 1e18);
+
         vm.prank(holder);
-        futuresHarness.settleFutures(seriesId, 1e18, holder);
+
+        futuresHarness.settleFutures(seriesId, 1e18, holder, payment, 0);
 
         assertEq(futuresHarness.getLocked(positionKey, 3), 1e18, "futures unlock on settlement");
 

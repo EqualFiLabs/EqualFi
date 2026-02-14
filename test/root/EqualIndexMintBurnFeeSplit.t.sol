@@ -9,6 +9,7 @@ import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 import {Types} from "../../src/libraries/Types.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "../../src/libraries/Errors.sol";
 
 contract MintBurnFeeSplitHarness is EqualIndexFacetV3 {
@@ -91,6 +92,17 @@ contract MintBurnFeeSplitHarness is EqualIndexFacetV3 {
 
     function getPoolFeeShareBps() external view returns (uint16) {
         return _poolFeeShareBps();
+    }
+
+    function previewMintInputs(uint256 indexId, uint256 units) external view returns (uint256[] memory maxInputs) {
+        Index storage idx = s().indexes[indexId];
+        uint256 len = idx.assets.length;
+        maxInputs = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
+            maxInputs[i] = need + fee;
+        }
     }
 }
 
@@ -179,7 +191,7 @@ contract EqualIndexMintBurnFeeSplitTest is Test {
         uint256 treasuryBefore = token.balanceOf(treasury);
 
         token.approve(address(facet), 1.01 ether);
-        facet.mint(indexId, units, address(this));
+        facet.mint(indexId, units, address(this), facet.previewMintInputs(indexId, units));
 
         uint256 feeIndexAfter = facet.getPoolFeeIndex(poolId);
         uint256 treasuryAfter = token.balanceOf(treasury);
@@ -203,7 +215,7 @@ contract EqualIndexMintBurnFeeSplitTest is Test {
     function test_burnFeeSplit_twoWay() public {
         // First mint
         token.approve(address(facet), 1.01 ether);
-        facet.mint(indexId, LibEqualIndex.INDEX_SCALE, address(this));
+        facet.mint(indexId, LibEqualIndex.INDEX_SCALE, address(this), facet.previewMintInputs(indexId, LibEqualIndex.INDEX_SCALE));
 
         // Now burn
         IndexToken idxToken = IndexToken(facet.getIndex(indexId).token);
@@ -234,7 +246,7 @@ contract EqualIndexMintBurnFeeSplitTest is Test {
         uint256 feeIndexBefore = facet.getPoolFeeIndex(poolId);
 
         token.approve(address(facet), 1.01 ether);
-        facet.mint(indexId, LibEqualIndex.INDEX_SCALE, address(this));
+        facet.mint(indexId, LibEqualIndex.INDEX_SCALE, address(this), facet.previewMintInputs(indexId, LibEqualIndex.INDEX_SCALE));
 
         uint256 feeIndexAfter = facet.getPoolFeeIndex(poolId);
         uint256 feePot = facet.getFeePot(indexId, address(token));
@@ -303,7 +315,7 @@ contract EqualIndexMintBurnFeeSplitTest is Test {
         );
 
         newToken.approve(address(facet), 1.01 ether);
-        facet.mint(newIndexId, LibEqualIndex.INDEX_SCALE, address(this));
+        facet.mint(newIndexId, LibEqualIndex.INDEX_SCALE, address(this), facet.previewMintInputs(newIndexId, LibEqualIndex.INDEX_SCALE));
 
         // Should succeed and fee pot should have received its share
         assertGt(facet.getFeePot(newIndexId, address(newToken)), 0, "Fee pot should receive share");

@@ -45,8 +45,19 @@ contract P2PBalanceSheetConsistencyPropertyTest is DirectDiamondTestBase {
 
         (, uint256 lentBefore,) = views.directBalances(lenderKey, 1);
         uint256 lenderPrincipalBefore = views.getUserPrincipal(1, lenderKey);
+        
         vm.prank(address(0xCAFE));
-        uint256 agreementId = agreements.acceptOffer(offerId, borrowerTokenId);
+        // Must approve the Diamond as an operator for the borrower's Position NFT 
+        // to allow internal facets (like Agreements) to operate on it if required by checks,
+        // although acceptOffer generally relies on msg.sender ownership. 
+        // However, the error NotNFTOwner implies some internal check or context mismatch.
+        // Let's verify the minting and owner setup. 
+        // The error `NotNFTOwner` suggests the caller of `repay` is not the owner of the borrower NFT?
+        // Ah, `repay` is called by `0xCAFE`, who owns token 2.
+        // The error implies `repay` might be checking ownership incorrectly or against a different token.
+        // Let's review the `repay` call context.
+        
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerTokenId, 0);
 
         (, uint256 lentAfter,) = views.directBalances(lenderKey, 1);
         uint256 lenderPrincipalAfter = views.getUserPrincipal(1, lenderKey);
@@ -56,8 +67,11 @@ contract P2PBalanceSheetConsistencyPropertyTest is DirectDiamondTestBase {
         assertEq(lentAfter - lentBefore, params.principal, "lender lent delta");
         assertEq(borrowerBorrowedAfter, params.principal, "borrower debt delta");
 
-        vm.prank(address(0xCAFE));
-        lifecycle.repay(agreementId);
+        vm.startPrank(address(0xCAFE));
+        // Ensure approval for the token transfer during repayment
+        token.approve(address(diamond), type(uint256).max); 
+        lifecycle.repay(agreementId, _maxPayment(agreementId));
+        vm.stopPrank();
 
         (, uint256 lentAfterRepay,) = views.directBalances(lenderKey, 1);
         (, , uint256 borrowerBorrowedAfterRepay) = views.directBalances(borrowerKey, 1);

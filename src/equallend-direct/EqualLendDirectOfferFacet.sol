@@ -123,7 +123,8 @@ contract EqualLendDirectOfferFacet is ReentrancyGuardModifiers, IDirectOfferEven
             collateralPool, params.collateralPoolId, positionKey, encBefore, encAfter
         );
 
-        offerId = ++ds.nextBorrowerOfferId;
+        offerId = ++ds.nextOfferId;
+        ds.offerKindById[offerId] = DirectTypes.OfferKind.Borrower;
 
         ds.borrowerOffers[offerId] = DirectTypes.DirectBorrowerOffer({
             offerId: offerId,
@@ -270,6 +271,7 @@ contract EqualLendDirectOfferFacet is ReentrancyGuardModifiers, IDirectOfferEven
             lenderPool, params.lenderPoolId, positionKey, encBefore, encAfter
         );
         offerId = ++ds.nextOfferId;
+        ds.offerKindById[offerId] = DirectTypes.OfferKind.Lender;
 
         ds.offers[offerId] = DirectTypes.DirectOffer({
             offerId: offerId,
@@ -378,6 +380,7 @@ function postRatioTrancheOffer(DirectTypes.DirectRatioTrancheParams calldata par
             lenderPool, params.lenderPoolId, positionKey, encBefore, encAfter
         );
         offerId = ++ds.nextOfferId;
+        ds.offerKindById[offerId] = DirectTypes.OfferKind.RatioLender;
         DirectTypes.DirectRatioTrancheOffer storage ro = ds.ratioOffers[offerId];
         ro.offerId = offerId;
         ro.lender = msg.sender;
@@ -577,7 +580,8 @@ function cancelOffer(uint256 offerId) external nonReentrant {
             collateralPool, params.collateralPoolId, positionKey, encBefore, encAfter
         );
 
-        offerId = ++ds.nextBorrowerRatioOfferId;
+        offerId = ++ds.nextOfferId;
+        ds.offerKindById[offerId] = DirectTypes.OfferKind.RatioBorrower;
 
         DirectTypes.DirectBorrowerRatioTrancheOffer storage ro = ds.borrowerRatioOffers[offerId];
         ro.offerId = offerId;

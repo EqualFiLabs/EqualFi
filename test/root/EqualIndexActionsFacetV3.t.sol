@@ -42,6 +42,17 @@ contract EqualIndexActionsHarness is EqualIndexActionsFacetV3 {
         s().indexes[indexId].paused = paused;
     }
 
+    function previewMintInputs(uint256 indexId, uint256 units) external view virtual returns (uint256[] memory maxInputs) {
+        Index storage idx = s().indexes[indexId];
+        uint256 len = idx.assets.length;
+        maxInputs = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
+            maxInputs[i] = need + fee;
+        }
+    }
+
     function getVaultBalance(uint256 indexId, address asset) external view returns (uint256) {
         return s().vaultBalances[indexId][asset];
     }
@@ -241,7 +252,7 @@ contract EqualIndexActionsFacetV3Test is Test {
         weth.approve(address(facet), type(uint256).max);
 
         uint256 units = 2 * SCALE;
-        facet.mint(indexId, units, address(this));
+        facet.mint(indexId, units, address(this), facet.previewMintInputs(indexId, units));
 
         uint256 expectedUsdc = (bundleAmounts[0] * units) / SCALE;
         uint256 expectedWbtc = (bundleAmounts[1] * units) / SCALE;
@@ -269,7 +280,7 @@ contract EqualIndexActionsFacetV3Test is Test {
         uint256 balA_Before = tokenA.balanceOf(address(this));
         uint256 balB_Before = tokenB.balanceOf(address(this));
 
-        facet.mint(INDEX_ID, units, address(this));
+        facet.mint(INDEX_ID, units, address(this), facet.previewMintInputs(INDEX_ID, units));
 
         assertEq(indexToken.balanceOf(address(this)), units);
         assertEq(indexToken.totalSupply(), units);
@@ -300,7 +311,7 @@ contract EqualIndexActionsFacetV3Test is Test {
         facet.setPoolTrackedBalance(1, totalDeposits - 1);
 
         uint256 yieldBefore = facet.getPoolYieldReserve(1);
-        facet.mint(INDEX_ID, units, address(this));
+        facet.mint(INDEX_ID, units, address(this), facet.previewMintInputs(INDEX_ID, units));
         uint256 yieldAfter = facet.getPoolYieldReserve(1);
 
         uint256 requiredA = 10 * units;
@@ -313,22 +324,26 @@ contract EqualIndexActionsFacetV3Test is Test {
     }
 
     function testMintInvalidUnits() public {
+        uint256 units = 15 * SCALE / 10;
+        uint256[] memory maxInputs = facet.previewMintInputs(INDEX_ID, units);
         vm.expectRevert(); // InvalidUnits
-        facet.mint(INDEX_ID, 15 * SCALE / 10, address(this)); // must be multiple of 1e18? 
+        facet.mint(INDEX_ID, units, address(this), maxInputs); // must be multiple of 1e18? 
         // Logic says: units % LibEqualIndex.INDEX_SCALE != 0
         // If passed 1.5e18, 1.5e18 % 1e18 = 0.5e18 != 0. Correct.
     }
 
     function testMintPaused() public {
+        uint256 units = 1 * SCALE;
+        uint256[] memory maxInputs = facet.previewMintInputs(INDEX_ID, units);
         facet.setPaused(INDEX_ID, true);
         vm.expectRevert(); // IndexPaused
-        facet.mint(INDEX_ID, 1 * SCALE, address(this));
+        facet.mint(INDEX_ID, units, address(this), maxInputs);
     }
 
     function testBurn() public {
         // First mint
         uint256 units = 2 * SCALE;
-        facet.mint(INDEX_ID, units, address(this));
+        facet.mint(INDEX_ID, units, address(this), facet.previewMintInputs(INDEX_ID, units));
 
         // Now burn 1 unit
         uint256 burnUnits = 1 * SCALE;
@@ -362,7 +377,7 @@ contract EqualIndexActionsFacetV3Test is Test {
 
     function testFlashLoan() public {
         // Mint to provide liquidity
-        facet.mint(INDEX_ID, 10 * SCALE, address(this));
+        facet.mint(INDEX_ID, 10 * SCALE, address(this), facet.previewMintInputs(INDEX_ID, 10 * SCALE));
 
         FlashLoanReceiver receiver = new FlashLoanReceiver();
         tokenA.mint(address(receiver), 10 * SCALE); // Provide extra for fees
@@ -387,7 +402,7 @@ contract EqualIndexActionsFacetV3Test is Test {
     }
 
     function testFlashLoanUnderpaid() public {
-        facet.mint(INDEX_ID, 10 * SCALE, address(this));
+        facet.mint(INDEX_ID, 10 * SCALE, address(this), facet.previewMintInputs(INDEX_ID, 10 * SCALE));
         FlashLoanReceiver receiver = new FlashLoanReceiver();
         tokenA.mint(address(receiver), 10 * SCALE);
         tokenB.mint(address(receiver), 10 * SCALE);
@@ -398,7 +413,7 @@ contract EqualIndexActionsFacetV3Test is Test {
     }
     
     function testFlashLoanReceiverRevert() public {
-        facet.mint(INDEX_ID, 10 * SCALE, address(this));
+        facet.mint(INDEX_ID, 10 * SCALE, address(this), facet.previewMintInputs(INDEX_ID, 10 * SCALE));
         FlashLoanReceiver receiver = new FlashLoanReceiver();
         receiver.setShouldFail(true);
         

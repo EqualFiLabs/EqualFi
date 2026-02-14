@@ -1,6 +1,6 @@
 # Community Auction System Design
 
-**Version:** 1.1 (Updated for centralized fee index and encumbrance systems)
+**Version:** 1.2 (Updated for router-based fee routing and current selector signatures)
 
 This document describes the Community Auction system, which extends the AMM Auction model to support multiple makers pooling liquidity into a shared auction. This enables smaller capital holders to participate in market making collectively, sharing maker fees proportionally based on their contribution.
 
@@ -133,7 +133,7 @@ pendingFees = makerShare × (currentIndex - snapshotIndex) / 1e18
 
 This allows makers to enter and exit freely while receiving their fair share of accumulated fees.
 
-**Note:** The per-auction fee index is separate from the pool-level `LibFeeIndex`. The pool fee index portion (20% of swap fees) is distributed to all pool depositors via `LibFeeIndex.accrueWithSource()`.
+**Note:** The per-auction fee index is separate from pool-level FI/ACI accounting. The non-maker fee share is routed through `LibFeeRouter`.
 
 ---
 
@@ -152,11 +152,11 @@ src/libraries/
 ├── LibEncumbrance.sol            # Centralized encumbrance tracking
 ├── LibCommunityAuctionFeeIndex.sol # Per-auction fee distribution
 ├── LibFeeIndex.sol               # Pool-level fee index accounting
-├── LibFeeTreasury.sol            # Treasury fee routing
+├── LibFeeRouter.sol              # Router split (Treasury/ACI/FI)
 └── LibAuctionSwap.sol            # Shared swap math
 
 src/views/
-└── DerivativeViewFacet.sol       # Query functions
+└── AuctionManagementViewFacet.sol # Community auction query/index views
 ```
 
 ### Data Structures
@@ -187,6 +187,12 @@ struct CommunityAuction {
     uint256 feeIndexB;               // Accumulated fee index for token B
     uint256 feeIndexRemainderA;      // Remainder for precision
     uint256 feeIndexRemainderB;      // Remainder for precision
+    uint256 treasuryFeeAAccrued;     // Routed treasury fees in token A
+    uint256 treasuryFeeBAccrued;     // Routed treasury fees in token B
+    uint256 indexFeeAAccrued;        // Routed fee-index share in token A
+    uint256 indexFeeBAccrued;        // Routed fee-index share in token B
+    uint256 activeCreditFeeAAccrued; // Routed active-credit share in token A
+    uint256 activeCreditFeeBAccrued; // Routed active-credit share in token B
     
     // Maker tracking
     uint256 totalShares;             // Sum of all maker shares
@@ -277,11 +283,10 @@ function joinCommunityAuction(
 - `block.timestamp < endTime`
 - Position must be member of both pools
 - Contribution ratio must match current reserves (±0.1%)
-- Position must not already be a participant
 
 **What Happens:**
 1. Validates ratio: `amountB ≈ amountA × reserveB / reserveA`
-2. Settles maker's fee/credit indexes
+2. Settles maker's fee/credit indexes (and settles pending maker fees first for existing participants)
 3. Locks contributed amounts from maker's position
 4. Calculates shares: `√(amountA × amountB)`
 5. Snapshots current fee indexes for the maker
@@ -310,9 +315,9 @@ function leaveCommunityAuction(uint256 auctionId, uint256 positionId)
 
 **What Happens:**
 1. Settles pending fees for the maker
-2. Calculates proportional reserves:
-   - `withdrawnA = reserveA × makerShare / totalShares`
-   - `withdrawnB = reserveB × makerShare / totalShares`
+2. Calculates proportional reserves from withdrawable balances (excluding reserved protocol-yield bookkeeping):
+   - `withdrawnA = (reserveA - reservedA) × makerShare / totalShares`
+   - `withdrawnB = (reserveB - reservedB) × makerShare / totalShares`
 3. Unlocks reserves back to maker's position
 4. Updates auction reserves and total shares
 5. Decrements maker count
@@ -390,8 +395,8 @@ shares = √(amountA × amountB)
 When leaving, makers receive their pro-rata share of current reserves:
 
 ```
-withdrawA = reserveA × makerShare / totalShares
-withdrawB = reserveB × makerShare / totalShares
+withdrawA = (reserveA - reservedA) × makerShare / totalShares
+withdrawB = (reserveB - reservedB) × makerShare / totalShares
 ```
 
 **Impermanent Loss:**
@@ -430,9 +435,10 @@ function swapExactIn(
     uint256 auctionId,
     address tokenIn,
     uint256 amountIn,
+    uint256 maxIn,
     uint256 minOut,
     address recipient
-) external returns (uint256 amountOut);
+) external payable returns (uint256 amountOut);
 ```
 
 ### Swap Calculation
@@ -459,7 +465,7 @@ amountOut = rawOut
 After each swap:
 ```
 newReserveIn = reserveIn + actualAmountIn
-newReserveOut = reserveOut - amountOut - protocolFees
+newReserveOut = reserveOut - amountOut - treasuryShareAdjustment
 ```
 
 ### Slippage Protection
@@ -475,19 +481,12 @@ if (amountOut < minOut) revert CommunityAuction_Slippage(minOut, amountOut);
 
 ### Fee Split
 
-Every swap fee is split three ways:
+Every swap fee is split in two stages:
 
-| Recipient | Share | Purpose |
-|-----------|-------|---------|
-| **Makers** | 70% | Distributed pro-rata to all makers via per-auction fee index |
-| **Fee Index** | 20% | Distributed to pool depositors via `LibFeeIndex` |
-| **Treasury** | 10% | Protocol revenue via `LibFeeTreasury` |
+1. Maker share: `makerFee = feeAmount × communityMakerShareBps / 10_000`
+2. Protocol share: `protocolFee = feeAmount - makerFee`, routed through `LibFeeRouter`
 
-```solidity
-uint16 internal constant FEE_SPLIT_MAKER_BPS = 7000;   // 70%
-uint16 internal constant FEE_SPLIT_INDEX_BPS = 2000;   // 20%
-uint16 internal constant FEE_SPLIT_TREASURY_BPS = 1000; // 10%
-```
+`LibFeeRouter` then splits `protocolFee` into Treasury / Active Credit / Fee Index using global app config.
 
 ### Fee Index Accrual
 
@@ -510,12 +509,13 @@ feeIndexRemainder = dividend - (delta × totalShares)
 
 The remainder tracking prevents precision loss across many small swaps.
 
-**Pool Fee Index Distribution:**
-The pool depositor portion (20%) is distributed via the centralized `LibFeeIndex`:
+**Protocol-Routed Distribution:**
+The non-maker portion is routed via `LibFeeRouter` and recorded into Treasury/ACI/FI ledgers:
 
 ```solidity
-// Accrue to pool fee index
-LibFeeIndex.accrueWithSource(poolId, poolFeeShare, "COMMUNITY_AUCTION_FEE");
+uint256 makerFee = feeAmount * communityMakerShareBps / 10_000;
+uint256 protocolFee = feeAmount - makerFee;
+LibFeeRouter.routeSamePool(poolId, protocolFee, COMMUNITY_FEE_SOURCE, false, extraBacking);
 ```
 
 ### Fee Settlement
@@ -548,16 +548,33 @@ makerSnapshotB = feeIndexB
 
 Community Auctions are indexed for efficient discovery:
 
-### By Position
+### By Auction ID
 ```solidity
-function getCommunityAuctionsByPosition(bytes32 positionKey, uint256 offset, uint256 limit)
-    external view returns (uint256[] memory ids, uint256 total);
+function getCommunityAuction(uint256 auctionId)
+    external view returns (CommunityAuction memory auction);
 ```
 
 ### By Token Pair
 ```solidity
 function getCommunityAuctionsByPair(address tokenA, address tokenB, uint256 offset, uint256 limit)
     external view returns (uint256[] memory ids, uint256 total);
+```
+
+### By Pool
+```solidity
+function getCommunityAuctionsByPool(uint256 poolId, uint256 offset, uint256 limit)
+    external view returns (uint256[] memory ids, uint256 total);
+```
+
+### Makers By Auction
+```solidity
+function getCommunityAuctionMakers(uint256 auctionId, uint256 offset, uint256 limit)
+    external view returns (
+        uint256[] memory positionIds,
+        bytes32[] memory positionKeys,
+        uint256[] memory shares,
+        uint256 total
+    );
 ```
 
 ### Global Active List
@@ -622,6 +639,7 @@ uint256 amountOut = communityAuctionFacet.swapExactIn(
     auctionId,
     address(weth),
     1e18,           // 1 WETH
+    1e18,           // maxIn
     1900e6,         // min 1900 USDC (slippage protection)
     msg.sender
 );
@@ -725,9 +743,9 @@ communityAuctionFacet.joinCommunityAuction(auctionId, bobPositionId, 5e18, 10000
 // amountOut = 4,985 USDC
 
 // Fee distribution:
-// - Maker fee (70%): 10.5 USDC → accrues to fee index
-// - Pool fee index (20%): 3 USDC
-// - Treasury (10%): 1.5 USDC
+// - Maker fee: `15 × communityMakerShareBps / 10_000` → accrues via per-auction fee index
+// - Remaining fee is routed by LibFeeRouter to Treasury/ACI/FI
+// - For the numeric example below, assume `communityMakerShareBps = 7000`
 
 // Fee index update:
 // feeIndexB += (10.5 × 1e18) / 670.82 ≈ 15.65e15
@@ -887,7 +905,6 @@ communityAuctionFacet.leaveCommunityAuction(auctionId, alicePositionId);
 | `CommunityAuction_NotExpired` | Trying to finalize before end time |
 | `CommunityAuction_NotCreator` | Non-creator trying to cancel |
 | `CommunityAuction_AlreadyStarted` | Trying to cancel after start time |
-| `CommunityAuction_AlreadyParticipant` | Position already joined this auction |
 | `CommunityAuction_NotParticipant` | Position not a participant |
 | `CommunityAuction_InvalidToken` | Token not part of this auction |
 | `CommunityAuction_Slippage` | Output less than minimum |
@@ -990,7 +1007,7 @@ event CommunityAuctionCancelled(
 
 10. **Flash Accounting Isolation**: Swaps don't affect individual maker principal during the auction.
 
-11. **Treasury Requirement**: Treasury address must be set for fee distribution.
+11. **Treasury Optionality**: If treasury is unset, the router treasury leg becomes zero and flow remains in ACI/FI.
 
 12. **Time Window Enforcement**: Swaps only allowed within active window, joins only before end.
 
@@ -1006,7 +1023,7 @@ LibEncumbrance.position(positionKey, poolIdA).directLent -= withdrawnA;
 LibEncumbrance.position(positionKey, poolIdB).directLent -= withdrawnB;
 ```
 
-14. **Centralized Pool Fee Index (LibFeeIndex)**: Pool depositor fees are distributed via `LibFeeIndex.accrueWithSource()` for consistent, auditable fee accounting.
+14. **Centralized Router + Indexes**: Non-maker fee flow is routed by `LibFeeRouter` into Treasury/ACI/FI with consistent accounting across features.
 
 ---
 

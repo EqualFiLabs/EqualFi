@@ -505,6 +505,7 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         uint256 auctionId,
         address tokenIn,
         uint256 amountIn,
+        uint256 maxIn,
         uint256 minOut,
         address recipient
     ) external payable nonReentrant returns (uint256 amountOut) {
@@ -525,9 +526,8 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         Types.PoolData storage poolA = LibAppStorage.s().pools[auction.poolIdA];
         Types.PoolData storage poolB = LibAppStorage.s().pools[auction.poolIdB];
 
-        LibCurrency.assertMsgValue(tokenIn, amountIn);
         address tokenOut = inIsA ? auction.tokenB : auction.tokenA;
-        uint256 actualIn = LibCurrency.pull(tokenIn, msg.sender, amountIn);
+        uint256 actualIn = LibCurrency.pullAtLeast(tokenIn, msg.sender, amountIn, maxIn);
         if (actualIn == 0) revert CommunityAuction_InvalidAmount(actualIn);
 
         uint256 reserveIn = inIsA ? auction.reserveA : auction.reserveB;
@@ -624,7 +624,7 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
             }
         }
 
-        LibCurrency.transfer(tokenOut, recipient, outputToRecipient);
+        LibCurrency.transferWithMin(tokenOut, recipient, outputToRecipient, minOut);
         if (LibCurrency.isNative(tokenOut) && outputToRecipient > 0) {
             LibAppStorage.s().nativeTrackedTotal -= outputToRecipient;
         }

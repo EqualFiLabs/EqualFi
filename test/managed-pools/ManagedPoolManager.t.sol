@@ -72,7 +72,7 @@ contract ManagedPoolManagerPropertyTest is Test {
         facet.setOwner(address(this));
         facet.setDefaultPoolConfig(_defaultPoolConfig());
 
-        Types.ManagedPoolConfig memory cfg;
+        Types.PoolConfig memory cfg;
         cfg.rollingApyBps = 500;
         cfg.depositorLTVBps = 8000;
         cfg.maintenanceRateBps = 50;
@@ -83,8 +83,6 @@ contract ManagedPoolManagerPropertyTest is Test {
         cfg.aumFeeMinBps = 100;
         cfg.aumFeeMaxBps = 500;
         cfg.isCapped = false;
-        cfg.manager = manager;
-        cfg.whitelistEnabled = true;
 
         vm.deal(manager, 1 ether);
         vm.prank(manager);

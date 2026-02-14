@@ -313,7 +313,7 @@ reservation.status = ReservationStatus.Settled;
 
 **Settlement Call:**
 ```solidity
-settlementEscrow.settle(reservationId, tau);
+settlementEscrow.settle(reservationId, tau, minReceived);
 ```
 
 ### **2.5 Phase 5: Alternative - Refund Path**
@@ -794,7 +794,7 @@ class AtomicSwapMaker {
         
         // Extract tau and settle
         const tau = this.extractTau(presig, finalSig);
-        await this.settlementEscrow.settle(reservationId, tau);
+        await this.settlementEscrow.settle(reservationId, tau, minReceived);
     }
 }
 ```

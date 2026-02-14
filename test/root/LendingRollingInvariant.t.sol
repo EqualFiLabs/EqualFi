@@ -114,7 +114,7 @@ contract LendingRollingInvariantTest is Test {
         if (borrowAmount == 0) return;
 
         vm.prank(user);
-        try facet.openRollingFromPosition(tokenId, PID, borrowAmount) {} catch {
+        try facet.openRollingFromPosition(tokenId, PID, borrowAmount, borrowAmount) {} catch {
             return;
         }
 
@@ -128,7 +128,7 @@ contract LendingRollingInvariantTest is Test {
         // Partial payment bounded to avoid overpay
         paymentAmount = bound(paymentAmount, 1, borrowAmount);
         vm.prank(user);
-        try facet.makePaymentFromPosition(tokenId, PID, paymentAmount) {} catch {
+        try facet.makePaymentFromPosition(tokenId, PID, paymentAmount, paymentAmount) {} catch {
             return;
         }
 
@@ -143,7 +143,7 @@ contract LendingRollingInvariantTest is Test {
         expandAmount = bound(expandAmount, 0, headroom);
         if (expandAmount > 0) {
             vm.prank(user);
-            try facet.expandRollingFromPosition(tokenId, PID, expandAmount) {} catch {
+            try facet.expandRollingFromPosition(tokenId, PID, expandAmount, expandAmount) {} catch {
                 return;
             }
             debtNow += expandAmount;

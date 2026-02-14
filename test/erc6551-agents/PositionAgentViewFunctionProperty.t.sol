@@ -6,6 +6,8 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
 import {PositionAgentViewFacet} from "../../src/erc6551/PositionAgentViewFacet.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
+import {MockBeacon} from "../helpers/MockBeacon.sol";
 
 contract MockERC6551Registry {
     function createAccount(
@@ -101,16 +103,20 @@ contract PositionAgentViewFunctionPropertyTest is Test {
     PositionNFT private nft;
     MockERC6551Registry private registry;
     MockERC6551Account private implementation;
+    MockBeacon private beacon;
+    BeaconProxy private beaconProxy;
     PositionAgentViewFacetHarness private facet;
 
     function setUp() public {
         nft = new PositionNFT();
         registry = new MockERC6551Registry();
         implementation = new MockERC6551Account();
+        beacon = new MockBeacon(address(implementation));
+        beaconProxy = new BeaconProxy(address(beacon));
         facet = new PositionAgentViewFacetHarness();
 
         facet.setPositionNFT(address(nft));
-        facet.setConfig(address(registry), address(implementation), address(0), bytes32(0));
+        facet.setConfig(address(registry), address(beaconProxy), address(0), bytes32(0));
     }
 
     /// @notice **Feature: erc6551-position-agents, Property 8: View Function Consistency**
@@ -121,7 +127,7 @@ contract PositionAgentViewFunctionPropertyTest is Test {
         agentId = bound(agentId, 1, type(uint256).max - 1);
 
         address expectedTba = registry.account(
-            address(implementation),
+            address(beaconProxy),
             bytes32(0),
             block.chainid,
             address(nft),
@@ -138,7 +144,7 @@ contract PositionAgentViewFunctionPropertyTest is Test {
         assertTrue(facet.isAgentRegistered(tokenId), "isAgentRegistered should be true after set");
 
         registry.createAccount(
-            address(implementation),
+            address(beaconProxy),
             bytes32(0),
             block.chainid,
             address(nft),
@@ -148,7 +154,7 @@ contract PositionAgentViewFunctionPropertyTest is Test {
 
         (address reg, address impl, address identity) = facet.getCanonicalRegistries();
         assertEq(reg, address(registry), "getCanonicalRegistries registry mismatch");
-        assertEq(impl, address(implementation), "getCanonicalRegistries implementation mismatch");
+        assertEq(impl, address(beaconProxy), "getCanonicalRegistries implementation mismatch");
         assertEq(identity, address(0), "getCanonicalRegistries identity mismatch");
     }
 }

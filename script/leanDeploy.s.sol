@@ -41,6 +41,9 @@ import {PositionAgentTBAFacet} from "../src/erc6551/PositionAgentTBAFacet.sol";
 import {PositionAgentRegistryFacet} from "../src/erc6551/PositionAgentRegistryFacet.sol";
 import {PositionAgentViewFacet} from "../src/erc6551/PositionAgentViewFacet.sol";
 import {PositionAgentConfigFacet} from "../src/erc6551/PositionAgentConfigFacet.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
+import {PositionMSCAImpl} from "../src/erc6900/PositionMSCAImpl.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);
@@ -73,6 +76,9 @@ contract LeanDeployScript is Script {
     address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
     address internal constant ERC8004_MAINNET = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
     address internal constant ERC8004_SEPOLIA = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
+    // ERC-4337 EntryPoint v0.7 addresses
+    address internal constant ENTRYPOINT_V07_MAINNET = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
+    address internal constant ENTRYPOINT_V07_SEPOLIA = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
 
     struct TokenSpec {
         string id;
@@ -215,14 +221,25 @@ contract LeanDeployScript is Script {
         IDiamondCut(address(diamond))
             .diamondCut(_mamViewCut(mamCurveView), address(0), "");
 
-        address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(0));
+        // Deploy ERC-6900 beacon chain for Position Agent TBAs
+        address entryPoint = _resolveEntryPoint();
+        PositionMSCAImpl mscaImplementation = new PositionMSCAImpl(entryPoint);
+        UpgradeableBeacon beacon = new UpgradeableBeacon(address(mscaImplementation), owner);
+        BeaconProxy beaconProxy = new BeaconProxy(address(beacon));
+
+        console2.log("EntryPoint", entryPoint);
+        console2.log("MSCAImplementation", address(mscaImplementation));
+        console2.log("Beacon", address(beacon));
+        console2.log("BeaconProxy", address(beaconProxy));
+
+        address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(beaconProxy));
         address identityRegistry = _resolveIdentityRegistry();
         PositionAgentConfigFacet(address(diamond)).setERC6551Registry(ERC6551_REGISTRY);
-        if (erc6551Implementation != address(0)) {
-            PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
-        } else {
-            console2.log("ERC6551_IMPLEMENTATION not set; skipping implementation config");
+        if (erc6551Implementation == address(0)) {
+            erc6551Implementation = address(beaconProxy);
         }
+        PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
+        console2.log("Using ERC6551 implementation:", erc6551Implementation);
         if (identityRegistry != address(0)) {
             PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
         } else {
@@ -289,6 +306,16 @@ contract LeanDeployScript is Script {
             return ERC8004_SEPOLIA;
         }
         return vm.envOr("IDENTITY_REGISTRY", address(0));
+    }
+
+    function _resolveEntryPoint() internal view returns (address) {
+        if (block.chainid == 1) {
+            return ENTRYPOINT_V07_MAINNET;
+        }
+        if (block.chainid == 11155111) {
+            return ENTRYPOINT_V07_SEPOLIA;
+        }
+        return vm.envOr("ENTRYPOINT_ADDRESS", address(0));
     }
 
     function _selectors(DiamondCutFacet) internal pure returns (bytes4[] memory s) {
@@ -430,27 +457,21 @@ contract LeanDeployScript is Script {
         s = new bytes4[](7);
         s[0] = PositionManagementFacet.mintPosition.selector;
         s[1] = PositionManagementFacet.mintPositionWithDeposit.selector;
-        s[2] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256)"));
+        s[2] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256,uint256)"));
+        s[3] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256,uint256)"));
         s[4] = bytes4(keccak256("rollYieldToPosition(uint256,uint256)"));
-        s[5] = bytes4(keccak256("closePoolPosition(uint256,uint256)"));
+        s[5] = bytes4(keccak256("closePoolPosition(uint256,uint256,uint256)"));
         s[6] = PositionManagementFacet.cleanupMembership.selector;
     }
 
     function _selectors(LendingFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](12);
-        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256)"));
-        s[1] = bytes4(keccak256("openRollingFromPosition(uint256,uint256)"));
-        s[2] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256)"));
-        s[4] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256)"));
-        s[5] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256)"));
-        s[6] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256)"));
-        s[7] = bytes4(keccak256("closeRollingCreditFromPosition(uint256)"));
-        s[8] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256)"));
-        s[9] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256)"));
-        s[10] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256)"));
-        s[11] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256)"));
+        s = new bytes4[](6);
+        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256,uint256)"));
+        s[1] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256,uint256)"));
+        s[2] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256,uint256)"));
+        s[3] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256,uint256)"));
+        s[4] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
+        s[5] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
     }
 
     function _selectors(PenaltyFacet) internal pure returns (bytes4[] memory s) {
@@ -512,9 +533,17 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(EqualLendDirectOfferFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](2);
-        s[0] = bytes4(keccak256("cancelOffersForPosition(bytes32)"));
-        s[1] = EqualLendDirectOfferFacet.hasOpenOffers.selector;
+        s = new bytes4[](6);
+        s[0] = bytes4(keccak256("postOffer((uint256,uint256,uint256,address,address,uint256,uint16,uint64,uint256,bool,bool,bool))"));
+        s[1] = bytes4(
+            keccak256(
+                "postOffer((uint256,uint256,uint256,address,address,uint256,uint16,uint64,uint256,bool,bool,bool),(bool,uint256))"
+            )
+        );
+        s[2] = EqualLendDirectOfferFacet.cancelOffer.selector;
+        s[3] = bytes4(keccak256("cancelOffersForPosition(bytes32)"));
+        s[4] = bytes4(keccak256("cancelOffersForPosition(uint256)"));
+        s[5] = EqualLendDirectOfferFacet.hasOpenOffers.selector;
     }
 
     function _selectors(PositionAgentTBAFacet) internal pure returns (bytes4[] memory s) {

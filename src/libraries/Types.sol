@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-/// @notice Shared structs and enums for EqualLend Diamond rebuild
+/// @notice Shared types for EqualLend Diamond rebuild
 library Types {
     struct ActionFeeConfig {
         uint128 amount;
@@ -62,42 +62,8 @@ library Types {
         ActionFeeConfig closeRollingFee;
     }
 
-    /// @notice Managed pool configuration with mutable parameters
-    struct ManagedPoolConfig {
-        // Interest rates (mutable)
-        uint16 rollingApyBps;
-        // LTV and collateralization (mutable)
-        uint16 depositorLTVBps;
-
-        // Maintenance and flash loan fees (mutable)
-        uint16 maintenanceRateBps;
-        uint16 flashLoanFeeBps;
-        bool flashLoanAntiSplit;
-
-        // Thresholds (mutable)
-        uint256 minDepositAmount;
-        uint256 minLoanAmount;
-        uint256 minTopupAmount;
-
-        // Caps (mutable)
-        bool isCapped;
-        uint256 depositCap;
-        uint256 maxUserCount;
-
-        // AUM fee bounds (immutable)
-        uint16 aumFeeMinBps;
-        uint16 aumFeeMaxBps;
-
-        // Fixed term configs (immutable array)
-        FixedTermConfig[] fixedTermConfigs;
-
-        // Action fees (mutable)
-        ActionFeeSet actionFees;
-
-        // Management settings
-        address manager;
-        bool whitelistEnabled;
-    }
+    /// @notice Managed pools use `PoolConfig` as the canonical configuration.
+    /// @dev Manager/whitelist state lives on `PoolData`.
 
     struct RollingCreditLoan {
         uint256 principal;
@@ -126,18 +92,8 @@ library Types {
         uint256 principalAtOpen;
     }
 
-    struct LoanStatusView {
-        uint256 principal;
-        uint256 principalRemaining;
-        uint256 interestAccrued;
-        uint256 minimumPaymentDue;
-        uint40 lastPaymentTimestamp;
-        uint40 nextPaymentDue;
-        uint8 missedPayments;
-        bool isDelinquent;
-        bool eligibleForPenalty;
-        bool active;
-    }
+
+    // LoanStatusView removed (unused)
 
     /// @notice Position NFT metadata
     struct PositionMetadata {
@@ -209,10 +165,9 @@ library Types {
         uint256[24] activeCreditPendingBuckets; // Pending principal scheduled to mature
         uint256 trackedBalance;             // Per-pool tracked token balance for isolation
 
-        // Managed pool state
+        // Managed pool state (only meaningful when isManagedPool == true)
         bool isManagedPool;
         address manager;
-        ManagedPoolConfig managedConfig;
         bool whitelistEnabled;
         mapping(bytes32 => bool) whitelist;
         

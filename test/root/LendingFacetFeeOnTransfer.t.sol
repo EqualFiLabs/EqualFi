@@ -8,6 +8,7 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {FeeOnTransferERC20} from "../../src/mocks/FeeOnTransferERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /// @notice Minimal harness to drive LendingFacet with configurable underlying
 contract LendingFacetFoTHarness is LendingFacet {
@@ -98,13 +99,18 @@ contract LendingFacetFeeOnTransferTest is Test {
         facet.seedPosition(PID, key, amount);
     }
 
+    function _grossWithFee(uint256 netAmount) internal view returns (uint256) {
+        uint256 feeBps = token.feeBps();
+        return Math.mulDiv(netAmount, 10_000, 10_000 - feeBps, Math.Rounding.Ceil);
+    }
+
     function test_makePaymentCreditsNetReceived() public {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether); // trackedBalance -> 80
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 18 ether); // trackedBalance -> 80
         uint256 sinkBefore = token.balanceOf(address(0xFEE));
-        facet.makePaymentFromPosition(tokenId, PID, 10 ether); // net received 9 ether
+        facet.makePaymentFromPosition(tokenId, PID, 9 ether, _grossWithFee(9 ether)); // net received 9 ether
         vm.stopPrank();
 
         assertEq(facet.trackedBalance(PID), 89 ether, "trackedBalance uses net");
@@ -116,8 +122,8 @@ contract LendingFacetFeeOnTransferTest is Test {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
-        facet.makePaymentFromPosition(tokenId, PID, 1 ether);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 18 ether);
+        facet.makePaymentFromPosition(tokenId, PID, 0.9 ether, _grossWithFee(0.9 ether));
         vm.stopPrank();
 
         assertEq(facet.rollingLoan(PID, key).principalRemaining, 19.1 ether, "principal reduced by net amount");
@@ -127,9 +133,8 @@ contract LendingFacetFeeOnTransferTest is Test {
         (uint256 tokenId,) = _seedPosition(100 ether);
 
         vm.startPrank(user);
-        facet.openRollingFromPosition(tokenId, PID, 20 ether);
-        vm.expectRevert("PositionNFT: payoff underfunded");
-        facet.closeRollingCreditFromPosition(tokenId, PID);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 18 ether);
+        facet.closeRollingCreditFromPosition(tokenId, PID, _grossWithFee(20 ether));
         vm.stopPrank();
     }
 
@@ -137,9 +142,8 @@ contract LendingFacetFeeOnTransferTest is Test {
         (uint256 tokenId,) = _seedPosition(100 ether);
 
         vm.startPrank(user);
-        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 20 ether, 0);
-        vm.expectRevert("PositionNFT: repay underfunded");
-        facet.repayFixedFromPosition(tokenId, PID, loanId, 10 ether);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 20 ether, 0, 18 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 10 ether, _grossWithFee(10 ether));
         vm.stopPrank();
     }
 }

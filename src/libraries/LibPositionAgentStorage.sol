@@ -17,6 +17,7 @@ library LibPositionAgentStorage {
     struct AgentStorage {
         // Canonical registry addresses
         address erc6551Registry;
+        // ERC-6551 account implementation (beacon proxy implementation)
         address erc6551Implementation;
         address identityRegistry;
 
