@@ -27,11 +27,11 @@ contract ModuleGatewayFacetHarness is ModuleGatewayFacet {
         LibPositionNFT.s().positionNFTContract = nft;
     }
 
-    function setupErc20Pool(uint256 pid, address token, uint256 trackedBalance, uint256 totalDeposits) external {
+    function setupErc20Pool(uint256 pid, address token, uint256 trackedAmount, uint256 totalDeposits) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.initialized = true;
         p.underlying = token;
-        p.trackedBalance = trackedBalance;
+        p.trackedBalance = trackedAmount;
         p.totalDeposits = totalDeposits;
     }
 
@@ -98,6 +98,14 @@ contract ModuleGatewayFacetHarness is ModuleGatewayFacet {
 
     function activeCreditPrincipalTotal(uint256 poolId) external view returns (uint256) {
         return LibAppStorage.s().pools[poolId].activeCreditPrincipalTotal;
+    }
+
+    function trackedBalance(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].trackedBalance;
+    }
+
+    function canClearMembership(bytes32 positionKey, uint256 poolId) external view returns (bool canClear, string memory reason) {
+        return LibPoolMembership.canClearMembership(positionKey, poolId);
     }
 }
 
@@ -255,5 +263,42 @@ contract ModuleGatewayFacetTest is Test {
         vm.prank(OTHER);
         vm.expectRevert(abi.encodeWithSelector(ModuleNotFound.selector, 404));
         facet.pokeModuleAum(TOKEN_ID, POOL_ID, 404);
+    }
+
+    function test_poke_sameEpoch_isNoOpAfterCheckpoint() public {
+        facet.setPrincipal(POOL_ID, positionKey, 365_050);
+        facet.setModuleEncumbered(positionKey, POOL_ID, MODULE_ID, 365_000);
+
+        vm.warp(1 days);
+        vm.prank(OTHER);
+        facet.pokeModuleAum(TOKEN_ID, POOL_ID, MODULE_ID); // first touch checkpoint
+
+        uint256 principalBefore = facet.principalOf(POOL_ID, positionKey);
+        vm.prank(OTHER);
+        facet.pokeModuleAum(TOKEN_ID, POOL_ID, MODULE_ID); // same epoch no-op
+        uint256 principalAfter = facet.principalOf(POOL_ID, positionKey);
+        assertEq(principalAfter, principalBefore);
+    }
+
+    function test_membershipCleanupBlocked_reasonModuleEncumbrance() public {
+        vm.prank(OWNER);
+        facet.encumberPosition(TOKEN_ID, POOL_ID, MODULE_ID, 10);
+        facet.setPrincipal(POOL_ID, positionKey, 0);
+
+        (bool canClear, string memory reason) = facet.canClearMembership(positionKey, POOL_ID);
+        assertFalse(canClear);
+        assertEq(reason, "module encumbrance");
+    }
+
+    function test_reservationOnlyEncumberUnencumber_doesNotChangeTrackedBacking() public {
+        uint256 trackedBefore = facet.trackedBalance(POOL_ID);
+
+        vm.prank(OWNER);
+        facet.encumberPosition(TOKEN_ID, POOL_ID, MODULE_ID, 100);
+        assertEq(facet.trackedBalance(POOL_ID), trackedBefore);
+
+        vm.prank(OWNER);
+        facet.unencumberPosition(TOKEN_ID, POOL_ID, MODULE_ID, 40);
+        assertEq(facet.trackedBalance(POOL_ID), trackedBefore);
     }
 }
