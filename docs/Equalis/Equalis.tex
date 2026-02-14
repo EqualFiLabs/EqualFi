@@ -1045,10 +1045,12 @@ These controls are not emissions-like complexity; they are accounting rules inte
 
 Protocol surfaces generate fees in many ways, including but not limited to:
 \begin{itemize}
-  \item AMM auction swap fees (with a maker share and an index share),
+  \item AMM/community auction swap fees (maker share plus protocol remainder routed by fee router),
+  \item MAM curve fill fees (maker share plus protocol remainder routed by fee router),
   \item peer-to-peer agreement fees and penalties (including default-related flows),
   \item EqualIndex mint and burn fees (per underlying asset),
   \item EqualIndex basket flash loan fees (per underlying asset),
+  \item atomic settlement swap fees (where configured),
   \item pool action fees (borrow/repay/withdraw/flash/close),
   \item other module-defined fees that settle into pool tokens.
 \end{itemize}
@@ -1056,8 +1058,7 @@ Protocol surfaces generate fees in many ways, including but not limited to:
 For each token $T$, fees collected in $T$ are routed through the token’s fee router and split according to configured rules, typically including:
 \begin{itemize}
   \item a \textbf{direct participant share} (e.g., makers),
-  \item a \textbf{protocol share} (e.g., Treasury),
-  \item an \textbf{index share} allocated to $I_T$ and/or $A_T$.
+  \item a \textbf{protocol remainder} routed by configuration into Treasury, Active Credit Index, and Fee Index rails.
 \end{itemize}
 
 \paragraph{Maintenance fees (implementation).}
@@ -1105,11 +1106,10 @@ This updates the maker's free and encumbered balances deterministically and prev
 A taker swap consumes one reserve and returns the other according to the auction’s pricing rule. On each swap, the protocol can collect fees and split them into:
 \begin{itemize}
   \item a \textbf{maker share} paid to the auction maker,
-  \item an \textbf{index share} routed through the per-token fee router for the relevant token(s),
-  \item an optional \textbf{protocol share} (e.g., Treasury).
+  \item a \textbf{protocol remainder} routed through the per-token fee router (Treasury, Active Credit, and Fee Index according to configured splits).
 \end{itemize}
 
-When fees are collected in token $T$, the index share contributes to $F^{FI}_T$ and/or $F^{ACI}_T$ and updates the global indexes for pool $\mathcal{P}_T$.
+When fees are collected in token $T$, routed protocol portions contribute to $F^{FI}_T$ and $F^{ACI}_T$ and update the global indexes for pool $\mathcal{P}_T$.
 
 \subsection{Community Auctions}
 
@@ -1449,7 +1449,7 @@ This schedule is deterministic and does not depend on fill size or on prior fill
 
 \subsection{Fill Mechanics}
 
-A taker specifies an \texttt{amountIn} (quote paid), a \texttt{minOut} (base received), and a \texttt{deadline}. The protocol computes the current price and determines base out:
+A taker specifies \texttt{amountIn} (quote net amount), \texttt{maxQuote} (quote cap including fees), \texttt{minOut} (base received), and \texttt{deadline}. The protocol computes the current price and determines base out:
 \[
 \texttt{baseOut} = \frac{\texttt{amountIn}\cdot 10^{18}}{P(t)}.
 \]
@@ -1457,6 +1457,7 @@ Constraints enforced include:
 \begin{itemize}
   \item \texttt{baseOut} must be non-zero,
   \item \texttt{baseOut} must not exceed remaining base volume,
+  \item required quote transfer (\texttt{amountIn} + fee) must respect \texttt{maxQuote},
   \item \texttt{baseOut} must be at least \texttt{minOut},
   \item the current timestamp must not exceed \texttt{deadline}.
 \end{itemize}
@@ -1465,11 +1466,10 @@ Curves support partial fills. Multiple takers can fill the same curve until rema
 
 \subsection{Fee Structure and Routing}
 
-Each fill can charge a fee (basis points on \texttt{amountIn}, denominated in the quote asset). The design specifies a three-way split of the fill fee:
+Each fill can charge a fee (basis points on \texttt{amountIn}, denominated in the quote asset). The implementation applies:
 \begin{itemize}
-  \item \textbf{Maker share:} rewards the maker for providing inventory and pricing,
-  \item \textbf{Fee Index share:} routes value back to passive liquidity providers through the per-token Fee Index,
-  \item \textbf{Treasury share:} protocol revenue.
+  \item \textbf{Maker share:} configurable via \texttt{mamMakerShareBps},
+  \item \textbf{Protocol remainder:} routed through the fee router into Treasury, Active Credit Index, and Fee Index rails.
 \end{itemize}
 
 This fee model allows MAM to compensate direct market makers while also feeding system-wide value rails.
@@ -1480,7 +1480,7 @@ MAM curves are designed to reduce common MEV vectors that rely on \textbf{price 
 
 \begin{itemize}
   \item \textbf{No reserve-based price impact.} In a constant-product AMM, a taker trade changes reserves and therefore changes the marginal price, enabling sandwich patterns that extract value from induced slippage. In a MAM curve, the price at time $t$ is determined by the curve schedule, not by the size of the previous trade.
-  \item \textbf{Deterministic quoting.} A taker can query the current price and expected output via view quote functions and protect execution with \texttt{minOut} and \texttt{deadline}.
+  \item \textbf{Deterministic quoting.} A taker can query quote requirements via view functions (e.g., preview quote cap) and protect execution with \texttt{maxQuote}, \texttt{minOut}, and \texttt{deadline}.
   \item \textbf{Less room for slippage games.} Since fills do not move the curve price, there is less opportunity to profit from manipulating the taker's execution price via immediate pre-trades that shift the curve's pricing function.
 \end{itemize}
 
@@ -1528,7 +1528,7 @@ MAM curves provide a deterministic market surface with:
   \item reduced reliance on trade-induced repricing, improving resistance to common slippage-based MEV,
   \item cheap and batchable updates for higher-frequency maker behavior,
   \item composable techniques for iceberg-like liquidity via staged or rolling curves,
-  \item fee splits that pay makers while feeding system-wide Fee Index rails.
+  \item fee splits that pay makers while feeding system-wide Treasury, Active Credit, and Fee Index rails via the router.
 \end{itemize}
 
 \section{Risk Model and Threat Model}
@@ -2111,7 +2111,7 @@ A taker paying $\texttt{amountIn}$ quote receives:
 \[
 \texttt{baseOut}=\frac{\texttt{amountIn}\cdot 10^{18}}{P(t)},
 \]
-subject to $0 < \texttt{baseOut} \le V_{\text{rem}}$ and user protections (\texttt{minOut}, \texttt{deadline}).
+subject to $0 < \texttt{baseOut} \le V_{\text{rem}}$ and user protections (\texttt{maxQuote}, \texttt{minOut}, \texttt{deadline}).
 
 % -------------------------------------------------
 % Appendix F: Protocol-Perpetual Leverage Definition
