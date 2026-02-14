@@ -111,7 +111,10 @@ price = 2000e18 (2000 USDC per 1 ETH)
 
 ```
 src/EqualX/
-└── MamCurveFacet.sol        # Main curve logic
+├── MamCurveCreationFacet.sol    # Creation + pause
+├── MamCurveManagementFacet.sol  # Update/cancel/expire lifecycle
+├── MamCurveExecutionFacet.sol   # Execution + fill helpers
+└── MamCurveFacet.sol            # Interface across facets
 
 src/views/
 └── MamCurveViewFacet.sol    # Query functions
@@ -199,9 +202,12 @@ mapping(uint256 => bool) curveBaseIsA;
 - Caller must own the Position NFT
 - Position must be a member of both pools
 - Sufficient unlocked principal for base asset
-- `startTime >= block.timestamp`
+- `startTime` cannot be older than 30 minutes (`block.timestamp <= startTime + 30 minutes`)
 - `duration > 0`
 - `generation == 1` (for new curves)
+- `priceIsQuotePerBase == true`
+- `feeAsset == TokenIn`
+- `tokenA` and `tokenB` must be non-zero, distinct, and match pool underlyings
 
 **Function:**
 ```solidity
@@ -242,10 +248,11 @@ Takers execute swaps against the curve:
 function executeCurveSwap(
     uint256 curveId,
     uint256 amountIn,      // Quote amount to pay
+    uint256 maxQuote,      // Maximum quote pull (supports FoT tokens)
     uint256 minOut,        // Minimum base to receive
     uint64 deadline,       // Transaction deadline
     address recipient      // Where to send base
-) external returns (uint256 amountOut);
+) external payable returns (uint256 amountOut);
 ```
 
 ### 4. Expiration
@@ -376,8 +383,11 @@ baseFill = amountIn × 1e18 / price
 // 3. Calculate fee
 feeAmount = amountIn × feeRateBps / 10000
 
-// 4. Total quote required
+// 4. Minimum quote required
 totalQuote = amountIn + feeAmount
+
+// 5. Pull quote with max cap and min-required check
+actualIn = pullAtLeast(quoteToken, taker, totalQuote, maxQuote)
 ```
 
 ### Fill Constraints
@@ -386,16 +396,19 @@ totalQuote = amountIn + feeAmount
 - `baseFill <= remainingVolume` (sufficient volume)
 - `baseFill >= minOut` (slippage protection)
 - `block.timestamp <= deadline` (transaction deadline)
+- `startTime <= block.timestamp <= endTime` (curve time window)
+- `actualIn >= totalQuote` (required quote must be received)
 
 ### Asset Flows
 
 ```
-Taker pays:     amountIn + feeAmount (quote tokens)
+Taker submits:  amountIn, maxQuote
+Taker pays:     actualIn (where actualIn >= amountIn + feeAmount)
 Taker receives: baseFill (base tokens)
 
-Maker receives: amountIn + makerFee (credited to position)
-Fee Index:      indexFee (distributed to pool)
-Treasury:       treasuryFee (transferred out)
+Maker receives: amountIn + makerFee + (actualIn - (amountIn + feeAmount))
+Protocol fee:   feeAmount - makerFee, routed by LibFeeRouter to:
+                treasury / active credit / fee index (per global config)
 ```
 
 ### Partial Fills
@@ -411,19 +424,11 @@ Curves support partial fills:
 
 ### Fee Split
 
-Every fill fee is split three ways:
+Fill fee splitting is **config-driven**:
 
-| Recipient | Share | Purpose |
-|-----------|-------|---------|
-| **Maker** | 70% | Reward for providing liquidity |
-| **Fee Index** | 20% | Distributed to pool depositors |
-| **Treasury** | 10% | Protocol revenue |
-
-```solidity
-uint16 internal constant FEE_SPLIT_MAKER_BPS = 7000;   // 70%
-uint16 internal constant FEE_SPLIT_INDEX_BPS = 2000;   // 20%
-uint16 internal constant FEE_SPLIT_TREASURY_BPS = 1000; // 10%
-```
+- Maker share comes from `mamMakerShareBps` in derivative config.
+- Protocol share is `feeAmount - makerFee`.
+- Protocol share is then routed by `LibFeeRouter` into treasury, active-credit, and fee-index portions based on global split settings (and whether treasury is set).
 
 ### Fee Calculation
 
@@ -431,10 +436,11 @@ uint16 internal constant FEE_SPLIT_TREASURY_BPS = 1000; // 10%
 // Total fee from taker
 feeAmount = amountIn × feeRateBps / 10000
 
-// Split
-makerFee = feeAmount × 7000 / 10000
-indexFee = feeAmount × 2000 / 10000
-treasuryFee = feeAmount - makerFee - indexFee
+// Maker portion
+makerFee = feeAmount × mamMakerShareBps / 10000
+
+// Protocol portion (routed by LibFeeRouter)
+protocolFee = feeAmount - makerFee
 ```
 
 ### Fee Asset
@@ -442,6 +448,7 @@ treasuryFee = feeAmount - makerFee - indexFee
 Currently, fees are always taken from `TokenIn` (quote asset):
 - Taker pays: `amountIn + feeAmount`
 - Fee is denominated in quote tokens
+- With fee-on-transfer quote tokens, taker may provide a higher `maxQuote`; excess received is credited to maker principal
 
 ---
 
@@ -614,9 +621,10 @@ require(ok, "Quote failed");
 usdc.approve(diamond, totalQuote);
 
 // 3. Execute fill
-uint256 received = mamCurveFacet.executeCurveSwap(
+uint256 amountOutFilled = mamCurveFacet.executeCurveSwap(
     curveId,
     2000e6,                         // amountIn
+    totalQuote,                     // maxQuote (or a higher FoT-safe cap)
     amountOut * 99 / 100,           // minOut (1% slippage)
     uint64(block.timestamp + 300),  // 5 min deadline
     msg.sender                      // recipient
@@ -832,6 +840,7 @@ usdc.approve(diamond, totalQuote);
 mamCurveFacet.executeCurveSwap(
     curveId,
     11000e6,
+    totalQuote,                     // maxQuote
     4.9e18,                         // minOut with slippage buffer
     uint64(block.timestamp + 300),
     alice
@@ -841,7 +850,7 @@ mamCurveFacet.executeCurveSwap(
 **After Fill:**
 - Alice receives: 5 ETH
 - Alice paid: 11,011 USDC (including fee)
-- Frank receives: 11,000 USDC + 7.7 USDC (maker fee share)
+- Frank receives: 11,000 USDC plus maker-fee share (based on current `mamMakerShareBps`)
 - Remaining volume: 5 ETH (order still active)
 
 **Advantages of MAM Limit Orders:**
@@ -934,13 +943,13 @@ uint256 firstId = mamCurveFacet.createCurvesBatch(descs);
 
 | Error | Cause |
 |-------|-------|
-| `MamCurve_Paused` | MAM system is paused |
+| `MamCurve_Paused` | MAM curve creation is paused |
 | `MamCurve_InvalidAmount` | Zero volume or fill amount |
 | `MamCurve_InvalidPool` | Same pool for both tokens |
 | `MamCurve_InvalidDescriptor` | Invalid curve parameters |
 | `MamCurve_InvalidTime` | Invalid start time or duration |
 | `MamCurve_NotActive` | Curve not active |
-| `MamCurve_Expired` | Curve has expired or deadline passed |
+| `MamCurve_Expired` | Deadline passed or swap attempted outside active time window |
 | `MamCurve_NotExpired` | Trying to expire before end time |
 | `MamCurve_InsufficientVolume` | Fill exceeds remaining volume |
 | `MamCurve_Slippage` | Output less than minimum |
@@ -982,6 +991,7 @@ event CurveFilled(
     address indexed taker,
     address indexed recipient,
     uint256 amountIn,
+    uint256 actualIn,
     uint256 amountOut,
     uint256 feeAmount,
     uint256 remainingVolume
@@ -1016,7 +1026,7 @@ event MamPausedUpdated(bool paused);
 
 2. **Price Bounds**: Both start and end prices must be non-zero.
 
-3. **Time Validation**: Start time must be in the future (or now), duration must be positive.
+3. **Time Validation**: Creation allows starts up to 30 minutes in the past; updates require start time `>= block.timestamp`; duration must be positive.
 
 4. **Commitment Hashing**: Curve parameters are hashed for integrity verification.
 
@@ -1030,11 +1040,11 @@ event MamPausedUpdated(bool paused);
 
 9. **Position Ownership**: Only maker can update or cancel their curves.
 
-10. **Treasury Requirement**: Treasury must be set for fee distribution.
+10. **Treasury Optionality**: Treasury is optional; if unset, treasury split is effectively zero.
 
-11. **Native ETH Support**: MAM curves fully support native ETH as either base or quote asset. The `LibCurrency` library handles all native ETH operations including deposits via `msg.value`, tracked balance accounting, and secure transfers.
+11. **Native Asset Constraint**: MAM descriptor validation currently requires non-zero token addresses, so native ETH (`address(0)`) is not accepted directly in MAM curves.
 
 ---
 
-**Document Version:** 2.0 (Updated for native ETH support)
-**Last Updated:** January 2026
+**Document Version:** 2.1
+**Last Updated:** February 2026

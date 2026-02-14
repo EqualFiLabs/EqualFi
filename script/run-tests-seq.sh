@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -u -o pipefail
 
 failures=()
@@ -11,19 +11,22 @@ run() {
   fi
 }
 
-run 'forge test --match-path "test/admin/*t.sol"'
-run 'forge test --match-path "test/equallend-direct/*t.sol"'
-run 'forge test --match-path "test/facets/*t.sol"'
-run 'forge test --match-path "test/gas/*t.sol"'
-run 'forge test --match-path "test/libraries/*t.sol"'
-run 'forge test --match-path "test/maintenance/*t.sol"'
-run 'forge test --match-path "test/managed-pools/*t.sol"'
-run 'forge test --match-path "test/mocks/*t.sol"'
-run 'forge test --match-path "test/penalty/*t.sol"'
-run 'forge test --match-path "test/root/*t.sol"'
-run 'forge test --match-path "test/treasury/*t.sol"'
-run 'forge test --match-path "test/views/*t.sol"'
-run 'forge test --match-path "test/derivatives/*t.sol"'
+for dir in test/*/; do
+  # Special-case equallend-direct: run each test file individually to avoid
+  # viaIR + memoryguard stack-depth issues when compiling the whole suite.
+  if [[ "$dir" == "test/equallend-direct/" ]]; then
+    if compgen -G "test/equallend-direct/suite-*/*.t.sol" > /dev/null; then
+      for f in test/equallend-direct/suite-*/*.t.sol; do
+        run "forge test --match-path \"$f\""
+      done
+    fi
+    continue
+  fi
+
+  if compgen -G "${dir}"*t.sol > /dev/null; then
+    run "forge test --match-path \"${dir}*t.sol\""
+  fi
+done
 
 if (( ${#failures[@]} > 0 )); then
   echo

@@ -17,6 +17,14 @@ library DirectTypes {
         AutoInsufficientTranche
     }
 
+    enum OfferKind {
+        None,
+        Lender,
+        Borrower,
+        RatioLender,
+        RatioBorrower
+    }
+
     struct DirectBorrowerOffer {
         uint256 offerId;
         address borrower;
@@ -391,6 +399,7 @@ library DirectTypes {
         mapping(uint256 => DirectBorrowerRatioTrancheOffer) borrowerRatioOffers;
         uint256 nextBorrowerRatioOfferId;
         LibPositionList.List ratioBorrowerOffers;
+        mapping(uint256 => OfferKind) offerKindById;
 
     }
 }

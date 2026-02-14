@@ -804,7 +804,7 @@ mailbox.on('ContextPublished', async (reservationId, taker, envelope) => {
 mailbox.on('FinalSigPublished', async (reservationId, taker, envelope) => {
   const finalSig = await decryptFinalSig(envelope, deskSecret);
   const tau = extractTau(finalSig);
-  await settlementEscrow.settle(reservationId, tau);
+  await settlementEscrow.settle(reservationId, tau, minReceived);
 });
 ```
 

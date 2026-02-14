@@ -18,7 +18,7 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
     bytes32 internal constant INDEX_FEE_SOURCE = keccak256("INDEX_FEE");
 
     /// @notice Mint index tokens. `units` must be a multiple of 1e18 (INDEX_SCALE).
-    function mint(uint256 indexId, uint256 units, address to)
+    function mint(uint256 indexId, uint256 units, address to, uint256[] calldata maxInputAmounts)
         external
         payable
         nonReentrant
@@ -30,12 +30,12 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         _requireIndexActive(idx, indexId);
 
         uint256 len = idx.assets.length;
+        if (maxInputAmounts.length != len) revert InvalidArrayLength();
+
         uint256 nativeTotal;
         bool hasNative;
         uint256[] memory required = new uint256[](len);
         uint256[] memory fees = new uint256[](len);
-        uint256[] memory vaultCredits = new uint256[](len);
-        uint256[] memory vaultBalancesBefore = new uint256[](len);
         uint16 feeIndexShareBps = _mintBurnFeeIndexShareBps();
 
         for (uint256 i = 0; i < len; i++) {
@@ -43,52 +43,43 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
             uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
             uint256 total = need + fee;
             address asset = idx.assets[i];
-            vaultBalancesBefore[i] = s().vaultBalances[indexId][asset];
             if (LibCurrency.isNative(asset)) {
                 hasNative = true;
                 nativeTotal += total;
+                // Check native max input
+                if (maxInputAmounts[i] < total) revert LibCurrency.LibCurrency_InvalidMax(maxInputAmounts[i], total);
             } else {
-                uint256 received = LibCurrency.pull(asset, msg.sender, total);
-                if (received < total) revert InvalidBundleDefinition();
+                uint256 received = LibCurrency.pullAtLeast(asset, msg.sender, total, maxInputAmounts[i]);
+                // For ERC20, we don't return excess here to keep it simple, similar to pullAtLeast behavior.
+                // We only ensure we received enough.
+                if (received < total) revert LibCurrency.LibCurrency_InsufficientReceived(received, total);
             }
             required[i] = need;
             fees[i] = fee;
-            vaultCredits[i] = need;
         }
         if (hasNative) {
             _pullNativeMint(nativeTotal);
         } else {
+            // For pure ERC20 mints, we usually assert zero msg.value, but pullAtLeast might handle native/ERC20 mixed.
+            // If the user sends native value for an ERC20-only index, it would be caught by pullAtLeast if we used it for native.
+            // But here we branch. If no native assets in index, ensure no ETH sent.
             LibCurrency.assertZeroMsgValue();
         }
         for (uint256 i = 0; i < len; i++) {
             address asset = idx.assets[i];
-            uint256 need = required[i];
-            s().vaultBalances[indexId][asset] = vaultBalancesBefore[i] + need;
-            _distributeIndexFee(indexId, idx, asset, fees[i], feeIndexShareBps);
+            s().vaultBalances[indexId][asset] += required[i];
+            _distributeIndexFee(indexId, asset, fees[i], feeIndexShareBps);
         }
 
-        uint256 totalSupplyBefore = idx.totalUnits;
-        if (totalSupplyBefore == 0) {
-            minted = units;
-        } else {
-            minted = type(uint256).max;
-            for (uint256 i = 0; i < len; i++) {
-                uint256 balanceBefore = vaultBalancesBefore[i];
-                require(balanceBefore > 0, "EqualIndex: zero NAV asset");
-                uint256 mintedForAsset = (vaultCredits[i] * totalSupplyBefore) / balanceBefore;
-                if (mintedForAsset < minted) minted = mintedForAsset;
-            }
-            if (minted == 0) revert InvalidUnits();
-        }
-
-        idx.totalUnits = totalSupplyBefore + minted;
+        minted = units;
+        idx.totalUnits += minted;
         IndexToken(idx.token).mintIndexUnits(to, minted);
         IndexToken(idx.token).recordMintDetails(to, minted, idx.assets, required, fees, 0);
 
         emit LibEqualIndex.Minted(indexId, to, minted, required);
     }
 
-    /// @notice Burn index tokens and redeem bundle share + fee pot share, minus burn fee.
+    /// @notice Burn index tokens and redeem fixed bundle amounts + fee pot share, minus burn fee.
     function burn(uint256 indexId, uint256 units, address to)
         external
         payable
@@ -113,15 +104,18 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
             address asset = idx.assets[i];
             uint256 vaultBalance = s().vaultBalances[indexId][asset];
             uint256 potBalance = s().feePots[indexId][asset];
-            uint256 navShare = Math.mulDiv(vaultBalance, units, totalSupply);
+            uint256 bundleOut = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            if (vaultBalance < bundleOut) {
+                revert InsufficientPoolLiquidity(bundleOut, vaultBalance);
+            }
             uint256 potShare = Math.mulDiv(potBalance, units, totalSupply);
-            uint256 gross = navShare + potShare;
+            uint256 gross = bundleOut + potShare;
             uint256 burnFee = Math.mulDiv(gross, idx.burnFeeBps[i], 10_000);
             uint256 payout = gross - burnFee;
 
-            s().vaultBalances[indexId][asset] = vaultBalance - navShare;
+            s().vaultBalances[indexId][asset] = vaultBalance - bundleOut;
             s().feePots[indexId][asset] = potBalance - potShare;
-            _distributeIndexFee(indexId, idx, asset, burnFee, feeIndexShareBps);
+            _distributeIndexFee(indexId, asset, burnFee, feeIndexShareBps);
 
             if (payout > 0) {
                 if (LibCurrency.isNative(asset)) {
@@ -140,7 +134,7 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         emit LibEqualIndex.Burned(indexId, to, units, assetsOut);
     }
 
-    /// @notice Flash borrow proportional bundle amounts for a given unit amount.
+    /// @notice Flash borrow fixed bundle amounts for a given unit amount.
     function flashLoan(uint256 indexId, uint256 units, address receiver, bytes calldata data)
         external
         payable
@@ -164,26 +158,28 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
             address asset = assets[i];
             contractBalancesBefore[i] = LibCurrency.balanceOfSelf(asset);
             uint256 vaultBalance = s().vaultBalances[indexId][asset];
-            uint256 navShare = Math.mulDiv(vaultBalance, units, totalSupply);
-            loanAmounts[i] = navShare;
-            uint256 fee = Math.mulDiv(navShare, idx.flashFeeBps, 10_000);
+            uint256 loanAmount = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            if (vaultBalance < loanAmount) {
+                revert InsufficientPoolLiquidity(loanAmount, vaultBalance);
+            }
+            loanAmounts[i] = loanAmount;
+            uint256 fee = Math.mulDiv(loanAmount, idx.flashFeeBps, 10_000);
             fees[i] = fee;
-            s().vaultBalances[indexId][asset] = vaultBalance - navShare;
-            if (navShare > 0) {
-                LibCurrency.transfer(asset, receiver, navShare);
+            s().vaultBalances[indexId][asset] = vaultBalance - loanAmount;
+            if (loanAmount > 0) {
+                LibCurrency.transfer(asset, receiver, loanAmount);
             }
         }
 
         IEqualIndexFlashReceiver(receiver).onEqualIndexFlashLoan(indexId, units, assets, loanAmounts, fees, data);
 
-        _finalizeFlashLoan(indexId, idx, assets, loanAmounts, fees, contractBalancesBefore);
+        _finalizeFlashLoan(indexId, assets, loanAmounts, fees, contractBalancesBefore);
 
         emit LibEqualIndex.FlashLoaned(indexId, receiver, units, loanAmounts, fees);
     }
 
     function _finalizeFlashLoan(
         uint256 indexId,
-        Index storage idx,
         address[] memory assets,
         uint256[] memory loanAmounts,
         uint256[] memory fees,
@@ -194,7 +190,6 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         for (uint256 i = 0; i < len; i++) {
             _settleFlashLoanFee(
                 indexId,
-                idx,
                 assets[i],
                 loanAmounts[i],
                 fees[i],
@@ -206,7 +201,6 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
 
     function _settleFlashLoanFee(
         uint256 indexId,
-        Index storage idx,
         address asset,
         uint256 loanAmount,
         uint256 fee,
@@ -222,7 +216,7 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         if (LibCurrency.isNative(asset) && fee > 0) {
             LibAppStorage.s().nativeTrackedTotal += fee;
         }
-        _distributeIndexFee(indexId, idx, asset, fee, poolFeeShareBps);
+        _distributeIndexFee(indexId, asset, fee, poolFeeShareBps);
     }
 
     function _pullNativeMint(uint256 amount) internal {
@@ -256,7 +250,6 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
     /// Uses feeIndexShareBps for the pool share, remainder goes to the Fee Pot.
     function _distributeIndexFee(
         uint256 indexId,
-        Index storage idx,
         address asset,
         uint256 fee,
         uint16 feeIndexShareBps

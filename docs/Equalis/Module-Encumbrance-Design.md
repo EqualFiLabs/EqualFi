@@ -1,100 +1,57 @@
 # Public Module Encumbrance - Design Document
 
-**Version:** 0.1
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Goals](#goals)
-3. [Non-Goals](#non-goals)
-4. [Design Principles](#design-principles)
-5. [Architecture](#architecture)
-6. [Data Model](#data-model)
-7. [Lifecycle](#lifecycle)
-8. [Fee Model](#fee-model)
-9. [Encumbrance and Write-Down](#encumbrance-and-write-down)
-10. [Module Integration Guide](#module-integration-guide)
-11. [Events](#events)
-12. [Security Considerations](#security-considerations)
-13. [Testing and Validation](#testing-and-validation)
-14. [Open Questions](#open-questions)
+**Version:** 0.3
 
 ---
 
 ## Overview
 
-This document proposes a permissionless module interface that allows external protocols to build standalone products (e.g., prediction markets) while consuming Equalis liquidity through the centralized encumbrance system. The objective is to avoid liquidity fragmentation: deposits remain on-platform, and modules must use encumbered principal rather than withdrawing funds from pools.
+This document defines V1 module encumbrance for Equalis with reservation semantics and mandatory module AUM.
 
-Greenfield assumption: this is a new subsystem in local dev, so no backwards compatibility or migrations are required.
+V1 rules:
+- Encumbered principal is reserved and non-reusable.
+- Encumbrance changes only via `encumber` and `unencumber`.
+- No generic escrow mutation path.
+- Module AUM accrues on tuple encumbered amount only (`positionKey/poolId/moduleId`).
+- AUM routes through standard protocol fee rails (Treasury/ACI/FI split via fee router path).
 
 ## Goals
 
-- Enable permissionless module registration with a configurable creation fee.
-- Allow modules to encumber pool principal from a Position NFT without withdrawing liquidity.
-- Ensure encumbered principal cannot be double-used and is always reflected in solvency checks.
-- Provide a write-down mechanism: if module assets are lost, the position principal is reduced on unencumber.
-- Route protocol fees back through the existing fee router (ACI/FI/Treasury).
+- Permissionless module registration with configurable creation fee.
+- Position-scoped module encumbrance that integrates with solvency checks.
+- Mandatory module AUM with deterministic 1-day epoch accrual.
+- Permissionless poke function for liveness.
+- Permanent module deactivation safeguard for catastrophic shortfall.
 
 ## Non-Goals
 
-- Guaranteeing module-level profitability or solvency.
-- Enforcing any business logic inside modules beyond balance accounting.
-- Providing oracle-based pricing or risk controls (modules handle their own logic).
-
-## Design Principles
-
-- Encumbrance is the source of truth for reserved capital.
-- Losses are position-local (no socialized losses across a pool).
-- Write-downs are deterministic and based on actual on-chain balances at finalization.
-- Protocol fees are centralized through `LibFeeRouter` and `LibFeeIndex`.
-- Module registration is permissionless but can be disabled by setting a creation fee of zero.
+- External adapter escrow in V1.
+- Arbitrary module escrow accounting.
+- Oracle-based module risk controls.
 
 ## Architecture
 
-### Contract/Ffacet Layout
+### Facets/Libraries
 
 ```
 src/modules/
-├── ModuleRegistryFacet.sol     # Permissionless module registration + config
-├── ModuleGatewayFacet.sol      # Encumber/unencumber + settlement entry points
-├── ModuleViewFacet.sol         # Read-only queries
+├── ModuleRegistryFacet.sol
+├── ModuleGatewayFacet.sol
+├── ModuleViewFacet.sol
 
 src/libraries/
-├── LibModuleRegistry.sol       # Storage + events for modules
-├── LibModuleEncumbrance.sol    # Encumbrance wrapper for modules
-├── LibModuleSettlement.sol     # Shared write-down helper
+├── LibModuleRegistry.sol
+├── LibModuleEncumbrance.sol
+├── LibModuleAum.sol
 ```
 
-### Core Dependencies
+### Core Integrations
 
-- `LibEncumbrance`: central encumbrance storage.
-- `LibSolvencyChecks`: available principal calculation.
-- `LibActiveCreditIndex`: encumbrance-aware yield accrual.
-- `LibFeeIndex` + `LibFeeRouter`: fee routing and yield distribution.
-
-### Encumbrance Tracking
-
-Two approaches are viable:
-
-1) **Generalize existing index encumbrance**
-   - Rename `indexEncumbered` and `encumberedByIndex` to module terminology.
-   - Use a single `moduleId` namespace for all third-party modules (including EqualIndex).
-
-2) **Add module encumbrance alongside index encumbrance**
-   - Keep EqualIndex isolated and introduce `moduleEncumbered` + `encumberedByModule`.
-   - Avoids ambiguity but adds storage.
-
-Given greenfield constraints, the recommended approach is (1) for simplicity, with a clear naming update.
-
-### Module Registration
-
-Permissionless module registration mirrors the EqualIndex creation fee pattern:
-
-- `moduleCreationFee` stored in `LibAppStorage` (or a dedicated module config).
-- If fee is `0`, permissionless registration is disabled.
-- Non-governance registrants must pay exact fee, routed to the treasury.
+- `LibEncumbrance`: add `moduleEncumbered` and `encumberedByModule`.
+- `LibSolvencyChecks`: include module encumbrance in available principal.
+- `LibFeeTreasury`/`LibFeeRouter`: route module AUM with standard splits.
+- `LibActiveCreditIndex`: module encumbrance increase/decrease, gated by global ACI pause for increases.
+- `LibPoolMembership`: block cleanup while module encumbrance exists.
 
 ## Data Model
 
@@ -102,248 +59,170 @@ Permissionless module registration mirrors the EqualIndex creation fee pattern:
 
 ```solidity
 struct Module {
-    address owner;          // Creator or admin
-    address adapter;        // Optional external module contract
-    bytes32 metadataHash;   // Off-chain metadata reference
-    uint16 feeBps;          // Optional protocol fee for module actions
+    address owner;      // EOA or contract
+    bytes32 metadataHash;
     bool paused;
+    bool inactive;      // terminal
+    uint16 aumBps;      // governance-controlled
 }
 ```
 
-### Module Position State
+### Global Module Config
 
 ```solidity
-struct ModulePositionState {
-    uint256 encumbered;     // Principal encumbered by module
-    uint256 escrowed;       // Module-held balance (internal escrow or external)
-}
+uint256 moduleCreationFee;
+uint16 defaultModuleAumBps;
+uint16 minModuleAumBps;
+uint16 maxModuleAumBps;
+uint16 deactivationGraceEpochs;
+bool moduleAciPaused;
 ```
 
-### Core Mappings
+### Tuple AUM State
 
 ```solidity
-mapping(uint256 => Module) modules; // moduleId => module config
-mapping(bytes32 => mapping(uint256 => mapping(uint256 => ModulePositionState))) moduleState;
+struct TupleAumState {
+    uint64 lastAumEpoch;
+    bool delinquent;
+    uint64 delinquentSince;
+    uint256 lastShortfall;
+}
+
+mapping(bytes32 => mapping(uint256 => mapping(uint256 => TupleAumState))) tupleAum;
 // positionKey => poolId => moduleId => state
 ```
 
-The encumbered amount should also be stored in `LibEncumbrance` to ensure `LibSolvencyChecks.calculateAvailablePrincipal` reflects module usage.
+### Encumbrance Extension
+
+```solidity
+struct Encumbrance {
+    uint256 directLocked;
+    uint256 directLent;
+    uint256 directOfferEscrow;
+    uint256 indexEncumbered;
+    uint256 moduleEncumbered;
+}
+
+mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByModule;
+```
 
 ## Lifecycle
 
-### 1) Module Registration
+### 1) Register Module
 
-- Caller provides `metadataHash`, optional `adapter` address, and fee configuration.
-- If caller is not governance, `msg.value` must equal `moduleCreationFee`.
-- `moduleId` is incremented and stored.
+- `registerModule(metadataHash)`.
+- Non-governance pays exact `moduleCreationFee`; governance bypass allowed.
+- Fee routed to treasury.
+- Module owner set to caller.
 
-### 2) Encumber (Open Module Position)
+### 2) Encumber
 
-Inputs: `positionId`, `poolId`, `moduleId`, `amount`, optional `permit`/signature.
+- Validate module exists, not paused, not inactive.
+- Validate position authorization.
+- Accrue tuple AUM first.
+- Validate available principal.
+- Increase tuple module encumbrance.
+- Apply ACI increase only when `moduleAciPaused == false`.
 
-Steps:
-- Verify position ownership or valid permit.
-- Ensure module not paused.
-- Check available principal via `LibSolvencyChecks.calculateAvailablePrincipal`.
-- Settle `LibFeeIndex` and `LibActiveCreditIndex` for the position.
-- `LibModuleEncumbrance.encumber(positionKey, poolId, moduleId, amount)`.
-- Increment `moduleState[positionKey][poolId][moduleId].encumbered` and `escrowed`.
-- Apply `LibActiveCreditIndex.applyEncumbranceIncrease` if encumbrance should count toward ACI.
+### 3) Unencumber
 
-### 3) Module Operations
+- Validate module exists.
+- Validate position authorization.
+- Accrue tuple AUM first.
+- Decrease tuple module encumbrance.
+- Apply ACI decrease.
 
-Module business logic is external to the core. The module may:
+Important: unencumber remains callable even if module is paused or inactive.
 
-- Use internal balances tracked in `moduleState` (no token transfers), or
-- Request asset movement to a registered `adapter` contract (external escrow).
+### 4) Poke AUM (Permissionless)
 
-In either case, the core maintains the encumbered amount for solvency.
+- Anyone calls `pokeModuleAum(positionId,poolId,moduleId)`.
+- Accrues tuple AUM and updates delinquency/deactivation state.
+- No position ownership required.
 
-### 4) Finalize (Unencumber + Write-Down)
+## Module AUM
 
-Inputs: `positionId`, `poolId`, `moduleId`, `expectedEncumbered`.
+### Epoch Model
 
-Steps:
-- Settle `LibFeeIndex` and `LibActiveCreditIndex` for the position.
-- Determine `currentEscrowed` from the module escrow balance:
-  - Internal mode: `moduleState[positionKey][poolId][moduleId].escrowed`.
-  - External mode: `IERC20(asset).balanceOf(adapter)` or an adapter-specific accounting method.
-- Apply a principal delta using the same pattern as AMM auctions:
-  - If `currentEscrowed < expectedEncumbered`, write down principal.
-  - If `currentEscrowed > expectedEncumbered`, credit principal.
-- Update `pool.totalDeposits` and `pool.trackedBalance` to match the delta.
-- `LibModuleEncumbrance.unencumber(positionKey, poolId, moduleId, expectedEncumbered)`.
-- Decrease ACI encumbrance using `LibActiveCreditIndex.applyEncumbranceDecrease`.
+- Epoch length: `1 days`.
+- Triggered on `encumber`, `unencumber`, and `poke`.
+- First touch initializes `lastAumEpoch` and does not retro-charge.
 
-## Fee Model
-
-### Registration Fee
-
-- `moduleCreationFee` in app config.
-- `0` disables permissionless registration.
-- Paid to treasury on creation.
-
-### Module Action Fees
-
-Two optional fee layers:
-
-1) **Protocol Fee** (configurable per module)
-   - Split through `LibFeeRouter` into Treasury / ACI / FeeIndex.
-
-2) **Module-Specific Fees**
-   - Defined by the module and handled within module logic.
-   - If fees are paid in underlying assets, they can be routed via `LibFeeRouter` for protocol capture.
-
-## Encumbrance and Write-Down
-
-The write-down behavior follows the AMM Auction model:
-
-- Encumbrance reserves principal while the module is active.
-- On finalization, the core compares the actual escrow balance to the encumbered amount.
-- The position is adjusted by the delta (gain or loss).
-
-Reference behavior: `AmmAuctionFacet._applyPrincipalDelta`.
-
-Pseudo-flow:
+### Formula
 
 ```solidity
-LibFeeIndex.settle(pid, positionKey);
-LibActiveCreditIndex.settle(pid, positionKey);
-
-uint256 current = moduleEscrowBalance(...);
-uint256 initial = moduleState[positionKey][pid][moduleId].encumbered;
-
-_applyPrincipalDelta(pid, pool, positionKey, current, initial);
-LibModuleEncumbrance.unencumber(positionKey, pid, moduleId, initial);
+epochs = (block.timestamp - lastAumEpoch) / 1 days;
+feeDue = encumbered * aumBps * epochs / (365 * 10_000);
 ```
 
-## Module Integration Guide
+where `encumbered = encumberedByModule[positionKey][poolId][moduleId]`.
 
-### Registration
+### Charge + Route
 
-1) Call `registerModule(metadataHash, adapter, feeBps)` with `msg.value = moduleCreationFee`.
-2) Receive a `moduleId` for future calls.
+- `chargeablePrincipal = min(userPrincipal[positionKey], encumbered)`.
+- If `feeDue <= chargeablePrincipal`:
+  - debit `userPrincipal` and `totalDeposits` by `feeDue`.
+  - route via `LibFeeTreasury.accrueWithTreasuryFromPrincipal(..., MODULE_AUM_SOURCE)`.
+- Advance epoch checkpoint by elapsed full epochs.
 
-### Encumber
+## Deactivation Safeguard
 
-1) Obtain user authorization for the Position NFT (ownership or permit).
-2) Call `encumberPosition(positionId, poolId, moduleId, amount, data)`.
+If `feeDue > chargeablePrincipal`:
 
-### Operate
+1. Charge up to `chargeablePrincipal` if nonzero.
+2. Mark tuple delinquent and emit delinquency event.
+3. If delinquency persists for `deactivationGraceEpochs` and shortfall remains on later accrual, set `module.inactive = true` permanently.
+4. Emit `ModulePermanentlyDeactivated`.
 
-- Use internal accounting for module balances, or
-- Request asset transfers to the registered `adapter` contract if needed.
+Inactive module behavior:
+- New `encumber` reverts forever.
+- No reactivation path.
+- `unencumber` and `poke` remain callable.
+- No future module-driven ACI increases.
 
-### Finalize
+## ACI Policy
 
-1) Ensure module state is finalized and balances are returned (if external).
-2) Call `finalizePosition(positionId, poolId, moduleId)`.
-3) The core applies write-downs and releases encumbrance.
+- Per-module `aciEligible` is removed.
+- Global governance/admin switch: `setModuleAciPaused(bool)`.
+- When paused: module encumbrance increases do not add ACI exposure.
+- Decreases still apply on unencumber.
 
-## Events
+## Governance/Admin Knobs
 
-Suggested events:
+- `setModuleCreationFee(uint256)`
+- `setDefaultModuleAumBps(uint16)`
+- `setModuleAumBps(uint256 moduleId, uint16)`
+- `setModuleAumBounds(uint16 minBps, uint16 maxBps)`
+- `setModuleDeactivationGraceEpochs(uint16)`
+- `setModuleAciPaused(bool)`
 
-- `ModuleRegistered(uint256 moduleId, address owner, address adapter, bytes32 metadataHash)`
-- `ModulePaused(uint256 moduleId, bool paused)`
-- `ModuleEncumbered(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount)`
-- `ModuleFinalized(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 initial, uint256 final)`
-
-## Native ETH Support
-
-The module encumbrance system supports native ETH (represented by `address(0)`) as pool underlying assets, enabling modules to encumber ETH liquidity without WETH wrapping.
-
-### Native ETH Pool Characteristics
-
-Native ETH pools use `address(0)` as the underlying asset. The system maintains a global `nativeTrackedTotal` in AppStorage that tracks the sum of `trackedBalance` across all native ETH pools.
-
-### Currency Operations
-
-All token operations use the `LibCurrency` helper library:
-
-| Operation | Native ETH Behavior | ERC20 Behavior |
-|-----------|---------------------|----------------|
-| `pull()` | Accounting-only (no transfer), validates against `nativeAvailable`, updates `nativeTrackedTotal` | `safeTransferFrom` with balance delta measurement |
-| `transfer()` | Low-level `call{value: amount}("")` | `safeTransfer` |
-| `balanceOfSelf()` | Returns `address(this).balance` | Returns `balanceOf(address(this))` |
-| `isNative()` | Returns `true` for `address(0)` | Returns `false` |
-
-### Encumbrance with Native ETH
-
-When encumbering principal from a native ETH pool:
-
-1. The module gateway validates available principal via `LibSolvencyChecks.calculateAvailablePrincipal`
-2. Encumbrance is recorded in `LibEncumbrance` (asset-agnostic)
-3. No token transfer occurs; the ETH remains in the contract
-4. `nativeTrackedTotal` is not modified during encumbrance (only on actual ETH movement)
-
-### External Escrow with Native ETH
-
-If a module uses external escrow (adapter contract) with native ETH:
-
-1. ETH is transferred to the adapter via `LibCurrency.transfer`
-2. `pool.trackedBalance` is decremented
-3. `nativeTrackedTotal` is decremented
-4. On finalization, the adapter returns ETH to the core contract
-5. Write-down logic compares actual balance to expected encumbered amount
-
-### Finalization with Native ETH
-
-When finalizing a module position with native ETH:
-
-```solidity
-// Determine current escrowed balance
-uint256 currentEscrowed = moduleEscrowBalance(...);
-uint256 initial = moduleState[positionKey][pid][moduleId].encumbered;
-
-// Apply principal delta (gain or loss)
-_applyPrincipalDelta(pid, pool, positionKey, currentEscrowed, initial);
-
-// Update native tracking if applicable
-if (LibCurrency.isNative(pool.underlying)) {
-    // Adjust nativeTrackedTotal based on delta
-}
-
-// Release encumbrance
-LibModuleEncumbrance.unencumber(positionKey, pid, moduleId, initial);
-```
-
-### Flash Accounting Pattern
-
-Native ETH operations follow a flash accounting pattern:
-
-1. All module gateway functions reject nonzero `msg.value` via `LibCurrency.assertZeroMsgValue()`
-2. Native ETH must be pre-deposited to the contract before operations
-3. `nativeAvailable = address(this).balance - nativeTrackedTotal` represents unallocated ETH
-4. Operations consume from `nativeAvailable` and update `nativeTrackedTotal`
-
----
+AUM setters must enforce bounds.
 
 ## Security Considerations
 
-- **Permissionless registration**: mitigate spam with a non-zero creation fee.
-- **Module pause**: governance should be able to pause a module in emergencies.
-- **Reentrancy**: module gateway methods should be nonReentrant.
-- **Balance integrity**: use `trackedBalance` invariants and check actual token balances on external escrow finalization.
-- **User consent**: require explicit ownership or signed permit for encumbrance.
-- **Native ETH safety**: Native ETH operations include:
-  - `nonReentrant` modifier on all functions that send ETH
-  - Rejection of unexpected `msg.value` with `UnexpectedMsgValue` error
-  - Failed ETH transfers revert with `NativeTransferFailed(address to, uint256 amount)`
-  - Global `nativeTrackedTotal` prevents double-spending across native ETH pools
-  - Flash accounting pattern ensures ETH is pre-deposited before consumption
+- Permissionless poke must not become a free deactivation grief vector:
+  - deactivation requires persisted delinquency through grace window.
+- Pause/inactive states must never trap user exits.
+- Namespace isolation between module and index encumbrance is mandatory.
+- Native invariant must hold: `nativeTrackedTotal <= address(this).balance`.
 
 ## Testing and Validation
 
-- Unit tests for encumber/unencumber behavior across multiple modules.
-- Write-down tests where `currentEscrowed < encumbered` and vice versa.
-- Fee routing tests ensuring ACI/FI/Treasury splits remain correct.
-- Integration test that mirrors the AMM auction close flow for module finalization.
+- Unit tests:
+  - registration and owner/admin controls,
+  - AUM bounds and ACI pause control,
+  - first-touch no-retro-charge,
+  - unencumber allowed while paused/inactive,
+  - delinquency and terminal deactivation.
+- Property tests:
+  - principal availability conservation,
+  - deterministic epoch accrual,
+  - AUM base isolation to tuple encumbrance,
+  - ACI pause gates increases only,
+  - module/index namespace isolation,
+  - native tracked invariant.
 
 ## Open Questions
 
-- Should module encumbrance count toward active credit yield by default?
-- Should module registration allow free creation for governance only?
-- What is the recommended metadata format (URI vs hash)?
-- Are external escrow transfers permitted, or should all modules operate in-core only?
-
+- Should grace epochs be global-only or allow per-module override?
+- Should delinquency view expose cumulative shortfall history or only latest shortfall?

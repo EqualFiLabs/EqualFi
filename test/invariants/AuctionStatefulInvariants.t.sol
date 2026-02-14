@@ -49,7 +49,7 @@ contract AmmAuctionStatefulHandler is Test {
         vm.prank(taker);
         tokenIn.approve(address(harness), amountIn);
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenIn), amountIn, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenIn), amountIn, amountIn, 0, taker);
     }
 
     function _snapshotK() internal {
@@ -179,7 +179,7 @@ contract CommunityAuctionStatefulHandler is Test {
         vm.prank(taker);
         tokenIn.approve(address(harness), amountIn);
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenIn), amountIn, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenIn), amountIn, amountIn, 0, taker);
     }
 }
 

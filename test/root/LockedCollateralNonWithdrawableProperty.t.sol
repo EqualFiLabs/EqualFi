@@ -80,6 +80,6 @@ contract LockedCollateralNonWithdrawablePropertyTest is Test {
 
         vm.expectRevert();
         vm.prank(owner);
-        facet.withdrawFromPosition(tokenId, 1, withdrawAmount);
+        facet.withdrawFromPosition(tokenId, 1, withdrawAmount, 0);
     }
 }

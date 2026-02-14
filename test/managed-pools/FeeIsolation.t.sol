@@ -74,27 +74,26 @@ contract FeeIsolationPropertyTest is Test {
         harness.setDefaultPoolConfig(_poolConfig());
     }
 
-    function _managedConfig() internal pure returns (Types.ManagedPoolConfig memory cfg) {
-        Types.ActionFeeSet memory actionFees;
-        cfg = Types.ManagedPoolConfig({
-            rollingApyBps: 500,
-            depositorLTVBps: 8000,
-            maintenanceRateBps: 50,
-            flashLoanFeeBps: 10,
-            flashLoanAntiSplit: false,
-            minDepositAmount: 1 ether,
-            minLoanAmount: 1 ether,
-            minTopupAmount: 0.1 ether,
-            isCapped: false,
-            depositCap: 0,
-            maxUserCount: 0,
-            aumFeeMinBps: 100,
-            aumFeeMaxBps: 500,
-            fixedTermConfigs: new Types.FixedTermConfig[](0),
-            actionFees: actionFees,
-            manager: address(0),
-            whitelistEnabled: true
-        });
+    function _managedConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg.rollingApyBps = 500;
+        cfg.depositorLTVBps = 8000;
+        cfg.maintenanceRateBps = 50;
+        cfg.flashLoanFeeBps = 10;
+        cfg.flashLoanAntiSplit = false;
+        cfg.minDepositAmount = 1 ether;
+        cfg.minLoanAmount = 1 ether;
+        cfg.minTopupAmount = 0.1 ether;
+        cfg.isCapped = false;
+        cfg.depositCap = 0;
+        cfg.maxUserCount = 0;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
+        cfg.fixedTermConfigs = new Types.FixedTermConfig[](0);
+        cfg.borrowFee = Types.ActionFeeConfig(0, false);
+        cfg.repayFee = Types.ActionFeeConfig(0, false);
+        cfg.withdrawFee = Types.ActionFeeConfig(0, false);
+        cfg.flashFee = Types.ActionFeeConfig(0, false);
+        cfg.closeRollingFee = Types.ActionFeeConfig(0, false);
     }
 
     function _poolConfig() internal pure returns (Types.PoolConfig memory cfg) {
@@ -124,8 +123,7 @@ contract FeeIsolationPropertyTest is Test {
         harness.setManagedPoolCreationFee(managedFee);
         harness.setPoolCreationFee(unmanagedFee);
 
-        Types.ManagedPoolConfig memory mCfg = _managedConfig();
-        mCfg.manager = managedCreator;
+        Types.PoolConfig memory mCfg = _managedConfig();
 
         vm.deal(managedCreator, 1 ether);
         uint256 balBefore = treasury.balance;

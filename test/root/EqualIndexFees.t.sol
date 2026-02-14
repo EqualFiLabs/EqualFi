@@ -9,6 +9,7 @@ import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 import {Types} from "../../src/libraries/Types.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "../../src/libraries/Errors.sol";
 
 contract EqualIndexFeesHarness is EqualIndexFacetV3 {
@@ -41,6 +42,17 @@ contract EqualIndexFeesHarness is EqualIndexFacetV3 {
 
     function setAssetToPoolId(address asset, uint256 pid) external {
         LibAppStorage.s().assetToPoolId[asset] = pid;
+    }
+
+    function previewMintInputs(uint256 indexId, uint256 units) external view returns (uint256[] memory maxInputs) {
+        Index storage idx = s().indexes[indexId];
+        uint256 len = idx.assets.length;
+        maxInputs = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
+            maxInputs[i] = need + fee;
+        }
     }
 
     function seedPool(uint256 pid, address underlying, uint256 totalDeposits) external {
@@ -158,7 +170,7 @@ contract EqualIndexFeesTest is Test {
         uint256 need = 1 ether * units / LibEqualIndex.INDEX_SCALE;
         uint256 fee = (need * MINT_FEE_BPS) / 10_000;
         token.approve(address(facet), need + fee);
-        facet.mint(indexId, units, to);
+        facet.mint(indexId, units, to, facet.previewMintInputs(indexId, units));
     }
 
     function _setTimelock(address newTimelock) internal {
@@ -292,8 +304,10 @@ contract EqualIndexFeesTest is Test {
         facet.setPaused(indexId, true);
 
         token.approve(address(facet), type(uint256).max);
+        uint256 units = LibEqualIndex.INDEX_SCALE;
+        uint256[] memory maxInputs = facet.previewMintInputs(indexId, units);
         vm.expectRevert(abi.encodeWithSelector(IndexPaused.selector, indexId));
-        facet.mint(indexId, LibEqualIndex.INDEX_SCALE, address(this));
+        facet.mint(indexId, units, address(this), maxInputs);
 
         vm.expectRevert(abi.encodeWithSelector(IndexPaused.selector, indexId));
         facet.burn(indexId, LibEqualIndex.INDEX_SCALE, address(this));

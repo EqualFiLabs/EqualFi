@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {IERC165} from "../interfaces/IERC165.sol";
-import {IERC6900ExecutionModule} from "./IERC6900ExecutionModule.sol";
-import {IERC6900Module} from "./IERC6900Module.sol";
-import {ExecutionManifest, ManifestExecutionFunction} from "./ModuleTypes.sol";
+import {IERC165} from "@agent-wallet-core/interfaces/IERC165.sol";
+import {IERC6900ExecutionModule} from "@agent-wallet-core/interfaces/IERC6900ExecutionModule.sol";
+import {IERC6900Module} from "@agent-wallet-core/interfaces/IERC6900Module.sol";
+import {ExecutionManifest, ManifestExecutionFunction} from "@agent-wallet-core/libraries/ModuleTypes.sol";
 import {DerivativeTypes} from "../libraries/DerivativeTypes.sol";
-import {IERC6551Account} from "../interfaces/IERC6551Account.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
 
 interface IAmmAuctionFacet {
     function createAuction(DerivativeTypes.CreateAuctionParams calldata params) external returns (uint256 auctionId);
     function cancelAuction(uint256 auctionId) external;
+    function getAuction(uint256 auctionId) external view returns (DerivativeTypes.AmmAuction memory);
 }
 
 interface IPositionManagementFacet {
@@ -67,6 +68,8 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
     error AmmSkill_DurationOutOfBounds(uint64 duration, uint64 min, uint64 max);
     error AmmSkill_FeeOutOfBounds(uint16 feeBps, uint16 minFeeBps, uint16 maxFeeBps);
     error AmmSkill_ReserveOutOfBounds(uint256 reserve, uint256 minReserve, uint256 maxReserve);
+    error AmmSkill_PositionIdMismatch(uint256 expectedTokenId, uint256 providedPositionId);
+    error AmmSkill_AuctionNotForThisPosition(uint256 auctionId, uint256 expectedTokenId, uint256 makerPositionId);
 
     event DiamondUpdated(address indexed previous, address indexed current);
     event AuctionPolicyUpdated(
@@ -162,6 +165,11 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
     }
 
     function createAuction(DerivativeTypes.CreateAuctionParams calldata params) external returns (uint256 auctionId) {
+        uint256 expectedTokenId = _boundTokenId();
+        if (params.positionId != expectedTokenId) {
+            revert AmmSkill_PositionIdMismatch(expectedTokenId, params.positionId);
+        }
+
         LibAmmSkillStorage.Layout storage ds = LibAmmSkillStorage.layout();
         _enforceAuctionPolicy(ds, params);
         address diamond = ds.diamond;
@@ -181,11 +189,22 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
         if (diamond == address(0)) {
             revert AmmSkill_DiamondNotSet();
         }
+        uint256 expectedTokenId = _boundTokenId();
+        DerivativeTypes.AmmAuction memory auction = IAmmAuctionFacet(diamond).getAuction(auctionId);
+        if (auction.makerPositionId != expectedTokenId) {
+            revert AmmSkill_AuctionNotForThisPosition(auctionId, expectedTokenId, auction.makerPositionId);
+        }
+
         IAmmAuctionFacet(diamond).cancelAuction(auctionId);
         emit AgentAuctionCancelled(address(this), auctionId);
     }
 
     function rollYieldToPosition(uint256 tokenId, uint256 pid) external {
+        uint256 expectedTokenId = _boundTokenId();
+        if (tokenId != expectedTokenId) {
+            revert AmmSkill_PositionIdMismatch(expectedTokenId, tokenId);
+        }
+
         LibAmmSkillStorage.Layout storage ds = LibAmmSkillStorage.layout();
         _enforceRollPolicy(ds, pid);
         address diamond = ds.diamond;
@@ -249,6 +268,10 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
 
     function getDiamond() external view returns (address) {
         return LibAmmSkillStorage.layout().diamond;
+    }
+
+    function _boundTokenId() internal view returns (uint256 tokenId) {
+        (, , tokenId) = IERC6551Account(address(this)).token();
     }
 
     function _requireOwner() internal view {

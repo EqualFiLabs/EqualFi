@@ -122,7 +122,7 @@ contract CrossFacetInvariantTest is Test {
         depositAmount = bound(depositAmount, 50 ether, 300 ether);
 
         vm.startPrank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(PID, depositAmount);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, depositAmount, depositAmount, 0);
         bytes32 key = nft.getPositionKey(tokenId);
         vm.stopPrank();
 
@@ -161,7 +161,7 @@ contract CrossFacetInvariantTest is Test {
         withdrawAmount = bound(withdrawAmount, 0, safeWithdrawCap);
         if (withdrawAmount > 0) {
             vm.prank(user);
-            facet.withdrawFromPosition(tokenId, PID, withdrawAmount);
+            facet.withdrawFromPosition(tokenId, PID, withdrawAmount, 0);
         }
 
         uint256 principalAfter = p.userPrincipal[key];

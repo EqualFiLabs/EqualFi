@@ -141,7 +141,7 @@ contract FeeSystemsPreservedPropertyTest is Test {
         uint256 indexBefore = flashFacet.feeIndex(1);
         uint256 totalDeposits = flashFacet.totalDeposits(1);
 
-        flashFacet.flashLoan(1, address(receiver), flashAmount, "");
+        flashFacet.flashLoan(1, address(receiver), flashAmount, "", flashFacet.previewFlashLoanRepayment(1, flashAmount));
 
         uint256 expectedTreasury = (flashFee * treasuryShareBps) / 10_000;
         uint256 expectedIndexAccrual = flashFee - expectedTreasury;

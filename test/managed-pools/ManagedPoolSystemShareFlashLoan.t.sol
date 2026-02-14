@@ -109,7 +109,7 @@ contract ManagedPoolSystemShareFlashLoanTest is Test {
         uint256 baseBefore = facet.feeIndex(BASE_PID);
         uint256 managedBefore = facet.feeIndex(MANAGED_PID);
 
-        facet.flashLoan(MANAGED_PID, address(receiver), amount, "");
+        facet.flashLoan(MANAGED_PID, address(receiver), amount, "", facet.previewFlashLoanRepayment(MANAGED_PID, amount));
 
         uint256 baseAfter = facet.feeIndex(BASE_PID);
         uint256 managedAfter = facet.feeIndex(MANAGED_PID);

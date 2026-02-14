@@ -320,9 +320,10 @@ abstract contract DerivativeDiamondTestBase is Test {
     }
 
     function _selectorsMamExec() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](2);
+        s = new bytes4[](3);
         s[0] = MamCurveExecutionFacet.loadCurveForFill.selector;
-        s[1] = MamCurveExecutionFacet.executeCurveSwap.selector;
+        s[1] = MamCurveExecutionFacet.previewCurveQuote.selector;
+        s[2] = MamCurveExecutionFacet.executeCurveSwap.selector;
     }
 
     function _selectorsCommunity() internal pure returns (bytes4[] memory s) {
@@ -346,23 +347,25 @@ abstract contract DerivativeDiamondTestBase is Test {
     }
 
     function _selectorsOptions() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](6);
+        s = new bytes4[](7);
         s[0] = OptionsFacet.setOptionToken.selector;
         s[1] = OptionsFacet.setOptionsPaused.selector;
         s[2] = OptionsFacet.createOptionSeries.selector;
         s[3] = OptionsFacet.exerciseOptions.selector;
         s[4] = OptionsFacet.exerciseOptionsFor.selector;
-        s[5] = OptionsFacet.reclaimOptions.selector;
+        s[5] = OptionsFacet.previewExercisePayment.selector;
+        s[6] = OptionsFacet.reclaimOptions.selector;
     }
 
     function _selectorsFutures() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](6);
+        s = new bytes4[](7);
         s[0] = FuturesFacet.setFuturesToken.selector;
         s[1] = FuturesFacet.setFuturesPaused.selector;
         s[2] = FuturesFacet.createFuturesSeries.selector;
         s[3] = FuturesFacet.settleFutures.selector;
         s[4] = FuturesFacet.settleFuturesFor.selector;
-        s[5] = FuturesFacet.reclaimFutures.selector;
+        s[5] = FuturesFacet.previewSettlePayment.selector;
+        s[6] = FuturesFacet.reclaimFutures.selector;
     }
 
     function _selectorsView(DerivativeViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
@@ -429,7 +432,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         tokenA.approve(address(diamond), 1e18);
         vm.prank(swapper);
         (uint256 amountOutA, bool finalizedA) =
-            amm.swapExactInOrFinalize(auctionId, address(tokenA), 1e18, 0, swapper);
+            amm.swapExactInOrFinalize(auctionId, address(tokenA), 1e18, 1e18, 0, swapper);
         assertTrue(amountOutA > 0, "amm swap out A");
         assertFalse(finalizedA, "amm not finalized");
 
@@ -438,7 +441,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         tokenB.approve(address(diamond), 2_000e6);
         vm.prank(swapper);
         (uint256 amountOutB, bool finalizedB) =
-            amm.swapExactInOrFinalize(auctionId, address(tokenB), 2_000e6, 0, swapper);
+            amm.swapExactInOrFinalize(auctionId, address(tokenB), 2_000e6, 2_000e6, 0, swapper);
         assertTrue(amountOutB > 0, "amm swap out B");
         assertFalse(finalizedB, "amm not finalized");
 
@@ -450,7 +453,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         uint256 principalB = harness.getPrincipal(2, key);
 
         vm.warp(block.timestamp + 2 days);
-        (, bool finalized) = amm.swapExactInOrFinalize(auctionId, address(tokenA), 1, 0, swapper);
+        (, bool finalized) = amm.swapExactInOrFinalize(auctionId, address(tokenA), 1, 1, 0, swapper);
         assertTrue(finalized, "amm finalized");
 
         assertEq(harness.getDirectLent(key, 1), 0, "lent A cleared");
@@ -505,14 +508,13 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         assertEq(harness.getDirectLocked(key, 1), 1e18, "base locked");
 
         uint256 amountIn = 2_000e6;
-        uint256 feeAmount = (amountIn * 100) / 10_000;
-        uint256 totalIn = amountIn + feeAmount;
-        tokenB.mint(swapper, totalIn);
+        uint256 maxQuote = mam.previewCurveQuote(curveId, amountIn);
+        tokenB.mint(swapper, maxQuote);
         vm.prank(swapper);
-        tokenB.approve(address(diamond), totalIn);
+        tokenB.approve(address(diamond), maxQuote);
 
         vm.prank(swapper);
-        mam.executeCurveSwap(curveId, amountIn, 1, uint64(block.timestamp + 1 days), swapper);
+        mam.executeCurveSwap(curveId, amountIn, maxQuote, 1, uint64(block.timestamp + 1 days), swapper);
 
         uint256 expectedBaseFill = (amountIn * 1e18) / 2e18;
         assertEq(harness.getDirectLocked(key, 1), 1e18 - expectedBaseFill, "base unlocked");
@@ -567,7 +569,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         vm.prank(swapper);
         tokenA.approve(address(diamond), 2e17);
         vm.prank(swapper);
-        community.swapExactIn(auctionId, address(tokenA), 2e17, 0, swapper);
+        community.swapExactIn(auctionId, address(tokenA), 2e17, 2e17, 0, swapper);
 
         vm.prank(holder);
         (, , uint256 feesA, uint256 feesB) = community.leaveCommunityAuction(auctionId, joinerTokenId);
@@ -651,7 +653,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         (, pendingBefore,) = community.getMakerShare(auctionId, makerKey);
         for (uint256 i = 0; i < 20; i++) {
             vm.prank(swapper);
-            community.swapExactIn(auctionId, address(tokenA), swapAmount, 0, swapper);
+            community.swapExactIn(auctionId, address(tokenA), swapAmount, swapAmount, 0, swapper);
         }
         uint256 pendingAfter;
         (, pendingAfter,) = community.getMakerShare(auctionId, makerKey);
@@ -706,8 +708,13 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
             tokenA.approve(address(diamond), 1e18);
         }
 
+        uint256 payment = options.previewExercisePayment(seriesId, 1e18);
+
+
         vm.prank(holder);
-        options.exerciseOptions(seriesId, 1e18, holder);
+
+
+        options.exerciseOptions(seriesId, 1e18, holder, payment, 0);
 
         uint256 expectedLocked = isCall ? 1e18 : _strikeAmount(1e18, 2e18);
         assertEq(harness.getDirectLocked(key, isCall ? poolUnderlying : poolStrike), expectedLocked, "locked after exercise");
@@ -763,8 +770,13 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
             vm.warp(block.timestamp + 7 days);
         }
 
+        uint256 payment = futures.previewSettlePayment(seriesId, 1e18);
+
+
         vm.prank(holder);
-        futures.settleFutures(seriesId, 1e18, holder);
+
+
+        futures.settleFutures(seriesId, 1e18, holder, payment, 0);
 
         assertEq(harness.getDirectLocked(key, poolUnderlying), 1e18, "futures locked after settlement");
 
@@ -842,8 +854,11 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         tokenB.mint(holder, strikeAmount);
         vm.prank(holder);
         tokenB.approve(address(diamond), strikeAmount);
+        uint256 payment = options.previewExercisePayment(optionId, 1e18);
+
         vm.prank(holder);
-        options.exerciseOptions(optionId, 1e18, holder);
+
+        options.exerciseOptions(optionId, 1e18, holder, payment, 0);
 
         vm.prank(maker);
         futuresToken.safeTransferFrom(maker, holder, futuresId, 1e18, "");
@@ -851,11 +866,14 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         tokenC.mint(holder, quoteAmount);
         vm.prank(holder);
         tokenC.approve(address(diamond), quoteAmount);
+        payment = futures.previewSettlePayment(futuresId, 1e18);
+
         vm.prank(holder);
-        futures.settleFutures(futuresId, 1e18, holder);
+
+        futures.settleFutures(futuresId, 1e18, holder, payment, 0);
 
         vm.warp(block.timestamp + 2 days);
-        (, bool finalized) = amm.swapExactInOrFinalize(auctionId, address(tokenA), 1, 0, swapper);
+        (, bool finalized) = amm.swapExactInOrFinalize(auctionId, address(tokenA), 1, 1, 0, swapper);
         assertTrue(finalized, "amm finalized");
 
         assertEq(harness.getDirectLent(key, 31), 0, "amm lent cleared");

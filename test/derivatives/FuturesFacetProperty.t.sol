@@ -137,8 +137,13 @@ contract FuturesFacetPropertyTest is Test {
         uint256 makerUnderlyingBefore = harness.getPrincipal(positionKey, 1);
         uint256 makerQuoteBefore = harness.getPrincipal(positionKey, 2);
 
+        uint256 payment = harness.previewSettlePayment(seriesId, settleAmount);
+
+
         vm.prank(holder);
-        harness.settleFutures(seriesId, settleAmount, holder);
+
+
+        harness.settleFutures(seriesId, settleAmount, holder, payment, 0);
 
         assertEq(
             harness.getPrincipal(positionKey, 1),

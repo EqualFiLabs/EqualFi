@@ -82,6 +82,17 @@ contract EqualIndexNativeIntegrationHarness is EqualIndexAdminFacetV3, EqualInde
     function getFeePot(uint256 indexId, address asset) external view returns (uint256) {
         return s().feePots[indexId][asset];
     }
+
+    function previewMintInputs(uint256 indexId, uint256 units) external view returns (uint256[] memory maxInputs) {
+        Index storage idx = s().indexes[indexId];
+        uint256 len = idx.assets.length;
+        maxInputs = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
+            maxInputs[i] = need + fee;
+        }
+    }
 }
 
 contract EqualIndexNativeEthIntegrationTest is Test {
@@ -143,7 +154,7 @@ contract EqualIndexNativeEthIntegrationTest is Test {
         tokenB.mint(address(this), 1_000 ether);
         tokenB.approve(address(facet), type(uint256).max);
 
-        facet.mint(indexId, units, user);
+        facet.mint(indexId, units, user, facet.previewMintInputs(indexId, units));
 
         assertEq(facet.getVaultBalance(indexId, address(0)), bundleAmounts[0], "native vault balance");
         assertEq(facet.getVaultBalance(indexId, address(tokenB)), bundleAmounts[1], "token vault balance");

@@ -152,8 +152,8 @@ contract CommunityAuctionLifecycleRegressionTest is Test {
         _logBacking("after swaps");
         tokenA.approve(address(facet), type(uint256).max);
         tokenB.approve(address(facet), type(uint256).max);
-        facet.swapExactIn(auctionId, address(tokenA), 1e18, 0, taker);
-        facet.swapExactIn(auctionId, address(tokenB), 20e18, 0, taker);
+        facet.swapExactIn(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
+        facet.swapExactIn(auctionId, address(tokenB), 20e18, 20e18, 0, taker);
         vm.stopPrank();
 
         // Both makers leave the auction.

@@ -1,6 +1,6 @@
 # Equalis Fee Sources - Design Document
 
-**Version:** 1.1 (Updated for centralized fee index and encumbrance systems)
+**Version:** 1.2 (Updated for fee-router-first routing and expanded fee sources)
 
 ---
 
@@ -39,7 +39,9 @@ Equalis generates fees from multiple sources across its protocol modules. Fees s
 | **Derivatives** | Create Fee | % + flat | Fee Index + Treasury + Active Credit |
 | **Derivatives** | Exercise Fee | % + flat | Fee Index + Treasury + Active Credit |
 | **Derivatives** | Reclaim Fee | % + flat | Fee Index + Treasury + Active Credit |
-| **Auctions** | Swap Fee | % of trade | Makers + Fee Index + Treasury |
+| **Auctions** | Swap Fee | % of trade | Makers + Fee Index + Treasury + Active Credit |
+| **MAM Curves** | Fill Fee | % of quote input | Maker + Fee Index + Treasury + Active Credit |
+| **Atomic Settlement** | Swap Fee | % of settled amount | Maker + Fee Index + Treasury + Active Credit |
 | **Direct** | Platform Fee | % of principal | Lender + Fee Index + Protocol + Active Credit |
 | **Direct** | Default Recovery | % of collateral | Lender + Fee Index + Protocol + Active Credit |
 | **Creation** | Pool Creation | ETH flat fee | Treasury |
@@ -50,34 +52,24 @@ Equalis generates fees from multiple sources across its protocol modules. Fees s
 
 ## Fee Distribution Architecture
 
-### Centralized Fee Routing (LibFeeTreasury & LibFeeIndex)
+### Centralized Fee Routing (LibFeeRouter-first)
 
 Fee distribution is managed through centralized libraries:
 
-- **LibFeeTreasury**: Handles treasury splits and routing
+- **LibFeeRouter**: Primary router for Treasury + Active Credit + Fee Index flows
+- **LibFeeTreasury**: Convenience wrapper that delegates to `LibFeeRouter.routeManagedShare()`
 - **LibFeeIndex**: Manages pool-level fee index accrual for depositors
 - **LibActiveCreditIndex**: Manages active credit rewards with 24h time gate
-- **LibFeeRouter**: Coordinates complex fee distributions
 
 ### Treasury Split
 
-Most fees are split between multiple recipients via `LibFeeTreasury`:
+Most flows split fees via `LibFeeRouter` (either directly, or indirectly through `LibFeeTreasury`):
 
 ```solidity
 // In LibFeeTreasury.sol
 function accrueWithTreasury(pool, pid, amount, source) {
-    toTreasury = (amount × treasuryShareBps) / 10,000
-    toActiveCredit = (amount × activeCreditShareBps) / 10,000
-    toFeeIndex = amount - toTreasury - toActiveCredit
-    
-    // Transfer treasury share
-    transfer(treasury, toTreasury)
-    
-    // Accrue to active credit index (via LibActiveCreditIndex)
-    LibActiveCreditIndex.accrueWithSource(pid, toActiveCredit, source)
-    
-    // Accrue to fee index (depositors, via LibFeeIndex)
-    LibFeeIndex.accrueWithSource(pid, toFeeIndex, source)
+    // Delegates to router; managed pools can split via system-share logic.
+    return LibFeeRouter.routeManagedShare(pid, amount, source, true, 0);
 }
 ```
 
@@ -91,6 +83,14 @@ function accrueWithTreasury(pool, pid, amount, source) {
 
 **Note:** These defaults apply only when governance has not set custom split values. If `treasuryShareBps` or
 `activeCreditShareBps` are configured, fee routing uses those values and the Fee Index receives the remainder.
+
+### Managed Pool System Share
+
+Managed pools route a configurable portion of protocol fees through the base permissionless pool for the same asset:
+
+- Controlled by `managedPoolSystemShareBps` (default `2000` = 20%)
+- Applied through `LibFeeRouter.routeManagedShare()`
+- If no valid base pool is available, that system-share portion falls back to treasury transfer
 
 ---
 
@@ -212,7 +212,7 @@ For each asset:
 ```solidity
 // 1. Pool share routed through fee router (FI/ACI/Treasury)
 poolShare = fee × mintBurnFeeIndexShareBps / 10,000
-LibFeeRouter.routeSamePool(poolId, poolShare, INDEX_FEE_SOURCE, true, 0)
+LibFeeRouter.routeSamePool(poolId, poolShare, INDEX_FEE_SOURCE, true, poolShare)
 
 // 2. Fee pot share
 potShare = fee - poolShare
@@ -264,6 +264,8 @@ poolShare = fee × poolFeeShareBps / 10,000
 // 2. Fee pot share
 potShare = fee - poolShare
 ```
+
+**Implementation Note:** Native-asset index pool-share routing uses a native-specific path that mirrors the same split semantics (`previewSplit`, treasury transfer, Active Credit accrual, Fee Index accrual with backing).
 
 ---
 
@@ -341,6 +343,28 @@ uint16 communityMakerShareBps;   // Maker share (configurable)
 **Distribution:**
 1. Maker share → Community auction fee index (pro-rata to LP shares)
 2. Protocol share → Routed via fee router (Treasury + Active Credit + Fee Index)
+
+### MAM Curve Fill Fees
+
+MAM swaps charge a configurable fill fee on quote input.
+
+**Fee Split:**
+```solidity
+uint16 mamMakerShareBps;   // Maker share (configurable)
+// Remainder routed via fee router (Treasury + Active Credit + Fee Index)
+```
+
+**Distribution:**
+1. Maker share → Credited to maker principal in quote pool
+2. Protocol share → `LibFeeRouter.routeSamePool(quotePoolId, protocolFee, MAM_CURVE_FILL, true, 0)`
+
+### Atomic Desk / Settlement Escrow Fees
+
+Atomic settlement flows can apply swap fees (`ATOMIC_SWAP_FEE`) with maker and protocol split.
+
+**Distribution:**
+1. Maker share → Retained in maker principal path
+2. Protocol share → Routed through `LibFeeRouter.routeSamePool(...)` (Treasury + Active Credit + Fee Index)
 
 ---
 
@@ -428,8 +452,11 @@ Distributes rewards to active borrowers and P2P lenders. Managed by the centrali
 function accrueWithSource(uint256 pid, uint256 amount, bytes32 source) {
     uint256 activeBase = p.activeCreditMaturedTotal;
     if (activeBase == 0) return;
-    
-    uint256 delta = (amount × INDEX_SCALE) / activeBase;
+
+    uint256 scaledAmount = amount × INDEX_SCALE;
+    uint256 dividend = scaledAmount + p.activeCreditIndexRemainder;
+    uint256 delta = dividend / activeBase;
+    p.activeCreditIndexRemainder = dividend - (delta × activeBase);
     p.activeCreditIndex += delta;
 }
 ```
@@ -472,6 +499,7 @@ feeIndexB += (makerFeeB × INDEX_SCALE) / totalShares
 |-----------|---------|-------------|
 | `treasuryShareBps` | 1000 (10%) | Treasury share of distributed fees |
 | `activeCreditShareBps` | 7000 (70%) | Active credit share of fees |
+| `managedPoolSystemShareBps` | 2000 (20%) | Managed-pool portion routed via base pool system path |
 | `defaultMaintenanceRateBps` | 100 (1%) | Default annual maintenance rate |
 | `maxMaintenanceRateBps` | 100 (1%) | Maximum allowed maintenance rate |
 | `actionFeeMin` | 0 | Minimum action fee amount |
@@ -481,9 +509,9 @@ feeIndexB += (makerFeeB × INDEX_SCALE) / totalShares
 
 | Parameter | Location | Mutable |
 |-----------|----------|---------|
-| `flashLoanFeeBps` | PoolConfig | Governance (via setPoolConfig) |
-| `maintenanceRateBps` | PoolConfig | Governance (via setPoolConfig) |
-| Action fees | PoolConfig | Admin override |
+| `flashLoanFeeBps` | PoolConfig | Governance; managed-pool manager may update managed pool |
+| `maintenanceRateBps` | PoolConfig | Governance; managed-pool manager may update managed pool |
+| Action fees | PoolConfig | Governance + managed-pool manager (`setActionFees`) |
 
 ### Index-Level Parameters
 
@@ -653,10 +681,16 @@ Fees are tagged with source identifiers for tracking:
 | `OPTIONS_RECLAIM_FEE` | Options reclaim |
 | `COMMUNITY_AUCTION_FEE` | Community auction swaps |
 | `AMM_AUCTION_FEE` | AMM auction swaps |
+| `MAM_CURVE_FILL` | MAM curve swap fills |
+| `ATOMIC_SWAP_FEE` | Atomic desk / settlement escrow swaps |
 | `DIRECT_PLATFORM_FEE` | Direct platform fees |
 | `DIRECT_INTEREST_FEE` | Direct interest fees |
 | `DIRECT_DEFAULT` | Direct default recovery |
+| `ROLLING_RECOVERY` | Rolling direct lifecycle recovery routing |
 | `FUTURES_RECLAIM_FEE` | Futures reclaim |
+| `ACTION_INDEX_MINT` | Index action fee (mint) |
+| `ACTION_INDEX_BURN` | Index action fee (burn) |
+| `ACTION_INDEX_FLASH` | Index action fee (flash) |
 | `ACTION_BORROW` | Borrow action fee |
 | `ACTION_REPAY` | Repay action fee |
 | `ACTION_WITHDRAW` | Withdraw action fee |
@@ -665,4 +699,4 @@ Fees are tagged with source identifiers for tracking:
 
 ---
 
-**Document Version:** 1.1 (Updated for centralized fee index and encumbrance systems)
+**Document Version:** 1.2 (Updated for fee-router-first routing and expanded fee sources)

@@ -1,6 +1,6 @@
 # AMM Auction System Design
 
-**Version:** 1.1 (Updated for centralized fee index and encumbrance systems)
+**Version:** 1.2 (Updated for router-based fee routing and current selector signatures)
 
 This document describes the AMM Auction system, which allows Position NFT holders to create time-bounded automated market maker (AMM) pools using their deposited liquidity. These auctions enable trustless token swaps with constant-product pricing.
 
@@ -141,7 +141,7 @@ src/libraries/
 ├── LibDerivativeHelpers.sol # Reserve locking utilities
 ├── LibEncumbrance.sol       # Centralized encumbrance tracking
 ├── LibFeeIndex.sol          # Centralized fee index accounting
-└── LibFeeTreasury.sol       # Treasury fee routing
+└── LibFeeRouter.sol         # Router split (Treasury/ACI/FI)
 
 src/views/
 └── DerivativeViewFacet.sol  # Query functions
@@ -168,6 +168,8 @@ struct AmmAuction {
     FeeAsset feeAsset;           // Fee taken from TokenIn or TokenOut
     uint256 makerFeeAAccrued;    // Accumulated fees in token A
     uint256 makerFeeBAccrued;    // Accumulated fees in token B
+    uint256 treasuryFeeAAccrued; // Routed treasury fees in token A
+    uint256 treasuryFeeBAccrued; // Routed treasury fees in token B
     bool active;                 // Whether auction is live
     bool finalized;              // Whether auction has been closed
 }
@@ -227,7 +229,7 @@ function createAuction(CreateAuctionParams calldata params)
 During the active window (`startTime ≤ now < endTime`):
 - Takers can swap tokens in either direction
 - Each swap updates reserves according to constant product formula
-- Fees are collected and split between maker, fee index, and treasury
+- Fees are split between maker share and protocol-routed share
 - Maker can cancel at any time
 
 ### 3. Finalization
@@ -253,11 +255,24 @@ function cancelAuction(uint256 auctionId) external;
 ```
 
 **What Happens:**
-1. Validates caller owns the maker position
+1. Validates caller has borrower authority over the maker position (owner, approved, or operator)
 2. Unlocks current reserves (may differ from initial)
 3. Applies principal delta
 4. Removes from indexes
 5. Emits `AuctionCancelled` event
+
+### 5. Add Liquidity
+
+Maker can add liquidity while active:
+
+```solidity
+function addLiquidity(uint256 auctionId, uint256 amountA, uint256 amountB) external;
+```
+
+**Requirements:**
+- Auction active and within `[startTime, endTime)`
+- Caller has borrower authority over maker position
+- Amounts match current reserve ratio within tolerance
 
 ---
 
@@ -270,9 +285,10 @@ function swapExactIn(
     uint256 auctionId,
     address tokenIn,
     uint256 amountIn,
+    uint256 maxIn,
     uint256 minOut,
     address recipient
-) external returns (uint256 amountOut);
+) external payable returns (uint256 amountOut);
 ```
 
 ### Swap Calculation
@@ -297,7 +313,7 @@ amountOut = rawOut
 After each swap:
 ```
 newReserveIn = reserveIn + actualAmountIn
-newReserveOut = reserveOut - amountOut - protocolFees
+newReserveOut = reserveOut - amountOut - treasuryShareAdjustment
 ```
 
 The invariant is preserved or increased:
@@ -329,9 +345,10 @@ function swapExactInOrFinalize(
     uint256 auctionId,
     address tokenIn,
     uint256 amountIn,
+    uint256 maxIn,
     uint256 minOut,
     address recipient
-) external returns (uint256 amountOut, bool finalized);
+) external payable returns (uint256 amountOut, bool finalized);
 ```
 
 ---
@@ -340,19 +357,12 @@ function swapExactInOrFinalize(
 
 ### Fee Split
 
-Every swap fee is split three ways:
+Every swap fee is split in two stages:
 
-| Recipient | Share | Purpose |
-|-----------|-------|---------|
-| **Maker** | 70% | Reward for providing liquidity |
-| **Fee Index** | 20% | Distributed to pool depositors via `LibFeeIndex` |
-| **Treasury** | 10% | Protocol revenue via `LibFeeTreasury` |
+1. Maker share: `makerFee = feeAmount × ammMakerShareBps / 10_000`
+2. Protocol share: `protocolFee = feeAmount - makerFee`, routed through `LibFeeRouter`
 
-```solidity
-uint16 internal constant FEE_SPLIT_MAKER_BPS = 7000;   // 70%
-uint16 internal constant FEE_SPLIT_INDEX_BPS = 2000;   // 20%
-uint16 internal constant FEE_SPLIT_TREASURY_BPS = 1000; // 10%
-```
+`LibFeeRouter` then splits `protocolFee` into Treasury / Active Credit / Fee Index using global app config.
 
 ### Fee Accrual
 
@@ -361,19 +371,16 @@ uint16 internal constant FEE_SPLIT_TREASURY_BPS = 1000; // 10%
 - Automatically credited to maker's position at finalization
 - Denominated in the fee asset (TokenIn or TokenOut)
 
-**Fee Index (via LibFeeIndex):**
-- Accrued to the pool's fee index using `LibFeeIndex.accrueWithSource()`
-- Distributed pro-rata to all pool depositors based on their fee base
-- Source tagged as `AMM_AUCTION_FEE`
+**Protocol-routed Fees (via LibFeeRouter):**
+- Routed using `LibFeeRouter.routeSamePool(..., "AMM_AUCTION_FEE", ...)`
+- Split dynamically into Treasury / ACI / FI via app-level split settings
+- Auction tracks treasury accrual in `treasuryFeeAAccrued` / `treasuryFeeBAccrued`
 
 ```solidity
-// Fee index accrual
-LibFeeIndex.accrueWithSource(poolId, feeIndexShare, "AMM_AUCTION_FEE");
+uint256 makerFee = feeAmount * ammMakerShareBps / 10_000;
+uint256 protocolFee = feeAmount - makerFee;
+LibFeeRouter.routeSamePool(poolId, protocolFee, AMM_FEE_SOURCE, false, extraBacking);
 ```
-
-**Treasury (via LibFeeTreasury):**
-- Routed to protocol treasury via `LibFeeTreasury`
-- Requires treasury address to be configured
 
 ### Fee Asset Selection
 
@@ -477,6 +484,7 @@ uint256 amountOut = ammAuctionFacet.swapExactIn(
     auctionId,
     address(weth),
     amountIn,
+    amountIn,      // maxIn
     minOut,
     msg.sender
 );
@@ -497,7 +505,7 @@ uint256 amountOut = ammAuctionFacet.swapExactIn(
 
 if (bestAuctionId != 0) {
     // Execute swap on best auction
-    ammAuctionFacet.swapExactIn(bestAuctionId, address(weth), 1e18, bestOut * 99 / 100, msg.sender);
+    ammAuctionFacet.swapExactIn(bestAuctionId, address(weth), 1e18, 1e18, bestOut * 99 / 100, msg.sender);
 }
 ```
 
@@ -575,6 +583,7 @@ ammAuctionFacet.swapExactIn(
     auctionId,
     weth,
     1e18,           // 1 WETH
+    1e18,           // maxIn
     1650e6,         // min 1650 USDC (slippage protection)
     bob
 );
@@ -585,9 +594,8 @@ ammAuctionFacet.swapExactIn(
 - New reserves: 6 WETH, 8,333.33 USDC
 - New price: 8,333.33 / 6 = $1,388.89/ETH (price impact)
 - Fee collected: 5 USDC
-  - Alice (maker): 3.5 USDC
-  - Fee index: 1 USDC
-  - Treasury: 0.5 USDC
+  - Maker share: `5 × ammMakerShareBps / 10_000`
+  - Remainder routed by `LibFeeRouter` to Treasury/ACI/FI
 
 **Step 3: After expiry, Alice finalizes**
 ```solidity
@@ -596,8 +604,8 @@ ammAuctionFacet.finalizeAuction(auctionId);
 
 **Alice's final position:**
 - Started with: 5 WETH + 10,000 USDC
-- Ended with: 6 WETH + 8,333.33 USDC + 3.5 USDC fees
-- Net: +1 WETH, -1,663.17 USDC (sold ETH at ~$1,663)
+- Ended with: 6 WETH + 8,333.33 USDC + maker-fee accrual
+- Net: +1 WETH, -1,666.67 USDC + maker-fee accrual
 
 ### Example 2: Arbitrage Opportunity
 
@@ -614,10 +622,10 @@ ammAuctionFacet.finalizeAuction(auctionId);
 
 ```solidity
 // Step 1: Buy cheap ETH
-ammAuctionFacet.swapExactIn(auction1, usdc, 1636e6, 0.99e18, arbitrageur);
+ammAuctionFacet.swapExactIn(auction1, usdc, 1636e6, 1636e6, 0.99e18, arbitrageur);
 
 // Step 2: Sell expensive ETH
-ammAuctionFacet.swapExactIn(auction2, weth, 1e18, 1800e6, arbitrageur);
+ammAuctionFacet.swapExactIn(auction2, weth, 1e18, 1e18, 1800e6, arbitrageur);
 ```
 
 ### Example 3: Fee Comparison
@@ -664,7 +672,7 @@ Slight difference due to when fee is applied in the calculation.
     derivativeViewFacet.previewSwapWithSlippage(bestId, weth, 5e18, 100); // 1% slippage
 
 // Execute on best auction
-ammAuctionFacet.swapExactIn(bestId, weth, 5e18, minOut, msg.sender);
+ammAuctionFacet.swapExactIn(bestId, weth, 5e18, 5e18, minOut, msg.sender);
 ```
 
 ---
@@ -753,7 +761,7 @@ event AmmPausedUpdated(bool paused);
 
 5. **Reentrancy Protection**: All state-changing functions use `nonReentrant` modifier.
 
-6. **Position Ownership**: Only the Position NFT owner can create auctions or cancel them.
+6. **Position Authority**: Create/cancel/add-liquidity require borrower authority (owner, approved, or operator) on the maker position.
 
 7. **Reserve Isolation via LibEncumbrance**: Locked reserves are tracked centrally via `LibEncumbrance`, preventing withdrawal or use for other purposes during the auction.
 
@@ -765,9 +773,9 @@ require(principal >= totalEncumbered + withdrawAmount, "Insufficient available p
 
 8. **Flash Accounting Isolation**: Swaps don't affect maker's principal or fee index snapshots during the auction.
 
-9. **Treasury Requirement**: Treasury address must be set for fee distribution to work.
+9. **Treasury Optionality**: If treasury is unset, the router treasury leg becomes zero and more flow remains in ACI/FI.
 
-10. **Centralized Fee Index**: Fee distribution uses `LibFeeIndex.accrueWithSource()` for consistent, auditable fee accounting across all protocol features.
+10. **Centralized Router + Indexes**: Fee distribution routes through `LibFeeRouter`, which coordinates Treasury/ACI/FI accounting consistently across features.
 
 ---
 

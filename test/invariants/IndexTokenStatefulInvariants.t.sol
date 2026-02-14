@@ -6,10 +6,23 @@ import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {EqualIndexActionsHarness} from "../root/EqualIndexActionsFacetV3.t.sol";
 import {IndexToken} from "../../src/equalindex/IndexToken.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 
 contract IndexInvariantHarness is EqualIndexActionsHarness {
     function getTotalUnits(uint256 indexId) external view returns (uint256) {
         return s().indexes[indexId].totalUnits;
+    }
+
+    function previewMintInputs(uint256 indexId, uint256 units) external view override returns (uint256[] memory maxInputs) {
+        Index storage idx = s().indexes[indexId];
+        uint256 len = idx.assets.length;
+        maxInputs = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
+            maxInputs[i] = need + fee;
+        }
     }
 }
 
@@ -60,7 +73,7 @@ contract IndexTokenStatefulHandler is Test {
         }
         _topUpForMint(units);
         vm.prank(user);
-        facet.mint(indexId, units, user);
+        facet.mint(indexId, units, user, facet.previewMintInputs(indexId, units));
     }
 
     function burn(uint256 unitsSeed) external {

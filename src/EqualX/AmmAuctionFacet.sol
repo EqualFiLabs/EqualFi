@@ -186,16 +186,18 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         uint256 auctionId,
         address tokenIn,
         uint256 amountIn,
+        uint256 maxIn,
         uint256 minOut,
         address recipient
     ) external payable nonReentrant returns (uint256 amountOut) {
-        return _swapExactInInternal(auctionId, tokenIn, amountIn, minOut, recipient);
+        return _swapExactInInternal(auctionId, tokenIn, amountIn, maxIn, minOut, recipient);
     }
 
     function swapExactInOrFinalize(
         uint256 auctionId,
         address tokenIn,
         uint256 amountIn,
+        uint256 maxIn,
         uint256 minOut,
         address recipient
     ) external payable nonReentrant returns (uint256 amountOut, bool finalized) {
@@ -210,7 +212,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         }
         if (block.timestamp < auction.startTime) revert AmmAuction_NotActive(auctionId);
 
-        amountOut = _swapExactInInternal(auctionId, tokenIn, amountIn, minOut, recipient);
+        amountOut = _swapExactInInternal(auctionId, tokenIn, amountIn, maxIn, minOut, recipient);
         return (amountOut, false);
     }
 
@@ -218,6 +220,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         uint256 auctionId,
         address tokenIn,
         uint256 amountIn,
+        uint256 maxIn,
         uint256 minOut,
         address recipient
     ) internal returns (uint256 amountOut) {
@@ -248,7 +251,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
 
         LibCurrency.assertMsgValue(tokenIn, amountIn);
         address tokenOut = inIsA ? tokenB : tokenA;
-        uint256 actualIn = LibCurrency.pull(tokenIn, msg.sender, amountIn);
+        uint256 actualIn = LibCurrency.pullAtLeast(tokenIn, msg.sender, amountIn, maxIn);
         if (actualIn == 0) revert AmmAuction_InvalidAmount(actualIn);
 
         uint256 reserveIn = inIsA ? auction.reserveA : auction.reserveB;
@@ -339,7 +342,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             }
         }
 
-        LibCurrency.transfer(tokenOut, recipient, outputToRecipient);
+        LibCurrency.transferWithMin(tokenOut, recipient, outputToRecipient, minOut);
         if (LibCurrency.isNative(tokenOut) && outputToRecipient > 0) {
             LibAppStorage.s().nativeTrackedTotal -= outputToRecipient;
         }

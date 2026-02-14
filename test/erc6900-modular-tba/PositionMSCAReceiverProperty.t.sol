@@ -4,11 +4,11 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {PackedUserOperation} from "@openzeppelin/contracts/interfaces/draft-IERC4337.sol";
 
-import {PositionMSCA} from "../../src/erc6900/PositionMSCA.sol";
-import {ExecutionManifest, Call, ModuleEntity, ValidationConfig} from "../../src/erc6900/ModuleTypes.sol";
+import {NFTBoundMSCA} from "@agent-wallet-core/core/NFTBoundMSCA.sol";
+import {ExecutionManifest, Call, ModuleEntity, ValidationConfig} from "@agent-wallet-core/libraries/ModuleTypes.sol";
 
-contract PositionMSCAReceiverHarness is PositionMSCA {
-    constructor(address entryPoint_) PositionMSCA(entryPoint_) {}
+contract PositionMSCAReceiverHarness is NFTBoundMSCA {
+    constructor(address entryPoint_) NFTBoundMSCA(entryPoint_) {}
 
     function token() public view override returns (uint256 chainId, address tokenContract, uint256 tokenId) {
         return (block.chainid, address(0), 0);
@@ -49,6 +49,22 @@ contract PositionMSCAReceiverHarness is PositionMSCA {
 
     function uninstallValidation(ModuleEntity, bytes calldata, bytes[] calldata) external override {
         revert("uninstallValidation not implemented");
+    }
+
+
+    function _owner() internal view override returns (address) {
+        (uint256 chainId, address tokenContract, uint256 tokenId) = token();
+        if (chainId != block.chainid || tokenContract == address(0)) {
+            return address(0);
+        }
+
+        (bool ok, bytes memory data) =
+            tokenContract.staticcall(abi.encodeWithSelector(bytes4(keccak256("ownerOf(uint256)")), tokenId));
+        if (!ok || data.length < 32) {
+            return address(0);
+        }
+
+        return abi.decode(data, (address));
     }
 
     function accountId() external pure override returns (string memory) {

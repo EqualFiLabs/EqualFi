@@ -105,7 +105,7 @@ contract FlashLoanFacetTest is Test {
     function testFlashLoanChargesFeeAndRepays() public {
         uint256 treasuryBefore = token.balanceOf(TREASURY);
         vm.prank(address(this));
-        facet.flashLoan(PID, address(receiver), 100 ether, "hello");
+        facet.flashLoan(PID, address(receiver), 100 ether, "hello", facet.previewFlashLoanRepayment(PID, 100 ether));
 
         uint256 fee = (100 ether * 50) / 10_000;
         uint256 treasuryShare = fee / 5;
@@ -117,29 +117,31 @@ contract FlashLoanFacetTest is Test {
 
     function testFlashLoanRejectsUnderpayment() public {
         receiver.setUnderpay(true);
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, 100 ether);
         vm.expectRevert(); // allowance/balance shortfall should revert
-        facet.flashLoan(PID, address(receiver), 100 ether, "");
+        facet.flashLoan(PID, address(receiver), 100 ether, "", repayment);
     }
 
     function testAntiSplitBlocksSameBlockMultiple() public {
         vm.prank(address(this));
-        facet.flashLoan(PID, address(receiver), 10 ether, "");
+        facet.flashLoan(PID, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(PID, 10 ether));
+        uint256 repayment = facet.previewFlashLoanRepayment(PID, 5 ether);
         vm.expectRevert("Flash: split block");
         vm.prank(address(this));
-        facet.flashLoan(PID, address(receiver), 5 ether, "");
+        facet.flashLoan(PID, address(receiver), 5 ether, "", repayment);
     }
 
     function testAntiSplitAllowsNextBlock() public {
-        facet.flashLoan(PID, address(receiver), 10 ether, "");
+        facet.flashLoan(PID, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(PID, 10 ether));
         vm.roll(block.number + 1);
-        facet.flashLoan(PID, address(receiver), 5 ether, "");
+        facet.flashLoan(PID, address(receiver), 5 ether, "", facet.previewFlashLoanRepayment(PID, 5 ether));
     }
 
     function testAntiSplitDisabledAllowsSameBlock() public {
         uint256 newPid = 2;
         facet.initPool(newPid, address(token), 50, false); // anti-split disabled
-        facet.flashLoan(newPid, address(receiver), 10 ether, "");
-        facet.flashLoan(newPid, address(receiver), 5 ether, "");
+        facet.flashLoan(newPid, address(receiver), 10 ether, "", facet.previewFlashLoanRepayment(newPid, 10 ether));
+        facet.flashLoan(newPid, address(receiver), 5 ether, "", facet.previewFlashLoanRepayment(newPid, 5 ether));
     }
 
     function testDocExampleFlashLoanScenario() public {
@@ -157,14 +159,15 @@ contract FlashLoanFacetTest is Test {
         uint256 treasuryShare = (fee * 2000) / 10_000; // 20% of fee
         uint256 indexAccrual = fee - treasuryShare;
 
-        facet.flashLoan(pid, address(receiver), amount, "doc");
+        facet.flashLoan(pid, address(receiver), amount, "doc", facet.previewFlashLoanRepayment(pid, amount));
 
         assertEq(token.balanceOf(TREASURY) - treasuryBefore, treasuryShare, "treasury cut from fee");
         assertEq(facet.trackedBalance(pid) - trackedBefore, indexAccrual, "pool tracked balance accrues index share");
         uint256 expectedIndexDelta = (indexAccrual * 1e18) / totalDeposits;
         assertEq(facet.feeIndex(pid) - indexBefore, expectedIndexDelta, "fee index accrual proportional to deposits");
 
+        uint256 repayment = facet.previewFlashLoanRepayment(pid, 1 ether);
         vm.expectRevert("Flash: split block");
-        facet.flashLoan(pid, address(receiver), 1 ether, "");
+        facet.flashLoan(pid, address(receiver), 1 ether, "", repayment);
     }
 }

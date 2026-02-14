@@ -213,7 +213,7 @@ contract IndexToken is ERC20, ERC20Permit, ReentrancyGuard {
         }
     }
 
-    /// @notice Preview redemption at current NAV (includes accumulated fees in vault)
+    /// @notice Preview redemption as fixed bundle amounts + pro-rata fee pot share.
     function previewRedeem(uint256 units)
         external
         view
@@ -228,7 +228,7 @@ contract IndexToken is ERC20, ERC20Permit, ReentrancyGuard {
         uint256 totalSupply = totalSupply();
         
         if (totalSupply == 0) {
-            // No supply, return base bundle
+            // No supply, return base bundle.
             for (uint256 i = 0; i < len; i++) {
                 uint256 gross = Math.mulDiv(_bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
                 uint256 burnFee = Math.mulDiv(gross, idx.burnFeeBps[i], 10_000);
@@ -236,13 +236,12 @@ contract IndexToken is ERC20, ERC20Permit, ReentrancyGuard {
                 feeAmounts[i] = burnFee;
             }
         } else {
-            // Return proportional share of vault (current NAV)
+            // Return fixed bundle amount plus pro-rata fee-pot share.
             for (uint256 i = 0; i < len; i++) {
-                uint256 vaultBalance = IEqualIndexData(minter).getVaultBalance(indexId, _assets[i]);
                 uint256 potBalance = IEqualIndexData(minter).getFeePot(indexId, _assets[i]);
-                uint256 navShare = Math.mulDiv(vaultBalance, units, totalSupply);
+                uint256 bundleOut = Math.mulDiv(_bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
                 uint256 potShare = Math.mulDiv(potBalance, units, totalSupply);
-                uint256 gross = navShare + potShare;
+                uint256 gross = bundleOut + potShare;
                 uint256 burnFee = Math.mulDiv(gross, idx.burnFeeBps[i], 10_000);
                 netOut[i] = gross - burnFee;
                 feeAmounts[i] = burnFee;
@@ -250,7 +249,7 @@ contract IndexToken is ERC20, ERC20Permit, ReentrancyGuard {
         }
     }
 
-    /// @notice Paginated preview of redemption at current NAV
+    /// @notice Paginated preview of fixed-bundle redemption + pro-rata fee pot share.
     /// @param units Number of index units to redeem
     /// @param offset Starting asset index (0-based)
     /// @param limit Maximum number of assets to return (0 = until end)
@@ -270,7 +269,7 @@ contract IndexToken is ERC20, ERC20Permit, ReentrancyGuard {
         uint256 totalSupply = totalSupply();
 
         if (totalSupply == 0) {
-            // No supply, return base bundle for this slice
+            // No supply, return base bundle for this slice.
             for (uint256 i = 0; i < len; i++) {
                 uint256 gross = Math.mulDiv(bundleSlice[i], units, LibEqualIndex.INDEX_SCALE);
                 uint256 burnFee = Math.mulDiv(gross, idx.burnFeeBps[offset + i], 10_000);
@@ -278,13 +277,12 @@ contract IndexToken is ERC20, ERC20Permit, ReentrancyGuard {
                 feeAmounts[i] = burnFee;
             }
         } else {
-            // Return proportional share of vault (current NAV) for this slice
+            // Return fixed bundle amount plus pro-rata fee-pot share for this slice.
             for (uint256 i = 0; i < len; i++) {
-                uint256 vaultBalance = IEqualIndexData(minter).getVaultBalance(indexId, assetsOut[i]);
                 uint256 potBalance = IEqualIndexData(minter).getFeePot(indexId, assetsOut[i]);
-                uint256 navShare = Math.mulDiv(vaultBalance, units, totalSupply);
+                uint256 bundleOut = Math.mulDiv(bundleSlice[i], units, LibEqualIndex.INDEX_SCALE);
                 uint256 potShare = Math.mulDiv(potBalance, units, totalSupply);
-                uint256 gross = navShare + potShare;
+                uint256 gross = bundleOut + potShare;
                 uint256 burnFee = Math.mulDiv(gross, idx.burnFeeBps[offset + i], 10_000);
                 netOut[i] = gross - burnFee;
                 feeAmounts[i] = burnFee;

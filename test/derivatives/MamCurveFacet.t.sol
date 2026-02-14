@@ -249,22 +249,17 @@ contract MamCurveFacetTest is Test {
         uint256 curveId = harness.createCurve(desc);
 
         uint256 amountIn = 2e18;
-        tokenB.mint(taker, amountIn + 1e18);
-        vm.prank(taker);
-        tokenB.approve(address(harness), amountIn + 1e18);
+        uint256 maxQuote = harness.previewCurveQuote(curveId, amountIn);
+        tokenB.mint(taker, maxQuote);
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), maxQuote);
 
         uint256 makerBaseBefore = harness.getUserPrincipal(1, positionKey);
         uint256 makerQuoteBefore = harness.getUserPrincipal(2, positionKey);
         uint256 trackedQuoteBefore = harness.getTrackedBalance(2);
 
-        vm.prank(taker);
-        uint256 out = harness.executeCurveSwap(
-            curveId,
-            amountIn,
-            1e18,
-            uint64(block.timestamp + 1 days),
-            taker
-        );
+        uint256 out = harness.executeCurveSwap(curveId, amountIn, maxQuote, 1e18, uint64(block.timestamp + 1 days), taker);
+        vm.stopPrank();
 
         assertEq(out, 1e18);
         assertEq(tokenA.balanceOf(taker), 1e18);

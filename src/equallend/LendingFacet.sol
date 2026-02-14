@@ -208,7 +208,8 @@ contract LendingFacet is ReentrancyGuardModifiers {
     function openRollingFromPosition(
         uint256 tokenId,
         uint256 pid,
-        uint256 amount
+        uint256 amount,
+        uint256 minReceived
     ) public payable nonReentrant {
         LibCurrency.assertZeroMsgValue();
         // Verify NFT ownership
@@ -264,7 +265,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(p.underlying) && amount > 0) {
             LibAppStorage.s().nativeTrackedTotal -= amount;
         }
-        LibCurrency.transfer(p.underlying, msg.sender, amount);
+        LibCurrency.transferWithMin(p.underlying, msg.sender, amount, minReceived);
 
         // Create loan in rollingLoans[positionKey]
         loan.principal = amount;
@@ -286,7 +287,12 @@ contract LendingFacet is ReentrancyGuardModifiers {
     /// @notice Make a payment on a rolling credit loan from a Position NFT
     /// @param tokenId The token ID
     /// @param paymentAmount The payment amount (interest + principal)
-    function makePaymentFromPosition(uint256 tokenId, uint256 pid, uint256 paymentAmount) public payable nonReentrant {
+    function makePaymentFromPosition(
+        uint256 tokenId,
+        uint256 pid,
+        uint256 paymentAmount,
+        uint256 maxPayment
+    ) public payable nonReentrant {
         // Verify NFT ownership
         _requireOwnership(tokenId);
 
@@ -299,7 +305,6 @@ contract LendingFacet is ReentrancyGuardModifiers {
         require(loan.active, "PositionNFT: no active loan");
         require(loan.principalRemaining > 0, "PositionNFT: no principal remaining");
         require(paymentAmount > 0, "PositionNFT: amount=0");
-        LibCurrency.assertMsgValue(p.underlying, paymentAmount);
 
         // Track missed epochs before computing amounts
         _syncMissedPayments(loan);
@@ -319,7 +324,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         LibActiveCreditIndex.settle(pid, positionKey);
 
         // Transfer payment from NFT owner to pool (handle fee-on-transfer tokens)
-        uint256 received = LibCurrency.pull(p.underlying, msg.sender, paymentAmount);
+        uint256 received = LibCurrency.pullAtLeast(p.underlying, msg.sender, paymentAmount, maxPayment);
         p.trackedBalance += received;
 
         // Charge ACTION_REPAY fee
@@ -361,7 +366,12 @@ contract LendingFacet is ReentrancyGuardModifiers {
     /// @notice Expand an existing rolling credit loan from a Position NFT
     /// @param tokenId The token ID
     /// @param amount The additional amount to borrow
-    function expandRollingFromPosition(uint256 tokenId, uint256 pid, uint256 amount) public payable nonReentrant {
+    function expandRollingFromPosition(
+        uint256 tokenId,
+        uint256 pid,
+        uint256 amount,
+        uint256 minReceived
+    ) public payable nonReentrant {
         LibCurrency.assertZeroMsgValue();
         // Verify NFT ownership
         _requireOwnership(tokenId);
@@ -423,7 +433,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(p.underlying) && amount > 0) {
             LibAppStorage.s().nativeTrackedTotal -= amount;
         }
-        LibCurrency.transfer(p.underlying, msg.sender, amount);
+        LibCurrency.transferWithMin(p.underlying, msg.sender, amount, minReceived);
 
         // Update loan state - increase both principal and principalRemaining
         loan.principal += amount;
@@ -435,7 +445,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
 
     /// @notice Close a rolling credit loan from a Position NFT, repaying accrued interest and principal
     /// @param tokenId The token ID
-    function closeRollingCreditFromPosition(uint256 tokenId, uint256 pid) public payable nonReentrant {
+    function closeRollingCreditFromPosition(uint256 tokenId, uint256 pid, uint256 maxPayment) public payable nonReentrant {
         // Verify NFT ownership
         _requireOwnership(tokenId);
 
@@ -455,12 +465,10 @@ contract LendingFacet is ReentrancyGuardModifiers {
 
         uint256 principalRemaining = loan.principalRemaining;
         uint256 totalPayoff = principalRemaining;
-        LibCurrency.assertMsgValue(p.underlying, totalPayoff);
 
         if (totalPayoff > 0) {
             // Transfer payoff from NFT owner to pool (handle fee-on-transfer tokens)
-            uint256 received = LibCurrency.pull(p.underlying, msg.sender, totalPayoff);
-            require(received >= totalPayoff, "PositionNFT: payoff underfunded");
+            uint256 received = LibCurrency.pullAtLeast(p.underlying, msg.sender, totalPayoff, maxPayment);
             p.trackedBalance += received;
 
             // Reduce principal remaining to zero
@@ -495,7 +503,8 @@ contract LendingFacet is ReentrancyGuardModifiers {
         uint256 tokenId,
         uint256 pid,
         uint256 amount,
-        uint256 termIndex
+        uint256 termIndex,
+        uint256 minReceived
     ) public payable nonReentrant returns (uint256 loanId) {
         LibCurrency.assertZeroMsgValue();
         // Verify NFT ownership
@@ -566,7 +575,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(p.underlying) && amount > 0) {
             LibAppStorage.s().nativeTrackedTotal -= amount;
         }
-        LibCurrency.transfer(p.underlying, msg.sender, amount);
+        LibCurrency.transferWithMin(p.underlying, msg.sender, amount, minReceived);
 
         // Create loan in fixedTermLoans[loanId] with borrower = positionKey
         loanId = ++p.nextFixedLoanId;
@@ -602,7 +611,8 @@ contract LendingFacet is ReentrancyGuardModifiers {
         uint256 tokenId,
         uint256 pid,
         uint256 loanId,
-        uint256 amount
+        uint256 amount,
+        uint256 maxPayment
     ) public payable nonReentrant {
         // Verify NFT ownership
         _requireOwnership(tokenId);
@@ -618,7 +628,6 @@ contract LendingFacet is ReentrancyGuardModifiers {
         // Verify loan belongs to position
         require(loan.borrower == positionKey, "PositionNFT: not borrower");
         require(amount > 0, "PositionNFT: amount=0");
-        LibCurrency.assertMsgValue(p.underlying, amount);
 
         // Settle fees before repayment
         LibFeeIndex.settle(pid, positionKey);
@@ -630,8 +639,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         }
 
         // Transfer payment from NFT owner to pool
-        uint256 received = LibCurrency.pull(p.underlying, msg.sender, principalPaid);
-        require(received >= principalPaid, "PositionNFT: repay underfunded");
+        uint256 received = LibCurrency.pullAtLeast(p.underlying, msg.sender, principalPaid, maxPayment);
         p.trackedBalance += received;
 
         // Charge ACTION_REPAY fee

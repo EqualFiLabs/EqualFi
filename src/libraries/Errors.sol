@@ -9,15 +9,10 @@ error LoanBelowMinimum(uint256 attempted, uint256 required);
 error InvalidMinimumThreshold(string reason);
 
 // Rolling credit expansion
-error DelinquentBorrower(address user, uint256 missedPayments);
-error ExpansionBelowMinimum(uint256 amount, uint256 minimum);
-error InsufficientCollateral(uint256 newPrincipal, uint256 maxBorrowable);
 error InsufficientPoolLiquidity(uint256 requested, uint256 available);
-error NoActiveRollingLoan(address user);
 
 // Fee configuration
 error ActionFeeBoundsViolation(uint128 amount, uint128 min, uint128 max);
-error UnauthorizedFeeConfiguration();
 error PoolNotInitialized(uint256 pid);
 error IndexNotFound(uint256 indexId);
 error ActionFeeDisabled(uint256 pid, bytes32 action);
@@ -34,11 +29,8 @@ error InvalidAumFeeBounds();
 error InsufficientPoolCreationFee(uint256 required, uint256 provided);
 error InsufficientManagedPoolCreationFee(uint256 required, uint256 provided);
 error InsufficientIndexCreationFee(uint256 required, uint256 provided);
-error ParameterIsImmutable(string parameter);
-error PoolDoesNotExist(uint256 pid);
 error PoolNotManaged(uint256 pid);
 error InvalidManagedPoolConfig(string reason);
-error UnauthorizedAdmin();
 error InvalidDepositCap();
 error InvalidLTVRatio();
 error InvalidCollateralizationRatio();
@@ -65,17 +57,11 @@ error InvalidArrayLength();
 error InvalidBundleDefinition();
 error InvalidFeeReceiver();
 error InvalidUnits();
-error InsufficientBalance();
-error NotImplemented();
 error IndexPaused(uint256 indexId);
 error UnknownIndex(uint256 indexId);
-error CapExceeded(uint256 indexId, uint256 requested, uint256 cap);
 error Unauthorized();
 error Reentrancy();
 error FlashLoanUnderpaid(uint256 indexId, address asset, uint256 expected, uint256 received);
-error NoSurplus();
-error UnknownAsset();
-error NoYieldAvailable();
 error NoPoolForAsset(address asset);
 error EncumbranceUnderflow(uint256 requested, uint256 available);
 error InsufficientUnencumberedPrincipal(uint256 requested, uint256 available);
@@ -101,9 +87,7 @@ error CannotClearMembership(bytes32 positionKey, uint256 poolId, string reason);
 error NegativeFeeBase();
 error InvalidAssetComparison();
 error FeeBaseOverflow();
-error DebtUnderflow();
 error SameAssetDebtMismatch(uint256 expected, uint256 actual);
-error CrossAssetDebtLeakage(uint256 crossAssetDebt);
 error NativeTransferFailed(address to, uint256 amount);
 error UnexpectedMsgValue(uint256 value);
 
@@ -117,16 +101,13 @@ error DirectError_InvalidConfiguration();
 error DirectError_InvalidRatio();
 error DirectError_InvalidFillAmount();
 error DirectError_InvalidAgreementState();
-error DirectError_AutoExerciseNotAllowed();
 error DirectError_EarlyExerciseNotAllowed();
 error DirectError_EarlyRepayNotAllowed();
 error DirectError_LenderCallNotAllowed();
 error DirectError_GracePeriodActive();
 error DirectError_GracePeriodExpired();
 error DirectError_InvalidTrancheAmount();
-error DirectError_NotOfferPoster();
 error DirectError_TrancheInsufficient();
-error DirectError_CancellationReason();
 
 // Rolling lending errors
 error RollingError_InvalidInterval(uint32 provided, uint32 minIntervalSeconds);

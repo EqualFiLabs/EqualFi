@@ -70,7 +70,7 @@ contract ManagedPoolBasePoolAutoCreatePropertyTest is Test {
     function testFuzz_basePoolAutoCreated(address underlying) public {
         underlying = address(uint160(bound(uint256(uint160(underlying)), 1, type(uint160).max)));
 
-        Types.ManagedPoolConfig memory cfg = _managedConfig();
+        Types.PoolConfig memory cfg = _managedConfig();
         uint256 managedPid = 2;
 
         facet.initManagedPool{value: 0.1 ether}(managedPid, underlying, cfg);
@@ -108,7 +108,7 @@ contract ManagedPoolBasePoolAutoCreatePropertyTest is Test {
         config.closeRollingFee = Types.ActionFeeConfig({amount: 0, enabled: false});
     }
 
-    function _managedConfig() internal pure returns (Types.ManagedPoolConfig memory cfg) {
+    function _managedConfig() internal pure returns (Types.PoolConfig memory cfg) {
         Types.FixedTermConfig[] memory terms = new Types.FixedTermConfig[](1);
         terms[0] = Types.FixedTermConfig({durationSecs: 30 days, apyBps: 500});
 
@@ -126,14 +126,11 @@ contract ManagedPoolBasePoolAutoCreatePropertyTest is Test {
         cfg.aumFeeMinBps = 0;
         cfg.aumFeeMaxBps = 100;
         cfg.fixedTermConfigs = terms;
-        cfg.actionFees = Types.ActionFeeSet({
-            borrowFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-            repayFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-            withdrawFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-            flashFee: Types.ActionFeeConfig({amount: 0, enabled: false}),
-            closeRollingFee: Types.ActionFeeConfig({amount: 0, enabled: false})
-        });
-        cfg.manager = address(0);
-        cfg.whitelistEnabled = true;
+
+        cfg.borrowFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.repayFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.withdrawFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.flashFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.closeRollingFee = Types.ActionFeeConfig({amount: 0, enabled: false});
     }
 }

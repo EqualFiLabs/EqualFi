@@ -22,8 +22,8 @@ import {DirectTestHarnessFacet} from "../equallend-direct/DirectTestHarnessFacet
 import {DirectTestViewFacet} from "../equallend-direct/DirectTestViewFacet.sol";
 
 interface IPositionManagement {
-    function mintPositionWithDeposit(uint256 pid, uint256 amount) external returns (uint256);
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
+    function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee) external returns (uint256);
+    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external;
 }
 
 interface ITestHarness {
@@ -39,8 +39,8 @@ interface ITestView {
 }
 
 interface ILending {
-    function openRollingFromPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
-    function makePaymentFromPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
+    function openRollingFromPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 minReceived) external;
+    function makePaymentFromPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxPayment) external;
 }
 
 interface IEqualIndexAdmin {
@@ -58,7 +58,9 @@ interface IEqualIndexPosition {
 }
 
 interface IEqualIndexActions {
-    function mint(uint256 indexId, uint256 units, address to) external returns (uint256);
+    function mint(uint256 indexId, uint256 units, address to, uint256[] calldata maxInputAmounts)
+        external
+        returns (uint256);
 }
 
 interface IAdminGovernance {
@@ -231,6 +233,8 @@ contract EqualIndexLeverageLoopIntegrationTest is EqualIndexDiamondBase {
     uint256[] internal indexIds;
     address[] internal indexTokens;
     uint256[] internal indexPoolIds;
+    uint256[] internal indexAssetCounts;
+    uint256[][] internal indexBundles;
 
     uint256 internal constant POOL_RETH = 1;
     uint256 internal constant POOL_STETH = 2;
@@ -278,10 +282,15 @@ contract EqualIndexLeverageLoopIntegrationTest is EqualIndexDiamondBase {
         assertEq(views.getUserPrincipal(indexPoolIds[0], positionKey), 0, "burn clears principal");
 
         for (uint256 i = 1; i < indexIds.length; i++) {
-            uint256 externalMint = indexActions.mint(indexIds[i], INDEX_UNITS, user);
+            uint256[] memory maxInputs = new uint256[](indexAssetCounts[i]);
+            uint256[] storage bundleAmounts = indexBundles[i];
+            for (uint256 j = 0; j < maxInputs.length; j++) {
+                maxInputs[j] = (bundleAmounts[j] * INDEX_UNITS) / 1e18;
+            }
+            uint256 externalMint = indexActions.mint(indexIds[i], INDEX_UNITS, user, maxInputs);
             assertEq(externalMint, INDEX_UNITS, "external mint amount");
 
-            pm.depositToPosition(positionId, indexPoolIds[i], externalMint);
+            pm.depositToPosition(positionId, indexPoolIds[i], externalMint, externalMint);
 
             uint256 borrowAmount = _borrowAtMaxLtv(indexPoolIds[i]);
             _payMonthly(indexPoolIds[i], borrowAmount);
@@ -292,20 +301,20 @@ contract EqualIndexLeverageLoopIntegrationTest is EqualIndexDiamondBase {
     function _borrowAtMaxLtv(uint256 pid) internal returns (uint256 borrowAmount) {
         uint256 principal = views.getUserPrincipal(pid, positionKey);
         borrowAmount = (principal * LTV_BPS) / 10_000;
-        lending.openRollingFromPosition(positionId, pid, borrowAmount);
+        lending.openRollingFromPosition(positionId, pid, borrowAmount, borrowAmount);
         assertEq(views.getTotalDebt(pid, positionKey), borrowAmount, "max ltv debt");
     }
 
     function _payMonthly(uint256 pid, uint256 principal) internal {
         uint256 payment = _minPayment(principal);
-        lending.makePaymentFromPosition(positionId, pid, payment);
+        lending.makePaymentFromPosition(positionId, pid, payment, payment);
         assertEq(views.getTotalDebt(pid, positionKey), principal - payment, "payment reduces debt");
     }
 
     function _repayRemaining(uint256 pid) internal {
         uint256 remaining = views.getTotalDebt(pid, positionKey);
         if (remaining > 0) {
-            lending.makePaymentFromPosition(positionId, pid, remaining);
+            lending.makePaymentFromPosition(positionId, pid, remaining, remaining);
             assertEq(views.getTotalDebt(pid, positionKey), 0, "rolling loan closed");
         }
     }
@@ -358,9 +367,9 @@ contract EqualIndexLeverageLoopIntegrationTest is EqualIndexDiamondBase {
 
     function _createPosition() internal {
         vm.startPrank(user);
-        positionId = pm.mintPositionWithDeposit(POOL_RETH, 500 ether);
-        pm.depositToPosition(positionId, POOL_STETH, 500 ether);
-        pm.depositToPosition(positionId, POOL_WSTETH, 500 ether);
+        positionId = pm.mintPositionWithDeposit(POOL_RETH, 500 ether, 500 ether, 0);
+        pm.depositToPosition(positionId, POOL_STETH, 500 ether, 500 ether);
+        pm.depositToPosition(positionId, POOL_WSTETH, 500 ether, 500 ether);
         vm.stopPrank();
         positionKey = nft.getPositionKey(positionId);
     }
@@ -387,6 +396,8 @@ contract EqualIndexLeverageLoopIntegrationTest is EqualIndexDiamondBase {
         indexIds.push(indexId);
         indexTokens.push(token);
         indexPoolIds.push(POOL_WSTETH + indexIds.length);
+        indexAssetCounts.push(params.assets.length);
+        indexBundles.push(params.bundleAmounts);
     }
 
     function _buildIndexParams(

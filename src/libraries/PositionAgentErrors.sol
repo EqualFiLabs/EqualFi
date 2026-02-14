@@ -8,13 +8,5 @@ error PositionAgent_Unauthorized(address caller, uint256 positionTokenId);
 error PositionAgent_NotAdmin(address caller);
 
 // State errors
-error PositionAgent_NotRegistered(uint256 positionTokenId);
 error PositionAgent_AlreadyRegistered(uint256 positionTokenId);
 error PositionAgent_InvalidAgentOwner(address expected, address actual);
-
-// Signature errors
-error PositionAgent_DeadlineExpired(uint256 deadline, uint256 currentTime);
-error PositionAgent_InvalidSignature();
-
-// Execution errors
-error PositionAgent_ExecutionFailed(bytes reason);

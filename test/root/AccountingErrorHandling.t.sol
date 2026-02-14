@@ -99,12 +99,13 @@ contract AccountingErrorHandlingDirectTest is DirectDiamondTestBase {
         vm.prank(lender);
         uint256 offerId = offers.postOffer(params);
         vm.prank(borrower);
-        uint256 agreementId = agreements.acceptOffer(offerId, borrowerId);
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerId, 0);
 
         harness.setDirectBorrowed(borrowerKey, 1, 0);
 
+        uint256 maxPayment = _maxPayment(agreementId);
         vm.expectRevert(DirectError_InvalidAgreementState.selector);
         vm.prank(borrower);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, maxPayment);
     }
 }

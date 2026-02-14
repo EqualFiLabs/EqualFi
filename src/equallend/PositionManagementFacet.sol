@@ -155,7 +155,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         }
     }
 
-    function _collectMintFee(address payer, address feeToken, uint256 feeAmount) internal {
+    function _collectMintFee(address payer, address feeToken, uint256 feeAmount, uint256 maxFee) internal {
         if (feeAmount == 0) {
             return;
         }
@@ -165,21 +165,24 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
             revert InvalidFeeReceiver();
         }
         if (LibCurrency.isNative(feeToken)) {
-            LibCurrency.transfer(address(0), treasury, feeAmount);
+            LibCurrency.transferWithMin(address(0), treasury, feeAmount, feeAmount);
             return;
         }
-        uint256 received = LibCurrency.pull(feeToken, payer, feeAmount);
-        require(received == feeAmount, "PositionNFT: fee short");
-        LibCurrency.transfer(feeToken, treasury, received);
+        uint256 received = LibCurrency.pullAtLeast(feeToken, payer, feeAmount, maxFee);
+        LibCurrency.transferWithMin(feeToken, treasury, received, received);
     }
 
-    function _pullMintDeposit(address token, uint256 amount) internal returns (uint256 received) {
+    function _pullMintDeposit(address token, uint256 amount, uint256 maxAmount)
+        internal
+        returns (uint256 received)
+    {
         if (!LibCurrency.isNative(token)) {
-            return LibCurrency.pull(token, msg.sender, amount);
+            return LibCurrency.pullAtLeast(token, msg.sender, amount, maxAmount);
         }
         if (amount == 0) {
             return 0;
         }
+        // For native, maxAmount should match msg.value (validated in _assertMintMsgValue).
         LibAppStorage.s().nativeTrackedTotal += amount;
         return amount;
     }
@@ -244,11 +247,11 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
     /// @notice Mint a new Position NFT for a pool
     /// @param pid The pool ID
     /// @return tokenId The newly minted token ID
-    function mintPosition(uint256 pid) external payable nonReentrant returns (uint256 tokenId) {
+    function mintPosition(uint256 pid, uint256 maxFee) external payable nonReentrant returns (uint256 tokenId) {
         // Validate pool exists
         Types.PoolData storage p = _pool(pid);
         (address feeToken, uint256 feeAmount) = _assertMintMsgValue(p.underlying, 0);
-        _collectMintFee(msg.sender, feeToken, feeAmount);
+        _collectMintFee(msg.sender, feeToken, feeAmount, maxFee);
 
         // Mint the NFT
         PositionNFT nft = PositionNFT(LibPositionNFT.s().positionNFTContract);
@@ -261,7 +264,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
     /// @param pid The pool ID
     /// @param amount The initial deposit amount
     /// @return tokenId The newly minted token ID
-    function mintPositionWithDeposit(uint256 pid, uint256 amount)
+    function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee)
         external
         payable
         nonReentrant
@@ -269,10 +272,13 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
     {
         Types.PoolData storage p = _pool(pid);
         require(amount > 0, "PositionNFT: amount=0");
+        if (LibCurrency.isNative(p.underlying) && maxAmount != amount) {
+            revert LibCurrency.LibCurrency_InvalidMax(maxAmount, amount);
+        }
         (address feeToken, uint256 feeAmount) = _assertMintMsgValue(p.underlying, amount);
 
         _enforceMaxUsers(p, true);
-        _collectMintFee(msg.sender, feeToken, feeAmount);
+        _collectMintFee(msg.sender, feeToken, feeAmount, maxFee);
 
         // Mint the NFT
         PositionNFT nft = PositionNFT(LibPositionNFT.s().positionNFTContract);
@@ -288,7 +294,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         _ensurePoolMembership(positionKey, pid, true);
 
         // Transfer tokens from user to contract and credit actual received (handles fee-on-transfer tokens)
-        uint256 received = _pullMintDeposit(p.underlying, amount);
+        uint256 received = _pullMintDeposit(p.underlying, amount, maxAmount);
         if (received < p.poolConfig.minDepositAmount) {
             revert DepositBelowMinimum(received, p.poolConfig.minDepositAmount);
         }
@@ -309,17 +315,25 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
     /// @notice Deposit capital to an existing Position NFT
     /// @param tokenId The token ID
     /// @param amount The amount to deposit
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) public payable nonReentrant {
+    function depositToPosition(
+        uint256 tokenId,
+        uint256 pid,
+        uint256 amount,
+        uint256 maxAmount
+    ) public payable nonReentrant {
         // Verify ownership
         _requireOwnership(tokenId);
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
+        
+        // Native currency checks: assert 0 msg.value for ERC20 pools to prevent stray ETH
+        LibCurrency.assertMsgValue(p.underlying, amount);
+
         bytes32 positionKey = _getPositionKey(tokenId);
         _ensurePoolMembership(positionKey, pid, true);
 
         require(amount > 0, "PositionNFT: amount=0");
-        LibCurrency.assertMsgValue(p.underlying, amount);
 
         // Settle fees before updating principal
         LibFeeIndex.settle(pid, positionKey);
@@ -329,7 +343,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         _enforceMaxUsers(p, isNewUser);
 
         // Transfer tokens from user to contract and credit actual received
-        uint256 received = LibCurrency.pull(p.underlying, msg.sender, amount);
+        uint256 received = LibCurrency.pullAtLeast(p.underlying, msg.sender, amount, maxAmount);
         if (received < p.poolConfig.minDepositAmount) {
             revert DepositBelowMinimum(received, p.poolConfig.minDepositAmount);
         }
@@ -349,7 +363,12 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
     /// @notice Withdraw capital from a Position NFT
     /// @param tokenId The token ID
     /// @param principalToWithdraw The amount of principal to withdraw
-    function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 principalToWithdraw) public payable nonReentrant {
+    function withdrawFromPosition(
+        uint256 tokenId,
+        uint256 pid,
+        uint256 principalToWithdraw,
+        uint256 minReceived
+    ) public payable nonReentrant {
         LibCurrency.assertZeroMsgValue();
         // Verify ownership
         _requireOwnership(tokenId);
@@ -428,7 +447,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         }
 
         // Transfer tokens from pool to NFT owner
-        LibCurrency.transfer(p.underlying, msg.sender, totalWithdrawal);
+        LibCurrency.transferWithMin(p.underlying, msg.sender, totalWithdrawal, minReceived);
 
         emit WithdrawnFromPosition(tokenId, msg.sender, pid, principalToWithdraw, yieldToWithdraw, newPrincipal);
     }
@@ -437,7 +456,11 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
     /// @dev Leaves any Direct commitments (locked or lent) intact; reverts if nothing withdrawable
     /// @param tokenId The token ID
     /// @param pid The pool ID
-    function closePoolPosition(uint256 tokenId, uint256 pid) external payable nonReentrant {
+    function closePoolPosition(
+        uint256 tokenId,
+        uint256 pid,
+        uint256 minReceived
+    ) external payable nonReentrant {
         LibCurrency.assertZeroMsgValue();
         _requireOwnership(tokenId);
 
@@ -499,7 +522,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
             LibAppStorage.s().nativeTrackedTotal -= totalWithdrawal;
         }
 
-        LibCurrency.transfer(p.underlying, msg.sender, totalWithdrawal);
+        LibCurrency.transferWithMin(p.underlying, msg.sender, totalWithdrawal, minReceived);
 
         emit WithdrawnFromPosition(tokenId, msg.sender, pid, principalToWithdraw, yieldToWithdraw, newPrincipal);
 

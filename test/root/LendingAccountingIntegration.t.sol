@@ -172,7 +172,7 @@ contract LendingAccountingIntegrationTest is Test {
         token.approve(address(facet), type(uint256).max);
 
         vm.prank(user);
-        uint256 tokenId = facet.mintPositionWithDeposit(1, 100 ether);
+        uint256 tokenId = facet.mintPositionWithDeposit(1, 100 ether, 100 ether, 0);
         bytes32 key = nft.getPositionKey(tokenId);
 
         facet.seedRollingDebt(1, key, 40 ether);
@@ -200,9 +200,9 @@ contract LendingAccountingIntegrationTest is Test {
         facet.seedPosition(1, key, 200 ether);
 
         vm.prank(user);
-        facet.openRollingFromPosition(tokenId, 1, 30 ether);
+        facet.openRollingFromPosition(tokenId, 1, 30 ether, 30 ether);
         vm.prank(user);
-        facet.openFixedFromPosition(tokenId, 1, 20 ether, 0);
+        facet.openFixedFromPosition(tokenId, 1, 20 ether, 0, 20 ether);
 
         assertEq(facet.sameAssetDebt(1, key), 50 ether, "same-asset debt aggregates");
     }

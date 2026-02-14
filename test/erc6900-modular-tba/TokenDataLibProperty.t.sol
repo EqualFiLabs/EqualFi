@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {TokenDataLib} from "../../src/erc6900/TokenDataLib.sol";
+import {TokenDataLib} from "@agent-wallet-core/libraries/TokenDataLib.sol";
 
 contract TokenDataHarness {
     function readTokenData() external view returns (bytes32, uint256, address, uint256) {

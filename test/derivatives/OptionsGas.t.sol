@@ -101,8 +101,11 @@ contract OptionsGasTest is Test {
         optionToken.safeTransferFrom(maker, holder, seriesId, 1e18, "");
 
         vm.resumeGasMetering();
+        uint256 payment = harness.previewExercisePayment(seriesId, 1e18);
+
         vm.prank(holder);
-        harness.exerciseOptions(seriesId, 1e18, holder);
+
+        harness.exerciseOptions(seriesId, 1e18, holder, payment, 0);
     }
 }
 

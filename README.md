@@ -217,7 +217,7 @@ EqualLend is designed to serve both ends of the spectrum. It gives ordinary user
 
 ## Perpetual Leverage Loop
 
-The below flowchart is a concrete example of how one can achieve a _**PERPETUAL LEVERAGE LOOP**_ . In this case perpetual leverage means exactly what it is.  A leverage loop that can be maintained indefinitely regardless of market conditions.
+The below flowchart is a concrete example of how one can achieve a _**PROTOCOL-PERPETUAL LEVERAGE LOOP**_. Here "perpetual" means the protocol does not force-close the loop solely due to mark-to-market price moves (no oracle-triggered liquidation). The loop persists until voluntary unwind, explicit default, or opt-in callability (when agreed), and market conditions still affect feasibility and execution.
 
 ```mermaid
 flowchart TB
@@ -246,7 +246,7 @@ flowchart TB
   S4 -->|repeat| S2
 ```
 
-This is achieved using P2P Revolving loans, AMM Auction Swaps and Redeposits. This creates leverage that is immune to price changes.
+This is achieved using P2P rolling (revolving) loans, AMM Auction swaps, and redeposits. This creates leverage that is not subject to price-triggered forced unwinds by protocol rules.
 
 ## Road to Immutability
 
@@ -273,6 +273,3 @@ Equalis exists because trustlessness has to be real. Not a brand. Not a vibe. A 
 If you’re a builder, a user, or someone who wants to see onchain finance done differently, welcome. If you’re tired of hearing that the way things are is the way they have to be, you’re in the right place.
 
 Discord: [https://discord.gg/brsMNDux4T](https://discord.gg/brsMNDux4T)
-
-
-

@@ -17,6 +17,7 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
+import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
@@ -54,6 +55,17 @@ contract EqualIndexFacetHarness is EqualIndexFacetV3 {
         cfg.flashLoanFeeBps = 9;
         cfg.aumFeeMinBps = 0;
         cfg.aumFeeMaxBps = 500;
+    }
+
+    function previewMintInputs(uint256 indexId, uint256 units) external view returns (uint256[] memory maxInputs) {
+        Index storage idx = s().indexes[indexId];
+        uint256 len = idx.assets.length;
+        maxInputs = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
+            maxInputs[i] = need + fee;
+        }
     }
 }
 
@@ -253,7 +265,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         uint256 fee = (required * 100) / 10_000;
 
         token.approve(address(facet), required + fee);
-        facet.mint(indexId, units, address(this));
+        facet.mint(indexId, units, address(this), facet.previewMintInputs(indexId, units));
 
         idxToken.approve(address(facet), idxToken.balanceOf(address(this)));
         facet.burn(indexId, units, address(this));
@@ -269,7 +281,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
 
         token.approve(address(facet), required + fee);
         vm.resumeGasMetering();
-        facet.mint(indexId, units, address(this));
+        facet.mint(indexId, units, address(this), facet.previewMintInputs(indexId, units));
     }
 
     function test_gas_IndexBurnOnly() public {
@@ -282,7 +294,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         uint256 fee = (required * 100) / 10_000;
 
         token.approve(address(facet), required + fee);
-        facet.mint(indexId, units, address(this));
+        facet.mint(indexId, units, address(this), facet.previewMintInputs(indexId, units));
 
         idxToken.approve(address(facet), idxToken.balanceOf(address(this)));
         vm.resumeGasMetering();
@@ -299,7 +311,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         uint256 fee = (required * 100) / 10_000;
 
         token.approve(address(facet), required + fee);
-        facet.mint(indexId, units, address(this));
+        facet.mint(indexId, units, address(this), facet.previewMintInputs(indexId, units));
 
         IndexFlashBorrower borrower = new IndexFlashBorrower();
         token.mint(address(borrower), 10 ether);
@@ -340,10 +352,10 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
         token.approve(address(pm), type(uint256).max);
-        uint256 tokenId = pm.mintPosition(1);
-        pm.depositToPosition(tokenId, 1, 100 ether);
-        pm.withdrawFromPosition(tokenId, 1, 40 ether);
-        pm.withdrawFromPosition(tokenId, 1, 60 ether);
+        uint256 tokenId = pm.mintPosition(1, 0);
+        pm.depositToPosition(tokenId, 1, 100 ether, 100 ether);
+        pm.withdrawFromPosition(tokenId, 1, 40 ether, 0);
+        pm.withdrawFromPosition(tokenId, 1, 60 ether, 0);
         pm.cleanupMembership(tokenId, 1);
         vm.stopPrank();
     }
@@ -361,9 +373,9 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
         token.approve(address(pm), type(uint256).max);
-        uint256 tokenId = pm.mintPosition(1);
+        uint256 tokenId = pm.mintPosition(1, 0);
         vm.resumeGasMetering();
-        pm.depositToPosition(tokenId, 1, 100 ether);
+        pm.depositToPosition(tokenId, 1, 100 ether, 100 ether);
         vm.stopPrank();
     }
 
@@ -380,10 +392,10 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
         token.approve(address(pm), type(uint256).max);
-        uint256 tokenId = pm.mintPosition(1);
-        pm.depositToPosition(tokenId, 1, 100 ether);
+        uint256 tokenId = pm.mintPosition(1, 0);
+        pm.depositToPosition(tokenId, 1, 100 ether, 100 ether);
         vm.resumeGasMetering();
-        pm.withdrawFromPosition(tokenId, 1, 100 ether);
+        pm.withdrawFromPosition(tokenId, 1, 100 ether, 0);
         vm.stopPrank();
     }
 
@@ -400,8 +412,8 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
         token.approve(address(pm), type(uint256).max);
-        uint256 tokenId = pm.mintPosition(1);
-        pm.depositToPosition(tokenId, 1, 100 ether);
+        uint256 tokenId = pm.mintPosition(1, 0);
+        pm.depositToPosition(tokenId, 1, 100 ether, 100 ether);
         vm.stopPrank();
 
         bytes32 positionKey = nft.getPositionKey(tokenId);
@@ -427,8 +439,8 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         vm.startPrank(user);
         token.approve(address(pm), type(uint256).max);
         vm.resumeGasMetering();
-        uint256 tokenId = pm.mintPosition(1);
-        pm.depositToPosition(tokenId, 1, 100 ether);
+        uint256 tokenId = pm.mintPosition(1, 0);
+        pm.depositToPosition(tokenId, 1, 100 ether, 100 ether);
         vm.stopPrank();
     }
 
@@ -445,10 +457,10 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
         token.approve(address(pm), type(uint256).max);
-        uint256 tokenId = pm.mintPosition(1);
-        pm.depositToPosition(tokenId, 1, 100 ether);
+        uint256 tokenId = pm.mintPosition(1, 0);
+        pm.depositToPosition(tokenId, 1, 100 ether, 100 ether);
         vm.resumeGasMetering();
-        pm.closePoolPosition(tokenId, 1);
+        pm.closePoolPosition(tokenId, 1, 0);
         vm.stopPrank();
     }
 
@@ -469,9 +481,9 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
 
         vm.startPrank(user);
         token.approve(address(lending), type(uint256).max);
-        lending.openRollingFromPosition(tokenId, 1, 20 ether);
-        lending.makePaymentFromPosition(tokenId, 1, 1 ether);
-        lending.closeRollingCreditFromPosition(tokenId, 1);
+        lending.openRollingFromPosition(tokenId, 1, 20 ether, 20 ether);
+        lending.makePaymentFromPosition(tokenId, 1, 1 ether, 1 ether);
+        lending.closeRollingCreditFromPosition(tokenId, 1, 19 ether);
         vm.stopPrank();
     }
 
@@ -494,7 +506,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         vm.startPrank(user);
         token.approve(address(lending), type(uint256).max);
         vm.resumeGasMetering();
-        lending.openRollingFromPosition(tokenId, 1, 20 ether);
+        lending.openRollingFromPosition(tokenId, 1, 20 ether, 20 ether);
         vm.stopPrank();
     }
 
@@ -517,8 +529,8 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
 
         vm.startPrank(user);
         token.approve(address(lending), type(uint256).max);
-        uint256 loanId = lending.openFixedFromPosition(tokenId, 1, 50 ether, 0);
-        lending.repayFixedFromPosition(tokenId, 1, loanId, 50 ether);
+        uint256 loanId = lending.openFixedFromPosition(tokenId, 1, 50 ether, 0, 50 ether);
+        lending.repayFixedFromPosition(tokenId, 1, loanId, 50 ether, 50 ether);
         vm.stopPrank();
     }
 
@@ -542,7 +554,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         vm.startPrank(user);
         token.approve(address(lending), type(uint256).max);
         vm.resumeGasMetering();
-        lending.openFixedFromPosition(tokenId, 1, 50 ether, 0);
+        lending.openFixedFromPosition(tokenId, 1, 50 ether, 0, 50 ether);
         vm.stopPrank();
     }
 
@@ -628,10 +640,10 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         vm.stopPrank();
 
         vm.prank(user);
-        uint256 agreementId = agreements.acceptOffer(offerId, borrowerTokenId);
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerTokenId, 0);
 
         vm.prank(user);
-        lifecycle.repay(agreementId);
+        lifecycle.repay(agreementId, 50000000000000000000);
     }
 
     function test_gas_DirectPostOfferOnly() public {
@@ -718,7 +730,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
 
         vm.prank(user);
         vm.resumeGasMetering();
-        agreements.acceptOffer(offerId, borrowerTokenId);
+        agreements.acceptOffer(offerId, borrowerTokenId, 0);
     }
 
     function test_gas_DirectPostBorrowerOfferOnly() public {
@@ -805,7 +817,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
 
         vm.prank(lender);
         vm.resumeGasMetering();
-        agreements.acceptBorrowerOffer(offerId, lenderTokenId);
+        agreements.acceptBorrowerOffer(offerId, lenderTokenId, 0);
     }
 
     function _configureDirect(address protocolTreasury) internal {

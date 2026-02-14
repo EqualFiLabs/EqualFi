@@ -134,37 +134,37 @@ When the Position NFT transfers, the entire ownership chain automatically update
 ### 2.3 Component Interaction Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DIAMOND PROXY                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐ │
-│  │ PositionAgentTBA    │  │ PositionAgentReg    │  │ PositionAgentView   │ │
-│  │ Facet               │  │ Facet               │  │ Facet               │ │
-│  ├─────────────────────┤  ├─────────────────────┤  ├─────────────────────┤ │
-│  │ • computeTBAAddress │  │ • recordAgentReg    │  │ • getTBAAddress     │ │
-│  │ • deployTBA         │  │ • getIdentityReg    │  │ • getAgentId        │ │
-│  │ • getTBAImpl        │  │                     │  │ • isAgentRegistered │ │
-│  │ • getERC6551Reg     │  │                     │  │ • isTBADeployed     │ │
-│  └──────────┬──────────┘  └──────────┬──────────┘  │ • getCanonicalRegs  │ │
-│             │                        │             │ • getTBAInterface   │ │
-│             │                        │             └─────────────────────┘ │
-│             │                        │                                      │
-│             ▼                        ▼                                      │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    LibPositionAgentStorage                          │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  • erc6551Registry        • positionToAgentId (mapping)             │   │
-│  │  • erc6551Implementation  • tbaDeployed (mapping)                   │   │
-│  │  • identityRegistry       • tbaSalt                                 │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────┐                                                    │
-│  │ PositionAgentConfig │  (Admin functions for registry configuration)     │
-│  │ Facet               │                                                    │
-│  └─────────────────────┘                                                    │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           DIAMOND PROXY                                             │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌───────────────────────┐┌──────────────────────────┐┌─────────────────────────┐   │
+│  │ PositionAgentTBA      ││ PositionAgentReg         ││ PositionAgentView       │   │
+│  │ Facet                 ││ Facet                    ││ Facet                   │   │
+│  ├───────────────────────┤├──────────────────────────┤├─────────────────────────┤   │
+│  │ • computeTBAAddress   ││ • recordAgentRegistration|│ • getTBAAddress         │   │
+│  │ • deployTBA           ││ • getIdentityRegistry    |│ • getAgentId            │   │
+│  │ • getTBAImplementation││                          |│ • isAgentRegistered     │   |
+│  │ • getERC6551Registry  ││                          |│ • isTBADeployed         │   │
+│  └──────────┬────────────┘└──────────┬───────────────┘│ • getCanonicalRegistries|   │
+│             │                        │                │ • getTBAInterfaceSupport|   │
+│             │                        │                └─────────────────────────┘   │
+│             │                        │                   |                          │
+│             ▼                        ▼                   ▼                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐            │
+│  │                    LibPositionAgentStorage                          │            │
+│  ├─────────────────────────────────────────────────────────────────────┤            │
+│  │  • erc6551Registry        • positionToAgentId (mapping)             │            │
+│  │  • erc6551Implementation  • tbaDeployed (mapping)                   │            │
+│  │  • identityRegistry       • tbaSalt                                 │            │
+│  └─────────────────────────────────────────────────────────────────────┘            │
+│                                                                                     │
+│  ┌─────────────────────┐                                                            │
+│  │ PositionAgentConfig │  (Admin functions for registry configuration)              │
+│  │ Facet               │                                                            │
+│  └─────────────────────┘                                                            │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -288,6 +288,8 @@ account.installExecution(
 ### 4.3 ERC-8004: Agent Identity
 
 The system uses the canonical ERC-8004 Identity Registry for agent registration.
+ERC-8004 commonly reuses one IdentityRegistry address for many mainnet deployments and a different address for many testnet deployments.
+This document lists the Ethereum addresses used by the deployment scripts.
 
 **Registry Addresses:**
 
@@ -295,6 +297,10 @@ The system uses the canonical ERC-8004 Identity Registry for agent registration.
 |-------|---------|
 | Ethereum Mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | Ethereum Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+| Base Mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| Base Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+| Arbitrum One | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| Arbitrum Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
 
 **Key Functions:**
 - `register(agentURI)` - Mint Identity NFT with metadata URI
@@ -320,7 +326,25 @@ function validateUserOp(
 ) external returns (uint256 validationData);
 ```
 
-### 4.5 ERC-1271: Smart Contract Signatures
+### 4.5 ERC-6492: Counterfactual Signature Validation
+
+The system supports ERC-6492 wrapper signatures for counterfactual accounts (accounts that may not be deployed yet at signature time).
+
+**Why this matters in this architecture:**
+- TBAs are ERC-6551 counterfactual addresses derived deterministically from `(implementation, salt, chainId, tokenContract, tokenId)`.
+- Implementations are deployed through the canonical ERC-6551 registry, and this protocol commonly uses a beacon-backed implementation address for upgradeable MSCA behavior.
+- ERC-6492 allows signatures to carry deployment context so verification can succeed even before the signer account is deployed.
+
+**Implementation behavior (OwnerValidationModule):**
+1. Detect ERC-6492 wrapper via the `0x6492...6492` magic suffix.
+2. Decode `(factory, factoryCalldata, innerSignature)`.
+3. If signer code already exists, attempt standard ERC-1271 validation directly.
+4. Otherwise, call the provided factory calldata (side-effecting deployment path).
+5. Retry ERC-1271 validation on the now-deployed signer account.
+
+This makes counterfactual signature flows compatible with ERC-6551 account deployment patterns while preserving ERC-1271 signature semantics after deployment.
+
+### 4.6 ERC-1271: Smart Contract Signatures
 
 The TBA validates signatures on behalf of the Position NFT owner.
 
@@ -987,7 +1011,13 @@ bytes memory signature = abi.encodePacked(r, s, v);  // Standard ECDSA
    PositionMSCAImpl msca = new PositionMSCAImpl(entryPointAddress);
    ```
 
-2. **Deploy Diamond Facets**
+2. **Deploy Beacon + ERC-6551 Implementation Proxy**
+   ```solidity
+   UpgradeableBeacon beacon = new UpgradeableBeacon(address(msca), owner);
+   ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
+   ```
+
+3. **Deploy Diamond Facets**
    ```solidity
    PositionAgentTBAFacet tbaFacet = new PositionAgentTBAFacet();
    PositionAgentRegistryFacet regFacet = new PositionAgentRegistryFacet();
@@ -995,15 +1025,17 @@ bytes memory signature = abi.encodePacked(r, s, v);  // Standard ECDSA
    PositionAgentConfigFacet configFacet = new PositionAgentConfigFacet();
    ```
 
-3. **Add Facets to Diamond**
+4. **Add Facets to Diamond**
    ```solidity
    diamond.diamondCut(facetCuts, address(0), "");
    ```
 
-4. **Configure Registry Addresses**
+5. **Configure Registry Addresses**
    ```solidity
    configFacet.setERC6551Registry(0x000000006551c19487814612e58FE06813775758);
-   configFacet.setERC6551Implementation(address(msca));
+   // Default implementation configured by scripts:
+   // the beacon-backed ERC6551 implementation proxy
+   configFacet.setERC6551Implementation(address(beaconProxy));
    configFacet.setIdentityRegistry(identityRegistryAddress);
    ```
 
@@ -1013,21 +1045,29 @@ bytes memory signature = abi.encodePacked(r, s, v);  // Standard ECDSA
 |-------|-------------------|---------------------------|------------|
 | Ethereum Mainnet | `0x000000006551c19487814612e58FE06813775758` | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
 | Ethereum Sepolia | `0x000000006551c19487814612e58FE06813775758` | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
+| Base Mainnet | `0x000000006551c19487814612e58FE06813775758` | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Set via `ENTRYPOINT_ADDRESS` env var |
+| Base Sepolia | `0x000000006551c19487814612e58FE06813775758` | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | Set via `ENTRYPOINT_ADDRESS` env var |
+| Arbitrum One | `0x000000006551c19487814612e58FE06813775758` | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Set via `ENTRYPOINT_ADDRESS` env var |
+| Arbitrum Sepolia | `0x000000006551c19487814612e58FE06813775758` | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | Set via `ENTRYPOINT_ADDRESS` env var |
+
+For additional supported chains and explorers, see `8004-addresses.md`.
+Current deployment scripts auto-resolve IdentityRegistry and EntryPoint only for Ethereum Mainnet (`chainid=1`) and Ethereum Sepolia (`chainid=11155111`); other chains should provide `IDENTITY_REGISTRY` and `ENTRYPOINT_ADDRESS`.
 
 ### 10.3 Salt Strategy
 
 The system uses a fixed salt (`bytes32(0)`) for TBA derivation:
 - **Deterministic**: Same inputs always produce same TBA address
 - **Simple**: No salt management required
-- **One TBA per Position**: Each Position NFT has exactly one TBA
+- **Per-Configuration Determinism**: Address is unique per `(implementation, salt, chainId, tokenContract, tokenId)`
 
 ### 10.4 Upgrade Strategy
 
-**Per-Account UUPS Upgrade:**
-- Each TBA can upgrade independently
-- Upgrade authorized by Position NFT owner (EIP-712 signature)
-- No protocol-wide admin required
-- Bootstrap validation serves as emergency fallback
+**Beacon-Based Upgrade Path (current deployment scripts):**
+- TBAs are deployed via ERC-6551 using a shared `ERC6551BeaconProxy` as implementation
+- The beacon points to `PositionMSCAImpl`
+- Upgrading the beacon implementation updates behavior for all TBAs using that beacon
+- Beacon ownership (deployer-configured governance owner) controls upgrades
+- `setERC6551Implementation` can swap the ERC-6551 implementation address used for future deterministic TBA computation/deployment
 
 ---
 
@@ -1038,9 +1078,10 @@ The system uses a fixed salt (`bytes32(0)`) for TBA derivation:
 | Contract | Address | Notes |
 |----------|---------|-------|
 | ERC-6551 Registry | `0x000000006551c19487814612e58FE06813775758` | Same on all EVM chains |
-| ERC-8004 Identity Registry (Mainnet) | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Chain-specific |
-| ERC-8004 Identity Registry (Sepolia) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | Chain-specific |
-| ERC-4337 EntryPoint v0.7 | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` | Same on all EVM chains |
+| ERC-8004 Identity Registry (Mainnet-family) | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Reused across many mainnet deployments |
+| ERC-8004 Identity Registry (Testnet-family) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | Reused across many testnet deployments |
+| ERC-4337 EntryPoint v0.7 (Mainnet) | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` | Script default |
+| ERC-4337 EntryPoint v0.7 (Sepolia) | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` | Script default |
 
 ### 11.2 Interface IDs
 
@@ -1059,7 +1100,6 @@ The system uses a fixed salt (`bytes32(0)`) for TBA derivation:
 ```solidity
 error PositionAgent_Unauthorized(address caller, uint256 positionTokenId);
 error PositionAgent_NotAdmin(address caller);
-error PositionAgent_NotRegistered(uint256 positionTokenId);
 error PositionAgent_AlreadyRegistered(uint256 positionTokenId);
 error PositionAgent_InvalidAgentOwner(address expected, address actual);
 ```
@@ -1132,22 +1172,17 @@ event ValidationUninstalled(address indexed module, uint32 indexed entityId, boo
 - [ERC-6900: Modular Smart Contract Accounts](https://eips.ethereum.org/EIPS/eip-6900)
 - [ERC-8004: Agent Identity](https://eips.ethereum.org/EIPS/eip-8004)
 - [ERC-4337: Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
+- [ERC-6492: Signature Validation for Predeploy Contracts](https://eips.ethereum.org/EIPS/eip-6492)
 - [ERC-1271: Standard Signature Validation](https://eips.ethereum.org/EIPS/eip-1271)
 - [ERC-7201: Namespaced Storage Layout](https://eips.ethereum.org/EIPS/eip-7201)
 - [EIP-712: Typed Structured Data Hashing](https://eips.ethereum.org/EIPS/eip-712)
 - [EIP-2535: Diamond Standard](https://eips.ethereum.org/EIPS/eip-2535)
 
-**Related Design Documents:**
-- `DESIGN-ERC8004-ERC6551-POSITION-AGENTS.md` - Original TBA + Identity design
-- `DESIGN-ERC6900-MODULAR-TBA.md` - Modular account design
-- `.kiro/specs/erc6551-position-agents/` - ERC-6551 integration spec
-- `.kiro/specs/erc6900-modular-tba/` - ERC-6900 MSCA spec
 
 ---
 
 ## Document History
 
-| Version | Date | Author | Changes |
-|---------|------|--------|---------|
-| 1.0.0 | 2026-01-30 | EqualGi Labs | Initial unified design document |
-
+| Version | Date | Author |
+|---------|------|--------|
+| 1.0.1 | 2026-02-06 | EqualFi Labs |

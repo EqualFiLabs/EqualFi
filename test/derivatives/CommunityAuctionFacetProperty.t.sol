@@ -434,7 +434,7 @@ contract CommunityAuctionFacetPropertyTest is Test {
         uint256 trackedBeforeB = harness.getTrackedBalance(2);
 
         vm.prank(swapper);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, 0, swapper);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, swapper);
 
         DerivativeTypes.CommunityAuction memory auction = harness.getCommunityAuction(auctionId);
         uint256 feeAmount = (amountIn * 100) / 10_000;
@@ -578,7 +578,7 @@ contract CommunityAuctionFacetPropertyTest is Test {
         tokenA.approve(address(harness), amountIn);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
 
         DerivativeTypes.CommunityAuction memory auctionAfter = harness.getCommunityAuction(auctionId);
         (uint256 makerFeesA,) = harness.pendingCommunityFees(auctionId, makerKey);
@@ -694,7 +694,7 @@ contract CommunityAuctionFacetPropertyTest is Test {
         tokenA.approve(address(harness), amountIn);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, 0, taker);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
 
         uint256 feeAmount = (amountIn * feeBps) / 10_000;
         uint16 makerShareBps = harness.getMakerShareBps();

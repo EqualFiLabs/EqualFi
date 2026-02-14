@@ -183,19 +183,19 @@ Every user interaction happens through a Position NFT (ERC-721). The NFT represe
 
 ```solidity
 // 1. Mint a position for a specific pool
-uint256 tokenId = positionFacet.mintPosition(poolId);
+uint256 tokenId = positionFacet.mintPosition(poolId, maxFee);
 
 // 2. Deposit assets
-positionFacet.depositToPosition(tokenId, poolId, amount);
+positionFacet.depositToPosition(tokenId, poolId, amount, maxAmount);
 
 // 3. Borrow against deposits
-lendingFacet.openRollingFromPosition(tokenId, poolId, borrowAmount);
+lendingFacet.openRollingFromPosition(tokenId, poolId, borrowAmount, minReceived);
 
 // 4. Repay loans
-lendingFacet.makePaymentFromPosition(tokenId, poolId, repayAmount);
+lendingFacet.makePaymentFromPosition(tokenId, poolId, repayAmount, maxPayment);
 
 // 5. Withdraw remaining principal
-positionFacet.withdrawFromPosition(tokenId, poolId, withdrawAmount);
+positionFacet.withdrawFromPosition(tokenId, poolId, withdrawAmount, minReceived);
 ```
 
 ### Position Key
@@ -273,7 +273,7 @@ Rolling credit is an open-ended credit line with periodic payment requirements.
 
 **Open a Rolling Loan:**
 ```solidity
-lendingFacet.openRollingFromPosition(tokenId, poolId, amount);
+lendingFacet.openRollingFromPosition(tokenId, poolId, amount, minReceived);
 ```
 
 **Requirements:**
@@ -283,21 +283,21 @@ lendingFacet.openRollingFromPosition(tokenId, poolId, amount);
 
 **Make a Payment:**
 ```solidity
-lendingFacet.makePaymentFromPosition(tokenId, poolId, paymentAmount);
+lendingFacet.makePaymentFromPosition(tokenId, poolId, paymentAmount, maxPayment);
 ```
 
 Payments reduce principal remaining. With 0% interest, the entire payment goes to principal.
 
 **Expand Credit Line:**
 ```solidity
-lendingFacet.expandRollingFromPosition(tokenId, poolId, additionalAmount);
+lendingFacet.expandRollingFromPosition(tokenId, poolId, additionalAmount, minReceived);
 ```
 
 Expansion is blocked if the position is delinquent (missed payments).
 
 **Close Rolling Loan:**
 ```solidity
-lendingFacet.closeRollingCreditFromPosition(tokenId, poolId);
+lendingFacet.closeRollingCreditFromPosition(tokenId, poolId, maxPayment);
 ```
 
 Requires full repayment of principal remaining.
@@ -308,14 +308,14 @@ Fixed-term loans have a defined expiry date.
 
 **Open a Fixed-Term Loan:**
 ```solidity
-uint256 loanId = lendingFacet.openFixedFromPosition(tokenId, poolId, amount, termIndex);
+uint256 loanId = lendingFacet.openFixedFromPosition(tokenId, poolId, amount, termIndex, minReceived);
 ```
 
 The `termIndex` selects from pre-configured term options (e.g., 30 days, 90 days).
 
 **Repay a Fixed-Term Loan:**
 ```solidity
-lendingFacet.repayFixedFromPosition(tokenId, poolId, loanId, amount);
+lendingFacet.repayFixedFromPosition(tokenId, poolId, loanId, amount, maxPayment);
 ```
 
 Partial repayments are allowed. The loan closes when principal remaining reaches zero.
@@ -427,9 +427,9 @@ newStartTime = currentTime - newTimeCredit
 
 | Source | Distribution |
 |--------|--------------|
-| Flash loan fees | Fee index via `LibFeeIndex.accrueWithSource()` |
-| Penalty seizures | 70% fee index, 20% active credit, 10% protocol |
-| Action fees | Protocol treasury via `LibFeeTreasury` |
+| Flash loan fees | Routed via `LibFeeTreasury`/`LibFeeRouter` into treasury, active credit, and fee index |
+| Penalty seizures | 10% enforcer bounty, remaining 90% routed via `LibFeeRouter` split |
+| Action fees | Charged via `LibActionFees`, then routed via `LibFeeTreasury`/`LibFeeRouter` |
 
 ---
 
@@ -438,7 +438,7 @@ newStartTime = currentTime - newTimeCredit
 ### How Defaults Work
 
 When a position becomes penalty-eligible:
-1. Anyone can call `penalizePosition`
+1. Anyone can call `penalizePositionRolling` or `penalizePositionFixed`
 2. Collateral is seized to cover debt + penalty
 3. Penalty is distributed to ecosystem participants
 4. Position's loan is closed
@@ -454,12 +454,10 @@ The penalty is capped at the remaining principal to prevent over-seizure.
 
 ### Penalty Distribution
 
-| Recipient | Share | Purpose |
-|-----------|-------|---------|
-| Enforcer | 10% | Incentive to trigger resolution |
-| Fee Index | 63% | Distributed to depositors |
-| Protocol | 9% | Protocol revenue |
-| Active Credit | 18% | Distributed to active borrowers |
+- `enforcerShare = penaltyApplied / 10` (10% of applied penalty)
+- Remaining `protocolAmount = penaltyApplied - enforcerShare` is routed through `LibFeeRouter.previewSplit`
+- Split is configurable by global treasury/active-credit basis points; fee-index receives the remainder
+- Default config implies totals of approximately: Protocol 9%, Active Credit 63%, Fee Index 18% (plus Enforcer 10%)
 
 ### Rolling Loan Penalty
 
@@ -500,7 +498,7 @@ Flash loans allow borrowing pool liquidity within a single transaction, provided
 ### Usage
 
 ```solidity
-flashLoanFacet.flashLoan(poolId, receiverContract, amount, data);
+flashLoanFacet.flashLoan(poolId, receiverContract, amount, data, maxRepayment);
 ```
 
 The receiver must implement:
@@ -524,7 +522,7 @@ Return `keccak256("IFlashLoanReceiver.onFlashLoan")` on success.
 fee = amount × flashLoanFeeBps / 10,000
 ```
 
-Fees are distributed to depositors via the fee index.
+Fees are routed via `LibFeeTreasury`/`LibFeeRouter` into treasury, active credit, and fee index shares.
 
 ### Anti-Split Protection
 
@@ -577,7 +575,7 @@ struct PoolData {
     mapping(uint256 => FixedTermLoan) fixedTermLoans;
     
     // Active credit per-user state
-    mapping(bytes32 => ActiveCreditState) userActiveCreditStateP2P;
+    mapping(bytes32 => ActiveCreditState) userActiveCreditStateEncumbrance;
     mapping(bytes32 => ActiveCreditState) userActiveCreditStateDebt;
 }
 
@@ -619,6 +617,7 @@ struct RollingCreditLoan {
     uint256 principalRemaining;     // Outstanding balance
     uint40 openedAt;                // Loan creation timestamp
     uint40 lastPaymentTimestamp;    // Last payment time
+    uint40 lastAccrualTs;           // Last accrual checkpoint
     uint16 apyBps;                  // Interest rate (0 for self-secured)
     uint8 missedPayments;           // Tracked missed epochs
     uint32 paymentIntervalSecs;     // Payment period (30 days)
@@ -634,11 +633,13 @@ struct RollingCreditLoan {
 struct FixedTermLoan {
     uint256 principal;              // Original loan amount
     uint256 principalRemaining;     // Outstanding balance
+    uint256 fullInterest;           // Interest snapshot (0 in current self-secured flow)
     uint40 openedAt;                // Loan creation timestamp
     uint40 expiry;                  // Maturity timestamp
     uint16 apyBps;                  // Interest rate (0 for self-secured)
     bytes32 borrower;               // Position key
     bool closed;                    // Loan status
+    bool interestRealized;          // Interest realization flag
     uint256 principalAtOpen;        // Snapshot for penalty calculation
 }
 ```
@@ -654,6 +655,7 @@ struct PositionState {
     uint256 accruedYield;
     uint256 feeIndexCheckpoint;
     uint256 maintenanceIndexCheckpoint;
+    uint256 externalCollateral;
     RollingCreditLoan rollingLoan;
     uint256[] fixedLoanIds;
     uint256 totalDebt;
@@ -727,19 +729,19 @@ function previewBorrowRolling(uint256 poolId, bytes32 borrower)
 
 ```solidity
 // 1. Mint position with initial deposit
-uint256 tokenId = positionFacet.mintPositionWithDeposit(poolId, depositAmount);
+uint256 tokenId = positionFacet.mintPositionWithDeposit(poolId, depositAmount, maxAmount, maxFee);
 
 // 2. Open rolling credit line
-lendingFacet.openRollingFromPosition(tokenId, poolId, borrowAmount);
+lendingFacet.openRollingFromPosition(tokenId, poolId, borrowAmount, minReceived);
 
 // 3. Use borrowed funds externally...
 
 // 4. Repay when ready
 IERC20(underlying).approve(diamond, repayAmount);
-lendingFacet.makePaymentFromPosition(tokenId, poolId, repayAmount);
+lendingFacet.makePaymentFromPosition(tokenId, poolId, repayAmount, maxPayment);
 
 // 5. Withdraw remaining principal
-positionFacet.withdrawFromPosition(tokenId, poolId, withdrawAmount);
+positionFacet.withdrawFromPosition(tokenId, poolId, withdrawAmount, minReceived);
 ```
 
 #### Yield Management
@@ -752,7 +754,7 @@ uint256 pending = LibFeeIndex.pendingYield(poolId, positionKey);
 positionFacet.rollYieldToPosition(tokenId, poolId);
 
 // Or withdraw yield with principal
-positionFacet.withdrawFromPosition(tokenId, poolId, amount);
+positionFacet.withdrawFromPosition(tokenId, poolId, amount, minReceived);
 // Yield is withdrawn proportionally with principal
 ```
 
@@ -879,27 +881,27 @@ Missed payments: 3 (penalty eligible)
 
 **Penalty Calculation:**
 ```
-Penalty rate: 10% (example)
-Penalty amount: 800 × 10% = 80 USDC
-Total seized: 800 (debt) + 80 (penalty) = 880 USDC
+Penalty rate: 5% (current default)
+Penalty amount: 800 × 5% = 40 USDC
+Total seized: 800 (debt) + 40 (penalty) = 840 USDC
 ```
 
 **Distribution:**
 ```
-Enforcer (10%): 8 USDC
-Fee index (63%): 50.4 USDC
-Protocol (9%): 7.2 USDC
-Active credit (18%): 14.4 USDC
+Enforcer (10% of penalty): 4 USDC
+Protocol (~9% total, default split): 3.6 USDC
+Active credit (~63% total, default split): 25.2 USDC
+Fee index (~18% total, default split): 7.2 USDC
 ```
 
 **Final State:**
 ```
-Carol's principal: 1000 - 880 = 120 USDC
+Carol's principal: 1000 - 840 = 160 USDC
 Carol's debt: 0 USDC
 Loan status: closed
 ```
 
-Carol lost 880 USDC but retains 120 USDC in her position.
+Carol lost 840 USDC but retains 160 USDC in her position.
 
 ### Example 4: Fixed-Term Loan Lifecycle
 

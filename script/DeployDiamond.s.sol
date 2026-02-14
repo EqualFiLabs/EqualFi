@@ -65,6 +65,9 @@ import {PositionAgentTBAFacet} from "../src/erc6551/PositionAgentTBAFacet.sol";
 import {PositionAgentRegistryFacet} from "../src/erc6551/PositionAgentRegistryFacet.sol";
 import {PositionAgentViewFacet} from "../src/erc6551/PositionAgentViewFacet.sol";
 import {PositionAgentConfigFacet} from "../src/erc6551/PositionAgentConfigFacet.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
+import {PositionMSCAImpl} from "../src/erc6900/PositionMSCAImpl.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);
@@ -99,6 +102,9 @@ contract DeployDiamondScript is Script {
     address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
     address internal constant ERC8004_MAINNET = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
     address internal constant ERC8004_SEPOLIA = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
+    // ERC-4337 EntryPoint v0.7 addresses
+    address internal constant ENTRYPOINT_V07_MAINNET = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
+    address internal constant ENTRYPOINT_V07_SEPOLIA = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
 
     struct TokenSpec {
         string id;
@@ -252,6 +258,17 @@ contract DeployDiamondScript is Script {
         OptionToken optionToken = new OptionToken("", owner, diamondAddress);
         FuturesToken futuresToken = new FuturesToken("", owner, diamondAddress);
 
+        // Deploy ERC-6900 beacon chain for Position Agent TBAs
+        address entryPoint = _resolveEntryPoint();
+        PositionMSCAImpl mscaImplementation = new PositionMSCAImpl(entryPoint);
+        UpgradeableBeacon beacon = new UpgradeableBeacon(address(mscaImplementation), owner);
+        BeaconProxy beaconProxy = new BeaconProxy(address(beacon));
+
+        console2.log("EntryPoint", entryPoint);
+        console2.log("MSCAImplementation", address(mscaImplementation));
+        console2.log("Beacon", address(beacon));
+        console2.log("BeaconProxy", address(beaconProxy));
+
         console2.log("OptionToken", address(optionToken));
         console2.log("FuturesToken", address(futuresToken));
         optionToken.setManager(diamondAddress);
@@ -262,14 +279,14 @@ contract DeployDiamondScript is Script {
         IDiamondCut(address(diamond))
             .diamondCut(more, address(initializer), abi.encodeWithSelector(DiamondInit.init.selector, timelock, address(nftContract)));
 
-        address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(0));
+        address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(beaconProxy));
         address identityRegistry = _resolveIdentityRegistry();
         PositionAgentConfigFacet(address(diamond)).setERC6551Registry(ERC6551_REGISTRY);
-        if (erc6551Implementation != address(0)) {
-            PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
-        } else {
-            console2.log("ERC6551_IMPLEMENTATION not set; skipping implementation config");
+        if (erc6551Implementation == address(0)) {
+            erc6551Implementation = address(beaconProxy);
         }
+        PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
+        console2.log("Using ERC6551 implementation:", erc6551Implementation);
         if (identityRegistry != address(0)) {
             PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
         } else {
@@ -325,6 +342,16 @@ contract DeployDiamondScript is Script {
             return ERC8004_SEPOLIA;
         }
         return vm.envOr("IDENTITY_REGISTRY", address(0));
+    }
+
+    function _resolveEntryPoint() internal view returns (address) {
+        if (block.chainid == 1) {
+            return ENTRYPOINT_V07_MAINNET;
+        }
+        if (block.chainid == 11155111) {
+            return ENTRYPOINT_V07_SEPOLIA;
+        }
+        return vm.envOr("ENTRYPOINT_ADDRESS", address(0));
     }
 
     // Selector helpers

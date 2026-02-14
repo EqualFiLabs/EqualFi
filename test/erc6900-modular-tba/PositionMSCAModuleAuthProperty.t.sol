@@ -4,18 +4,18 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-import {PositionMSCA} from "../../src/erc6900/PositionMSCA.sol";
+import {NFTBoundMSCA} from "@agent-wallet-core/core/NFTBoundMSCA.sol";
 import {
     ExecutionManifest,
     ManifestExecutionFunction,
     ModuleEntity,
     ValidationConfig
-} from "../../src/erc6900/ModuleTypes.sol";
-import {ModuleEntityLib} from "../../src/erc6900/ModuleEntityLib.sol";
-import {ValidationConfigLib} from "../../src/erc6900/ValidationConfigLib.sol";
-import {IERC6900ExecutionModule} from "../../src/erc6900/IERC6900ExecutionModule.sol";
-import {IERC6900ValidationModule} from "../../src/erc6900/IERC6900ValidationModule.sol";
-import {IERC6900Module} from "../../src/erc6900/IERC6900Module.sol";
+} from "@agent-wallet-core/libraries/ModuleTypes.sol";
+import {ModuleEntityLib} from "@agent-wallet-core/libraries/ModuleEntityLib.sol";
+import {ValidationConfigLib} from "@agent-wallet-core/libraries/ValidationConfigLib.sol";
+import {IERC6900ExecutionModule} from "@agent-wallet-core/interfaces/IERC6900ExecutionModule.sol";
+import {IERC6900ValidationModule} from "@agent-wallet-core/interfaces/IERC6900ValidationModule.sol";
+import {IERC6900Module} from "@agent-wallet-core/interfaces/IERC6900Module.sol";
 import {PackedUserOperation} from "@openzeppelin/contracts/interfaces/draft-IERC4337.sol";
 
 contract MockPositionNFT is ERC721 {
@@ -70,12 +70,12 @@ contract MockValidationModule is IERC6900ValidationModule {
     }
 }
 
-contract PositionMSCAModuleAuthHarness is PositionMSCA {
+contract PositionMSCAModuleAuthHarness is NFTBoundMSCA {
     uint256 private _chainId;
     address private _tokenContract;
     uint256 private _tokenId;
 
-    constructor(address entryPoint_) PositionMSCA(entryPoint_) {}
+    constructor(address entryPoint_) NFTBoundMSCA(entryPoint_) {}
 
     function setTokenData(uint256 chainId, address tokenContract, uint256 tokenId) external {
         _chainId = chainId;
@@ -85,6 +85,22 @@ contract PositionMSCAModuleAuthHarness is PositionMSCA {
 
     function token() public view override returns (uint256 chainId, address tokenContract, uint256 tokenId) {
         return (_chainId, _tokenContract, _tokenId);
+    }
+
+
+    function _owner() internal view override returns (address) {
+        (uint256 chainId, address tokenContract, uint256 tokenId) = token();
+        if (chainId != block.chainid || tokenContract == address(0)) {
+            return address(0);
+        }
+
+        (bool ok, bytes memory data) =
+            tokenContract.staticcall(abi.encodeWithSelector(bytes4(keccak256("ownerOf(uint256)")), tokenId));
+        if (!ok || data.length < 32) {
+            return address(0);
+        }
+
+        return abi.decode(data, (address));
     }
 
     function accountId() external pure override returns (string memory) {
@@ -139,11 +155,11 @@ contract PositionMSCAModuleAuthPropertyTest is Test {
         bytes4[] memory selectors = _singleSelector(bytes4(keccak256("validate()")));
 
         vm.prank(attacker);
-        vm.expectRevert(abi.encodeWithSelector(PositionMSCA.UnauthorizedCaller.selector, attacker));
+        vm.expectRevert(abi.encodeWithSelector(NFTBoundMSCA.UnauthorizedCaller.selector, attacker));
         account.installExecution(address(execModule), manifest, "");
 
         vm.prank(attacker);
-        vm.expectRevert(abi.encodeWithSelector(PositionMSCA.UnauthorizedCaller.selector, attacker));
+        vm.expectRevert(abi.encodeWithSelector(NFTBoundMSCA.UnauthorizedCaller.selector, attacker));
         account.installValidation(validationConfig, selectors, "", new bytes[](0));
 
         vm.prank(owner);
@@ -153,17 +169,17 @@ contract PositionMSCAModuleAuthPropertyTest is Test {
         account.installValidation(validationConfig, selectors, "", new bytes[](0));
 
         vm.prank(attacker);
-        vm.expectRevert(abi.encodeWithSelector(PositionMSCA.UnauthorizedCaller.selector, attacker));
+        vm.expectRevert(abi.encodeWithSelector(NFTBoundMSCA.UnauthorizedCaller.selector, attacker));
         account.uninstallExecution(address(execModule), manifest, "");
 
         ModuleEntity validationFunction = ModuleEntityLib.pack(address(validationModule), 1);
         vm.prank(attacker);
-        vm.expectRevert(abi.encodeWithSelector(PositionMSCA.UnauthorizedCaller.selector, attacker));
+        vm.expectRevert(abi.encodeWithSelector(NFTBoundMSCA.UnauthorizedCaller.selector, attacker));
         account.uninstallValidation(validationFunction, "", new bytes[](0));
 
         MockExecutionModule execModuleB = new MockExecutionModule();
         vm.prank(address(execModule));
-        vm.expectRevert(abi.encodeWithSelector(PositionMSCA.UnauthorizedCaller.selector, address(execModule)));
+        vm.expectRevert(abi.encodeWithSelector(NFTBoundMSCA.UnauthorizedCaller.selector, address(execModule)));
         account.installExecution(address(execModuleB), manifest, "");
     }
 
@@ -174,12 +190,12 @@ contract PositionMSCAModuleAuthPropertyTest is Test {
         bytes4[] memory selectors = _singleSelector(bytes4(keccak256("validate()")));
 
         vm.prank(address(execModule));
-        vm.expectRevert(abi.encodeWithSelector(PositionMSCA.ModuleSelfModification.selector, address(execModule)));
+        vm.expectRevert(abi.encodeWithSelector(NFTBoundMSCA.ModuleSelfModification.selector, address(execModule)));
         selfAccount.installExecution(address(execModule), manifest, "");
 
         ValidationConfig selfValidationConfig = _buildValidationConfig(address(execModule), 2);
         vm.prank(address(execModule));
-        vm.expectRevert(abi.encodeWithSelector(PositionMSCA.ModuleSelfModification.selector, address(execModule)));
+        vm.expectRevert(abi.encodeWithSelector(NFTBoundMSCA.ModuleSelfModification.selector, address(execModule)));
         selfAccount.installValidation(selfValidationConfig, selectors, "", new bytes[](0));
     }
 }

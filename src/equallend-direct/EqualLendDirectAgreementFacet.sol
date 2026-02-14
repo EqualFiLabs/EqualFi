@@ -137,7 +137,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
                 if (LibCurrency.isNative(feePool.underlying)) {
                     LibAppStorage.s().nativeTrackedTotal -= toTreasury;
                 }
-                LibCurrency.transfer(feePool.underlying, treasury, toTreasury);
+                LibCurrency.transferWithMin(feePool.underlying, treasury, toTreasury, toTreasury);
             }
         }
         if (toActiveCredit > 0) {
@@ -148,7 +148,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         }
     }
 
-    function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId)
+    function acceptBorrowerOffer(uint256 offerId, uint256 lenderPositionId, uint256 minReceived)
         external
         nonReentrant
         returns (uint256 agreementId)
@@ -302,7 +302,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         LibDirectStorage.addBorrowerAgreement(ds, borrowerKey, agreementId);
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
-        LibCurrency.transfer(offer.borrowAsset, offer.borrower, offer.principal - totalFee);
+        LibCurrency.transferWithMin(offer.borrowAsset, offer.borrower, offer.principal - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(
@@ -321,7 +321,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         emit BorrowerOfferAccepted(offerId, agreementId, lenderPositionId);
     }
 
-    function acceptOffer(uint256 offerId, uint256 borrowerPositionId)
+    function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived)
         external
         nonReentrant
         returns (uint256 agreementId)
@@ -503,7 +503,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
         // Transfer net principal from lender pool liquidity to the borrower
-        LibCurrency.transfer(offer.borrowAsset, msg.sender, offer.principal - totalFee);
+        LibCurrency.transferWithMin(offer.borrowAsset, msg.sender, offer.principal - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(
@@ -534,7 +534,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
     
 
 
-function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount)
+function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, uint256 principalAmount, uint256 minReceived)
         external
         nonReentrant
         returns (uint256 agreementId)
@@ -679,7 +679,7 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         LibDirectStorage.addBorrowerAgreement(ds, borrowerKey, agreementId);
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
-        LibCurrency.transfer(offer.borrowAsset, msg.sender, principalAmount - totalFee);
+        LibCurrency.transferWithMin(offer.borrowAsset, msg.sender, principalAmount - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(
@@ -735,10 +735,13 @@ function _checkAndConsumeTranche(
         offer.cancelled = true;
         offer.filled = true;
         uint256 amountReturned = trancheRemaining;
+        if (amountReturned > offerEscrow) {
+            amountReturned = offerEscrow;
+        }
         uint256 trancheAmount = offer.trancheAmount;
         ds.trancheRemaining[offerId] = 0;
         uint256 lenderEncBefore = LibEncumbrance.totalForActiveCredit(lenderKey, offer.lenderPoolId);
-        LibEncumbrance.position(lenderKey, offer.lenderPoolId).directOfferEscrow = 0;
+        LibEncumbrance.position(lenderKey, offer.lenderPoolId).directOfferEscrow = offerEscrow - amountReturned;
         LibActiveCreditIndex.applyEncumbranceDelta(
             lenderPool,
             offer.lenderPoolId,
@@ -764,7 +767,7 @@ function _checkAndConsumeTranche(
     /// @param offerId The borrower ratio tranche offer to accept
     /// @param lenderPositionId The lender's position NFT providing principal
     /// @param collateralAmount The amount of collateral to fill (borrower's collateral)
-    function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount)
+    function acceptBorrowerRatioTrancheOffer(uint256 offerId, uint256 lenderPositionId, uint256 collateralAmount, uint256 minReceived)
         external
         nonReentrant
         returns (uint256 agreementId)
@@ -796,6 +799,10 @@ function _checkAndConsumeTranche(
 
         uint256 lenderPrincipalBefore = lenderPool.userPrincipal[lenderKey];
         if (lenderPrincipalBefore < principalAmount) revert InsufficientPrincipal(principalAmount, lenderPrincipalBefore);
+        uint256 offerEscrow = LibEncumbrance.position(lenderKey, offer.lenderPoolId).directOfferEscrow;
+        if (offerEscrow > lenderPrincipalBefore) revert InsufficientPrincipal(offerEscrow, lenderPrincipalBefore);
+        uint256 lenderAvailable = lenderPrincipalBefore - offerEscrow;
+        if (principalAmount > lenderAvailable) revert InsufficientPrincipal(principalAmount, lenderAvailable);
 
         bytes32 borrowerKey = nft.getPositionKey(offer.borrowerPositionId);
         LibFeeIndex.settle(offer.collateralPoolId, borrowerKey);
@@ -807,6 +814,22 @@ function _checkAndConsumeTranche(
         // Collateral was already locked when offer was posted, verify it's still locked
         uint256 locked = LibEncumbrance.position(borrowerKey, offer.collateralPoolId).directLocked;
         if (locked < collateralAmount) revert InsufficientPrincipal(collateralAmount, locked);
+        uint256 borrowerPrincipal = collateralPool.userPrincipal[borrowerKey];
+
+        if (offer.borrowAsset == offer.collateralAsset) {
+            uint256 currentBorrowerDebt =
+                LibSolvencyChecks.calculateTotalDebt(collateralPool, borrowerKey, offer.lenderPoolId);
+            uint256 newBorrowerDebt = currentBorrowerDebt + principalAmount;
+            require(
+                LibSolvencyChecks.checkSolvency(
+                    collateralPool,
+                    borrowerKey,
+                    borrowerPrincipal,
+                    newBorrowerDebt
+                ),
+                "SolvencyViolation: Borrower LTV"
+            );
+        }
 
         DirectTypes.DirectConfig storage cfg = ds.config;
         (uint256 platformFee, uint256 interestAmount, uint256 totalFee, uint64 dueTimestamp) =
@@ -886,7 +909,7 @@ function _checkAndConsumeTranche(
         LibDirectStorage.addBorrowerAgreement(ds, borrowerKey, agreementId);
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
-        LibCurrency.transfer(offer.borrowAsset, offer.borrower, principalAmount - totalFee);
+        LibCurrency.transferWithMin(offer.borrowAsset, offer.borrower, principalAmount - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(

@@ -84,6 +84,7 @@ src/libraries/
 ### Storage Layout
 
 The derivative system uses Diamond storage pattern at slot `keccak256("equallend.derivative.storage")`:
+Below is an abridged options/futures-focused subset of `DerivativeStorage`.
 
 ```solidity
 struct DerivativeStorage {
@@ -198,7 +199,7 @@ struct CreateOptionSeriesParams {
 **What Happens:**
 1. Validates position ownership and pool membership
 2. Settles any pending Fee Index and Active Credit Index
-3. Charges creation fee (routed via LibFeeRouter to ACI/FI/Treasury)
+3. Charges creation fee (via `LibFeeTreasury`, routed by `LibFeeRouter` to Treasury/ACI/FI)
 4. Locks collateral via centralized LibEncumbrance:
    - Call: locks `totalSize` of underlying
    - Put: locks `strikePrice * totalSize` of strike asset (normalized)
@@ -218,16 +219,20 @@ struct CreateOptionSeriesParams {
 function exerciseOptions(
     uint256 seriesId,
     uint256 amount,
-    address recipient
-) external;
+    address recipient,
+    uint256 maxPayment,
+    uint256 minReceived
+) external payable;
 
 // Exercise on behalf of another holder (requires approval)
 function exerciseOptionsFor(
     uint256 seriesId,
     uint256 amount,
     address holder,
-    address recipient
-) external;
+    address recipient,
+    uint256 maxPayment,
+    uint256 minReceived
+) external payable;
 ```
 
 **Exercise Windows:**
@@ -325,7 +330,7 @@ struct CreateFuturesSeriesParams {
 **What Happens:**
 1. Validates position ownership and pool membership
 2. Settles any pending Fee Index and Active Credit Index
-3. Charges creation fee (routed via LibFeeRouter to ACI/FI/Treasury)
+3. Charges creation fee (via `LibFeeTreasury`, routed by `LibFeeRouter` to Treasury/ACI/FI)
 4. Locks `totalSize` of underlying asset via centralized LibEncumbrance
 5. Sets `graceUnlockTime = expiry + gracePeriod`
 6. Mints `totalSize` ERC-1155 tokens to Position NFT owner
@@ -339,22 +344,26 @@ Unlike options, futures are obligations. The holder must settle by paying the fo
 function settleFutures(
     uint256 seriesId,
     uint256 amount,
-    address recipient
-) external;
+    address recipient,
+    uint256 maxPayment,
+    uint256 minReceived
+) external payable;
 
 function settleFuturesFor(
     uint256 seriesId,
     uint256 amount,
     address holder,
-    address recipient
-) external;
+    address recipient,
+    uint256 maxPayment,
+    uint256 minReceived
+) external payable;
 ```
 
 **Settlement Windows:**
 
 | Style | Settlement Window |
 |-------|-------------------|
-| American | Anytime before `graceUnlockTime` |
+| American | Anytime up to `graceUnlockTime` |
 | European | `expiry ± europeanToleranceSeconds` |
 
 **Settlement Flow:**
@@ -378,7 +387,7 @@ function reclaimFutures(uint256 seriesId) external;
 ```
 
 **Grace Period Purpose:**
-The grace period gives holders time to settle after expiry. If they fail to settle, the maker keeps both the collateral AND the quote payment they would have received (since no settlement occurred).
+The grace period gives holders time to settle after expiry. If they fail to settle, the maker reclaims the remaining locked underlying collateral (no quote payment is transferred unless settlement occurs).
 
 ---
 
@@ -525,11 +534,11 @@ feeAmount = (baseAmount × feeBps / 10_000) + flatFeeWad
 
 ### Fee Routing
 
-All fees are routed through `LibFeeTreasury`, which delegates to `LibFeeRouter.routeSamePool`:
+All fees are routed through `LibFeeTreasury`, which delegates to `LibFeeRouter.routeManagedShare`:
 
 ```solidity
 // LibFeeTreasury routes fees to ACI/FI/Treasury
-(toTreasury, toActiveCredit, toFeeIndex) = LibFeeRouter.routeSamePool(
+(toTreasury, toActiveCredit, toFeeIndex) = LibFeeRouter.routeManagedShare(
     poolId, 
     feeAmount, 
     source,      // e.g., "OPTIONS_CREATE_FEE"
@@ -597,7 +606,11 @@ DerivativeTypes.CreateOptionSeriesParams memory params = DerivativeTypes.CreateO
     expiry: block.timestamp + 30 days,
     totalSize: 10e18,            // 10 WETH
     isCall: true,
-    isAmerican: false            // European style
+    isAmerican: false,           // European style
+    useCustomFees: false,
+    createFeeBps: 0,
+    exerciseFeeBps: 0,
+    reclaimFeeBps: 0
 });
 
 uint256 seriesId = OptionsFacet(diamond).createOptionSeries(params);
@@ -612,8 +625,10 @@ IERC20(usdc).approve(diamond, type(uint256).max);
 // 2. Exercise
 OptionsFacet(diamond).exerciseOptions(
     seriesId,
-    5e18,           // Exercise 5 options
-    msg.sender      // Receive underlying here
+    5e18,               // Exercise 5 options
+    msg.sender,         // Receive underlying here
+    maxPayment,         // Gross max (FoT-safe)
+    minReceived         // Minimum acceptable payout
 );
 ```
 
@@ -673,7 +688,11 @@ CreateOptionSeriesParams memory params = CreateOptionSeriesParams({
     expiry: block.timestamp + 30 days,
     totalSize: 10e18,         // 10 ETH
     isCall: true,
-    isAmerican: false
+    isAmerican: false,
+    useCustomFees: false,
+    createFeeBps: 0,
+    exerciseFeeBps: 0,
+    reclaimFeeBps: 0
 });
 
 uint256 seriesId = optionsFacet.createOptionSeries(params);
@@ -694,7 +713,7 @@ Bob decides to exercise (profitable since $3000 > $2500):
 usdc.approve(diamond, 25000e6);  // 10 × $2500 = $25,000
 
 // Bob exercises all 10 options
-optionsFacet.exerciseOptions(1, 10e18, bob);
+optionsFacet.exerciseOptions(1, 10e18, bob, maxPayment, minReceived);
 ```
 
 **Settlement:**
@@ -723,7 +742,11 @@ CreateOptionSeriesParams memory params = CreateOptionSeriesParams({
     expiry: block.timestamp + 14 days,
     totalSize: 10e18,         // 10 ETH
     isCall: false,            // PUT
-    isAmerican: true          // American style
+    isAmerican: true,         // American style
+    useCustomFees: false,
+    createFeeBps: 0,
+    exerciseFeeBps: 0,
+    reclaimFeeBps: 0
 });
 
 uint256 seriesId = optionsFacet.createOptionSeries(params);
@@ -742,7 +765,7 @@ Diana exercises (profitable since $1500 < $1800):
 weth.approve(diamond, 10e18);
 
 // Diana exercises
-optionsFacet.exerciseOptions(seriesId, 10e18, diana);
+optionsFacet.exerciseOptions(seriesId, 10e18, diana, maxPayment, minReceived);
 ```
 
 **Settlement:**
@@ -765,7 +788,11 @@ CreateFuturesSeriesParams memory params = CreateFuturesSeriesParams({
     forwardPrice: 2200e18,
     expiry: block.timestamp + 60 days,
     totalSize: 5e18,
-    isEuropean: true
+    isEuropean: true,
+    useCustomFees: false,
+    createFeeBps: 0,
+    exerciseFeeBps: 0,
+    reclaimFeeBps: 0
 });
 
 uint256 seriesId = futuresFacet.createFuturesSeries(params);
@@ -782,7 +809,7 @@ Frank must settle (futures are obligations):
 ```solidity
 usdc.approve(diamond, 11000e6);  // 5 × $2200
 
-futuresFacet.settleFutures(seriesId, 5e18, frank);
+futuresFacet.settleFutures(seriesId, 5e18, frank, maxPayment, minReceived);
 ```
 
 **Settlement:**
@@ -871,7 +898,8 @@ event Exercised(
     address indexed holder,
     address indexed recipient,
     uint256 amount,
-    uint256 strikeAmount
+    uint256 strikeAmount,
+    uint256 paymentReceived
 );
 
 event Reclaimed(
@@ -906,7 +934,8 @@ event Settled(
     address indexed holder,
     address indexed recipient,
     uint256 amount,
-    uint256 quoteAmount
+    uint256 quoteAmount,
+    uint256 paymentReceived
 );
 
 event Reclaimed(

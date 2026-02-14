@@ -98,28 +98,26 @@ contract PoolManagementGasTest is Test {
         config.closeRollingFee = Types.ActionFeeConfig(0, false);
     }
 
-    function _managedConfig() internal view returns (Types.ManagedPoolConfig memory cfg) {
-        Types.ActionFeeSet memory fees;
-        fees.borrowFee = Types.ActionFeeConfig({amount: 1 ether, enabled: true});
-        cfg = Types.ManagedPoolConfig({
-            rollingApyBps: 500,
-            depositorLTVBps: 8000,
-            maintenanceRateBps: 50,
-            flashLoanFeeBps: 10,
-            flashLoanAntiSplit: false,
-            minDepositAmount: 1 ether,
-            minLoanAmount: 1 ether,
-            minTopupAmount: 0.1 ether,
-            isCapped: true,
-            depositCap: 100 ether,
-            maxUserCount: 10,
-            aumFeeMinBps: 100,
-            aumFeeMaxBps: 500,
-            fixedTermConfigs: new Types.FixedTermConfig[](0),
-            actionFees: fees,
-            manager: manager,
-            whitelistEnabled: true
-        });
+    function _managedConfig() internal pure returns (Types.PoolConfig memory cfg) {
+        cfg.rollingApyBps = 500;
+        cfg.depositorLTVBps = 8000;
+        cfg.maintenanceRateBps = 50;
+        cfg.flashLoanFeeBps = 10;
+        cfg.flashLoanAntiSplit = false;
+        cfg.minDepositAmount = 1 ether;
+        cfg.minLoanAmount = 1 ether;
+        cfg.minTopupAmount = 0.1 ether;
+        cfg.isCapped = true;
+        cfg.depositCap = 100 ether;
+        cfg.maxUserCount = 10;
+        cfg.aumFeeMinBps = 100;
+        cfg.aumFeeMaxBps = 500;
+        cfg.fixedTermConfigs = new Types.FixedTermConfig[](0);
+        cfg.borrowFee = Types.ActionFeeConfig({amount: 1 ether, enabled: true});
+        cfg.repayFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.withdrawFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.flashFee = Types.ActionFeeConfig({amount: 0, enabled: false});
+        cfg.closeRollingFee = Types.ActionFeeConfig({amount: 0, enabled: false});
     }
 
     function test_gas_InitPoolWithActionFees() public {
@@ -133,7 +131,7 @@ contract PoolManagementGasTest is Test {
 
     function test_gas_InitManagedPool() public {
         vm.pauseGasMetering();
-        Types.ManagedPoolConfig memory cfg = _managedConfig();
+        Types.PoolConfig memory cfg = _managedConfig();
         vm.deal(manager, 1 ether);
 
         vm.prank(manager);
@@ -142,7 +140,7 @@ contract PoolManagementGasTest is Test {
     }
 
     function _initManagedPool(uint256 pid) internal {
-        Types.ManagedPoolConfig memory cfg = _managedConfig();
+        Types.PoolConfig memory cfg = _managedConfig();
         vm.deal(manager, 1 ether);
         vm.prank(manager);
         facet.initManagedPool{value: 0.1 ether}(pid, address(token), cfg);

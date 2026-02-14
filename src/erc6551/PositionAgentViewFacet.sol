@@ -4,21 +4,12 @@ pragma solidity ^0.8.20;
 import {LibPositionAgentStorage} from "../libraries/LibPositionAgentStorage.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {DirectError_InvalidPositionNFT} from "../libraries/Errors.sol";
-import {IERC165} from "../interfaces/IERC165.sol";
-import {IERC6551Account} from "../interfaces/IERC6551Account.sol";
-import {IERC6551Executable} from "../interfaces/IERC6551Executable.sol";
+import {IERC165} from "@agent-wallet-core/interfaces/IERC165.sol";
+import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
+import {IERC6551Executable} from "@agent-wallet-core/interfaces/IERC6551Executable.sol";
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
-
-interface IERC6551Registry {
-    function account(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    ) external view returns (address account);
-}
 
 /// @title PositionAgentViewFacet
 /// @notice View functions for ERC-6551 Position Agent integration

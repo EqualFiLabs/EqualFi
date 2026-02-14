@@ -4,3 +4,9 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/aave-v3-origin"]
+	path = lib/aave-v3-origin
+	url = https://github.com/aave/aave-v3-origin.git
+[submodule "lib/agent-wallet-core"]
+	path = lib/agent-wallet-core
+	url = https://github.com/EqualFiLabs/agent-wallet-core

@@ -22,6 +22,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         address indexed taker,
         address indexed recipient,
         uint256 amountIn,
+        uint256 actualIn,
         uint256 amountOut,
         uint256 feeAmount,
         uint256 remainingVolume
@@ -57,9 +58,18 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         });
     }
 
+    /// @notice Preview the total quote required for a curve swap (amountIn + fee).
+    function previewCurveQuote(uint256 curveId, uint256 amountIn) external view returns (uint256 maxQuote) {
+        LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
+        LibDerivativeStorage.CurveImmutables storage imm = ds.curveImmutables[curveId];
+        uint256 feeAmount = imm.feeRateBps == 0 ? 0 : LibMamMath.computeFeeBps(amountIn, imm.feeRateBps);
+        maxQuote = amountIn + feeAmount;
+    }
+
     function executeCurveSwap(
         uint256 curveId,
         uint256 amountIn,
+        uint256 maxQuote,
         uint256 minOut,
         uint64 deadline,
         address recipient
@@ -107,18 +117,17 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         address baseToken = baseIsA ? imm.tokenA : imm.tokenB;
         address quoteToken = baseIsA ? imm.tokenB : imm.tokenA;
 
-        LibCurrency.assertMsgValue(quoteToken, totalQuote);
-        uint256 received = LibCurrency.pull(quoteToken, msg.sender, totalQuote);
-        require(received == totalQuote, "Direct: insufficient amount received");
+        uint256 received = LibCurrency.pullAtLeast(quoteToken, msg.sender, totalQuote, maxQuote);
 
         Types.PoolData storage quotePool = LibAppStorage.s().pools[quotePoolId];
-        quotePool.trackedBalance += totalQuote;
+        quotePool.trackedBalance += received;
 
         uint16 makerShareBps = ds.config.mamMakerShareBps;
         uint256 makerFee = (feeAmount * makerShareBps) / 10_000;
         uint256 protocolFee = feeAmount - makerFee;
 
-        uint256 makerIncrease = amountIn + makerFee;
+        uint256 excess = received - totalQuote;
+        uint256 makerIncrease = amountIn + makerFee + excess;
         quotePool.userPrincipal[data.makerPositionKey] += makerIncrease;
         quotePool.totalDeposits += makerIncrease;
 
@@ -143,11 +152,11 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(basePool.underlying)) {
             LibAppStorage.s().nativeTrackedTotal -= baseFill;
         }
-        LibCurrency.transfer(baseToken, recipient, baseFill);
+        LibCurrency.transferWithMin(baseToken, recipient, baseFill, minOut);
 
         uint256 remaining = _consumeCurve(curveId, uint128(baseFill));
 
-        emit CurveFilled(curveId, msg.sender, recipient, amountIn, amountOut, feeAmount, remaining);
+        emit CurveFilled(curveId, msg.sender, recipient, amountIn, received, amountOut, feeAmount, remaining);
     }
 
     function _consumeCurve(uint256 curveId, uint128 baseFill) internal returns (uint128 remainingAfter) {

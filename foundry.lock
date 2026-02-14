@@ -1,4 +1,10 @@
 {
+  "lib/aave-v3-origin": {
+    "rev": "5c2eb37f39959dd491ba97fdc2af94bb4ee88f41"
+  },
+  "lib/agent-wallet-core": {
+    "rev": "4bbe4285763d8b5b753d8f1d8f3d962d55f6e8bf"
+  },
   "lib/forge-std": {
     "tag": {
       "name": "v1.7.6",

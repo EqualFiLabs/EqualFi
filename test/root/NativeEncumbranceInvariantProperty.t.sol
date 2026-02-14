@@ -73,7 +73,7 @@ contract NativeEncumbranceInvariantPropertyTest is Test {
         address owner = address(0xBEEF);
         facet.seedNativePool(1, principal);
         vm.prank(owner);
-        uint256 tokenId = facet.mintPosition(1);
+        uint256 tokenId = facet.mintPosition(1, 0);
         bytes32 key = nft.getPositionKey(tokenId);
         facet.setUser(1, key, principal);
         facet.joinPool(1, key);
@@ -84,6 +84,6 @@ contract NativeEncumbranceInvariantPropertyTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, withdrawAmount, available));
-        facet.withdrawFromPosition(tokenId, 1, withdrawAmount);
+        facet.withdrawFromPosition(tokenId, 1, withdrawAmount, 0);
     }
 }

@@ -11,8 +11,8 @@ import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {DirectDiamondTestBase} from "../equallend-direct/DirectDiamondTestBase.sol";
 
 interface IPositionManagement {
-    function mintPositionWithDeposit(uint256 pid, uint256 amount) external returns (uint256);
-    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
+    function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee) external returns (uint256);
+    function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external;
 }
 
 contract DirectAmmRatioLoopIntegrationTest is DirectDiamondTestBase {
@@ -65,19 +65,19 @@ contract DirectAmmRatioLoopIntegrationTest is DirectDiamondTestBase {
         vm.startPrank(userA);
         token1.approve(address(diamond), type(uint256).max);
         token2.approve(address(diamond), type(uint256).max);
-        aPositionId = pm.mintPositionWithDeposit(POOL_TOKEN1, 2 ether);
+        aPositionId = pm.mintPositionWithDeposit(POOL_TOKEN1, 2 ether, 2 ether, 0);
         vm.stopPrank();
 
         vm.startPrank(userB);
         token2.approve(address(diamond), type(uint256).max);
-        bPositionId = pm.mintPositionWithDeposit(POOL_TOKEN2, 50_000 ether);
+        bPositionId = pm.mintPositionWithDeposit(POOL_TOKEN2, 50_000 ether, 50_000 ether, 0);
         vm.stopPrank();
 
         vm.startPrank(userC);
         token1.approve(address(diamond), type(uint256).max);
         token2.approve(address(diamond), type(uint256).max);
-        cPositionId = pm.mintPositionWithDeposit(POOL_TOKEN1, 10 ether);
-        pm.depositToPosition(cPositionId, POOL_TOKEN2, 20_000 ether);
+        cPositionId = pm.mintPositionWithDeposit(POOL_TOKEN1, 10 ether, 10 ether, 0);
+        pm.depositToPosition(cPositionId, POOL_TOKEN2, 20_000 ether, 20_000 ether);
         vm.stopPrank();
     }
 
@@ -95,14 +95,14 @@ contract DirectAmmRatioLoopIntegrationTest is DirectDiamondTestBase {
 
         for (uint256 i = 0; i < 3; i++) {
             vm.prank(userA);
-            agreements.acceptRatioTrancheOffer(offerId, aPositionId, borrowAmount);
+            agreements.acceptRatioTrancheOffer(offerId, aPositionId, borrowAmount, 0);
 
             vm.prank(userA);
-            uint256 amountOut = amm.swapExactIn(auctionId, address(token2), borrowAmount, 0, userA);
+            uint256 amountOut = amm.swapExactIn(auctionId, address(token2), borrowAmount, borrowAmount, 0, userA);
             assertGt(amountOut, 0, "swap output");
 
             vm.prank(userA);
-            pm.depositToPosition(aPositionId, POOL_TOKEN1, amountOut);
+            pm.depositToPosition(aPositionId, POOL_TOKEN1, amountOut, amountOut);
 
             uint256 locked = views.directLocked(aKey, POOL_TOKEN1);
             assertEq(locked, expectedCollateralPerFill * (i + 1), "locked collateral");
@@ -171,7 +171,7 @@ contract DirectAmmRatioLoopIntegrationTest is DirectDiamondTestBase {
     function _selectorsPositionManagement() internal pure returns (bytes4[] memory s) {
         s = new bytes4[](2);
         s[0] = PositionManagementFacet.mintPositionWithDeposit.selector;
-        s[1] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
+        s[1] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256,uint256)"));
     }
 
     function _selectorsAmm() internal pure returns (bytes4[] memory s) {
