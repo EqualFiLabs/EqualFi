@@ -26,7 +26,6 @@
 % From here forward: two-column layout (including abstract)
 \title{Equalis: Deterministic Credit, Unified Liquidity, Dual-Index Incentives, and Deterministic Basket Liquidity via EqualIndex}
 \author{EqualFi Labs}
-\date{Status: Early-stage}
 
 \maketitle
 
@@ -252,7 +251,6 @@ The architecture aims to preserve the following properties:
 
 The remainder of this paper specifies the deterministic credit primitives, the encumbrance model, index mechanics, EqualIndex fee routing and basket flash loans, and the implications for capital efficiency and leverage strategies.
 
-```latex
 % =========================
 % 3. Deterministic Core Credit
 % =========================
@@ -364,7 +362,7 @@ A peer-to-peer agreement is defined by parameters such as:
   \item loan asset and principal amount,
   \item collateral asset and locked collateral amount,
   \item repayment schedule (e.g., monthly payment),
-  \item term structure (term loan or rolling / perpetual structure),
+  \item term structure (term loan or rolling structure),
   \item grace windows and default conditions,
   \item fee or pricing terms (e.g., upfront interest, periodic payments),
   \item optional covenants (including an opt-in lender call feature).
@@ -372,12 +370,12 @@ A peer-to-peer agreement is defined by parameters such as:
 
 The protocol treats these parameters as the ground truth. There is no requirement that solvency be continuously evaluated using external price feeds. If a lender wants additional protection, it is expressed in the agreement terms (collateral ratio, callability, stricter grace windows), not delegated to liquidation markets.
 
-\subsubsection{Rolling and Perpetual Credit}
+\subsubsection{Term and Rolling Credit}
 
-Equalis Direct supports structures that allow leverage continuity without relying on liquidation thresholds:
+Equalis Direct supports two agreement shapes for cross-asset credit:
 \begin{itemize}
-  \item \textbf{Rolling credit:} agreements that renew on a fixed cadence (e.g., every 30 days) subject to explicit conditions.
-  \item \textbf{Perpetual credit:} agreements that have no fixed maturity and remain open until the borrower repays/unwinds or defaults under explicit payment rules.
+  \item \textbf{Term credit:} agreements with a fixed due timestamp and explicit grace/default handling.
+  \item \textbf{Rolling credit:} agreements with a recurring payment interval and a moving due timestamp (\texttt{nextDue}). A rolling agreement is kept current by making payments that clear accrued arrears and the current interval interest; \texttt{nextDue} advances by one interval only when the agreement is brought current. If \texttt{block.timestamp} exceeds \texttt{nextDue} plus a grace window, recovery becomes available.
 \end{itemize}
 
 This is a structural distinction from liquidation-based systems. Continuation is governed by contractual compliance rather than by maintaining a health factor against a price oracle.
@@ -670,8 +668,40 @@ Transferability must remain compatible with protocol invariants. In practice, tr
 
 If fungibility, partial transfers, or standardized lots are required, the system may also support explicit option tokenization (e.g., ERC-1155-based options). Synthetic options are the lightweight agreement-native primitive optimized for OTC-style deals, structured hedging, and minimizing dependency on external price feeds.
 
-\paragraph{Tokenized derivatives (implementation).}
-The current implementation includes tokenized options and futures series as separate modules. These instruments are physically settled and integrate with the same pool/encumbrance infrastructure but are not the primary focus of this paper's core credit architecture.
+\subsubsection{ERC-1155 Tokenized Derivatives (Implementation)}
+
+In addition to agreement-native synthetic options, the current implementation includes \textbf{ERC-1155 tokenized derivatives} for users that want standardized, fungible lots and transferable per-series claims. These modules coexist with Direct agreements and use the same pool, encumbrance, and fee-routing infrastructure.
+
+\paragraph{Token model.}
+The implementation deploys dedicated \texttt{OptionToken} and \texttt{FuturesToken} ERC-1155 contracts. Each derivative series maps to an ERC-1155 token id:
+\begin{itemize}
+  \item balances are fungible within a series id,
+  \item series tokens are transferable with standard ERC-1155 operator semantics,
+  \item mint/burn is manager-gated to protocol facets for deterministic lifecycle enforcement.
+\end{itemize}
+
+\paragraph{Options series (ERC-1155).}
+An options series is created with explicit parameters (underlying pool, strike pool, strike price, expiry, call/put flag, American/European exercise style, and size). On series creation:
+\begin{itemize}
+  \item maker collateral is locked via encumbrance in the appropriate pool,
+  \item a new series id is created in storage,
+  \item ERC-1155 option units for that series id are minted to the maker's wallet.
+\end{itemize}
+Holders can transfer option units or exercise them by burning units through the options facet. Exercise is physically settled: the holder pays the required asset leg and receives delivery from locked maker collateral under deterministic rules. After expiry and settlement windows, makers can reclaim remaining unexercised collateral.
+
+\paragraph{Futures/forwards series (ERC-1155).}
+The futures module similarly creates series with explicit parameters (underlying pool, quote pool, forward price, expiry, size, and settlement-style flags). On creation:
+\begin{itemize}
+  \item underlying collateral is locked from the maker position,
+  \item ERC-1155 futures units are minted for the series id.
+\end{itemize}
+Settlement burns futures units and performs physical delivery versus quote payment according to series terms. Unsettled residual collateral becomes reclaimable by the maker after the configured post-expiry grace period.
+
+\paragraph{Why both models exist.}
+Direct synthetic options optimize for bilateral custom agreements and portfolio-level Position NFT transfer. ERC-1155 derivatives optimize for standardized lots, fungibility, and secondary transferability per series. Both models are deterministic, physically settled, and integrated into unified pool accounting and fee rails.
+
+\paragraph{Discovery and market data.}
+Series creation, exercise/settlement, reclaim, and token transfer events provide an indexable feed for offchain order-book-style discovery and analytics. This enables CLOB-like interfaces while keeping settlement and state transitions onchain.
 
 \section{EqualIndex: Deterministic Basket Tokens and Basket Flash Loans}
 
@@ -1325,7 +1355,7 @@ Let the borrower begin with an initial deposit of $T_1$ into $\mathcal{P}_{T_1}$
 
 Each loop iteration:
 \begin{enumerate}
-  \item Borrow $\Delta$ units of $T_2$ via an Equalis Direct agreement (rolling or perpetual).
+  \item Borrow $\Delta$ units of $T_2$ via an Equalis Direct agreement (term or rolling).
   \item Swap $\Delta$ units of $T_2$ into $T_1$ using an internal execution surface (e.g., AMM Auction).
   \item Deposit received $T_1$ back into $\mathcal{P}_{T_1}$, increasing the position’s $T_1$ balance.
 \end{enumerate}
@@ -1747,6 +1777,31 @@ Early in the lifecycle, upgrades may be required to:
 This is acknowledged explicitly: \textbf{early-stage safety depends on engineering and responsible upgrade practices.}
 The intended evolution is to reduce this trust requirement by freezing mature surfaces and limiting remaining mutability to bounded fee and configuration parameters.
 
+\subsection{Current Upgrade and Admin Surfaces (Implementation)}
+
+\paragraph{EIP-2535 Diamond architecture.}
+The current codebase is deployed as an EIP-2535 \textbf{Diamond}: a single contract address that dispatches calls by function selector to \textbf{facets} via \texttt{delegatecall}. This provides modularity and reduces the need for state migrations, but it also introduces an explicit \emph{upgrade surface} in early phases.
+
+\paragraph{Facet upgrades (diamond cuts).}
+Selector routing can be changed via \texttt{diamondCut} (adding, replacing, or removing selectors). In the current implementation, \texttt{diamondCut} is gated by the Diamond contract owner. Deployments that require upgrade delay can set the Diamond owner to a timelock contract (so upgrades are effectively timelocked), or otherwise constrain upgrades by operational policy.
+
+\paragraph{Owner vs timelock roles.}
+In addition to the Diamond owner, the implementation tracks a separate \texttt{timelock} address that is authorized alongside the owner for many parameter updates. This supports a workflow where routine configuration changes are executed by a delayed timelock, while ownership can later be transferred to (or permanently set as) the timelock to eliminate immediate-upgrade pathways.
+
+\paragraph{Concrete bounded knobs (non-exhaustive).}
+The current implementation exposes admin-controlled parameters such as:
+\begin{itemize}
+  \item treasury and fee-routing split parameters (Treasury vs index rails),
+  \item pool creation fees, index creation fees, and Position mint fees,
+  \item per-action flat fees (borrow/repay/withdraw/flash/close) and fee bounds,
+  \item bounded AUM fees (mutable within immutable min/max ranges),
+  \item rolling delinquency and penalty thresholds,
+  \item Equalis Direct rolling-offer validation bounds (payment cadence, APY bounds, penalty bps, minimum payments),
+  \item derivative-module fee configuration (maker-share splits and flat/bps fee parameters),
+  \item narrow pause switches for selected higher-risk surfaces (e.g., Atomic Desk).
+\end{itemize}
+These controls are intended as temporary scaffolding: they should be progressively bounded and, where possible, removed or frozen as the protocol approaches the walkaway end state.
+
 \subsection{Emergency Controls}
 
 If emergency controls exist during early phases, they should be treated as temporary and constrained. Any emergency mechanism should be:
@@ -1862,6 +1917,51 @@ Modules discussed in this paper include:
 \paragraph{Additional implemented modules (current codebase).}
 The implementation also includes tokenized \textbf{Options} and \textbf{Futures} series, an \textbf{Atomic Desk} and settlement escrow surface, and account-abstraction components (Position Agents, ERC-6551 TBAs, and ERC-6900 modules). These are compatible with the same pool/encumbrance/index architecture but are not fully specified in the core sections above.
 
+\subsection{Implementation Architecture: Diamond + Facets (Implementation)}
+
+The reference implementation is organized as an EIP-2535 Diamond. Conceptually, this paper describes ``modules'' as protocol surfaces with shared pool accounting and fee routing; in code, those surfaces are realized as facets and libraries that share a single storage layout.
+
+\paragraph{Facet grouping (high level).}
+The current codebase groups functionality into facets for: pool and position operations (deposit/withdraw/borrow/repay), Equalis Direct (offers, agreements, lifecycle), derivatives (tokenized options/futures), execution venues (AMM auctions and MAM curves), EqualIndex, administrative configuration, and read-only view/preview endpoints. Diamond loupe introspection enables tooling and indexers to enumerate selectors and facet addresses.
+
+\paragraph{Upgrade surface.}
+Facet routing may be changed by diamond cuts. This is an implementation choice; protocol-level invariants are intended to remain stable under upgrades, and upgradeability is treated as temporary scaffolding as described in the governance section.
+
+\subsection{Position Agents (ERC-6551 + ERC-6900 + ERC-8004) (Implementation)}
+
+In addition to the Position NFT as an account container, the current codebase optionally supports a \textbf{Position Agent} layer for automation and standardized discovery. This layer is \emph{orthogonal} to core solvency: it does not introduce oracle-driven liquidation and it does not relax deterministic credit constraints.
+
+\paragraph{ERC-6551 token-bound accounts (TBAs).}
+For a given Position NFT, a deterministic token-bound account address can be computed from a canonical ERC-6551 registry and a configured account implementation. The Position owner can deploy this account on demand. The TBA can hold assets, sign messages, and execute transactions as a programmable ``agent wallet'' for the Position.
+
+\paragraph{ERC-6900 modular smart contract account (MSCA).}
+The TBA implementation follows an ERC-6900-style modular architecture: execution modules expose callable actions and validation modules define authorization rules. This allows Position behavior to be extended without changing core pool accounting.
+
+\paragraph{Scoped session keys.}
+A session-key validation module enables bounded delegation to an ephemeral key: policy can restrict validity windows, value limits, and which targets/selectors may be invoked. This supports bots and autonomous agents that can operate within explicit constraints rather than inheriting full Position control.
+
+\paragraph{Skill modules (example).}
+The current implementation includes an ``AMM skill'' execution module that allows a Position Agent to (i) create or cancel AMM auctions and (ii) roll accrued yield into principal, subject to policy bounds (duration, fee bps, reserve ranges, and optional pool allowlists). This is an automation surface; it does not modify the underlying solvency model.
+
+\paragraph{ERC-8004 agent identity (optional discovery).}
+For cross-application discovery and indexing, a Position Agent can be registered in the canonical ERC-8004 Identity Registry. Registration itself is performed externally (e.g., via the TBA executing against the registry), and the protocol records the mapping from Position tokenId $\rightarrow$ agentId after verifying that the ERC-8004 Identity NFT is owned by the Position's TBA.
+
+\subsection{Admin and Timelock Parameter Machinery (Implementation)}
+
+The current implementation includes explicit configuration surfaces intended to be \textbf{bounded} and progressively frozen. Access control distinguishes between the Diamond owner and a separate configured \texttt{timelock} address that is authorized for many governance-minimized updates.
+
+\paragraph{Representative configuration categories (non-exhaustive).}
+\begin{itemize}
+  \item \textbf{Fee routing:} treasury address; fee split shares between Treasury and index rails; managed-pool system-share routing.
+  \item \textbf{Creation costs:} pool creation fee; index creation fee; Position mint fee (token and amount).
+  \item \textbf{Pool configuration:} deposit/loan thresholds; deposit caps and user-count caps; maintenance rate bounds; flash-loan fee parameters; fixed-term configuration arrays.
+  \item \textbf{Bounded mutability:} AUM fee adjustable within immutable per-pool min/max bounds; per-action flat fee overrides; pool deprecation flags for UI guidance.
+  \item \textbf{Credit enforcement parameters:} rolling delinquency and penalty thresholds; minimum rolling payment parameters.
+  \item \textbf{Direct rolling offer bounds:} payment cadence bounds; APY bounds; penalty bps; maximum upfront premium bounds.
+  \item \textbf{Module fee parameters:} maker-share splits and fee configuration for execution/derivative modules.
+\end{itemize}
+These knobs should be treated as implementation scaffolding: they exist to enable safe iteration and operational hardening early, and should be reduced over time to pass the walkaway test.
+
 \subsection{System Invariants}
 
 The protocol is defined by invariants that must hold under all valid state transitions. These invariants are intended to be:
@@ -1948,7 +2048,6 @@ The long-term goal is to pass the walkaway test. Equalis treats upgradeability a
 
 If DeFi is to become durable, it must move beyond systems that depend on reactive forced selling and fragile coordination assumptions. Equalis is one design exploration in that direction: socialize gains through unified fee rails, isolate risk through explicit agreements and module accounting, and let cryptographic rules, not intermediaries, determine outcomes.
 
-```latex
 % =========================
 % Appendices
 % =========================
@@ -1963,6 +2062,13 @@ If DeFi is to become durable, it must move beyond systems that depend on reactiv
 \begin{description}
   \item[Pool ($\mathcal{P}_T$)] The canonical base pool for token $T$ that holds unified accounting and fee rails (with optional managed pools routed back to it).
   \item[Position NFT] An ERC-721 account container representing a complete balance sheet: deposits, debt, encumbrances, agreements, and index claims.
+  \item[Diamond (EIP-2535)] A single contract address that routes function selectors to facet contracts via \texttt{delegatecall}, enabling modular upgrades and a unified entrypoint.
+  \item[Facet] A contract that implements a subset of the Diamond's callable selectors; facets share the Diamond's storage layout under \texttt{delegatecall}.
+  \item[Timelock] A delayed execution authority used to gate administrative actions (and optionally upgrades) to reduce discretionary key risk.
+  \item[Position Agent] An optional automation/discovery layer that binds a Position NFT to a programmable account (TBA/MSCA) and optional identity registration.
+  \item[TBA (ERC-6551)] A token-bound account whose address is deterministically derived from an NFT and a registry, enabling the NFT to control a smart account.
+  \item[MSCA (ERC-6900)] A modular smart contract account supporting installable execution and validation modules (e.g., scoped session keys).
+  \item[Session Key] A delegated key with explicitly scoped permissions (time bounds, target/selector allowlists, and value limits) for constrained automation.
   \item[Encumbrance] Internal allocation mechanism that marks balances as committed to a module without leaving the pool accounting domain.
   \item[Fee Router] Per-token routing mechanism that splits collected fees between direct participants, Treasury, and indexes.
   \item[Fee Index ($I_T$)] Monotonic per-token index distributing passive fees to eligible liquidity providers.
