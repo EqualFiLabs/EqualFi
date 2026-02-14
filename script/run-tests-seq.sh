@@ -12,16 +12,6 @@ run() {
 }
 
 for dir in test/*/; do
-  # Special-case equallend-direct: run each test file individually to avoid
-  # viaIR + memoryguard stack-depth issues when compiling the whole suite.
-  if [[ "$dir" == "test/equallend-direct/" ]]; then
-    if compgen -G "test/equallend-direct/suite-*/*.t.sol" > /dev/null; then
-      for f in test/equallend-direct/suite-*/*.t.sol; do
-        run "forge test --match-path \"$f\""
-      done
-    fi
-    continue
-  fi
 
   if compgen -G "${dir}"*t.sol > /dev/null; then
     run "forge test --match-path \"${dir}*t.sol\""
