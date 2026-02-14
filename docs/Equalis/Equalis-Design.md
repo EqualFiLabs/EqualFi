@@ -184,7 +184,7 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 | **EqualLendDirectRollingAgreementFacet** | P2P rolling acceptance | `acceptRollingOffer`, `getRollingAgreement` |
 | **EqualLendDirectRollingPaymentFacet** | P2P rolling payments | `makeRollingPayment` |
 | **EqualLendDirectRollingLifecycleFacet** | P2P rolling lifecycle | `recoverRolling`, `exerciseRolling`, `repayRollingInFull` |
-| **EqualIndex Facets (V3)** | Multi-asset index tokens | Admin (`setIndexFees`, `setPaused`), Actions (`mint`, `burn`, `flashLoan`), Position (`depositToPosition`, `withdrawFromPosition`), View (`getIndex`, `getIndexAssets`) |
+| **EqualIndex Facets (V3)** | Multi-asset index tokens | Admin (`setIndexFees`, `setPaused`), Actions (`mint(indexId,units,to,maxInputAmounts)`, `burn`, `flashLoan`), Position (`depositToPosition`, `withdrawFromPosition`), View (`getIndex`, `getIndexAssets`) |
 | **MaintenanceFacet** | AUM fee management | `pokeMaintenance`, `settleMaintenance` |
 | **AdminFacet / AdminGovernanceFacet** | Protocol governance | `setTimelock`, `setTreasury`, fee split configuration |
 | **ActiveCreditViewFacet** | Active credit queries | `pendingActiveCredit`, `getActiveCreditState` |
@@ -198,7 +198,7 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 | **PositionViewFacet** | Position state queries | `getPositionState`, `getPositionLoanSummary`, `getPositionEncumbrance` |
 | **EqualLendDirectViewFacet** | Direct lending queries and config | `setDirectConfig`, `getOffer`, `getBorrowerOffer`, `getAgreement`, `getLenderOffers` |
 | **EqualLendDirectRollingViewFacet** | Rolling direct helpers | `getRollingStatus`, `calculateRollingPayment`, `aggregateRollingExposure` |
-| **AmmAuctionFacet** | Time-bounded AMM auctions | `createAuction`, `swapExactIn`, `finalizeAuction`, `cancelAuction` |
+| **AmmAuctionFacet** | Time-bounded AMM auctions | `createAuction`, `swapExactIn`, `swapExactInOrFinalize`, `finalizeAuction`, `cancelAuction` |
 | **AtomicDeskFacet** | Atomic RFQ desks and tranche reservations | `registerDesk`, `openTranche`, `reserveAtomicSwap`, `setHashlock` |
 | **CommunityAuctionFacet** | Multi-maker auction markets | `createCommunityAuction`, `joinCommunityAuction`, `swapExactIn`, `finalizeAuction` |
 | **SettlementEscrowFacet** | Escrow settlement and refunds | `settle`, `refund`, `setCommittee`, `configureMailbox` |
@@ -206,7 +206,7 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 | **FuturesFacet** | Physical delivery futures | `createFuturesSeries`, `settleFutures`, `reclaimFutures` |
 | **MamCurveCreationFacet** | MAM creation and pause control | `setMamPaused`, `createCurve`, `createCurvesBatch` |
 | **MamCurveManagementFacet** | MAM updates/cancel/expiry | `updateCurve`, `updateCurvesBatch`, `cancelCurve`, `expireCurve` |
-| **MamCurveExecutionFacet** | MAM execution | `loadCurveForFill`, `executeCurveSwap` |
+| **MamCurveExecutionFacet** | MAM execution | `loadCurveForFill`, `previewCurveQuote`, `executeCurveSwap` |
 | **MamCurveViewFacet** | MAM curve queries | `getCurve`, `getCurvesByPosition`, `getCurvesByPositionId` |
 | **DerivativeViewFacet** | Derivative product queries | `getAmmAuction`, `getOptionSeries`, `getFuturesSeries` |
 | **AuctionManagementViewFacet** | Auction-management views | `getActiveCommunityAuctions`, `getCommunityAuctionMakers`, `getPoolHealth` |
@@ -232,7 +232,8 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 **Formula**:
 ```
 totalDebt = rollingPrincipalRemaining + fixedTermPrincipalRemaining + directBorrowedPrincipal
-availableCollateral = userPrincipal - directLockedPrincipal[positionKey][poolId]
+totalEncumbrance = directLocked + directLent + directOfferEscrow + indexEncumbered
+availableCollateral = userPrincipal - totalEncumbrance
 solvencyRatio = (availableCollateral * 10000) / totalDebt
 require(solvencyRatio >= depositorLTVBps)
 ```
@@ -363,7 +364,7 @@ struct PoolPositionState {
 **Tranche-Backed Direct Offers**:
 - Lenders may post offers with `isTranche=true` and `trancheAmount`, escrowing the full tranche into `directOfferEscrow` at post time
 - `trancheRemaining` tracks the unfilled balance
-- Acceptances atomically check tranche availability, decrement `trancheRemaining` by `principal`, and convert that slice from escrow to `directLentPrincipal`
+- Acceptances atomically check tranche availability, decrement `trancheRemaining` by `principal`, and convert that slice from escrow to active lender encumbrance (`directLent`)
 - Insufficient tranche auto-cancels the offer
 - Optional `enforceFixedSizeFills` flag requires `trancheAmount` to be divisible by `principal` to prevent dust
 
@@ -373,7 +374,7 @@ A second tranche type lets lenders quote a price ratio instead of fixed-size fil
 - Borrowers draw any amount between `minPrincipalPerFill` and `principalRemaining` at the posted ratio
 - Required collateral computed as: `collateral = principal × priceNumerator / priceDenominator`
 - Escrowed principal is reserved at post time and decremented per fill
-- Accepts convert the filled slice from escrow to active `directLentPrincipal`
+- Accepts convert the filled slice from escrow to active lender encumbrance (`directLent`)
 
 ### 4.2 Pool Membership System (LibPoolMembership)
 
@@ -509,7 +510,7 @@ if (isActiveCreditEligible(user, poolId)) {
 The Active Credit Index provides time-gated subsidies to active credit participants using a weighted dilution mechanism to prevent gaming:
 
 **Participants:**
-- **P2P Lenders**: Earn rewards on directLentPrincipal (all asset types)
+- **P2P Lenders**: Earn rewards on lender encumbrance (`directLent + directOfferEscrow`, all asset types)
 - **Same-Asset Borrowers**: Earn rewards on same-asset debt only (rolling, fixed, direct P2P)
 
 **Time Gate & Weighted Dilution:**
@@ -1019,14 +1020,14 @@ enum DirectStatus {
 2. **Post Borrower Offer**: `postBorrowerOffer(DirectBorrowerOfferParams)`
    - Verify borrower owns Position NFT
    - Check borrower has sufficient collateral
-   - Lock collateral per pool: `directLockedPrincipal[borrowerKey][collateralPoolId] += collateralLockAmount`
+   - Lock collateral per pool: `LibEncumbrance.position(borrowerKey, collateralPoolId).directLocked += collateralLockAmount`
    - Store offer with unique ID
    - Emit `BorrowerOfferPosted` event
 
 3. **Accept Lender Offer**: `acceptOffer(offerId, borrowerPositionId, minReceived)`
    - Verify borrower owns Position NFT
    - Check borrower has sufficient collateral
-   - Lock collateral per pool: `directLockedPrincipal[borrowerKey][collateralPoolId] += collateralLockAmount`
+   - Lock collateral per pool: `LibEncumbrance.position(borrowerKey, collateralPoolId).directLocked += collateralLockAmount`
    - Calculate and collect fees (interest + platform fee)
    - Distribute fees to lender, FeeIndex, protocol, and Active Credit Index
    - Transfer escrow to active loan
@@ -1202,7 +1203,7 @@ struct DirectRollingConfig {
 
 2. **Post Borrower Offer**: `postBorrowerRollingOffer(DirectRollingBorrowerOfferParams)`
    - Verify borrower owns Position NFT and has sufficient collateral
-   - Lock collateral: `directLockedPrincipal[borrowerKey][collateralPoolId] += collateralLockAmount`
+   - Lock collateral: `LibEncumbrance.position(borrowerKey, collateralPoolId).directLocked += collateralLockAmount`
    - Store offer and emit event
 
 3. **Accept Offer**: `acceptRollingOffer(offerId, callerPositionId, minReceivedLender, minReceivedBorrower)`
@@ -1401,10 +1402,11 @@ struct Index {
 **Mint Process**:
 1. Calculate required amounts: `need = (bundleAmounts[i] * units) / 1e18`
 2. Calculate fees: `fee = (need * mintFeeBps[i]) / 10_000`
-3. Transfer `need + fee` from user
-4. Credit `need` to vault balance
-5. Split fee: fee pot share + pool fee router share
-6. Mint proportional units
+3. Enforce per-asset transfer bounds via `maxInputAmounts[i]` where `maxInputAmounts.length == assets.length`
+4. Pull `need + fee` per asset from user (`pullAtLeast` for ERC20, bounded native pull for native assets)
+5. Credit `need` to vault balance
+6. Split fee: fee pot share + pool fee router share
+7. Mint proportional units
 
 **Burn Process**:
 1. Calculate NAV share: `(vaultBalance * units) / totalSupply`
@@ -2250,7 +2252,7 @@ Equalis includes oracle-free AMM Auctions, Options, Futures, and Maker Auction M
 **Key Characteristics**:
 - **Oracle-Free**: All products operate without external price oracles
 - **Fully Collateralized**: 100% collateralization at the smart contract level
-- **Flash Accounting**: Liabilities isolated via `directLockedPrincipal` and `directLentPrincipal`
+- **Flash Accounting**: Liabilities isolated via centralized `LibEncumbrance` (`directLocked`, `directLent`, `directOfferEscrow`, `indexEncumbered`)
 - **Capital Efficient**: Locked collateral continues earning fee index yield
 - **Unified Identity**: Single Position NFT can simultaneously hold deposits, write options, sell futures, market-make AMMs, and create MAM curves
 
@@ -2264,7 +2266,7 @@ Equalis includes oracle-free AMM Auctions, Options, Futures, and Maker Auction M
 - Deterministic pricing based on invariant (no oracle required)
 - Time-bounded with configurable start and end times
 - Configurable swap fees with protocol fee split
-- Reserves tracked as `directLentPrincipal` so they continue earning fee index
+- Reserves tracked as `LibEncumbrance.directLent` so they continue earning fee index
 
 **Data Structure**:
 ```solidity
@@ -2277,6 +2279,8 @@ struct AmmAuction {
     address tokenB;
     uint256 reserveA;
     uint256 reserveB;
+    uint256 initialReserveA;
+    uint256 initialReserveB;
     uint256 invariant;           // k = reserveA * reserveB
     uint64 startTime;
     uint64 endTime;
@@ -2284,16 +2288,19 @@ struct AmmAuction {
     FeeAsset feeAsset;           // TokenIn or TokenOut
     uint256 makerFeeAAccrued;
     uint256 makerFeeBAccrued;
+    uint256 treasuryFeeAAccrued;
+    uint256 treasuryFeeBAccrued;
     bool active;
     bool finalized;
 }
 ```
 
 **Lifecycle**:
-1. **Create**: `createAuction(params)` - Lock reserves via `directLentPrincipal`, compute invariant
-2. **Swap**: `swapExactIn(auctionId, tokenIn, amountIn, minOut, recipient)` - Execute constant-product swap
-3. **Finalize**: `finalizeAuction(auctionId)` - Release locks, apply net reserve changes to maker principal
-4. **Cancel**: `cancelAuction(auctionId)` - Maker can cancel before expiry, returning reserves
+1. **Create**: `createAuction(params)` - Lock reserves via `LibEncumbrance.directLent`, compute invariant
+2. **Swap**: `swapExactIn(auctionId, tokenIn, amountIn, maxIn, minOut, recipient)` - Execute constant-product swap
+3. **Swap/Finalize**: `swapExactInOrFinalize(auctionId, tokenIn, amountIn, maxIn, minOut, recipient)` - Swap if active, finalize automatically if expired
+4. **Finalize**: `finalizeAuction(auctionId)` - Release locks, apply net reserve changes to maker principal
+5. **Cancel**: `cancelAuction(auctionId)` - Maker can cancel before expiry, returning reserves
 
 #### B. Options (Yield-Bearing Covered Derivatives)
 
@@ -2321,6 +2328,9 @@ struct OptionSeries {
     uint256 totalSize;
     uint256 remaining;
     uint256 collateralLocked;
+    uint16 createFeeBps;
+    uint16 exerciseFeeBps;
+    uint16 reclaimFeeBps;
     bool isCall;
     bool isAmerican;
     bool reclaimed;
@@ -2328,7 +2338,7 @@ struct OptionSeries {
 ```
 
 **Lifecycle**:
-1. **Create**: `createOptionSeries(params)` - Lock collateral via `directLockedPrincipal`, mint ERC-1155 tokens to maker
+1. **Create**: `createOptionSeries(params)` - Lock collateral via `LibEncumbrance.directLocked`, mint ERC-1155 tokens to maker
 2. **Exercise**: `exerciseOptions(seriesId, amount, recipient, maxPayment, minReceived)` - Holder burns tokens, atomic swap of strike for collateral
 3. **Reclaim**: `reclaimOptions(seriesId)` - Maker burns remaining supply after expiry to reclaim collateral
 
@@ -2356,6 +2366,9 @@ struct FuturesSeries {
     uint256 totalSize;
     uint256 remaining;
     uint256 underlyingLocked;
+    uint16 createFeeBps;
+    uint16 exerciseFeeBps;
+    uint16 reclaimFeeBps;
     uint64 graceUnlockTime;
     bool isEuropean;
     bool reclaimed;
@@ -2363,7 +2376,7 @@ struct FuturesSeries {
 ```
 
 **Lifecycle**:
-1. **Create**: `createFuturesSeries(params)` - Lock underlying via `directLockedPrincipal`, mint ERC-1155 tokens
+1. **Create**: `createFuturesSeries(params)` - Lock underlying via `LibEncumbrance.directLocked`, mint ERC-1155 tokens
 2. **Settle**: `settleFutures(seriesId, amount, recipient, maxPayment, minReceived)` - Holder burns tokens, pays forward price, receives underlying
 3. **Reclaim**: `reclaimFutures(seriesId)` - Maker burns remaining supply after grace period to reclaim underlying
 
@@ -2375,8 +2388,9 @@ struct FuturesSeries {
 - Linear Dutch auction pricing (price interpolates between start and end over duration)
 - Time-bounded with configurable start time and duration
 - Partial fills supported with remaining volume tracking
-- Configurable swap fees with 70/20/10 split (maker/FeeIndex/treasury)
-- Base collateral locked via `directLockedPrincipal` (continues earning fee index)
+- Configurable swap fees with per-product maker share (`mamMakerShareBps`)
+- Remaining protocol fee routed by `LibFeeRouter` across treasury, Active Credit, and FeeIndex
+- Base collateral locked via `LibEncumbrance.directLocked` (continues earning fee index)
 - Generation-based updates allow price/timing changes without cancellation
 - Batch operations for efficient multi-curve management
 - CurveId-only execution path for gas efficiency
@@ -2512,7 +2526,7 @@ struct CurvePricing {
 1. **Create**: `createCurve(CurveDescriptor)` or `createCurvesBatch(CurveDescriptor[])`
    - Verify maker owns Position NFT and has pool membership
    - Validate descriptor parameters (prices, timing, pools)
-   - Lock base asset volume via `directLockedPrincipal`
+   - Lock base asset volume via `LibEncumbrance.directLocked`
    - Compute commitment hash and store curve data
    - Emit `CurveCreated` event
 
@@ -2523,15 +2537,16 @@ struct CurvePricing {
    - Recompute commitment hash with new parameters
    - Emit `CurveUpdated` event
 
-3. **Fill**: `executeCurveSwap(curveId, amountIn, minOut, deadline, recipient)`
+3. **Fill**: `executeCurveSwap(curveId, amountIn, maxQuote, minOut, deadline, recipient)`
    - Verify curve is active and within time window
    - Compute current price via linear interpolation
    - Calculate base fill amount from quote input
    - Verify sufficient remaining volume
    - Apply slippage protection (minOut check)
-   - Pull quote tokens from taker
-   - Distribute fees: 70% maker, 20% FeeIndex, 10% treasury
-   - Credit maker with quote amount plus maker fee share
+   - Pull quote tokens from taker (bounded by `maxQuote`)
+   - Split fee into maker share and protocol share
+   - Route protocol share via `LibFeeRouter` in the quote pool
+   - Credit maker with quote amount plus maker fee share (and any transfer excess)
    - Unlock and transfer base tokens to recipient
    - Emit `CurveFilled` event
 
@@ -2543,20 +2558,19 @@ struct CurvePricing {
 
 **Fee Distribution**:
 ```solidity
-// Fee split constants
-uint16 constant FEE_SPLIT_MAKER_BPS = 7000;     // 70% to maker
-uint16 constant FEE_SPLIT_INDEX_BPS = 2000;     // 20% to FeeIndex
-uint16 constant FEE_SPLIT_TREASURY_BPS = 1000;  // 10% to treasury
-
 // Fee calculation on fill
 feeAmount = (amountIn * feeRateBps) / 10_000;
-makerFee = (feeAmount * 7000) / 10_000;
-indexFee = (feeAmount * 2000) / 10_000;
-treasuryFee = feeAmount - makerFee - indexFee;
+makerFee = (feeAmount * mamMakerShareBps) / 10_000;
+protocolFee = feeAmount - makerFee;
 
-// Maker receives: amountIn + makerFee (credited to quote pool principal)
-// FeeIndex receives: indexFee (accrued to quote pool FeeIndex)
-// Treasury receives: treasuryFee (transferred out)
+// Protocol fee routing (same quote pool)
+// LibFeeRouter uses governance-configured splits:
+// - treasury share (treasuryShareBps or default)
+// - active credit share (activeCreditShareBps or default)
+// - fee index share (remainder)
+LibFeeRouter.routeSamePool(quotePoolId, protocolFee, MAM_FEE_SOURCE, true, 0);
+
+// Maker receives: amountIn + makerFee (+ any token transfer excess)
 ```
 
 **Collateral Locking** (via centralized `LibEncumbrance`):

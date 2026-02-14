@@ -1,6 +1,6 @@
 # Fully Collateralized Options via ERC-1155 Tokens
 
-**Version:** 2.0 (Updated for native ETH support)
+**Version:** 2.1 (Aligned with current `OptionsFacet` behavior)
 
 The implementation treats Options and Futures not as ephemeral contracts, but as **tokenized claims on locked collateral**. This differs from traditional DeFi options in a few critical ways:
 
@@ -8,12 +8,16 @@ The implementation treats Options and Futures not as ephemeral contracts, but as
 The `OptionToken.sol` is an ERC-1155 contract. Each `seriesId` corresponds to a specific Option Series (Strike, Expiry, Underlying). The token itself represents the **Long** side of the contract.
 2. **Flash Accounting & Collateralization:**
 When a Maker creates a series, the collateral is locked inside their **Position NFT** using `LibDerivativeHelpers._lockCollateral`. The assets never leave the pool; they are just flagged as encumbered. This allows the collateral to theoretically continue earning `FeeIndex` yield (passive lending yield) while backing the option, maximizing capital efficiency.
-3. **The "Buy-to-Close" Constraint (Critical Observation):**
-A unique feature (or constraint) of this implementation is found in `reclaimOptions`.
-* To reclaim collateral after expiry, the Maker must **burn** the Option Tokens.
-* **Implication:** If a Maker writes a Covered Call and sells the token, they cannot simply "withdraw" their ETH after expiry. They must **buy back** the expired token (presumably for near-zero cost) to burn it and unlock their collateral. This enforces a strict 1:1 backing relationship where the token *is* the claim, regardless of time.
+3. **Reclaim Constraint (Owner + Remaining Supply):**
+`reclaimOptions` is controlled by ownership of the maker's Position NFT (`makerPositionId`) and remaining token supply.
+* To unlock collateral after expiry, the **current owner of the maker Position NFT** must call `reclaimOptions`.
+* If `remaining > 0`, caller must hold and burn that remaining `OptionToken` balance.
+* If `remaining == 0` (all options exercised), reclaim finalizes the series without additional burns.
+* **Implication:** If a writer sells unexercised options, they (or a later NFT owner) must reacquire remaining tokens to unlock residual collateral.
 4. **Native ETH Support:**
-The system fully supports native ETH (represented as `address(0)`) as underlying, strike, or quote asset via `LibCurrency`. When exercising options with native ETH, users send ETH via `msg.value` and the facet validates the exact amount. Native ETH transfers use low-level calls with proper error handling.
+The system supports native ETH (`address(0)`) as underlying or strike asset via `LibCurrency`. During exercise, payment is pulled through `LibCurrency.pullAtLeast`.
+* For native-ETH payment legs, `msg.value` must equal `maxPayment` (not strictly the previewed minimum), and must still satisfy the required minimum payment.
+* Native ETH transfers use low-level calls with error handling.
 
 
 
@@ -35,7 +39,7 @@ Call `createOptionSeries` on `OptionsFacet`:
 
 
 * **Result:**
-* 1 WETH is locked in your Position NFT (`directLockedPrincipal`).
+* 1 WETH is locked in your Position NFT encumbrance (`directLocked`).
 * You receive **1 unit** of `OptionToken` (ERC-1155) representing the Long Call.
 
 
@@ -62,6 +66,7 @@ Call `createOptionSeries` on `OptionsFacet`:
 Call `exerciseOptions` on `OptionsFacet`:
 * `seriesId`: The ID of the token you hold.
 * `amount`: 1.
+* `maxPayment`: Maximum you are willing to pay (must be >= required payment).
 
 
 * **Result:**
@@ -96,7 +101,7 @@ Call `createOptionSeries`:
 
 * **Outcome:**
 * **Exercised (ETH < 2500):** You keep Premium. You pay 2500 USDC and receive 1 WETH (effectively buying ETH at 2500).
-* **Expired:** You keep Premium + 2500 USDC.
+* **Expired:** You keep Premium + 2500 USDC after reclaiming (which requires burning any remaining option supply).
 
 
 
@@ -112,6 +117,7 @@ Call `createOptionSeries`:
 Call `exerciseOptions`:
 * You send **1 WETH** (Underlying) to the protocol.
 * You burn **1 OptionToken**.
+* You pass `maxPayment` to cap payment input.
 
 
 * **Result:**
@@ -140,16 +146,26 @@ When using native ETH as the underlying or strike asset:
 - The ETH remains in the protocol's tracked balance (`nativeTrackedTotal`)
 
 ### Exercising Options with Native ETH
-- **Call Exercise (ETH underlying)**: Holder pays strike in quote asset, receives native ETH via `LibCurrency.transfer()`
+- **Call Exercise (ETH underlying)**: Holder pays strike in quote asset, receives native ETH via `LibCurrency.transferWithMin()`
 - **Put Exercise (ETH strike)**: Holder pays underlying, receives native ETH strike amount
 - All native ETH transfers use low-level `call{value: amount}("")` with proper error handling
 
 ### Payment with Native ETH
-- When the payment asset is native ETH, users must send the exact amount via `msg.value`
-- `LibCurrency.assertMsgValue()` validates the payment amount
-- Excess or insufficient `msg.value` reverts with `UnexpectedMsgValue`
+- When the payment asset is native ETH in exercise flows, users send `msg.value == maxPayment`
+- `maxPayment` must be at least the required payment amount; otherwise exercise reverts
+- Mismatch in expected value reverts with `UnexpectedMsgValue`
 
 ---
 
-**Document Version:** 2.0
-**Last Updated:** January 2026
+## Additional Behavior Notes
+
+- **Exercise windows matter**:
+  - American options: exercisable strictly before expiry.
+  - European options: exercisable only inside the configured tolerance window around expiry.
+- **Fee model is configurable per series creation**:
+  - Create, exercise, and reclaim fees (bps + optional flat wad) can use defaults or custom values (bounded by config min/max).
+
+---
+
+**Document Version:** 2.1
+**Last Updated:** February 2026
