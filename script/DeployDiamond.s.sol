@@ -83,11 +83,6 @@ contract DeployDiamondScript is Script {
     address internal timelock;
     address internal treasury;
     address internal diamondAddress;
-    address public deployedDiamond;
-    address public deployedPositionNFT;
-    address public deployedOptionToken;
-    address public deployedFuturesToken;
-    address public deployedMailbox;
 
     uint16 internal constant DEFAULT_DEPOSITOR_LTV_BPS = 7_500;
     uint16 internal constant DEFAULT_EXTERNAL_CR_BPS = 15_000;
@@ -255,17 +250,13 @@ contract DeployDiamondScript is Script {
         // Deploy diamond
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
         diamondAddress = address(diamond);
-        deployedDiamond = diamondAddress;
         
         // Deploy PositionNFT contract
         PositionNFT nftContract = new PositionNFT();
-        deployedPositionNFT = address(nftContract);
 
         // Deploy derivative ERC-1155 tokens with the Diamond as manager
         OptionToken optionToken = new OptionToken("", owner, diamondAddress);
         FuturesToken futuresToken = new FuturesToken("", owner, diamondAddress);
-        deployedOptionToken = address(optionToken);
-        deployedFuturesToken = address(futuresToken);
 
         // Deploy ERC-6900 beacon chain for Position Agent TBAs
         address entryPoint = _resolveEntryPoint();
@@ -330,7 +321,6 @@ contract DeployDiamondScript is Script {
         SettlementEscrowFacet(address(diamond)).setRefundSafetyWindow(ATOMIC_REFUND_SAFETY_WINDOW);
         SettlementEscrowFacet(address(diamond)).configureAtomicDesk(address(diamond));
         Mailbox mailbox = new Mailbox(address(diamond));
-        deployedMailbox = address(mailbox);
         SettlementEscrowFacet(address(diamond)).configureMailbox(address(mailbox));
         SettlementEscrowFacet(address(diamond)).setCommittee(timelock, true);
         SettlementEscrowFacet(address(diamond)).transferGovernor(timelock);
@@ -398,9 +388,8 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(FlashLoanFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](2);
-        s[0] = FlashLoanFacet.previewFlashLoanRepayment.selector;
-        s[1] = FlashLoanFacet.flashLoan.selector;
+        s = new bytes4[](1);
+        s[0] = FlashLoanFacet.flashLoan.selector;
     }
 
     function _selectors(FeeFacet) internal pure returns (bytes4[] memory s) {
@@ -416,30 +405,28 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(AdminGovernanceFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](23);
+        s = new bytes4[](21);
         s[0] = AdminGovernanceFacet.setDefaultPoolConfig.selector;
         s[1] = AdminGovernanceFacet.setAumFee.selector;
         s[2] = AdminGovernanceFacet.setPoolConfig.selector;
         s[3] = AdminGovernanceFacet.setRollingDelinquencyThresholds.selector;
         s[4] = AdminGovernanceFacet.setRollingMinPaymentBps.selector;
-        s[5] = AdminGovernanceFacet.setPositionNFT.selector;
-        s[6] = AdminGovernanceFacet.setDirectRollingConfig.selector;
-        s[7] = AdminGovernanceFacet.setPoolDeprecated.selector;
-        s[8] = AdminGovernanceFacet.setFoundationReceiver.selector;
-        s[9] = AdminGovernanceFacet.setDefaultMaintenanceRateBps.selector;
-        s[10] = AdminGovernanceFacet.setMaxMaintenanceRateBps.selector;
-        s[11] = AdminGovernanceFacet.setTreasury.selector;
-        s[12] = AdminGovernanceFacet.setTreasuryShareBps.selector;
-        s[13] = AdminGovernanceFacet.setActiveCreditShareBps.selector;
-        s[14] = AdminGovernanceFacet.setManagedPoolSystemShareBps.selector;
-        s[15] = AdminGovernanceFacet.setActionFeeBounds.selector;
-        s[16] = AdminGovernanceFacet.setActionFeeConfig.selector;
-        s[17] = AdminGovernanceFacet.setDerivativeFeeConfig.selector;
-        s[18] = AdminGovernanceFacet.setProtocolFeeReceiver.selector;
-        s[19] = AdminGovernanceFacet.setIndexCreationFee.selector;
-        s[20] = AdminGovernanceFacet.setPoolCreationFee.selector;
-        s[21] = AdminGovernanceFacet.setPositionMintFee.selector;
-        s[22] = AdminGovernanceFacet.executeDiamondCut.selector;
+        s[5] = AdminGovernanceFacet.setPoolDeprecated.selector;
+        s[6] = AdminGovernanceFacet.setFoundationReceiver.selector;
+        s[7] = AdminGovernanceFacet.setDefaultMaintenanceRateBps.selector;
+        s[8] = AdminGovernanceFacet.setMaxMaintenanceRateBps.selector;
+        s[9] = AdminGovernanceFacet.setTreasury.selector;
+        s[10] = AdminGovernanceFacet.setTreasuryShareBps.selector;
+        s[11] = AdminGovernanceFacet.setActiveCreditShareBps.selector;
+        s[12] = AdminGovernanceFacet.setActionFeeBounds.selector;
+        s[13] = AdminGovernanceFacet.setActionFeeConfig.selector;
+        s[14] = AdminGovernanceFacet.setDerivativeFeeConfig.selector;
+        s[15] = AdminGovernanceFacet.setProtocolFeeReceiver.selector;
+        s[16] = AdminGovernanceFacet.setIndexCreationFee.selector;
+        s[17] = AdminGovernanceFacet.setPoolCreationFee.selector;
+        s[18] = AdminGovernanceFacet.setPositionMintFee.selector;
+        s[19] = AdminGovernanceFacet.executeDiamondCut.selector;
+        s[20] = AdminGovernanceFacet.setDirectRollingConfig.selector;
     }
 
     function _selectors(PoolManagementFacet) internal pure returns (bytes4[] memory s) {
@@ -540,21 +527,27 @@ contract DeployDiamondScript is Script {
         s = new bytes4[](7);
         s[0] = PositionManagementFacet.mintPosition.selector;
         s[1] = PositionManagementFacet.mintPositionWithDeposit.selector;
-        s[2] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256,uint256)"));
+        s[2] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
+        s[3] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256)"));
         s[4] = bytes4(keccak256("rollYieldToPosition(uint256,uint256)"));
-        s[5] = bytes4(keccak256("closePoolPosition(uint256,uint256,uint256)"));
+        s[5] = bytes4(keccak256("closePoolPosition(uint256,uint256)"));
         s[6] = PositionManagementFacet.cleanupMembership.selector;
     }
 
     function _selectors(LendingFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](6);
-        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256,uint256)"));
-        s[1] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256,uint256)"));
-        s[2] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256,uint256)"));
-        s[4] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
-        s[5] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256,uint256)"));
+        s = new bytes4[](12);
+        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256)"));
+        s[1] = bytes4(keccak256("openRollingFromPosition(uint256,uint256)"));
+        s[2] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256)"));
+        s[3] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256)"));
+        s[4] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256)"));
+        s[5] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256)"));
+        s[6] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256)"));
+        s[7] = bytes4(keccak256("closeRollingCreditFromPosition(uint256)"));
+        s[8] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256)"));
+        s[9] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256)"));
+        s[10] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256)"));
+        s[11] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256)"));
     }
 
     function _selectors(PenaltyFacet) internal pure returns (bytes4[] memory s) {
@@ -660,18 +653,17 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(AmmAuctionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](7);
+        s = new bytes4[](6);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
         s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
         s[3] = AmmAuctionFacet.cancelAuction.selector;
         s[4] = AmmAuctionFacet.getAuction.selector;
         s[5] = AmmAuctionFacet.previewSwap.selector;
-        s[6] = AmmAuctionFacet.addLiquidity.selector;
     }
 
     function _selectors(CommunityAuctionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](13);
+        s = new bytes4[](12);
         s[0] = CommunityAuctionFacet.createCommunityAuction.selector;
         s[1] = CommunityAuctionFacet.joinCommunityAuction.selector;
         s[2] = CommunityAuctionFacet.leaveCommunityAuction.selector;
@@ -684,7 +676,6 @@ contract DeployDiamondScript is Script {
         s[9] = CommunityAuctionFacet.previewJoin.selector;
         s[10] = CommunityAuctionFacet.previewLeave.selector;
         s[11] = CommunityAuctionFacet.getTotalMakers.selector;
-        s[12] = CommunityAuctionFacet.previewCommunitySwap.selector;
     }
 
     function _selectors(AtomicDeskFacet) internal pure returns (bytes4[] memory s) {
