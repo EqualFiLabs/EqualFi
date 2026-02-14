@@ -27,7 +27,8 @@ jobs:
       - name: Run tests
         run: |
           set -euo pipefail
-          mapfile -t test_dirs < <(find test -type f -name '*t.sol' -print | xargs -n1 dirname | sort -u)
+          # Only run subdirectories under test/ (exclude root-level test/*.t.sol).
+          mapfile -t test_dirs < <(find test -mindepth 2 -type f -name '*t.sol' -printf '%h\n' | sort -u)
 
           echo "Discovered test directories (${#test_dirs[@]}):"
           printf ' - %s\n' "${test_dirs[@]}"
