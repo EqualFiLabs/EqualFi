@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibSolvencyChecks} from "../../src/libraries/LibSolvencyChecks.sol";
 import {Types} from "../../src/libraries/Types.sol";
+import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 
 contract LibSolvencyChecksHarness {
     function s() internal pure returns (LibAppStorage.AppStorage storage) {
@@ -29,9 +30,41 @@ contract LibSolvencyChecksHarness {
         Types.PoolData storage p = s().pools[pid];
         return LibSolvencyChecks.calculateLoanDebts(p, positionKey);
     }
+
+    function setPrincipal(uint256 pid, bytes32 positionKey, uint256 principal) external {
+        s().pools[pid].userPrincipal[positionKey] = principal;
+    }
+
+    function setDirectEncumbrance(
+        bytes32 positionKey,
+        uint256 pid,
+        uint256 directLocked,
+        uint256 directLent,
+        uint256 directOfferEscrow
+    ) external {
+        LibEncumbrance.Encumbrance storage enc = LibEncumbrance.position(positionKey, pid);
+        enc.directLocked = directLocked;
+        enc.directLent = directLent;
+        enc.directOfferEscrow = directOfferEscrow;
+    }
+
+    function encumberIndex(bytes32 positionKey, uint256 pid, uint256 indexId, uint256 amount) external {
+        LibEncumbrance.encumberIndex(positionKey, pid, indexId, amount);
+    }
+
+    function encumberModule(bytes32 positionKey, uint256 pid, uint256 moduleId, uint256 amount) external {
+        LibEncumbrance.encumberModule(positionKey, pid, moduleId, amount);
+    }
+
+    function availablePrincipal(uint256 pid, bytes32 positionKey) external view returns (uint256) {
+        return LibSolvencyChecks.calculateAvailablePrincipal(s().pools[pid], positionKey, pid);
+    }
 }
 
 contract LibSolvencyChecksPropertyTest is Test {
+    uint256 internal constant INDEX_ID = 77;
+    uint256 internal constant MODULE_ID = 88;
+
     /// Feature: principal-accounting-normalization, Property 2: Pool-Native Debt Tracking
     function testFuzz_poolNativeDebtTracking(
         uint256 rollingStart,
@@ -78,5 +111,29 @@ contract LibSolvencyChecksPropertyTest is Test {
         assertEq(rollingDebt, rollingAfterRepay, "rolling repay mismatch");
         assertEq(fixedDebt, fixedAfterRepay, "fixed repay mismatch");
         assertEq(totalDebt, rollingAfterRepay + fixedAfterRepay, "total repay mismatch");
+    }
+
+    function test_availablePrincipal_includesModuleEncumbered() public {
+        LibSolvencyChecksHarness harness = new LibSolvencyChecksHarness();
+        uint256 pid = 2;
+        bytes32 positionKey = bytes32(uint256(0xCAFE));
+
+        harness.setPrincipal(pid, positionKey, 1000);
+        harness.setDirectEncumbrance(positionKey, pid, 100, 50, 25);
+        harness.encumberIndex(positionKey, pid, INDEX_ID, 200);
+        harness.encumberModule(positionKey, pid, MODULE_ID, 125);
+
+        assertEq(harness.availablePrincipal(pid, positionKey), 500, "module encumbrance must reduce availability");
+    }
+
+    function test_availablePrincipal_returnsZeroWhenModuleEncumbranceExceedsPrincipal() public {
+        LibSolvencyChecksHarness harness = new LibSolvencyChecksHarness();
+        uint256 pid = 3;
+        bytes32 positionKey = bytes32(uint256(0xD00D));
+
+        harness.setPrincipal(pid, positionKey, 100);
+        harness.encumberModule(positionKey, pid, MODULE_ID, 101);
+
+        assertEq(harness.availablePrincipal(pid, positionKey), 0, "availability floors at zero");
     }
 }

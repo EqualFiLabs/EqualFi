@@ -114,6 +114,9 @@ library LibPoolMembership {
         if (enc.directOfferEscrow > 0) {
             return (false, "direct offer escrow");
         }
+        if (enc.moduleEncumbered > 0) {
+            return (false, "module encumbrance");
+        }
         return (true, "");
     }
 }

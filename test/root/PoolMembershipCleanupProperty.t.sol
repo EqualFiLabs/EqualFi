@@ -54,6 +54,11 @@ contract MembershipStateHarness {
     function setDirectLent(bytes32 positionKey, uint256 pid, uint256 amount) external {
         LibEncumbrance.position(positionKey, pid).directLent = amount;
     }
+
+    function setModuleEncumbered(bytes32 positionKey, uint256 pid, uint256 moduleId, uint256 amount) external {
+        if (amount == 0) return;
+        LibEncumbrance.encumberModule(positionKey, pid, moduleId, amount);
+    }
 }
 
 /// @notice Feature: multi-pool-position-nfts, Property 10: Membership Cleanup Safety
@@ -91,6 +96,7 @@ contract MembershipValidationErrorClarityPropertyTest is Test {
     MembershipStateHarness internal harness;
     bytes32 internal positionKey = keccak256("POSITION_B0B");
     uint256 internal constant POOL_ID = 2;
+    uint256 internal constant MODULE_ID = 77;
 
     function setUp() public {
         harness = new MembershipStateHarness();
@@ -105,6 +111,18 @@ contract MembershipValidationErrorClarityPropertyTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 CannotClearMembership.selector, positionKey, POOL_ID, "locked direct principal"
+            )
+        );
+        harness.cleanup(positionKey, POOL_ID);
+    }
+
+    function testProperty_MembershipCleanupBlockedByModuleEncumbrance() public {
+        harness.ensure(positionKey, POOL_ID, true);
+        harness.setModuleEncumbered(positionKey, POOL_ID, MODULE_ID, 1 ether);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CannotClearMembership.selector, positionKey, POOL_ID, "module encumbrance"
             )
         );
         harness.cleanup(positionKey, POOL_ID);
