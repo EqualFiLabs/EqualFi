@@ -65,6 +65,9 @@ import {PositionAgentTBAFacet} from "../src/erc6551/PositionAgentTBAFacet.sol";
 import {PositionAgentRegistryFacet} from "../src/erc6551/PositionAgentRegistryFacet.sol";
 import {PositionAgentViewFacet} from "../src/erc6551/PositionAgentViewFacet.sol";
 import {PositionAgentConfigFacet} from "../src/erc6551/PositionAgentConfigFacet.sol";
+import {ModuleRegistryFacet} from "../src/modules/ModuleRegistryFacet.sol";
+import {ModuleGatewayFacet} from "../src/modules/ModuleGatewayFacet.sol";
+import {ModuleViewFacet} from "../src/modules/ModuleViewFacet.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/erc6900/PositionMSCAImpl.sol";
@@ -194,6 +197,9 @@ contract DeployDiamondScript is Script {
         PositionAgentRegistryFacet positionAgentRegistry = new PositionAgentRegistryFacet();
         PositionAgentViewFacet positionAgentView = new PositionAgentViewFacet();
         PositionAgentConfigFacet positionAgentConfig = new PositionAgentConfigFacet();
+        ModuleRegistryFacet moduleRegistry = new ModuleRegistryFacet();
+        ModuleGatewayFacet moduleGateway = new ModuleGatewayFacet();
+        ModuleViewFacet moduleView = new ModuleViewFacet();
 
         // Build facet cuts (core + admin + fee + index + base views)
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](14);
@@ -212,7 +218,7 @@ contract DeployDiamondScript is Script {
         cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[13] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](37);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](40);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -250,6 +256,9 @@ contract DeployDiamondScript is Script {
         more[34] = _cut(address(positionAgentRegistry), _selectors(positionAgentRegistry));
         more[35] = _cut(address(positionAgentView), _selectors(positionAgentView));
         more[36] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
+        more[37] = _cut(address(moduleRegistry), _selectors(moduleRegistry));
+        more[38] = _cut(address(moduleGateway), _selectors(moduleGateway));
+        more[39] = _cut(address(moduleView), _selectors(moduleView));
 
         // Deploy diamond
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
@@ -802,6 +811,37 @@ contract DeployDiamondScript is Script {
         s[0] = PositionAgentConfigFacet.setERC6551Registry.selector;
         s[1] = PositionAgentConfigFacet.setERC6551Implementation.selector;
         s[2] = PositionAgentConfigFacet.setIdentityRegistry.selector;
+    }
+
+    function _selectors(ModuleRegistryFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](10);
+        s[0] = ModuleRegistryFacet.registerModule.selector;
+        s[1] = ModuleRegistryFacet.setModuleOwner.selector;
+        s[2] = ModuleRegistryFacet.pauseModule.selector;
+        s[3] = ModuleRegistryFacet.unpauseModule.selector;
+        s[4] = ModuleRegistryFacet.setModuleCreationFee.selector;
+        s[5] = ModuleRegistryFacet.setDefaultModuleAumBps.selector;
+        s[6] = ModuleRegistryFacet.setModuleAumBps.selector;
+        s[7] = ModuleRegistryFacet.setModuleAumBounds.selector;
+        s[8] = ModuleRegistryFacet.setModuleDeactivationGraceEpochs.selector;
+        s[9] = ModuleRegistryFacet.setModuleAciPaused.selector;
+    }
+
+    function _selectors(ModuleGatewayFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](3);
+        s[0] = ModuleGatewayFacet.encumberPosition.selector;
+        s[1] = ModuleGatewayFacet.unencumberPosition.selector;
+        s[2] = ModuleGatewayFacet.pokeModuleAum.selector;
+    }
+
+    function _selectors(ModuleViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = ModuleViewFacet.getModule.selector;
+        s[1] = ModuleViewFacet.getModuleEncumbrance.selector;
+        s[2] = ModuleViewFacet.getModuleEncumbranceForModule.selector;
+        s[3] = ModuleViewFacet.getModuleAumState.selector;
+        s[4] = ModuleViewFacet.getModuleAumConfig.selector;
+        s[5] = ModuleViewFacet.isModuleAciPaused.selector;
     }
 
     function _deployTokensAndPools(

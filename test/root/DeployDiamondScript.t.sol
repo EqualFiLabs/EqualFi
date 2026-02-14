@@ -15,6 +15,9 @@ import {FlashLoanFacet} from "../../src/equallend/FlashLoanFacet.sol";
 import {AdminGovernanceFacet} from "../../src/admin/AdminGovernanceFacet.sol";
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
 import {CommunityAuctionFacet} from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {ModuleRegistryFacet} from "../../src/modules/ModuleRegistryFacet.sol";
+import {ModuleGatewayFacet} from "../../src/modules/ModuleGatewayFacet.sol";
+import {ModuleViewFacet} from "../../src/modules/ModuleViewFacet.sol";
 
 contract DeployDiamondScriptTest is Test {
     uint256 internal constant DEPLOYER_PK = 0xA11CE;
@@ -106,6 +109,12 @@ contract DeployDiamondScriptTest is Test {
             CommunityAuctionFacet.previewCommunitySwap.selector,
             "community preview swap selector"
         );
+        _assertSelectorMapped(loupe, ModuleRegistryFacet.registerModule.selector, "module register selector");
+        _assertSelectorMapped(loupe, ModuleRegistryFacet.setModuleAciPaused.selector, "module aci pause selector");
+        _assertSelectorMapped(loupe, ModuleGatewayFacet.encumberPosition.selector, "module encumber selector");
+        _assertSelectorMapped(loupe, ModuleGatewayFacet.pokeModuleAum.selector, "module poke selector");
+        _assertSelectorMapped(loupe, ModuleViewFacet.getModule.selector, "module get selector");
+        _assertSelectorMapped(loupe, ModuleViewFacet.getModuleAumState.selector, "module aum state selector");
 
         SettlementEscrowFacet escrow = SettlementEscrowFacet(diamond);
         assertEq(escrow.refundSafetyWindow(), 3 days, "refund safety window");
