@@ -26,18 +26,13 @@ jobs:
           fi
       - name: Run tests
         run: |
-          #forge test
-          forge test --match-path "test/admin/*t.sol"
-          forge test --match-path "test/equallend-direct/*t.sol"
-          forge test --match-path "test/facets/*t.sol"
-          forge test --match-path "test/libraries/*t.sol"
-          forge test --match-path "test/maintenance/*t.sol"
-          forge test --match-path "test/managed-pools/*t.sol"
-          forge test --match-path "test/mocks/*t.sol"
-          forge test --match-path "test/penalty/*t.sol"
-          forge test --match-path "test/root/*t.sol"
-          forge test --match-path "test/treasury/*t.sol"
-          forge test --match-path "test/views/*t.sol"
-          forge test --match-path "test/invariants/*t.sol"
-          forge test --match-path "test/erc6900/*t.sol"
-          forge test --match-path "test/compete/*t.sol"
+          set -euo pipefail
+          # Only run subdirectories under test/ (exclude root-level test/*.t.sol).
+          mapfile -t test_dirs < <(find test -mindepth 2 -type f -name '*t.sol' -printf '%h\n' | sort -u)
+
+          echo "Discovered test directories (${#test_dirs[@]}):"
+          printf ' - %s\n' "${test_dirs[@]}"
+
+          for dir in "${test_dirs[@]}"; do
+            forge test --match-path "${dir}/*t.sol"
+          done

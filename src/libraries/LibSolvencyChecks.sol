@@ -147,7 +147,7 @@ library LibSolvencyChecks {
         return calculateAvailablePrincipal(p, positionKey, pid);
     }
 
-    /// @notice Calculate available principal after direct locks, offer escrow, and index encumbrance.
+    /// @notice Calculate available principal after direct locks, offer escrow, index encumbrance, and module encumbrance.
     function calculateAvailablePrincipal(
         Types.PoolData storage p,
         bytes32 positionKey,
@@ -156,7 +156,7 @@ library LibSolvencyChecks {
         uint256 principal = p.userPrincipal[positionKey];
         LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
         uint256 totalEncumbered =
-            enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+            enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered + enc.moduleEncumbered;
         if (totalEncumbered >= principal) {
             return 0;
         }
