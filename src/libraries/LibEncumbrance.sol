@@ -12,11 +12,13 @@ library LibEncumbrance {
         uint256 directLent;
         uint256 directOfferEscrow;
         uint256 indexEncumbered;
+        uint256 moduleEncumbered;
     }
 
     struct EncumbranceStorage {
         mapping(bytes32 => mapping(uint256 => Encumbrance)) encumbrance;
         mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByIndex;
+        mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByModule;
     }
 
     event EncumbranceIncreased(
@@ -34,6 +36,22 @@ library LibEncumbrance {
         uint256 amount,
         uint256 totalEncumbered,
         uint256 indexEncumbered
+    );
+    event ModuleEncumbranceIncreased(
+        bytes32 indexed positionKey,
+        uint256 indexed poolId,
+        uint256 indexed moduleId,
+        uint256 amount,
+        uint256 totalEncumbered,
+        uint256 moduleEncumbered
+    );
+    event ModuleEncumbranceDecreased(
+        bytes32 indexed positionKey,
+        uint256 indexed poolId,
+        uint256 indexed moduleId,
+        uint256 amount,
+        uint256 totalEncumbered,
+        uint256 moduleEncumbered
     );
 
     function s() internal pure returns (EncumbranceStorage storage es) {
@@ -53,7 +71,7 @@ library LibEncumbrance {
 
     function total(bytes32 positionKey, uint256 poolId) internal view returns (uint256) {
         Encumbrance storage enc = s().encumbrance[positionKey][poolId];
-        return enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        return enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered + enc.moduleEncumbered;
     }
 
     function totalForActiveCredit(bytes32 positionKey, uint256 poolId) internal view returns (uint256) {
@@ -65,12 +83,24 @@ library LibEncumbrance {
         return s().encumbrance[positionKey][poolId].indexEncumbered;
     }
 
+    function getModuleEncumbered(bytes32 positionKey, uint256 poolId) internal view returns (uint256) {
+        return s().encumbrance[positionKey][poolId].moduleEncumbered;
+    }
+
     function getIndexEncumberedForIndex(bytes32 positionKey, uint256 poolId, uint256 indexId)
         internal
         view
         returns (uint256)
     {
         return s().encumberedByIndex[positionKey][poolId][indexId];
+    }
+
+    function getModuleEncumberedForModule(bytes32 positionKey, uint256 poolId, uint256 moduleId)
+        internal
+        view
+        returns (uint256)
+    {
+        return s().encumberedByModule[positionKey][poolId][moduleId];
     }
 
     function encumberIndex(bytes32 positionKey, uint256 poolId, uint256 indexId, uint256 amount) internal {
@@ -99,5 +129,33 @@ library LibEncumbrance {
         enc.indexEncumbered = newTotal;
         es.encumberedByIndex[positionKey][poolId][indexId] = newIndexTotal;
         emit EncumbranceDecreased(positionKey, poolId, indexId, amount, newTotal, newIndexTotal);
+    }
+
+    function encumberModule(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) internal {
+        EncumbranceStorage storage es = s();
+        Encumbrance storage enc = es.encumbrance[positionKey][poolId];
+        uint256 newTotal = enc.moduleEncumbered + amount;
+        enc.moduleEncumbered = newTotal;
+        uint256 newModuleTotal = es.encumberedByModule[positionKey][poolId][moduleId] + amount;
+        es.encumberedByModule[positionKey][poolId][moduleId] = newModuleTotal;
+        emit ModuleEncumbranceIncreased(positionKey, poolId, moduleId, amount, newTotal, newModuleTotal);
+    }
+
+    function unencumberModule(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) internal {
+        EncumbranceStorage storage es = s();
+        Encumbrance storage enc = es.encumbrance[positionKey][poolId];
+        uint256 currentModule = es.encumberedByModule[positionKey][poolId][moduleId];
+        if (amount > currentModule) {
+            revert EncumbranceUnderflow(amount, currentModule);
+        }
+        uint256 currentTotal = enc.moduleEncumbered;
+        if (amount > currentTotal) {
+            revert EncumbranceUnderflow(amount, currentTotal);
+        }
+        uint256 newTotal = currentTotal - amount;
+        uint256 newModuleTotal = currentModule - amount;
+        enc.moduleEncumbered = newTotal;
+        es.encumberedByModule[positionKey][poolId][moduleId] = newModuleTotal;
+        emit ModuleEncumbranceDecreased(positionKey, poolId, moduleId, amount, newTotal, newModuleTotal);
     }
 }

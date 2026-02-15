@@ -65,6 +65,9 @@ import {PositionAgentTBAFacet} from "../src/erc6551/PositionAgentTBAFacet.sol";
 import {PositionAgentRegistryFacet} from "../src/erc6551/PositionAgentRegistryFacet.sol";
 import {PositionAgentViewFacet} from "../src/erc6551/PositionAgentViewFacet.sol";
 import {PositionAgentConfigFacet} from "../src/erc6551/PositionAgentConfigFacet.sol";
+import {ModuleRegistryFacet} from "../src/modules/ModuleRegistryFacet.sol";
+import {ModuleGatewayFacet} from "../src/modules/ModuleGatewayFacet.sol";
+import {ModuleViewFacet} from "../src/modules/ModuleViewFacet.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/erc6900/PositionMSCAImpl.sol";
@@ -83,6 +86,10 @@ contract DeployDiamondScript is Script {
     address internal timelock;
     address internal treasury;
     address internal diamondAddress;
+    address internal positionNftAddress;
+    address internal optionTokenAddress;
+    address internal futuresTokenAddress;
+    address internal mailboxAddress;
 
     uint16 internal constant DEFAULT_DEPOSITOR_LTV_BPS = 7_500;
     uint16 internal constant DEFAULT_EXTERNAL_CR_BPS = 15_000;
@@ -190,6 +197,9 @@ contract DeployDiamondScript is Script {
         PositionAgentRegistryFacet positionAgentRegistry = new PositionAgentRegistryFacet();
         PositionAgentViewFacet positionAgentView = new PositionAgentViewFacet();
         PositionAgentConfigFacet positionAgentConfig = new PositionAgentConfigFacet();
+        ModuleRegistryFacet moduleRegistry = new ModuleRegistryFacet();
+        ModuleGatewayFacet moduleGateway = new ModuleGatewayFacet();
+        ModuleViewFacet moduleView = new ModuleViewFacet();
 
         // Build facet cuts (core + admin + fee + index + base views)
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](14);
@@ -208,7 +218,7 @@ contract DeployDiamondScript is Script {
         cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[13] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](37);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](40);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -246,6 +256,9 @@ contract DeployDiamondScript is Script {
         more[34] = _cut(address(positionAgentRegistry), _selectors(positionAgentRegistry));
         more[35] = _cut(address(positionAgentView), _selectors(positionAgentView));
         more[36] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
+        more[37] = _cut(address(moduleRegistry), _selectors(moduleRegistry));
+        more[38] = _cut(address(moduleGateway), _selectors(moduleGateway));
+        more[39] = _cut(address(moduleView), _selectors(moduleView));
 
         // Deploy diamond
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
@@ -253,10 +266,13 @@ contract DeployDiamondScript is Script {
         
         // Deploy PositionNFT contract
         PositionNFT nftContract = new PositionNFT();
+        positionNftAddress = address(nftContract);
 
         // Deploy derivative ERC-1155 tokens with the Diamond as manager
         OptionToken optionToken = new OptionToken("", owner, diamondAddress);
         FuturesToken futuresToken = new FuturesToken("", owner, diamondAddress);
+        optionTokenAddress = address(optionToken);
+        futuresTokenAddress = address(futuresToken);
 
         // Deploy ERC-6900 beacon chain for Position Agent TBAs
         address entryPoint = _resolveEntryPoint();
@@ -321,6 +337,7 @@ contract DeployDiamondScript is Script {
         SettlementEscrowFacet(address(diamond)).setRefundSafetyWindow(ATOMIC_REFUND_SAFETY_WINDOW);
         SettlementEscrowFacet(address(diamond)).configureAtomicDesk(address(diamond));
         Mailbox mailbox = new Mailbox(address(diamond));
+        mailboxAddress = address(mailbox);
         SettlementEscrowFacet(address(diamond)).configureMailbox(address(mailbox));
         SettlementEscrowFacet(address(diamond)).setCommittee(timelock, true);
         SettlementEscrowFacet(address(diamond)).transferGovernor(timelock);
@@ -388,8 +405,9 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(FlashLoanFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](1);
+        s = new bytes4[](2);
         s[0] = FlashLoanFacet.flashLoan.selector;
+        s[1] = FlashLoanFacet.previewFlashLoanRepayment.selector;
     }
 
     function _selectors(FeeFacet) internal pure returns (bytes4[] memory s) {
@@ -405,7 +423,7 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(AdminGovernanceFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](21);
+        s = new bytes4[](23);
         s[0] = AdminGovernanceFacet.setDefaultPoolConfig.selector;
         s[1] = AdminGovernanceFacet.setAumFee.selector;
         s[2] = AdminGovernanceFacet.setPoolConfig.selector;
@@ -427,6 +445,8 @@ contract DeployDiamondScript is Script {
         s[18] = AdminGovernanceFacet.setPositionMintFee.selector;
         s[19] = AdminGovernanceFacet.executeDiamondCut.selector;
         s[20] = AdminGovernanceFacet.setDirectRollingConfig.selector;
+        s[21] = AdminGovernanceFacet.setPositionNFT.selector;
+        s[22] = AdminGovernanceFacet.setManagedPoolSystemShareBps.selector;
     }
 
     function _selectors(PoolManagementFacet) internal pure returns (bytes4[] memory s) {
@@ -527,27 +547,21 @@ contract DeployDiamondScript is Script {
         s = new bytes4[](7);
         s[0] = PositionManagementFacet.mintPosition.selector;
         s[1] = PositionManagementFacet.mintPositionWithDeposit.selector;
-        s[2] = bytes4(keccak256("depositToPosition(uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("withdrawFromPosition(uint256,uint256,uint256)"));
-        s[4] = bytes4(keccak256("rollYieldToPosition(uint256,uint256)"));
-        s[5] = bytes4(keccak256("closePoolPosition(uint256,uint256)"));
+        s[2] = PositionManagementFacet.depositToPosition.selector;
+        s[3] = PositionManagementFacet.withdrawFromPosition.selector;
+        s[4] = PositionManagementFacet.rollYieldToPosition.selector;
+        s[5] = PositionManagementFacet.closePoolPosition.selector;
         s[6] = PositionManagementFacet.cleanupMembership.selector;
     }
 
     function _selectors(LendingFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](12);
-        s[0] = bytes4(keccak256("openRollingFromPosition(uint256,uint256,uint256)"));
-        s[1] = bytes4(keccak256("openRollingFromPosition(uint256,uint256)"));
-        s[2] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256,uint256)"));
-        s[3] = bytes4(keccak256("makePaymentFromPosition(uint256,uint256)"));
-        s[4] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256,uint256)"));
-        s[5] = bytes4(keccak256("expandRollingFromPosition(uint256,uint256)"));
-        s[6] = bytes4(keccak256("closeRollingCreditFromPosition(uint256,uint256)"));
-        s[7] = bytes4(keccak256("closeRollingCreditFromPosition(uint256)"));
-        s[8] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256,uint256)"));
-        s[9] = bytes4(keccak256("openFixedFromPosition(uint256,uint256,uint256)"));
-        s[10] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256,uint256)"));
-        s[11] = bytes4(keccak256("repayFixedFromPosition(uint256,uint256,uint256)"));
+        s = new bytes4[](6);
+        s[0] = LendingFacet.openRollingFromPosition.selector;
+        s[1] = LendingFacet.makePaymentFromPosition.selector;
+        s[2] = LendingFacet.expandRollingFromPosition.selector;
+        s[3] = LendingFacet.closeRollingCreditFromPosition.selector;
+        s[4] = LendingFacet.openFixedFromPosition.selector;
+        s[5] = LendingFacet.repayFixedFromPosition.selector;
     }
 
     function _selectors(PenaltyFacet) internal pure returns (bytes4[] memory s) {
@@ -653,17 +667,18 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(AmmAuctionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](6);
+        s = new bytes4[](7);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
         s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
         s[3] = AmmAuctionFacet.cancelAuction.selector;
         s[4] = AmmAuctionFacet.getAuction.selector;
         s[5] = AmmAuctionFacet.previewSwap.selector;
+        s[6] = AmmAuctionFacet.addLiquidity.selector;
     }
 
     function _selectors(CommunityAuctionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](12);
+        s = new bytes4[](13);
         s[0] = CommunityAuctionFacet.createCommunityAuction.selector;
         s[1] = CommunityAuctionFacet.joinCommunityAuction.selector;
         s[2] = CommunityAuctionFacet.leaveCommunityAuction.selector;
@@ -676,6 +691,7 @@ contract DeployDiamondScript is Script {
         s[9] = CommunityAuctionFacet.previewJoin.selector;
         s[10] = CommunityAuctionFacet.previewLeave.selector;
         s[11] = CommunityAuctionFacet.getTotalMakers.selector;
+        s[12] = CommunityAuctionFacet.previewCommunitySwap.selector;
     }
 
     function _selectors(AtomicDeskFacet) internal pure returns (bytes4[] memory s) {
@@ -795,6 +811,37 @@ contract DeployDiamondScript is Script {
         s[0] = PositionAgentConfigFacet.setERC6551Registry.selector;
         s[1] = PositionAgentConfigFacet.setERC6551Implementation.selector;
         s[2] = PositionAgentConfigFacet.setIdentityRegistry.selector;
+    }
+
+    function _selectors(ModuleRegistryFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](10);
+        s[0] = ModuleRegistryFacet.registerModule.selector;
+        s[1] = ModuleRegistryFacet.setModuleOwner.selector;
+        s[2] = ModuleRegistryFacet.pauseModule.selector;
+        s[3] = ModuleRegistryFacet.unpauseModule.selector;
+        s[4] = ModuleRegistryFacet.setModuleCreationFee.selector;
+        s[5] = ModuleRegistryFacet.setDefaultModuleAumBps.selector;
+        s[6] = ModuleRegistryFacet.setModuleAumBps.selector;
+        s[7] = ModuleRegistryFacet.setModuleAumBounds.selector;
+        s[8] = ModuleRegistryFacet.setModuleDeactivationGraceEpochs.selector;
+        s[9] = ModuleRegistryFacet.setModuleAciPaused.selector;
+    }
+
+    function _selectors(ModuleGatewayFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](3);
+        s[0] = ModuleGatewayFacet.encumberPosition.selector;
+        s[1] = ModuleGatewayFacet.unencumberPosition.selector;
+        s[2] = ModuleGatewayFacet.pokeModuleAum.selector;
+    }
+
+    function _selectors(ModuleViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = ModuleViewFacet.getModule.selector;
+        s[1] = ModuleViewFacet.getModuleEncumbrance.selector;
+        s[2] = ModuleViewFacet.getModuleEncumbranceForModule.selector;
+        s[3] = ModuleViewFacet.getModuleAumState.selector;
+        s[4] = ModuleViewFacet.getModuleAumConfig.selector;
+        s[5] = ModuleViewFacet.isModuleAciPaused.selector;
     }
 
     function _deployTokensAndPools(
@@ -1109,5 +1156,25 @@ contract DeployDiamondScript is Script {
             defaultPenaltyBps: 500,
             minPaymentBps: 50
         });
+    }
+
+    function deployedDiamond() external view returns (address) {
+        return diamondAddress;
+    }
+
+    function deployedPositionNFT() external view returns (address) {
+        return positionNftAddress;
+    }
+
+    function deployedOptionToken() external view returns (address) {
+        return optionTokenAddress;
+    }
+
+    function deployedFuturesToken() external view returns (address) {
+        return futuresTokenAddress;
+    }
+
+    function deployedMailbox() external view returns (address) {
+        return mailboxAddress;
     }
 }

@@ -78,6 +78,16 @@ error InvalidTokenId(uint256 tokenId);
 error SolvencyViolation(uint256 principal, uint256 debt, uint256 ltvBps);
 error InsufficientPrincipal(uint256 requested, uint256 available);
 error ActiveLoansExist();
+
+// Module encumbrance errors
+error ModuleNotFound(uint256 moduleId);
+error ModulePausedError(uint256 moduleId);
+error ModuleInactive(uint256 moduleId);
+error ModuleRegistrationDisabled();
+error ModuleIncorrectFee(uint256 sent, uint256 required);
+error NotModuleOwner(uint256 moduleId, address caller);
+error ModuleAumOutOfBounds(uint16 bps, uint16 minBps, uint16 maxBps);
+
 // Pool membership validation
 error PoolMembershipRequired(bytes32 positionKey, uint256 poolId);
 error MembershipAlreadyExists(bytes32 positionKey, uint256 poolId);
