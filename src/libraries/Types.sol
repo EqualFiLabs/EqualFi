@@ -110,6 +110,7 @@ library Types {
         uint256 directLent;
         uint256 directOfferEscrow;
         uint256 indexEncumbered;
+        uint256 moduleEncumbered;
         uint256 totalEncumbered;
     }
 

@@ -236,8 +236,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         _autoRollYieldForBorrow(p, positionKey, pid, tokenId);
 
         // Collateral checks - only deposit-backed loans supported
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
-        uint256 encumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 encumbered = LibEncumbrance.total(positionKey, pid);
         uint256 principalBalance = p.userPrincipal[positionKey];
         require(principalBalance >= encumbered, "PositionNFT: locked exceeds principal");
         uint256 collateralValue = principalBalance - encumbered;
@@ -405,8 +404,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         // Verify solvency after expansion using deterministic on-chain data
         // Only deposit-backed loans are supported
         require(loan.depositBacked, "PositionNFT: only deposit-backed loans supported");
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
-        uint256 encumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 encumbered = LibEncumbrance.total(positionKey, pid);
         uint256 principalBalance = p.userPrincipal[positionKey];
         require(principalBalance >= encumbered, "PositionNFT: locked exceeds principal");
         uint256 collateralValue = principalBalance - encumbered;
@@ -538,8 +536,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         uint256 totalFees = actionFee;
 
         // Verify solvency with existing loans using deterministic on-chain data
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
-        uint256 encumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 encumbered = LibEncumbrance.total(positionKey, pid);
         uint256 principalBalance = p.userPrincipal[positionKey];
         require(principalBalance >= encumbered, "PositionNFT: locked exceeds principal");
         uint256 collateralValue = principalBalance - encumbered;

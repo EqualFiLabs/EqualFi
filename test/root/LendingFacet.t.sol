@@ -9,6 +9,7 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
+import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {LoanBelowMinimum, RollingError_MinPayment} from "../../src/libraries/Errors.sol";
@@ -92,6 +93,11 @@ contract LendingFacetHarness is LendingFacet {
         Types.PoolData storage p = s().pools[pid];
         p.userAccruedYield[positionKey] = amount;
         p.yieldReserve = amount;
+    }
+
+    function setModuleEncumbered(bytes32 positionKey, uint256 pid, uint256 moduleId, uint256 amount) external {
+        if (amount == 0) return;
+        LibEncumbrance.encumberModule(positionKey, pid, moduleId, amount);
     }
 
     function getYieldReserve(uint256 pid) external view returns (uint256) {
@@ -196,6 +202,15 @@ contract LendingFacetUnitTest is Test {
         assertGt(debtState.startTime, 0, "active credit start set");
     }
 
+    function test_openRolling_revertsWhenModuleEncumbranceExhaustsCollateral() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
+        facet.setModuleEncumbered(key, PID, 1, 100 ether);
+
+        vm.prank(user);
+        vm.expectRevert(bytes("PositionNFT: no principal"));
+        facet.openRollingFromPosition(tokenId, PID, 1 ether, 1 ether);
+    }
+
     function test_openRolling_autoRollsAccruedYield() public {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
         facet.seedAccruedYield(PID, key, 5 ether);
@@ -287,6 +302,18 @@ contract LendingFacetUnitTest is Test {
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 50 ether, "active credit total after expand");
     }
 
+    function test_expandRolling_revertsWhenModuleEncumbranceExhaustsCollateral() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
+
+        vm.prank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+        facet.setModuleEncumbered(key, PID, 2, 200 ether);
+
+        vm.prank(user);
+        vm.expectRevert(bytes("PositionNFT: no principal"));
+        facet.expandRollingFromPosition(tokenId, PID, 1 ether, 1 ether);
+    }
+
     function test_closeRolling_clearsLoan() public {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
@@ -338,6 +365,15 @@ contract LendingFacetUnitTest is Test {
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
         assertEq(debtState.principal, 50 ether, "active credit principal");
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 50 ether, "active credit total");
+    }
+
+    function test_openFixed_revertsWhenModuleEncumbranceExhaustsCollateral() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
+        facet.setModuleEncumbered(key, PID, 3, 200 ether);
+
+        vm.prank(user);
+        vm.expectRevert(bytes("PositionNFT: no net equity"));
+        facet.openFixedFromPosition(tokenId, PID, 10 ether, 0, 10 ether);
     }
 
     function test_repayFixed_reducesPrincipalRemaining() public {

@@ -107,7 +107,9 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         uint256 borrowerPrincipal = collateralPool.userPrincipal[borrowerKey];
         uint256 locked = LibEncumbrance.position(borrowerKey, offer.collateralPoolId).directLocked;
         if (locked > borrowerPrincipal) revert InsufficientPrincipal(locked, borrowerPrincipal);
-        uint256 available = borrowerPrincipal - locked;
+        uint256 available = LibSolvencyChecks.calculateAvailablePrincipal(
+            collateralPool, borrowerKey, offer.collateralPoolId
+        );
         if (offer.collateralLockAmount > available) revert InsufficientPrincipal(offer.collateralLockAmount, available);
 
         if (offer.borrowAsset == offer.collateralAsset) {

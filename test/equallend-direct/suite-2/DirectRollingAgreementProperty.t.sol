@@ -5,11 +5,14 @@ pragma solidity ^0.8.20;
 import {DirectDiamondTestBase} from "../DirectDiamondTestBase.sol";
 import {DirectTypes} from "../../../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../../../src/mocks/MockERC20.sol";
+import {InsufficientPrincipal} from "../../../src/libraries/Errors.sol";
 
 /// @notice Feature: p2p-rolling-loans, Property 2: Rolling Agreement Initialization Correctness
 /// @notice Validates: Requirements 2.1, 2.2, 2.3
 /// forge-config: default.fuzz.runs = 100
 contract DirectRollingAgreementPropertyTest is DirectDiamondTestBase {
+    bytes32 internal constant ENCUMBRANCE_STORAGE_POSITION = keccak256("equallend.encumbrance.storage");
+
     MockERC20 internal asset;
     address internal lenderOwner = address(0xA11CE);
     address internal borrowerOwner = address(0xB0B);
@@ -58,6 +61,20 @@ contract DirectRollingAgreementPropertyTest is DirectDiamondTestBase {
             _rollingBorrowerOfferParams(ctx.borrowerPositionId, 3, 4);
         BalanceState memory st = _acceptBorrowerOffer(ctx, borrowerParams);
         _assertBorrowerOfferState(ctx, borrowerParams, st);
+    }
+
+    function test_acceptRollingOffer_revertsWhenBorrowerModuleEncumberanceReducesAvailableCollateral() public {
+        RollingContext memory ctx = _setupContext(5, 6, 1, 2, 1_000 ether, 100 ether);
+        DirectTypes.DirectRollingOfferParams memory offerParams = _rollingOfferParams(ctx.lenderPositionId, 1, 2);
+        offerParams.collateralLockAmount = 20 ether;
+        _setModuleEncumbered(ctx.borrowerKey, 2, 90 ether);
+
+        vm.prank(lenderOwner);
+        uint256 offerId = rollingOffers.postRollingOffer(offerParams);
+
+        vm.prank(borrowerOwner);
+        vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, 20 ether, 10 ether));
+        rollingAgreements.acceptRollingOffer(offerId, ctx.borrowerPositionId, 0, 0);
     }
 
     function _setupContext(
@@ -193,5 +210,12 @@ contract DirectRollingAgreementPropertyTest is DirectDiamondTestBase {
             st.borrowerBalanceBefore + borrowerParams.principal - borrowerParams.upfrontPremium,
             "net principal to borrower"
         );
+    }
+
+    function _setModuleEncumbered(bytes32 positionKey, uint256 pid, uint256 amount) internal {
+        bytes32 positionSlot = keccak256(abi.encode(positionKey, ENCUMBRANCE_STORAGE_POSITION));
+        bytes32 encumbranceSlot = keccak256(abi.encode(pid, positionSlot));
+        bytes32 moduleSlot = bytes32(uint256(encumbranceSlot) + 4);
+        vm.store(address(diamond), moduleSlot, bytes32(amount));
     }
 }

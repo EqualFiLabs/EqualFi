@@ -148,14 +148,14 @@ contract PositionViewFacet {
     {
         bytes32 positionKey = _getPositionKey(tokenId);
         LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
-        uint256 totalEncumbered =
-            enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 totalEncumbered = LibEncumbrance.total(positionKey, pid);
 
         encumbrance = Types.PositionEncumbrance({
             directLocked: enc.directLocked,
             directLent: enc.directLent,
             directOfferEscrow: enc.directOfferEscrow,
             indexEncumbered: enc.indexEncumbered,
+            moduleEncumbered: enc.moduleEncumbered,
             totalEncumbered: totalEncumbered
         });
     }
