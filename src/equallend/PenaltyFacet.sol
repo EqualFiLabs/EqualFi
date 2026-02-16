@@ -118,8 +118,7 @@ contract PenaltyFacet is ReentrancyGuardModifiers {
         // Get collateral from userPrincipal[positionKey] (only deposit-backed loans supported)
         require(loan.depositBacked, "PositionNFT: only deposit-backed loans supported");
         uint256 principalBalance = p.userPrincipal[positionKey];
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
-        uint256 encumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 encumbered = LibEncumbrance.total(positionKey, pid);
         if (encumbered >= principalBalance) {
             revert InsufficientPrincipal(encumbered, principalBalance);
         }
@@ -229,8 +228,7 @@ contract PenaltyFacet is ReentrancyGuardModifiers {
 
         // Get collateral from userPrincipal[positionKey]
         uint256 principalBalance = p.userPrincipal[positionKey];
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
-        uint256 encumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 encumbered = LibEncumbrance.total(positionKey, pid);
         if (encumbered >= principalBalance) {
             revert InsufficientPrincipal(encumbered, principalBalance);
         }

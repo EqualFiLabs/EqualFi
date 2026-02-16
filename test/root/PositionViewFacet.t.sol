@@ -83,6 +83,11 @@ contract PositionViewFacetHarness is PositionViewFacet {
         LibEncumbrance.position(key, pid).directLent = amount;
     }
 
+    function setModuleEncumbered(bytes32 key, uint256 pid, uint256 moduleId, uint256 amount) external {
+        if (amount == 0) return;
+        LibEncumbrance.encumberModule(key, pid, moduleId, amount);
+    }
+
     function setIndexEncumbered(bytes32 key, uint256 pid, uint256 indexId, uint256 amount) external {
         // Set desired value by first zeroing (fresh harness) then encumbering
         LibIndexEncumbrance.encumber(key, pid, indexId, amount);
@@ -143,13 +148,15 @@ contract PositionViewFacetTest is Test {
         viewFacet.setDirectLent(key, PID, 4 ether);
         viewFacet.setDirectOfferEscrow(key, PID, 3 ether);
         viewFacet.setIndexEncumbered(key, PID, 1, 7 ether);
+        viewFacet.setModuleEncumbered(key, PID, 2, 11 ether);
 
         Types.PositionEncumbrance memory enc = viewFacet.getPositionEncumbrance(tokenId, PID);
         assertEq(enc.directLocked, 5 ether, "direct locked");
         assertEq(enc.directLent, 4 ether, "direct lent");
         assertEq(enc.directOfferEscrow, 3 ether, "offer escrow");
         assertEq(enc.indexEncumbered, 7 ether, "index encumbrance");
-        assertEq(enc.totalEncumbered, 19 ether, "total encumbered");
+        assertEq(enc.moduleEncumbered, 11 ether, "module encumbrance");
+        assertEq(enc.totalEncumbered, 30 ether, "total encumbered");
     }
 
     function test_getPositionStatesBatchesPools() public {

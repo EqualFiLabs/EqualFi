@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {EnhancedLoanViewFacet} from "../../src/views/EnhancedLoanViewFacet.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {Types} from "../../src/libraries/Types.sol";
+import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 
 contract EnhancedLoanViewFacetHarness is EnhancedLoanViewFacet {
     function initPool(uint256 pid, address underlying, uint16 depositorLtvBps) external {
@@ -22,6 +23,11 @@ contract EnhancedLoanViewFacetHarness is EnhancedLoanViewFacet {
 
     function setUserPrincipal(uint256 pid, bytes32 user, uint256 principal) external {
         LibAppStorage.s().pools[pid].userPrincipal[user] = principal;
+    }
+
+    function setModuleEncumbered(bytes32 user, uint256 pid, uint256 moduleId, uint256 amount) external {
+        if (amount == 0) return;
+        LibEncumbrance.encumberModule(user, pid, moduleId, amount);
     }
 
     function seedRollingLoan(uint256 pid, bytes32 borrower, uint256 principalRemaining) external {
@@ -210,6 +216,31 @@ contract EnhancedLoanViewFacetTest is Test {
         uint256 expectedMaxDebt = (netCollateral * 8000) / 10_000;
         uint256 expectedAvailable = expectedMaxDebt > 20 ether ? expectedMaxDebt - 20 ether : 0;
         assertEq(availableToBorrow, expectedAvailable);
+    }
+
+    function test_moduleEncumbrance_isIncludedAcrossBorrowHealthViews() public {
+        viewFacet.addFixedConfig(PID, 30 days, 0);
+        viewFacet.setUserPrincipal(PID, BORROWER, 100 ether);
+        viewFacet.seedRollingLoan(PID, BORROWER, 20 ether);
+        viewFacet.setModuleEncumbered(BORROWER, PID, 1, 30 ether);
+
+        (uint256 currentLtv,, uint256 availableToBorrow, bool isHealthy,, uint256 totalDebt) =
+            viewFacet.getUserHealthMetrics(PID, BORROWER);
+        assertEq(totalDebt, 20 ether, "debt unchanged");
+        // gross collateral: 100 - 30(module) = 70, then net-equity: 70 - 20(same-asset debt) = 50
+        uint256 expectedCurrentLtv = (uint256(20 ether) * 10_000) / uint256(50 ether);
+        assertEq(currentLtv, expectedCurrentLtv, "ltv uses module-adjusted collateral");
+        assertEq(availableToBorrow, 20 ether, "available borrow uses module-adjusted collateral");
+        assertTrue(isHealthy, "position remains healthy");
+
+        (uint256 maxBorrow, uint256 existingBorrowed) = viewFacet.previewBorrowFixed(PID, BORROWER);
+        assertEq(existingBorrowed, 0, "no fixed loans borrowed yet");
+        assertEq(maxBorrow, 40 ether, "preview borrow uses module-adjusted collateral");
+
+        (bool ok, uint256 maxAllowed, string memory reason) = viewFacet.canOpenFixedLoan(PID, BORROWER, 41 ether, 0);
+        assertFalse(ok, "request above module-adjusted max should fail");
+        assertEq(maxAllowed, 40 ether, "max allowed reflects module-adjusted collateral");
+        assertEq(reason, "Exceeds LTV limit");
     }
 
     function test_previewBorrowFixed_returnsZeroWhenNoFixedConfigs() public {

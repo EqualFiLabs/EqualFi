@@ -136,8 +136,7 @@ contract EnhancedLoanViewFacet {
 
         // Get collateral value (net equity for same-asset domains)
         uint256 grossCollateral = p.userPrincipal[borrower];
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(borrower, pid);
-        uint256 encumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 encumbered = LibEncumbrance.total(borrower, pid);
         if (grossCollateral > encumbered) {
             grossCollateral -= encumbered;
         } else {
@@ -200,8 +199,7 @@ contract EnhancedLoanViewFacet {
 
         // Calculate max borrow based on collateral, LTV, and upfront interest (using term 0)
         uint256 grossCollateral = p.userPrincipal[borrower];
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(borrower, pid);
-        uint256 encumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 encumbered = LibEncumbrance.total(borrower, pid);
         if (grossCollateral > encumbered) {
             grossCollateral -= encumbered;
         } else {
@@ -248,8 +246,7 @@ contract EnhancedLoanViewFacet {
 
         // Check collateral
         uint256 grossCollateral = p.userPrincipal[borrower];
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(borrower, pid);
-        uint256 encumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        uint256 encumbered = LibEncumbrance.total(borrower, pid);
         if (grossCollateral > encumbered) {
             grossCollateral -= encumbered;
         } else {
