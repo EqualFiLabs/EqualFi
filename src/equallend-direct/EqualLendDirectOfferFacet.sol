@@ -102,7 +102,9 @@ contract EqualLendDirectOfferFacet is ReentrancyGuardModifiers, IDirectOfferEven
         if (locked > principal) {
             revert InsufficientPrincipal(locked, principal);
         }
-        uint256 available = principal - locked;
+        uint256 available = LibSolvencyChecks.calculateAvailablePrincipal(
+            collateralPool, positionKey, params.collateralPoolId
+        );
         if (params.collateralLockAmount > available) {
             revert InsufficientPrincipal(params.collateralLockAmount, available);
         }
@@ -559,7 +561,9 @@ function cancelOffer(uint256 offerId) external nonReentrant {
         if (locked > principal) {
             revert InsufficientPrincipal(locked, principal);
         }
-        uint256 available = principal - locked;
+        uint256 available = LibSolvencyChecks.calculateAvailablePrincipal(
+            collateralPool, positionKey, params.collateralPoolId
+        );
         if (params.collateralCap > available) {
             revert InsufficientPrincipal(params.collateralCap, available);
         }
