@@ -118,6 +118,11 @@ contract PenaltyFacetHarness is PenaltyFacet {
         LibEncumbrance.position(positionKey, pid).directOfferEscrow = escrowed;
     }
 
+    function setModuleEncumbered(bytes32 positionKey, uint256 pid, uint256 moduleId, uint256 amount) external {
+        if (amount == 0) return;
+        LibEncumbrance.encumberModule(positionKey, pid, moduleId, amount);
+    }
+
     function getDirectLockedPrincipal(uint256 pid, bytes32 positionKey) external view returns (uint256) {
         return LibEncumbrance.position(positionKey, pid).directLocked;
     }
@@ -433,6 +438,15 @@ contract PenaltyFacetUnitTest is Test {
         facet.penalizePositionRolling(tokenId, PID, enforcer);
     }
 
+    function test_penalizeRolling_revertsWhenModuleEncumberedExceedsPrincipal() public {
+        (uint256 tokenId, bytes32 key) = _mintAndSeed(100 ether);
+        facet.seedRollingLoan(PID, key, 50 ether, 5);
+        facet.setModuleEncumbered(key, PID, 1, 100 ether);
+
+        vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, 100 ether, 100 ether));
+        facet.penalizePositionRolling(tokenId, PID, enforcer);
+    }
+
     function test_penalizeFixed_closesLoanAndClearsMembership() public {
         // Use seedFixedState helper to mirror working harness pattern
         uint256 tokenId = facet.mintFor(address(receiver), PID);
@@ -503,6 +517,16 @@ contract PenaltyFacetUnitTest is Test {
         facet.seedFixedState(PID, address(token), key, 100 ether, 1, 20 ether);
         facet.setDirectLockedPrincipal(PID, key, 90 ether);
         facet.setDirectOfferEscrow(PID, key, 10 ether);
+
+        vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, 100 ether, 100 ether));
+        facet.penalizePositionFixed(tokenId, PID, 1, enforcer);
+    }
+
+    function test_penalizeFixed_revertsWhenModuleEncumberedExceedsPrincipal() public {
+        uint256 tokenId = facet.mintFor(address(receiver), PID);
+        bytes32 key = nft.getPositionKey(tokenId);
+        facet.seedFixedState(PID, address(token), key, 100 ether, 1, 20 ether);
+        facet.setModuleEncumbered(key, PID, 2, 100 ether);
 
         vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, 100 ether, 100 ether));
         facet.penalizePositionFixed(tokenId, PID, 1, enforcer);

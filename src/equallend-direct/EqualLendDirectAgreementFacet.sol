@@ -377,8 +377,11 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         if (locked > borrowerPrincipal) {
             revert InsufficientPrincipal(locked, borrowerPrincipal);
         }
-        if (offer.collateralLockAmount > borrowerPrincipal - locked) {
-            revert InsufficientPrincipal(offer.collateralLockAmount, borrowerPrincipal - locked);
+        uint256 availableCollateral = LibSolvencyChecks.calculateAvailablePrincipal(
+            pool, borrowerKey, offer.collateralPoolId
+        );
+        if (offer.collateralLockAmount > availableCollateral) {
+            revert InsufficientPrincipal(offer.collateralLockAmount, availableCollateral);
         }
 
         if (offer.borrowAsset == offer.collateralAsset) {
@@ -574,7 +577,12 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         if (locked > borrowerPrincipal) revert InsufficientPrincipal(locked, borrowerPrincipal);
         uint256 collateralRequired = Math.mulDiv(principalAmount, offer.priceNumerator, offer.priceDenominator);
         if (collateralRequired == 0) revert DirectError_InvalidRatio();
-        if (collateralRequired > borrowerPrincipal - locked) revert InsufficientPrincipal(collateralRequired, borrowerPrincipal - locked);
+        uint256 availableCollateral = LibSolvencyChecks.calculateAvailablePrincipal(
+            pool, borrowerKey, offer.collateralPoolId
+        );
+        if (collateralRequired > availableCollateral) {
+            revert InsufficientPrincipal(collateralRequired, availableCollateral);
+        }
 
         if (offer.borrowAsset == offer.collateralAsset) {
             uint256 currentBorrowerDebt =

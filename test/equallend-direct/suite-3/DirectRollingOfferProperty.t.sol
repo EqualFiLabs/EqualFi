@@ -5,11 +5,14 @@ import {DirectDiamondTestBase} from "../DirectDiamondTestBase.sol";
 import {EqualLendDirectRollingOfferFacet} from "../../../src/equallend-direct/EqualLendDirectRollingOfferFacet.sol";
 import {DirectTypes} from "../../../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../../../src/mocks/MockERC20.sol";
+import {InsufficientPrincipal} from "../../../src/libraries/Errors.sol";
 
 /// @notice Feature: p2p-rolling-loans, Property 2: Rolling Agreement Initialization Correctness (offer creation preconditions)
 /// @notice Validates: Requirements 1.1, 1.2, 1.3, 1.5, 2.1, 2.2, 2.3
 /// forge-config: default.fuzz.runs = 100
 contract DirectRollingOfferPropertyTest is DirectDiamondTestBase {
+    bytes32 internal constant ENCUMBRANCE_STORAGE_POSITION = keccak256("equallend.encumbrance.storage");
+
     MockERC20 internal asset;
     address internal lenderOwner = address(0xA11CE);
     address internal borrowerOwner = address(0xB0B);
@@ -58,6 +61,39 @@ contract DirectRollingOfferPropertyTest is DirectDiamondTestBase {
         _expectRollingOfferPosted(lenderPositionId);
         vm.prank(lenderOwner);
         rollingOffers.postRollingOffer(_rollingOfferParamsForEvents(lenderPositionId));
+    }
+
+    function test_postBorrowerRollingOffer_revertsWhenModuleEncumberanceReducesAvailableCollateral() public {
+        uint256 lenderPositionId = nft.mint(lenderOwner, 5);
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 6);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 100 ether, true);
+        _setModuleEncumbered(borrowerKey, 2, 90 ether);
+
+        DirectTypes.DirectRollingBorrowerOfferParams memory borrowerParams = DirectTypes.DirectRollingBorrowerOfferParams({
+            borrowerPositionId: borrowerPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(asset),
+            borrowAsset: address(asset),
+            principal: 50 ether,
+            collateralLockAmount: 20 ether,
+            paymentIntervalSeconds: 604_800,
+            rollingApyBps: 750,
+            gracePeriodSeconds: 604_000,
+            maxPaymentCount: 520,
+            upfrontPremium: 0,
+            allowAmortization: false,
+            allowEarlyRepay: true,
+            allowEarlyExercise: true
+        });
+
+        vm.prank(borrowerOwner);
+        vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, 20 ether, 10 ether));
+        rollingOffers.postBorrowerRollingOffer(borrowerParams);
     }
 
     function _postLenderRollingOffer(uint256 lenderPositionId) internal returns (uint256 offerId) {
@@ -177,5 +213,12 @@ contract DirectRollingOfferPropertyTest is DirectDiamondTestBase {
             false,
             5 ether
         );
+    }
+
+    function _setModuleEncumbered(bytes32 positionKey, uint256 pid, uint256 amount) internal {
+        bytes32 positionSlot = keccak256(abi.encode(positionKey, ENCUMBRANCE_STORAGE_POSITION));
+        bytes32 encumbranceSlot = keccak256(abi.encode(pid, positionSlot));
+        bytes32 moduleSlot = bytes32(uint256(encumbranceSlot) + 4);
+        vm.store(address(diamond), moduleSlot, bytes32(amount));
     }
 }

@@ -387,10 +387,8 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         // Get current principal after settlement
         uint256 currentPrincipal = p.userPrincipal[positionKey];
 
-        // Enforce Direct commitments (locked + escrow) remain after withdrawal
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
-        uint256 totalEncumbered =
-            enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        // Enforce unified encumbrance commitments remain after withdrawal.
+        uint256 totalEncumbered = LibEncumbrance.total(positionKey, pid);
 
         // Charge ACTION_WITHDRAW fee from position principal before solvency check
         uint256 feeAmount = LibActionFees.chargeFromUser(p, pid, LibActionFees.ACTION_WITHDRAW, positionKey);
@@ -474,10 +472,8 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
 
         uint256 currentPrincipal = p.userPrincipal[positionKey];
 
-        // Respect Direct commitments
-        LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
-        uint256 totalEncumbered =
-            enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        // Respect unified encumbrance commitments.
+        uint256 totalEncumbered = LibEncumbrance.total(positionKey, pid);
 
         // Charge ACTION_WITHDRAW fee before solvency check
         uint256 feeAmount = LibActionFees.chargeFromUser(p, pid, LibActionFees.ACTION_WITHDRAW, positionKey);

@@ -111,6 +111,11 @@ contract PositionManagementFacetHarness is PositionManagementFacet {
         LibEncumbrance.position(positionKey, pid).directOfferEscrow = escrowed;
     }
 
+    function setModuleEncumbered(bytes32 positionKey, uint256 pid, uint256 moduleId, uint256 amount) external {
+        if (amount == 0) return;
+        LibEncumbrance.encumberModule(positionKey, pid, moduleId, amount);
+    }
+
     function setDirectBorrowed(bytes32 positionKey, uint256 pid, uint256 borrowed) external {
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         ds.directBorrowedPrincipal[positionKey][pid] = borrowed;
@@ -422,6 +427,33 @@ contract PositionManagementFacetUnitTest is Test {
         assertEq(snap.principal, 40 ether, "principal left for direct commitments");
         assertTrue(snap.isMember, "membership retained with commitments");
         assertEq(token.balanceOf(user) - balanceBefore, 60 ether, "withdraws available principal");
+    }
+
+    function test_withdrawFromPosition_blocksModuleEncumberedPrincipal() public {
+        vm.prank(user);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 100 ether, 100 ether, 0);
+        bytes32 key = nft.getPositionKey(tokenId);
+        facet.setModuleEncumbered(key, PID, 1, 80 ether);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(InsufficientPrincipal.selector, 30 ether, 20 ether));
+        facet.withdrawFromPosition(tokenId, PID, 30 ether, 0);
+    }
+
+    function test_closePoolPosition_respectsModuleEncumbrance() public {
+        vm.prank(user);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 100 ether, 100 ether, 0);
+        bytes32 key = nft.getPositionKey(tokenId);
+        facet.setModuleEncumbered(key, PID, 2, 40 ether);
+
+        uint256 balanceBefore = token.balanceOf(user);
+        vm.prank(user);
+        facet.closePoolPosition(tokenId, PID, 0);
+
+        PositionSnapshot memory snap = facet.snapshot(PID, key);
+        assertEq(snap.principal, 40 ether, "principal left for module commitments");
+        assertTrue(snap.isMember, "membership retained with module commitments");
+        assertEq(token.balanceOf(user) - balanceBefore, 60 ether, "withdraws only unencumbered principal");
     }
 
     function test_depositCapEnforcedWithDirectLocks() public {
