@@ -8,7 +8,7 @@ import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStora
 import {PositionAgentViewFacet} from "../../src/erc6551/PositionAgentViewFacet.sol";
 import {IERC165} from "../../src/interfaces/IERC165.sol";
 import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
-import {IERC6551Executable} from "../../src/interfaces/IERC6551Executable.sol";
+import {IERC6551Executable} from "@agent-wallet-core/interfaces/IERC6551Executable.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";

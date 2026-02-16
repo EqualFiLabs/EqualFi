@@ -11,7 +11,7 @@ import {IAccount, IAccountExecute, PackedUserOperation} from "@openzeppelin/cont
 import {NFTBoundMSCA} from "@agent-wallet-core/core/NFTBoundMSCA.sol";
 import {ExecutionManifest, ManifestExecutionFunction, ValidationConfig, ModuleEntity} from "@agent-wallet-core/libraries/ModuleTypes.sol";
 import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
-import {IERC6551Executable} from "../../src/interfaces/IERC6551Executable.sol";
+import {IERC6551Executable} from "@agent-wallet-core/interfaces/IERC6551Executable.sol";
 import {IERC6900Account} from "@agent-wallet-core/interfaces/IERC6900Account.sol";
 import {IERC6900ExecutionModule} from "@agent-wallet-core/interfaces/IERC6900ExecutionModule.sol";
 import {IERC6900Module} from "@agent-wallet-core/interfaces/IERC6900Module.sol";
