@@ -18,7 +18,7 @@ import {PositionAgentTBAFacet} from "../../src/erc6551/PositionAgentTBAFacet.sol
 import {PositionAgentRegistryFacet} from "../../src/erc6551/PositionAgentRegistryFacet.sol";
 import {PositionAgentConfigFacet} from "../../src/erc6551/PositionAgentConfigFacet.sol";
 import {PositionMSCAImpl} from "../../src/erc6900/PositionMSCAImpl.sol";
-import {IERC6551Executable} from "../../src/interfaces/IERC6551Executable.sol";
+import {IERC6551Executable} from "@agent-wallet-core/interfaces/IERC6551Executable.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";

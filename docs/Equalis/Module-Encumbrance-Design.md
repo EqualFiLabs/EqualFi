@@ -1,57 +1,37 @@
-# Public Module Encumbrance - Design Document
+# Module Encumbrance - Implemented Specification
 
-**Version:** 0.3
-
----
+**Version:** 1.0  
+**Status:** Implemented
 
 ## Overview
 
-This document defines V1 module encumbrance for Equalis with reservation semantics and mandatory module AUM.
+Module encumbrance is live as a reservation system over Position NFT principal. A reservation is tracked per tuple:
 
-V1 rules:
-- Encumbered principal is reserved and non-reusable.
-- Encumbrance changes only via `encumber` and `unencumber`.
-- No generic escrow mutation path.
-- Module AUM accrues on tuple encumbered amount only (`positionKey/poolId/moduleId`).
-- AUM routes through standard protocol fee rails (Treasury/ACI/FI split via fee router path).
+- `positionKey`
+- `poolId`
+- `moduleId`
 
-## Goals
+Reserved principal remains in protocol custody and is non-reusable while encumbered. The system also applies a tuple-scoped AUM fee that accrues in whole-day epochs.
 
-- Permissionless module registration with configurable creation fee.
-- Position-scoped module encumbrance that integrates with solvency checks.
-- Mandatory module AUM with deterministic 1-day epoch accrual.
-- Permissionless poke function for liveness.
-- Permanent module deactivation safeguard for catastrophic shortfall.
+## Contract Surface
 
-## Non-Goals
+### Facets
 
-- External adapter escrow in V1.
-- Arbitrary module escrow accounting.
-- Oracle-based module risk controls.
+| Facet | Responsibility | Main Functions |
+|---|---|---|
+| `ModuleRegistryFacet` | Module registration and governance controls | `registerModule`, `setModuleOwner`, `pauseModule`, `unpauseModule`, `setModuleCreationFee`, `setDefaultModuleAumBps`, `setModuleAumBps`, `setModuleAumBounds`, `setModuleDeactivationGraceEpochs`, `setModuleAciPaused` |
+| `ModuleGatewayFacet` | Encumber/unencumber execution and AUM poke | `encumberPosition`, `unencumberPosition`, `pokeModuleAum` |
+| `ModuleViewFacet` | Read-only module, encumbrance, and AUM state | `getModule`, `getModuleEncumbrance`, `getModuleEncumbranceForModule`, `getModuleAumState`, `getModuleAumConfig`, `isModuleAciPaused` |
 
-## Architecture
+### Core Libraries
 
-### Facets/Libraries
-
-```
-src/modules/
-├── ModuleRegistryFacet.sol
-├── ModuleGatewayFacet.sol
-├── ModuleViewFacet.sol
-
-src/libraries/
-├── LibModuleRegistry.sol
-├── LibModuleEncumbrance.sol
-├── LibModuleAum.sol
-```
-
-### Core Integrations
-
-- `LibEncumbrance`: add `moduleEncumbered` and `encumberedByModule`.
-- `LibSolvencyChecks`: include module encumbrance in available principal.
-- `LibFeeTreasury`/`LibFeeRouter`: route module AUM with standard splits.
-- `LibActiveCreditIndex`: module encumbrance increase/decrease, gated by global ACI pause for increases.
-- `LibPoolMembership`: block cleanup while module encumbrance exists.
+| Library | Responsibility |
+|---|---|
+| `LibModuleRegistry` | Module config storage, tuple AUM state storage, events |
+| `LibModuleEncumbrance` | Thin wrapper around module encumbrance getters/mutations |
+| `LibModuleAum` | Epoch accrual, principal charging, delinquency and deactivation |
+| `LibEncumbrance` | Unified encumbrance storage, includes `moduleEncumbered` and per-module bucket |
+| `LibSolvencyChecks` | Available principal calculation used by module encumbering paths |
 
 ## Data Model
 
@@ -59,11 +39,11 @@ src/libraries/
 
 ```solidity
 struct Module {
-    address owner;      // EOA or contract
+    address owner;
     bytes32 metadataHash;
     bool paused;
-    bool inactive;      // terminal
-    uint16 aumBps;      // governance-controlled
+    bool inactive;
+    uint16 aumBps;
 }
 ```
 
@@ -87,12 +67,9 @@ struct TupleAumState {
     uint64 delinquentSince;
     uint256 lastShortfall;
 }
-
-mapping(bytes32 => mapping(uint256 => mapping(uint256 => TupleAumState))) tupleAum;
-// positionKey => poolId => moduleId => state
 ```
 
-### Encumbrance Extension
+### Encumbrance Storage Extension
 
 ```solidity
 struct Encumbrance {
@@ -106,123 +83,227 @@ struct Encumbrance {
 mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByModule;
 ```
 
-## Lifecycle
+## Registration and Administration
 
-### 1) Register Module
+### `registerModule(metadataHash)`
 
-- `registerModule(metadataHash)`.
-- Non-governance pays exact `moduleCreationFee`; governance bypass allowed.
-- Fee routed to treasury.
-- Module owner set to caller.
+- Module IDs are monotonic and start at `1`.
+- Governance callers (`owner` or `timelock`) must send `0` ETH.
+- Non-governance callers must send exactly `moduleCreationFee`.
+- If `moduleCreationFee == 0`, non-governance registration is disabled.
+- Public registration fee is transferred to treasury.
+- New modules initialize with:
+  - `owner = msg.sender`
+  - `paused = false`
+  - `inactive = false`
+  - `aumBps = defaultModuleAumBps`
 
-### 2) Encumber
+### Ownership and Pause Controls
 
-- Validate module exists, not paused, not inactive.
-- Validate position authorization.
-- Accrue tuple AUM first.
-- Validate available principal.
-- Increase tuple module encumbrance.
-- Apply ACI increase only when `moduleAciPaused == false`.
+- `setModuleOwner`: only current module owner.
+- `pauseModule` and `unpauseModule`: module owner or governance.
+- Inactive modules cannot be unpaused.
 
-### 3) Unencumber
+### Governance Knobs
 
-- Validate module exists.
-- Validate position authorization.
-- Accrue tuple AUM first.
-- Decrease tuple module encumbrance.
-- Apply ACI decrease.
+- `setModuleCreationFee`
+- `setDefaultModuleAumBps`
+- `setModuleAumBps`
+- `setModuleAumBounds`
+- `setModuleDeactivationGraceEpochs`
+- `setModuleAciPaused`
 
-Important: unencumber remains callable even if module is paused or inactive.
+`setDefaultModuleAumBps` and `setModuleAumBps` enforce configured min/max bounds.
 
-### 4) Poke AUM (Permissionless)
+## Encumbrance Lifecycle
 
-- Anyone calls `pokeModuleAum(positionId,poolId,moduleId)`.
-- Accrues tuple AUM and updates delinquency/deactivation state.
-- No position ownership required.
+### `encumberPosition(positionId, poolId, moduleId, amount)`
 
-## Module AUM
+Execution order:
 
-### Epoch Model
+1. Require module exists and is not paused/inactive.
+2. Require caller owns `positionId`.
+3. Require pool is initialized and the position is already a member of the pool.
+4. Accrue tuple AUM before mutating encumbrance.
+5. Check available principal with `LibSolvencyChecks.calculateAvailablePrincipal(...)`.
+6. Increase tuple module encumbrance.
+7. Increase Active Credit encumbrance weight unless global module ACI pause is enabled.
+
+### `unencumberPosition(positionId, poolId, moduleId, amount)`
+
+Execution order:
+
+1. Require module exists.
+2. Require caller owns `positionId`.
+3. Require pool initialized and position membership.
+4. Accrue tuple AUM before mutation.
+5. Decrease tuple module encumbrance (underflow-protected).
+6. Always apply Active Credit decrease.
+
+`unencumberPosition` is allowed even if the module is paused or inactive.
+
+### `pokeModuleAum(positionId, poolId, moduleId)`
+
+- Permissionless.
+- Requires only: module exists, position token exists, pool initialized.
+- No ownership or membership requirement.
+- Runs tuple AUM accrual without mutating encumbrance.
+
+## AUM Accrual Semantics
+
+### Epoching
 
 - Epoch length: `1 days`.
-- Triggered on `encumber`, `unencumber`, and `poke`.
-- First touch initializes `lastAumEpoch` and does not retro-charge.
+- Epoch anchor: `currentEpochStart = floor(block.timestamp / 1 days) * 1 days`.
+- Pending epochs count only whole elapsed days.
 
-### Formula
+### First Touch Behavior
+
+If `lastAumEpoch == 0`, accrual sets `lastAumEpoch = currentEpochStart` and returns with no fee charged.
+
+### Fee Formula
 
 ```solidity
-epochs = (block.timestamp - lastAumEpoch) / 1 days;
-feeDue = encumbered * aumBps * epochs / (365 * 10_000);
+epochs = (currentEpochStart - lastAumEpoch) / 1 days;
+feeDue = (encumbered * aumBps * epochs) / (365 * 10_000);
 ```
 
-where `encumbered = encumberedByModule[positionKey][poolId][moduleId]`.
+Where:
 
-### Charge + Route
+- `encumbered = encumberedByModule[positionKey][poolId][moduleId]`
+- `aumBps = module.aumBps` unless `module.aumBps == 0`, then `defaultModuleAumBps`
 
-- `chargeablePrincipal = min(userPrincipal[positionKey], encumbered)`.
-- If `feeDue <= chargeablePrincipal`:
-  - debit `userPrincipal` and `totalDeposits` by `feeDue`.
-  - route via `LibFeeTreasury.accrueWithTreasuryFromPrincipal(..., MODULE_AUM_SOURCE)`.
-- Advance epoch checkpoint by elapsed full epochs.
+### Charging and Routing
 
-## Deactivation Safeguard
+For each accrual:
 
-If `feeDue > chargeablePrincipal`:
+1. `LibFeeIndex.settle(poolId, positionKey)` is called first.
+2. `chargeablePrincipal = min(userPrincipal[positionKey], encumbered)`.
+3. `charged = min(feeDue, chargeablePrincipal)`.
+4. Principal accounting decreases:
+   - `userPrincipal -= charged`
+   - `totalDeposits -= charged`
+5. Fee routing uses `LibFeeTreasury.accrueWithTreasuryFromPrincipal(..., MODULE_AUM_FEE)`.
+6. `trackedBalance` and `nativeTrackedTotal` are reduced by the treasury-transfer portion only.
 
-1. Charge up to `chargeablePrincipal` if nonzero.
-2. Mark tuple delinquent and emit delinquency event.
-3. If delinquency persists for `deactivationGraceEpochs` and shortfall remains on later accrual, set `module.inactive = true` permanently.
-4. Emit `ModulePermanentlyDeactivated`.
+## Delinquency and Permanent Deactivation
 
-Inactive module behavior:
-- New `encumber` reverts forever.
-- No reactivation path.
-- `unencumber` and `poke` remain callable.
-- No future module-driven ACI increases.
+If `feeDue > charged`, the tuple has shortfall:
 
-## ACI Policy
+- Tuple state is marked delinquent.
+- `delinquentSince` is set on first delinquent accrual.
+- `lastShortfall` is updated.
 
-- Per-module `aciEligible` is removed.
-- Global governance/admin switch: `setModuleAciPaused(bool)`.
-- When paused: module encumbrance increases do not add ACI exposure.
-- Decreases still apply on unencumber.
+If shortfall persists on subsequent delinquent accruals and elapsed delinquent epochs meet `deactivationGraceEpochs`, the module is permanently deactivated:
 
-## Governance/Admin Knobs
+- `module.inactive = true` (global module flag, not tuple-local).
+- No reactivation path exists.
+- New encumbrance is blocked forever.
+- Unencumber and poke remain callable.
 
-- `setModuleCreationFee(uint256)`
-- `setDefaultModuleAumBps(uint16)`
-- `setModuleAumBps(uint256 moduleId, uint16)`
-- `setModuleAumBounds(uint16 minBps, uint16 maxBps)`
-- `setModuleDeactivationGraceEpochs(uint16)`
-- `setModuleAciPaused(bool)`
+If a later accrual has no shortfall, tuple delinquency state is cleared.
 
-AUM setters must enforce bounds.
+## Active Credit Policy
 
-## Security Considerations
+- Module encumbrance increases contribute to Active Credit only when `moduleAciPaused == false`.
+- Module encumbrance decreases always reduce Active Credit principal.
+- This is a global switch, not per-module.
 
-- Permissionless poke must not become a free deactivation grief vector:
-  - deactivation requires persisted delinquency through grace window.
-- Pause/inactive states must never trap user exits.
-- Namespace isolation between module and index encumbrance is mandatory.
-- Native invariant must hold: `nativeTrackedTotal <= address(this).balance`.
+## Current Integration Boundary
 
-## Testing and Validation
+Module encumbrance is included in available-principal math used by:
 
-- Unit tests:
-  - registration and owner/admin controls,
-  - AUM bounds and ACI pause control,
-  - first-touch no-retro-charge,
-  - unencumber allowed while paused/inactive,
-  - delinquency and terminal deactivation.
-- Property tests:
-  - principal availability conservation,
-  - deterministic epoch accrual,
-  - AUM base isolation to tuple encumbrance,
-  - ACI pause gates increases only,
-  - module/index namespace isolation,
-  - native tracked invariant.
+- `ModuleGatewayFacet.encumberPosition`
+- `EqualIndexPositionFacet.mintFromPosition`
+- `LibSolvencyChecks.calculateAvailablePrincipal`
 
-## Open Questions
+Legacy paths that still compute encumbrance as direct + index (without module) include:
 
-- Should grace epochs be global-only or allow per-module override?
-- Should delinquency view expose cumulative shortfall history or only latest shortfall?
+- `PositionManagementFacet.withdrawFromPosition`
+- `PositionManagementFacet.closePoolPosition`
+- `LendingFacet` collateral checks
+- `PenaltyFacet` collateral checks
+- `PositionViewFacet.getPositionEncumbrance`
+- `EnhancedLoanViewFacet` collateral views
+
+Operationally, module encumbrance is fully tracked and queryable through module-specific views, but those legacy read/withdraw paths do not yet consume the module bucket.
+
+## View APIs
+
+### Module Metadata
+
+- `getModule(moduleId)` -> owner, metadata hash, paused, inactive, AUM bps.
+
+### Encumbrance
+
+- `getModuleEncumbrance(positionId, poolId)` -> total module encumbrance for position/pool.
+- `getModuleEncumbranceForModule(positionId, poolId, moduleId)` -> tuple amount.
+
+### AUM State
+
+- `getModuleAumState(...)` returns:
+  - `lastAccruedEpoch`
+  - `pendingEpochs_`
+  - `delinquent`
+  - `delinquentSince`
+  - `lastShortfall`
+  - `graceEpochs`
+  - `delinquentEpochs_`
+  - `graceSatisfied`
+
+### Config
+
+- `getModuleAumConfig()` -> default/min/max AUM bps and grace epochs.
+- `isModuleAciPaused()` -> global ACI pause for module encumbrance increases.
+
+## Events
+
+### Registry and AUM
+
+- `ModuleRegistered`
+- `ModuleOwnerUpdated`
+- `ModulePauseUpdated`
+- `ModuleAumAccrued`
+- `ModuleAumDelinquent`
+- `ModulePermanentlyDeactivated`
+- `ModuleAciPauseToggled`
+
+### Encumbrance
+
+- `ModuleEncumbranceIncreased`
+- `ModuleEncumbranceDecreased`
+
+## Key Errors
+
+- `ModuleNotFound`
+- `ModulePausedError`
+- `ModuleInactive`
+- `ModuleRegistrationDisabled`
+- `ModuleIncorrectFee`
+- `NotModuleOwner`
+- `ModuleAumOutOfBounds`
+- `InvalidAumFeeBounds`
+- `InsufficientUnencumberedPrincipal`
+- `EncumbranceUnderflow`
+
+Common shared errors can also bubble from ownership, pool initialization, and membership checks.
+
+## Security and Invariants
+
+- Reservation-only: encumber/unencumber does not transfer assets by itself.
+- Namespace isolation: module and index encumbrance are tracked independently.
+- Membership cleanup is blocked while `moduleEncumbered > 0`.
+- Native pools maintain `nativeTrackedTotal <= address(this).balance` in tested module-AUM paths.
+
+## Test Coverage (Current Suite)
+
+Module behavior is validated by:
+
+- `test/modules/ModuleRegistryFacet.t.sol`
+- `test/modules/ModuleGatewayFacet.t.sol`
+- `test/modules/ModuleViewFacet.t.sol`
+- `test/modules/ModuleEncumbranceProperty.t.sol`
+- `test/libraries/LibModuleAum.t.sol`
+- `test/libraries/LibModuleEncumbrance.t.sol`
+- `test/libraries/LibEncumbranceModuleNamespace.t.sol`
+- `test/root/LibSolvencyChecksProperty.t.sol`
