@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {LibPositionAgentStorage} from "../libraries/LibPositionAgentStorage.sol";
-import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
-import {DirectError_InvalidPositionNFT} from "../libraries/Errors.sol";
+import {LibPositionAgentStorage} from "../../libraries/LibPositionAgentStorage.sol";
+import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
+import {DirectError_InvalidPositionNFT} from "../../libraries/Errors.sol";
 import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 /// @title PositionAgentTBAFacet
