@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {LibPositionAgentStorage} from "../libraries/LibPositionAgentStorage.sol";
-import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
-import {DirectError_InvalidPositionNFT} from "../libraries/Errors.sol";
+import {LibPositionAgentStorage} from "../../libraries/LibPositionAgentStorage.sol";
+import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
+import {DirectError_InvalidPositionNFT} from "../../libraries/Errors.sol";
 import {IERC165} from "@agent-wallet-core/interfaces/IERC165.sol";
 import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
 import {IERC6551Executable} from "@agent-wallet-core/interfaces/IERC6551Executable.sol";

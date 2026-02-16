@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
-import {PositionAgentViewFacet} from "../../src/erc6551/PositionAgentViewFacet.sol";
+import {PositionAgentViewFacet} from "../../src/agent-wallet/erc6551/PositionAgentViewFacet.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {MockBeacon} from "../helpers/MockBeacon.sol";
 

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
-import {PositionAgentConfigFacet} from "../../src/erc6551/PositionAgentConfigFacet.sol";
+import {PositionAgentConfigFacet} from "../../src/agent-wallet/erc6551/PositionAgentConfigFacet.sol";
 import {PositionAgent_NotAdmin} from "../../src/libraries/PositionAgentErrors.sol";
 
 contract PositionAgentConfigFacetHarness is PositionAgentConfigFacet {

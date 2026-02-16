@@ -10,7 +10,7 @@ import {FuturesToken} from "../../src/derivatives/FuturesToken.sol";
 import {EqualIndexViewFacetV3} from "../../src/views/EqualIndexViewFacetV3.sol";
 import {ConfigViewFacet} from "../../src/views/ConfigViewFacet.sol";
 import {SettlementEscrowFacet} from "../../src/EqualX/SettlementEscrowFacet.sol";
-import {PositionAgentViewFacet} from "../../src/erc6551/PositionAgentViewFacet.sol";
+import {PositionAgentViewFacet} from "../../src/agent-wallet/erc6551/PositionAgentViewFacet.sol";
 import {FlashLoanFacet} from "../../src/equallend/FlashLoanFacet.sol";
 import {AdminGovernanceFacet} from "../../src/admin/AdminGovernanceFacet.sol";
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
