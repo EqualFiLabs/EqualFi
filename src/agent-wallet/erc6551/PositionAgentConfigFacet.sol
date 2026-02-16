@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {LibAccess} from "../libraries/LibAccess.sol";
-import {LibPositionAgentStorage} from "../libraries/LibPositionAgentStorage.sol";
-import {PositionAgent_NotAdmin} from "../libraries/PositionAgentErrors.sol";
+import {LibAccess} from "../../libraries/LibAccess.sol";
+import {LibPositionAgentStorage} from "../../libraries/LibPositionAgentStorage.sol";
+import {PositionAgent_NotAdmin} from "../../libraries/PositionAgentErrors.sol";
 import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 /// @title PositionAgentConfigFacet
