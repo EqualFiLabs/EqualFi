@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
-import {PositionAgentViewFacet} from "../../src/erc6551/PositionAgentViewFacet.sol";
+import {PositionAgentViewFacet} from "../../src/agent-wallet/erc6551/PositionAgentViewFacet.sol";
 import {IERC165} from "../../src/interfaces/IERC165.sol";
 import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
 import {IERC6551Executable} from "@agent-wallet-core/interfaces/IERC6551Executable.sol";

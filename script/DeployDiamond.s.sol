@@ -61,16 +61,16 @@ import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {Types} from "../src/libraries/Types.sol";
 import {OptionToken} from "../src/derivatives/OptionToken.sol";
 import {FuturesToken} from "../src/derivatives/FuturesToken.sol";
-import {PositionAgentTBAFacet} from "../src/erc6551/PositionAgentTBAFacet.sol";
-import {PositionAgentRegistryFacet} from "../src/erc6551/PositionAgentRegistryFacet.sol";
-import {PositionAgentViewFacet} from "../src/erc6551/PositionAgentViewFacet.sol";
-import {PositionAgentConfigFacet} from "../src/erc6551/PositionAgentConfigFacet.sol";
+import {PositionAgentTBAFacet} from "../src/agent-wallet/erc6551/PositionAgentTBAFacet.sol";
+import {PositionAgentRegistryFacet} from "../src/agent-wallet/erc6551/PositionAgentRegistryFacet.sol";
+import {PositionAgentViewFacet} from "../src/agent-wallet/erc6551/PositionAgentViewFacet.sol";
+import {PositionAgentConfigFacet} from "../src/agent-wallet/erc6551/PositionAgentConfigFacet.sol";
 import {ModuleRegistryFacet} from "../src/modules/ModuleRegistryFacet.sol";
 import {ModuleGatewayFacet} from "../src/modules/ModuleGatewayFacet.sol";
 import {ModuleViewFacet} from "../src/modules/ModuleViewFacet.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
-import {PositionMSCAImpl} from "../src/erc6900/PositionMSCAImpl.sol";
+import {PositionMSCAImpl} from "../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);

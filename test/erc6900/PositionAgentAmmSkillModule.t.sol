@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 
-import {PositionAgentAmmSkillModule, LibAmmSkillStorage, IAmmAuctionFacet, IPositionManagementFacet} from "../../src/erc6900/PositionAgentAmmSkillModule.sol";
+import {PositionAgentAmmSkillModule, LibAmmSkillStorage, IAmmAuctionFacet, IPositionManagementFacet} from "../../src/agent-wallet/erc6900/PositionAgentAmmSkillModule.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol";
 
