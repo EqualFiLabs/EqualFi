@@ -68,6 +68,8 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
     error AmmSkill_DurationOutOfBounds(uint64 duration, uint64 min, uint64 max);
     error AmmSkill_FeeOutOfBounds(uint16 feeBps, uint16 minFeeBps, uint16 maxFeeBps);
     error AmmSkill_ReserveOutOfBounds(uint256 reserve, uint256 minReserve, uint256 maxReserve);
+    error AmmSkill_InvalidDependency(address dependency);
+    error AmmSkill_InvalidPolicyConfig();
     error AmmSkill_PositionIdMismatch(uint256 expectedTokenId, uint256 providedPositionId);
     error AmmSkill_AuctionNotForThisPosition(uint256 auctionId, uint256 expectedTokenId, uint256 makerPositionId);
 
@@ -217,6 +219,7 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
 
     function setDiamond(address diamond) external {
         _requireOwner();
+        _requireContractDependency(diamond);
         LibAmmSkillStorage.Layout storage ds = LibAmmSkillStorage.layout();
         address previous = ds.diamond;
         ds.diamond = diamond;
@@ -225,6 +228,7 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
 
     function setAuctionPolicy(LibAmmSkillStorage.AuctionPolicy calldata policy) external {
         _requireOwner();
+        _enforceAuctionPolicyConfig(policy);
         LibAmmSkillStorage.Layout storage ds = LibAmmSkillStorage.layout();
         ds.auctionPolicy = policy;
         emit AuctionPolicyUpdated(
@@ -278,6 +282,30 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
         address owner = IERC6551Account(address(this)).owner();
         if (msg.sender != owner) {
             revert AmmSkill_Unauthorized(msg.sender);
+        }
+    }
+
+    function _requireContractDependency(address dependency) internal view {
+        if (dependency == address(0) || dependency.code.length == 0) {
+            revert AmmSkill_InvalidDependency(dependency);
+        }
+    }
+
+    function _enforceAuctionPolicyConfig(LibAmmSkillStorage.AuctionPolicy calldata policy) internal pure {
+        if (policy.maxDuration != 0 && policy.minDuration > policy.maxDuration) {
+            revert AmmSkill_InvalidPolicyConfig();
+        }
+        if (policy.minFeeBps > 10_000 || policy.maxFeeBps > 10_000) {
+            revert AmmSkill_InvalidPolicyConfig();
+        }
+        if (policy.maxFeeBps != 0 && policy.minFeeBps > policy.maxFeeBps) {
+            revert AmmSkill_InvalidPolicyConfig();
+        }
+        if (policy.maxReserveA != 0 && policy.minReserveA > policy.maxReserveA) {
+            revert AmmSkill_InvalidPolicyConfig();
+        }
+        if (policy.maxReserveB != 0 && policy.minReserveB > policy.maxReserveB) {
+            revert AmmSkill_InvalidPolicyConfig();
         }
     }
 

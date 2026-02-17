@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
 import {PositionAgentConfigFacet} from "../../src/agent-wallet/erc6551/PositionAgentConfigFacet.sol";
-import {PositionAgent_NotAdmin} from "../../src/libraries/PositionAgentErrors.sol";
+import {PositionAgent_InvalidConfigAddress, PositionAgent_NotAdmin} from "../../src/libraries/PositionAgentErrors.sol";
 
 contract PositionAgentConfigFacetHarness is PositionAgentConfigFacet {
     function getConfig()
@@ -25,6 +25,7 @@ contract PositionAgentConfigPropertyTest is Test {
     address private attacker = address(0xBEEF);
 
     bytes32 private constant DIAMOND_SLOT = keccak256("diamond.standard.diamond.storage");
+    bytes private constant MIN_RUNTIME = hex"00";
 
     function setUp() public {
         facet = new PositionAgentConfigFacetHarness();
@@ -36,9 +37,12 @@ contract PositionAgentConfigPropertyTest is Test {
     /// @notice Admin can set registry addresses; non-admin cannot
     /// @notice **Validates: Requirements 9.1, 9.2, 9.3, 9.5**
     function testProperty_ConfigurationManagement(address reg, address impl, address id) public {
-        vm.assume(reg != address(0));
-        vm.assume(impl != address(0));
-        vm.assume(id != address(0));
+        _assumeWritableAddress(reg);
+        _assumeWritableAddress(impl);
+        _assumeWritableAddress(id);
+        vm.etch(reg, MIN_RUNTIME);
+        vm.etch(impl, MIN_RUNTIME);
+        vm.etch(id, MIN_RUNTIME);
 
         vm.startPrank(owner);
         vm.expectEmit(true, true, false, true);
@@ -63,5 +67,37 @@ contract PositionAgentConfigPropertyTest is Test {
         vm.expectRevert(abi.encodeWithSelector(PositionAgent_NotAdmin.selector, attacker));
         facet.setERC6551Registry(address(0x1234));
         vm.stopPrank();
+    }
+
+    function test_configSetters_revertForZeroAddress() public {
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSelector(PositionAgent_InvalidConfigAddress.selector, address(0)));
+        facet.setERC6551Registry(address(0));
+        vm.expectRevert(abi.encodeWithSelector(PositionAgent_InvalidConfigAddress.selector, address(0)));
+        facet.setERC6551Implementation(address(0));
+        vm.expectRevert(abi.encodeWithSelector(PositionAgent_InvalidConfigAddress.selector, address(0)));
+        facet.setIdentityRegistry(address(0));
+        vm.stopPrank();
+    }
+
+    function test_configSetters_revertForNonContract() public {
+        address eoa = address(0x1234);
+        assertEq(eoa.code.length, 0, "test precondition: EOA has no bytecode");
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSelector(PositionAgent_InvalidConfigAddress.selector, eoa));
+        facet.setERC6551Registry(eoa);
+        vm.expectRevert(abi.encodeWithSelector(PositionAgent_InvalidConfigAddress.selector, eoa));
+        facet.setERC6551Implementation(eoa);
+        vm.expectRevert(abi.encodeWithSelector(PositionAgent_InvalidConfigAddress.selector, eoa));
+        facet.setIdentityRegistry(eoa);
+        vm.stopPrank();
+    }
+
+    function _assumeWritableAddress(address candidate) internal {
+        vm.assume(candidate != address(0));
+        vm.assume(candidate != address(facet));
+        vm.assume(candidate != owner);
+        vm.assume(candidate != attacker);
+        vm.assume(uint160(candidate) > 9); // avoid precompiles
     }
 }

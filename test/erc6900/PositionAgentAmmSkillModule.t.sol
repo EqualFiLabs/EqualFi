@@ -13,6 +13,8 @@ contract PositionAgentAmmSkillModuleTest is Test {
     bytes4 internal constant POSITION_ID_MISMATCH = bytes4(keccak256("AmmSkill_PositionIdMismatch(uint256,uint256)"));
     bytes4 internal constant AUCTION_NOT_FOR_THIS_POSITION =
         bytes4(keccak256("AmmSkill_AuctionNotForThisPosition(uint256,uint256,uint256)"));
+    bytes4 internal constant INVALID_DEPENDENCY = bytes4(keccak256("AmmSkill_InvalidDependency(address)"));
+    bytes4 internal constant INVALID_POLICY = bytes4(keccak256("AmmSkill_InvalidPolicyConfig()"));
 
     address internal owner = address(0xA11CE);
 
@@ -106,6 +108,63 @@ contract PositionAgentAmmSkillModuleTest is Test {
         assertTrue(diamond.cancelled());
     }
 
+    function test_setDiamond_revertsOnZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_DEPENDENCY, address(0)));
+        PositionAgentAmmSkillModule(address(account)).setDiamond(address(0));
+    }
+
+    function test_setDiamond_revertsOnNonContractAddress() public {
+        address eoa = address(0x1234);
+        assertEq(eoa.code.length, 0, "test precondition: EOA has no code");
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_DEPENDENCY, eoa));
+        PositionAgentAmmSkillModule(address(account)).setDiamond(eoa);
+    }
+
+    function test_setAuctionPolicy_revertsOnInvalidDurationBounds() public {
+        LibAmmSkillStorage.AuctionPolicy memory policy = _defaultPolicy();
+        policy.minDuration = 101;
+        policy.maxDuration = 100;
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_POLICY));
+        PositionAgentAmmSkillModule(address(account)).setAuctionPolicy(policy);
+    }
+
+    function test_setAuctionPolicy_revertsOnInvalidFeeBoundsOrCap() public {
+        LibAmmSkillStorage.AuctionPolicy memory policy = _defaultPolicy();
+        policy.minFeeBps = 6_000;
+        policy.maxFeeBps = 5_000;
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_POLICY));
+        PositionAgentAmmSkillModule(address(account)).setAuctionPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.maxFeeBps = 10_001;
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_POLICY));
+        PositionAgentAmmSkillModule(address(account)).setAuctionPolicy(policy);
+    }
+
+    function test_setAuctionPolicy_revertsOnInvalidReserveBounds() public {
+        LibAmmSkillStorage.AuctionPolicy memory policy = _defaultPolicy();
+        policy.minReserveA = 11;
+        policy.maxReserveA = 10;
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_POLICY));
+        PositionAgentAmmSkillModule(address(account)).setAuctionPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.minReserveB = 21;
+        policy.maxReserveB = 20;
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_POLICY));
+        PositionAgentAmmSkillModule(address(account)).setAuctionPolicy(policy);
+    }
+
     function _defaultAuctionParams() internal view returns (DerivativeTypes.CreateAuctionParams memory) {
         return DerivativeTypes.CreateAuctionParams({
             positionId: 1,
@@ -117,6 +176,22 @@ contract PositionAgentAmmSkillModuleTest is Test {
             endTime: 200,
             feeBps: 30,
             feeAsset: DerivativeTypes.FeeAsset.TokenIn
+        });
+    }
+
+    function _defaultPolicy() internal pure returns (LibAmmSkillStorage.AuctionPolicy memory policy) {
+        policy = LibAmmSkillStorage.AuctionPolicy({
+            enabled: true,
+            allowCancel: true,
+            enforcePoolAllowlist: false,
+            minDuration: 0,
+            maxDuration: 0,
+            minFeeBps: 0,
+            maxFeeBps: 0,
+            minReserveA: 0,
+            maxReserveA: 0,
+            minReserveB: 0,
+            maxReserveB: 0
         });
     }
 }
