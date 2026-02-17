@@ -118,16 +118,22 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         address quoteToken = baseIsA ? imm.tokenB : imm.tokenA;
 
         uint256 received = LibCurrency.pullAtLeast(quoteToken, msg.sender, totalQuote, maxQuote);
+        uint256 excess = received - totalQuote;
+        if (excess > 0) {
+            if (LibCurrency.isNative(quoteToken)) {
+                LibAppStorage.s().nativeTrackedTotal -= excess;
+            }
+            LibCurrency.transfer(quoteToken, msg.sender, excess);
+        }
 
         Types.PoolData storage quotePool = LibAppStorage.s().pools[quotePoolId];
-        quotePool.trackedBalance += received;
+        quotePool.trackedBalance += totalQuote;
 
         uint16 makerShareBps = ds.config.mamMakerShareBps;
         uint256 makerFee = (feeAmount * makerShareBps) / 10_000;
         uint256 protocolFee = feeAmount - makerFee;
 
-        uint256 excess = received - totalQuote;
-        uint256 makerIncrease = amountIn + makerFee + excess;
+        uint256 makerIncrease = amountIn + makerFee;
         quotePool.userPrincipal[data.makerPositionKey] += makerIncrease;
         quotePool.totalDeposits += makerIncrease;
 

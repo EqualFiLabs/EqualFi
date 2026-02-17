@@ -12,9 +12,7 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
-import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
-import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
@@ -283,6 +281,110 @@ contract MamCurveFacetTest is Test {
 
         uint256 lockedAfter = harness.getDirectLocked(positionKey, 1);
         assertEq(lockedAfter, desc.maxVolume - 1e18);
+    }
+
+    function testFuzz_overCapGrossPullDoesNotChangeOutputOrDebt(uint256 extraQuote) public {
+        extraQuote = bound(extraQuote, 1, 10e18);
+
+        uint256 makerTokenIdExact = nft.mint(maker, 1);
+        bytes32 keyExact = nft.getPositionKey(makerTokenIdExact);
+        uint256 makerTokenIdOver = nft.mint(maker, 1);
+        bytes32 keyOver = nft.getPositionKey(makerTokenIdOver);
+
+        uint256 principalA = 10e18;
+        uint256 principalB = 10e18;
+        harness.seedPool(1, address(tokenA), keyExact, principalA, principalA);
+        harness.seedPool(2, address(tokenB), keyExact, principalB, principalB);
+        harness.seedPool(3, address(tokenA), keyOver, principalA, principalA);
+        harness.seedPool(4, address(tokenB), keyOver, principalB, principalB);
+        harness.joinPool(keyExact, 1);
+        harness.joinPool(keyExact, 2);
+        harness.joinPool(keyOver, 3);
+        harness.joinPool(keyOver, 4);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: keyExact,
+            makerPositionId: makerTokenIdExact,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 701
+        });
+
+        MamTypes.CurveDescriptor memory overDesc = MamTypes.CurveDescriptor({
+            makerPositionKey: keyOver,
+            makerPositionId: makerTokenIdOver,
+            poolIdA: 3,
+            poolIdB: 4,
+            tokenA: address(tokenA),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 702
+        });
+
+        vm.startPrank(maker);
+        uint256 exactCurveId = harness.createCurve(desc);
+        uint256 overCurveId = harness.createCurve(overDesc);
+        vm.stopPrank();
+
+        uint256 amountIn = 2e18;
+        uint256 totalQuote = harness.previewCurveQuote(exactCurveId, amountIn);
+        uint256 overCapQuote = totalQuote + extraQuote;
+        tokenB.mint(taker, totalQuote + overCapQuote);
+
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), totalQuote + overCapQuote);
+
+        uint256 exactMakerQuoteBefore = harness.getUserPrincipal(2, keyExact);
+        uint256 exactTrackedBefore = harness.getTrackedBalance(2);
+        uint256 exactDepositsBefore = harness.getTotalDeposits(2);
+        uint256 exactTakerQuoteBefore = tokenB.balanceOf(taker);
+        uint256 exactOut =
+            harness.executeCurveSwap(exactCurveId, amountIn, totalQuote, 1e18, uint64(block.timestamp + 1 days), taker);
+        uint256 exactTakerSpent = exactTakerQuoteBefore - tokenB.balanceOf(taker);
+
+        uint256 overMakerQuoteBefore = harness.getUserPrincipal(4, keyOver);
+        uint256 overTrackedBefore = harness.getTrackedBalance(4);
+        uint256 overDepositsBefore = harness.getTotalDeposits(4);
+        uint256 overTakerQuoteBefore = tokenB.balanceOf(taker);
+        uint256 overOut =
+            harness.executeCurveSwap(overCurveId, amountIn, overCapQuote, 1e18, uint64(block.timestamp + 1 days), taker);
+        uint256 overTakerSpent = overTakerQuoteBefore - tokenB.balanceOf(taker);
+        vm.stopPrank();
+
+        uint256 exactMakerQuoteDelta = harness.getUserPrincipal(2, keyExact) - exactMakerQuoteBefore;
+        uint256 overMakerQuoteDelta = harness.getUserPrincipal(4, keyOver) - overMakerQuoteBefore;
+        uint256 exactTrackedDelta = harness.getTrackedBalance(2) - exactTrackedBefore;
+        uint256 overTrackedDelta = harness.getTrackedBalance(4) - overTrackedBefore;
+        uint256 exactDepositsDelta = harness.getTotalDeposits(2) - exactDepositsBefore;
+        uint256 overDepositsDelta = harness.getTotalDeposits(4) - overDepositsBefore;
+
+        assertEq(overOut, exactOut, "amount out invariant");
+        assertEq(overMakerQuoteDelta, exactMakerQuoteDelta, "maker debt invariant");
+        assertEq(overDepositsDelta, exactDepositsDelta, "pool debt invariant");
+        assertEq(overTrackedDelta, exactTrackedDelta, "tracked accounting invariant");
+        assertEq(exactTakerSpent, totalQuote, "exact path spend");
+        assertEq(overTakerSpent, totalQuote, "over-cap should be refunded to net quote");
     }
 
     function testUpdateCurveBumpsGeneration() public {
@@ -664,8 +766,11 @@ contract MamCurveHarness is MamCurveCreationFacet, MamCurveManagementFacet, MamC
         return LibAppStorage.s().pools[pid].trackedBalance;
     }
 
+    function getTotalDeposits(uint256 pid) external view returns (uint256) {
+        return LibAppStorage.s().pools[pid].totalDeposits;
+    }
+
     function getDirectLocked(bytes32 positionKey, uint256 pid) external view returns (uint256) {
-        DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         return LibEncumbrance.position(positionKey, pid).directLocked;
     }
 
