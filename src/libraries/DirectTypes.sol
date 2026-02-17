@@ -25,6 +25,12 @@ library DirectTypes {
         RatioBorrower
     }
 
+    enum RollingOfferKind {
+        None,
+        Lender,
+        Borrower
+    }
+
     struct DirectBorrowerOffer {
         uint256 offerId;
         address borrower;
@@ -395,6 +401,7 @@ library DirectTypes {
         mapping(uint256 => DirectRollingBorrowerOffer) rollingBorrowerOffers;
         uint256 nextRollingBorrowerOfferId;
         LibPositionList.List rollingBorrowerOffersByPosition;
+        mapping(uint256 => RollingOfferKind) rollingOfferKindById;
         // Borrower ratio tranche offers
         mapping(uint256 => DirectBorrowerRatioTrancheOffer) borrowerRatioOffers;
         uint256 nextBorrowerRatioOfferId;

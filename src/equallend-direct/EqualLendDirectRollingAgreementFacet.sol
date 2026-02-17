@@ -37,12 +37,11 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         LibDirectHelpers._requireNFTOwnership(nft, callerPositionId);
 
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
-
-        DirectTypes.DirectRollingOffer storage lenderOffer = ds.rollingOffers[offerId];
-        bool isLenderOffer = lenderOffer.lender != address(0);
+        DirectTypes.RollingOfferKind kind = ds.rollingOfferKindById[offerId];
 
         address borrower;
-        if (isLenderOffer) {
+        if (kind == DirectTypes.RollingOfferKind.Lender) {
+            DirectTypes.DirectRollingOffer storage lenderOffer = ds.rollingOffers[offerId];
             agreementId = _acceptLenderRollingOffer(
                 nft,
                 ds,
@@ -52,7 +51,8 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
                 minReceivedBorrower
             );
             borrower = nft.ownerOf(callerPositionId);
-        } else {
+            delete ds.rollingOfferKindById[offerId];
+        } else if (kind == DirectTypes.RollingOfferKind.Borrower) {
             DirectTypes.DirectRollingBorrowerOffer storage borrowerOffer = ds.rollingBorrowerOffers[offerId];
             agreementId = _acceptBorrowerRollingOffer(
                 nft,
@@ -63,6 +63,9 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
                 minReceivedBorrower
             );
             borrower = borrowerOffer.borrower;
+            delete ds.rollingOfferKindById[offerId];
+        } else {
+            revert DirectError_InvalidOffer();
         }
 
         emit RollingOfferAccepted(offerId, agreementId, borrower);
