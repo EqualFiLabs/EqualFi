@@ -117,14 +117,9 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         address baseToken = baseIsA ? imm.tokenA : imm.tokenB;
         address quoteToken = baseIsA ? imm.tokenB : imm.tokenA;
 
+        LibCurrency.assertMsgValue(quoteToken, maxQuote);
         uint256 received = LibCurrency.pullAtLeast(quoteToken, msg.sender, totalQuote, maxQuote);
         uint256 excess = received - totalQuote;
-        if (excess > 0) {
-            if (LibCurrency.isNative(quoteToken)) {
-                LibAppStorage.s().nativeTrackedTotal -= excess;
-            }
-            LibCurrency.transfer(quoteToken, msg.sender, excess);
-        }
 
         Types.PoolData storage quotePool = LibAppStorage.s().pools[quotePoolId];
         quotePool.trackedBalance += totalQuote;
@@ -155,14 +150,22 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
             ? basePool.totalDeposits - baseFill
             : 0;
         basePool.trackedBalance -= baseFill;
-        if (LibCurrency.isNative(basePool.underlying)) {
+
+        uint256 remaining = _consumeCurve(curveId, uint128(baseFill));
+
+        if (excess > 0) {
+            if (LibCurrency.isNative(quoteToken)) {
+                LibAppStorage.s().nativeTrackedTotal -= excess;
+            }
+            LibCurrency.transfer(quoteToken, msg.sender, excess);
+        }
+
+        if (LibCurrency.isNative(baseToken)) {
             LibAppStorage.s().nativeTrackedTotal -= baseFill;
         }
         LibCurrency.transferWithMin(baseToken, recipient, baseFill, minOut);
 
-        uint256 remaining = _consumeCurve(curveId, uint128(baseFill));
-
-        emit CurveFilled(curveId, msg.sender, recipient, amountIn, received, amountOut, feeAmount, remaining);
+        emit CurveFilled(curveId, msg.sender, recipient, amountIn, totalQuote, amountOut, feeAmount, remaining);
     }
 
     function _consumeCurve(uint256 curveId, uint128 baseFill) internal returns (uint128 remainingAfter) {
