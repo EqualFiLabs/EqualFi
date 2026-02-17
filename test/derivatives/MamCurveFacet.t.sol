@@ -335,7 +335,43 @@ contract MamCurveFacetTest is Test {
         assertEq(takerSpent, totalQuote, "excess refunded to net quote");
     }
 
-    function test_nativeQuoteTokenDescriptor_isRejected() public {
+    function test_nativeBaseTokenDescriptor_isAccepted() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principalA = 3e18;
+        uint256 principalB = 10e18;
+        harness.seedPool(1, address(0), positionKey, principalA, 0);
+        harness.seedPool(2, address(tokenB), positionKey, principalB, principalB);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(0),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 703
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+        assertTrue(harness.getStoredCurve(curveId).active);
+    }
+
+    function test_nativeQuoteTokenDescriptor_isAccepted() public {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
 
@@ -362,7 +398,109 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 703
+            salt: 704
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+        assertTrue(harness.getStoredCurve(curveId).active);
+    }
+
+    function test_bothNativeDescriptor_reverts() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(0), positionKey, 3e18, 0);
+        harness.seedPool(2, address(0), positionKey, 0, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(0),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 705
+        });
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSignature("MamCurve_InvalidDescriptor()"));
+        harness.createCurve(desc);
+    }
+
+    function test_sameNonZeroTokensDescriptor_reverts() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 10e18, 10e18);
+        harness.seedPool(2, address(tokenA), positionKey, 10e18, 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(tokenA),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 706
+        });
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSignature("MamCurve_InvalidDescriptor()"));
+        harness.createCurve(desc);
+    }
+
+    function test_nativeDescriptor_revertsWhenPoolUnderlyingMismatch() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 10e18, 10e18);
+        harness.seedPool(2, address(tokenB), positionKey, 0, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 707
         });
 
         vm.prank(maker);
