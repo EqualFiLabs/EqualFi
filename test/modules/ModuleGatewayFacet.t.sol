@@ -104,6 +104,10 @@ contract ModuleGatewayFacetHarness is ModuleGatewayFacet {
         return LibAppStorage.s().pools[poolId].trackedBalance;
     }
 
+    function moduleInactive(uint256 moduleId) external view returns (bool) {
+        return LibModuleRegistry.module(moduleId).inactive;
+    }
+
     function canClearMembership(bytes32 positionKey, uint256 poolId) external view returns (bool canClear, string memory reason) {
         return LibPoolMembership.canClearMembership(positionKey, poolId);
     }
@@ -116,6 +120,7 @@ contract ModuleGatewayFacetTest is Test {
 
     address internal constant OWNER = address(0xA11CE);
     address internal constant OTHER = address(0xB0B);
+    address internal constant OWNER_TWO = address(0xC0DE);
     address internal constant MODULE_OWNER = address(0xCAFE);
     address internal constant TREASURY = address(0xFEE);
 
@@ -300,5 +305,55 @@ contract ModuleGatewayFacetTest is Test {
         vm.prank(OWNER);
         facet.unencumberPosition(TOKEN_ID, POOL_ID, MODULE_ID, 40);
         assertEq(facet.trackedBalance(POOL_ID), trackedBefore);
+    }
+
+    function test_globalDeactivation_crossUserGatewayLivenessAndBlastRadius() public {
+        uint256 tokenIdTwo = nft.mint(OWNER_TWO, POOL_ID);
+        bytes32 positionKeyTwo = nft.getPositionKey(tokenIdTwo);
+        facet.setPoolMembership(positionKeyTwo, POOL_ID);
+
+        uint256 yearDenom = 365 * 10_000;
+        uint256 riskyEncumbered = (30 * yearDenom) / 100; // 30/day @ 1% AUM
+        uint256 healthyEncumbered = 365_000; // 10/day @ 1% AUM
+
+        facet.setPrincipal(POOL_ID, positionKey, 10);
+        facet.setPrincipal(POOL_ID, positionKeyTwo, 1_000);
+        facet.setModuleEncumbered(positionKey, POOL_ID, MODULE_ID, riskyEncumbered);
+        facet.setModuleEncumbered(positionKeyTwo, POOL_ID, MODULE_ID, healthyEncumbered);
+
+        vm.warp(1 days);
+        vm.prank(OTHER);
+        facet.pokeModuleAum(TOKEN_ID, POOL_ID, MODULE_ID); // checkpoint tuple 1
+        vm.prank(OTHER);
+        facet.pokeModuleAum(tokenIdTwo, POOL_ID, MODULE_ID); // checkpoint tuple 2
+
+        vm.warp(2 days);
+        vm.prank(OTHER);
+        facet.pokeModuleAum(TOKEN_ID, POOL_ID, MODULE_ID); // delinquent starts
+        vm.warp(3 days);
+        vm.prank(OTHER);
+        facet.pokeModuleAum(TOKEN_ID, POOL_ID, MODULE_ID); // still within grace
+        vm.warp(4 days);
+        vm.prank(OTHER);
+        facet.pokeModuleAum(TOKEN_ID, POOL_ID, MODULE_ID); // deactivates module globally
+
+        assertTrue(facet.moduleInactive(MODULE_ID), "module should be globally inactive after grace breach");
+
+        vm.prank(OWNER_TWO);
+        vm.expectRevert(abi.encodeWithSelector(ModuleInactive.selector, MODULE_ID));
+        facet.encumberPosition(tokenIdTwo, POOL_ID, MODULE_ID, 1);
+
+        vm.warp(5 days);
+        vm.prank(OTHER);
+        facet.pokeModuleAum(tokenIdTwo, POOL_ID, MODULE_ID);
+        assertEq(facet.principalOf(POOL_ID, positionKeyTwo), 960, "inactive module should not block tuple AUM accrual");
+
+        vm.prank(OWNER_TWO);
+        facet.unencumberPosition(tokenIdTwo, POOL_ID, MODULE_ID, healthyEncumbered);
+        assertEq(
+            facet.moduleEncumberedByModule(positionKeyTwo, POOL_ID, MODULE_ID),
+            0,
+            "owner should still be able to unencumber after global deactivation"
+        );
     }
 }

@@ -121,6 +121,7 @@ contract LibModuleAumTest is Test {
     LibModuleAumHarness internal h;
 
     bytes32 internal constant POSITION_KEY = keccak256("POSITION");
+    bytes32 internal constant POSITION_KEY_TWO = keccak256("POSITION_TWO");
     uint256 internal constant POOL_ID = 5;
     uint256 internal constant MODULE_ID = 9;
     uint256 internal constant YEAR_DENOM = 365 * 10_000;
@@ -271,5 +272,40 @@ contract LibModuleAumTest is Test {
         assertTrue(tupleDelinquent);
         assertEq(lastShortfall, 30);
         assertEq(token.balanceOf(treasury), 10);
+    }
+
+    function test_globalDeactivationFromOneTuple_doesNotBlockOtherTupleAccrual() public {
+        _seedErc20Env(10, 2_000, 2_000);
+        h.setPrincipal(POOL_ID, POSITION_KEY_TWO, 1_000);
+        h.setModuleConfig(MODULE_ID, address(0xABCD), 100, 0, 2, false);
+
+        uint256 delinquentEncumbered = 30 * YEAR_DENOM / 100; // 30/day at 1% AUM
+        uint256 healthyEncumbered = 365_000; // 10/day at 1% AUM
+        h.setModuleEncumbered(POSITION_KEY, POOL_ID, MODULE_ID, delinquentEncumbered);
+        h.setModuleEncumbered(POSITION_KEY_TWO, POOL_ID, MODULE_ID, healthyEncumbered);
+
+        vm.warp(1 days);
+        h.accrue(POSITION_KEY, POOL_ID, MODULE_ID);
+        h.accrue(POSITION_KEY_TWO, POOL_ID, MODULE_ID);
+
+        vm.warp(2 days);
+        h.accrue(POSITION_KEY, POOL_ID, MODULE_ID); // delinquent start
+        vm.warp(3 days);
+        h.accrue(POSITION_KEY, POOL_ID, MODULE_ID); // grace epoch 1
+        vm.warp(4 days);
+        h.accrue(POSITION_KEY, POOL_ID, MODULE_ID); // grace epoch 2 => deactivated
+        assertTrue(h.moduleInactive(MODULE_ID), "module should deactivate globally");
+
+        vm.warp(5 days);
+        (uint256 epochs, uint256 feeDue, uint256 charged, uint256 shortfall,, bool deactivated,) =
+            h.accrue(POSITION_KEY_TWO, POOL_ID, MODULE_ID);
+        assertEq(epochs, 4, "healthy tuple should accrue elapsed epochs despite global deactivation");
+        assertEq(feeDue, 40, "fee due should be deterministic for healthy tuple");
+        assertEq(charged, 40, "healthy tuple should still be chargeable");
+        assertEq(shortfall, 0, "healthy tuple should remain solvent");
+        assertFalse(deactivated, "deactivation should not be re-triggered by healthy tuple");
+
+        (uint256 principal,,,) = h.getPoolState(POSITION_KEY_TWO, POOL_ID);
+        assertEq(principal, 960, "healthy tuple principal should continue to decay by AUM after deactivation");
     }
 }
