@@ -9,6 +9,7 @@ import {DiamondCutFacet} from "../src/core/DiamondCutFacet.sol";
 import {DiamondLoupeFacet} from "../src/core/DiamondLoupeFacet.sol";
 import {OwnershipFacet} from "../src/core/OwnershipFacet.sol";
 import {AdminFacet} from "../src/admin/AdminFacet.sol";
+import {PointsAdminFacet} from "../src/admin/PointsAdminFacet.sol";
 import {MaintenanceFacet} from "../src/core/MaintenanceFacet.sol";
 import {FlashLoanFacet} from "../src/equallend/FlashLoanFacet.sol";
 import {FeeFacet} from "../src/core/FeeFacet.sol";
@@ -22,6 +23,7 @@ import {EqualIndexBaseV3} from "../src/equalindex/EqualIndexBaseV3.sol";
 import {LiquidityViewFacet} from "../src/views/LiquidityViewFacet.sol";
 import {LoanViewFacet} from "../src/views/LoanViewFacet.sol";
 import {ConfigViewFacet} from "../src/views/ConfigViewFacet.sol";
+import {PointsViewFacet} from "../src/views/PointsViewFacet.sol";
 import {EnhancedLoanViewFacet} from "../src/views/EnhancedLoanViewFacet.sol";
 import {PoolUtilizationViewFacet} from "../src/views/PoolUtilizationViewFacet.sol";
 import {LoanPreviewFacet} from "../src/views/LoanPreviewFacet.sol";
@@ -149,6 +151,7 @@ contract DeployDiamondScript is Script {
         DiamondLoupeFacet loupe = new DiamondLoupeFacet();
         OwnershipFacet own = new OwnershipFacet();
         AdminFacet adminFacet = new AdminFacet();
+        PointsAdminFacet pointsAdmin = new PointsAdminFacet();
         MaintenanceFacet maintenance = new MaintenanceFacet();
         FlashLoanFacet flash = new FlashLoanFacet();
         FeeFacet fee = new FeeFacet();
@@ -162,6 +165,7 @@ contract DeployDiamondScript is Script {
         LoanViewFacet loanView = new LoanViewFacet();
         // ConfigViewFacet selectors() intentionally omitted to avoid duplicate selector collisions.
         ConfigViewFacet cfgView = new ConfigViewFacet();
+        PointsViewFacet pointsView = new PointsViewFacet();
         EnhancedLoanViewFacet enhancedView = new EnhancedLoanViewFacet();
         PoolUtilizationViewFacet poolUtil = new PoolUtilizationViewFacet();
         LoanPreviewFacet loanPreview = new LoanPreviewFacet();
@@ -218,7 +222,7 @@ contract DeployDiamondScript is Script {
         cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[13] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](40);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](42);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -259,6 +263,8 @@ contract DeployDiamondScript is Script {
         more[37] = _cut(address(moduleRegistry), _selectors(moduleRegistry));
         more[38] = _cut(address(moduleGateway), _selectors(moduleGateway));
         more[39] = _cut(address(moduleView), _selectors(moduleView));
+        more[40] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
+        more[41] = _cut(address(pointsView), _selectors(pointsView));
 
         // Deploy diamond
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
@@ -398,6 +404,12 @@ contract DeployDiamondScript is Script {
         s[1] = AdminFacet.timelock.selector;
     }
 
+    function _selectors(PointsAdminFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = PointsAdminFacet.setPointsPerAction.selector;
+        s[1] = PointsAdminFacet.setPointsPerActionBatch.selector;
+    }
+
     function _selectors(MaintenanceFacet) internal pure returns (bytes4[] memory s) {
         s = new bytes4[](2);
         s[0] = MaintenanceFacet.pokeMaintenance.selector;
@@ -512,6 +524,10 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(ConfigViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
+        s = viewFacet.selectors();
+    }
+
+    function _selectors(PointsViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
         s = viewFacet.selectors();
     }
 

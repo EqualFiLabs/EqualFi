@@ -9,6 +9,7 @@ import {DiamondCutFacet} from "../src/core/DiamondCutFacet.sol";
 import {DiamondLoupeFacet} from "../src/core/DiamondLoupeFacet.sol";
 import {OwnershipFacet} from "../src/core/OwnershipFacet.sol";
 import {AdminFacet} from "../src/admin/AdminFacet.sol";
+import {PointsAdminFacet} from "../src/admin/PointsAdminFacet.sol";
 import {MaintenanceFacet} from "../src/core/MaintenanceFacet.sol";
 import {AdminGovernanceFacet} from "../src/admin/AdminGovernanceFacet.sol";
 import {PoolManagementFacet} from "../src/equallend/PoolManagementFacet.sol";
@@ -18,6 +19,7 @@ import {EqualIndexPositionFacet} from "../src/equalindex/EqualIndexPositionFacet
 import {EqualIndexViewFacetV3} from "../src/views/EqualIndexViewFacetV3.sol";
 import {EqualIndexBaseV3} from "../src/equalindex/EqualIndexBaseV3.sol";
 import {ConfigViewFacet} from "../src/views/ConfigViewFacet.sol";
+import {PointsViewFacet} from "../src/views/PointsViewFacet.sol";
 import {PositionViewFacet} from "../src/views/PositionViewFacet.sol";
 import {PositionNFTMetadataFacet} from "../src/views/PositionNFTMetadataFacet.sol";
 import {MultiPoolPositionViewFacet} from "../src/views/MultiPoolPositionViewFacet.sol";
@@ -212,6 +214,7 @@ contract LeanDeployScript is Script {
         DiamondLoupeFacet loupe = new DiamondLoupeFacet();
         OwnershipFacet own = new OwnershipFacet();
         AdminFacet adminFacet = new AdminFacet();
+        PointsAdminFacet pointsAdmin = new PointsAdminFacet();
         MaintenanceFacet maintenance = new MaintenanceFacet();
         AdminGovernanceFacet admin = new AdminGovernanceFacet();
         PoolManagementFacet poolManagement = new PoolManagementFacet();
@@ -220,6 +223,7 @@ contract LeanDeployScript is Script {
         EqualIndexPositionFacet equalIndexPosition = new EqualIndexPositionFacet();
         EqualIndexViewFacetV3 equalIndexView = new EqualIndexViewFacetV3();
         ConfigViewFacet cfgView = new ConfigViewFacet();
+        PointsViewFacet pointsView = new PointsViewFacet();
         PositionViewFacet positionView = new PositionViewFacet();
         PositionNFTMetadataFacet positionNftMetadata = new PositionNFTMetadataFacet();
         MultiPoolPositionViewFacet multiPoolView = new MultiPoolPositionViewFacet();
@@ -240,7 +244,7 @@ contract LeanDeployScript is Script {
         PositionAgentViewFacet positionAgentView = new PositionAgentViewFacet();
         PositionAgentConfigFacet positionAgentConfig = new PositionAgentConfigFacet();
 
-        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](30);
+        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](32);
         cuts[0] = _cut(address(cut), _selectors(cut));
         cuts[1] = _cut(address(loupe), _selectors(loupe));
         cuts[2] = _cut(address(own), _selectors(own));
@@ -271,6 +275,8 @@ contract LeanDeployScript is Script {
         cuts[27] = _cut(address(positionAgentRegistry), _selectors(positionAgentRegistry));
         cuts[28] = _cut(address(positionAgentView), _selectors(positionAgentView));
         cuts[29] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
+        cuts[30] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
+        cuts[31] = _cut(address(pointsView), _selectors(pointsView));
 
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
         diamondAddress = address(diamond);
@@ -426,6 +432,12 @@ contract LeanDeployScript is Script {
         s[1] = AdminFacet.timelock.selector;
     }
 
+    function _selectors(PointsAdminFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = PointsAdminFacet.setPointsPerAction.selector;
+        s[1] = PointsAdminFacet.setPointsPerActionBatch.selector;
+    }
+
     function _selectors(MaintenanceFacet) internal pure returns (bytes4[] memory s) {
         s = new bytes4[](2);
         s[0] = MaintenanceFacet.pokeMaintenance.selector;
@@ -512,6 +524,10 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(ConfigViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
+        s = viewFacet.selectors();
+    }
+
+    function _selectors(PointsViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
         s = viewFacet.selectors();
     }
 

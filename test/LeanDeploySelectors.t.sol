@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {LeanDeployScript} from "../script/leanDeploy.s.sol";
 import {IDiamondLoupe} from "../src/interfaces/IDiamondLoupe.sol";
+import {PointsAdminFacet} from "../src/admin/PointsAdminFacet.sol";
+import {PointsViewFacet} from "../src/views/PointsViewFacet.sol";
 
 contract LeanDeploySelectorsTest is Test {
     function testLeanDeployCutsPositionViewSelectors() public {
@@ -32,5 +34,58 @@ contract LeanDeploySelectorsTest is Test {
         assertTrue(
             loupe.facetAddress(pendingActiveCreditSelector) != address(0), "missing pendingActiveCredit selector"
         );
+    }
+
+    function testLeanDeployCutsAndCallsPointsSelectors() public {
+        LeanDeployScript script = new LeanDeployScript();
+        LeanDeployScript.Deployment memory deployment =
+            script.deployForTest(address(this), address(this), address(this));
+
+        IDiamondLoupe loupe = IDiamondLoupe(deployment.diamond);
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setPointsPerAction.selector) != address(0),
+            "missing setPointsPerAction selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setPointsPerActionBatch.selector) != address(0),
+            "missing setPointsPerActionBatch selector"
+        );
+        assertTrue(loupe.facetAddress(PointsViewFacet.getPoints.selector) != address(0), "missing getPoints selector");
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getPointsPerAction.selector) != address(0),
+            "missing getPointsPerAction selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getPointsBatch.selector) != address(0),
+            "missing getPointsBatch selector"
+        );
+
+        PointsAdminFacet pointsAdmin = PointsAdminFacet(deployment.diamond);
+        PointsViewFacet pointsView = PointsViewFacet(deployment.diamond);
+
+        bytes32 actionTypeA = keccak256("POINTS_TEST_A");
+        bytes32 actionTypeB = keccak256("POINTS_TEST_B");
+        pointsAdmin.setPointsPerAction(actionTypeA, 111);
+        assertEq(pointsView.getPointsPerAction(actionTypeA), 111, "single setter not callable");
+
+        bytes32[] memory actionTypes = new bytes32[](2);
+        actionTypes[0] = actionTypeA;
+        actionTypes[1] = actionTypeB;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 333;
+        amounts[1] = 777;
+        pointsAdmin.setPointsPerActionBatch(actionTypes, amounts);
+
+        assertEq(pointsView.getPointsPerAction(actionTypeA), 333, "batch setter not callable");
+        assertEq(pointsView.getPointsPerAction(actionTypeB), 777, "batch setter not callable");
+        assertEq(pointsView.getPoints(address(this)), 0, "unexpected non-zero points");
+
+        address[] memory users = new address[](2);
+        users[0] = address(this);
+        users[1] = address(0xBEEF);
+        uint256[] memory balances = pointsView.getPointsBatch(users);
+        assertEq(balances.length, 2, "batch length");
+        assertEq(balances[0], 0, "batch points self");
+        assertEq(balances[1], 0, "batch points other");
     }
 }
