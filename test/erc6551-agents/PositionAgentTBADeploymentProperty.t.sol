@@ -207,4 +207,24 @@ contract PositionAgentTBADeploymentPropertyTest is Test {
 
         assertFalse(facet.isMarkedDeployed(tokenId), "failed deploy must not set deployed marker");
     }
+
+    function test_mutableCanonicalConfig_desyncsComputedAddressFromDeployedState() public {
+        uint256 tokenId = nft.mint(owner, 1);
+
+        vm.prank(owner);
+        address deployedUnderConfigA = facet.deployTBA(tokenId);
+        assertGt(deployedUnderConfigA.code.length, 0, "config A deployment should exist");
+
+        bytes32 saltB = bytes32(uint256(1));
+        facet.setConfig(address(registry), address(beaconProxy), address(0), saltB);
+        address computedUnderConfigB = facet.computeTBAAddress(tokenId);
+        assertNotEq(computedUnderConfigB, deployedUnderConfigA, "config mutation should alter computed TBA");
+        assertEq(computedUnderConfigB.code.length, 0, "new computed TBA should not already be deployed");
+
+        vm.prank(owner);
+        address returned = facet.deployTBA(tokenId);
+        assertEq(returned, computedUnderConfigB, "deploy should now return config-B computed address");
+        assertEq(returned.code.length, 0, "tbaDeployed sentinel can block actual deploy under new config");
+        assertGt(deployedUnderConfigA.code.length, 0, "old deployed account remains onchain");
+    }
 }

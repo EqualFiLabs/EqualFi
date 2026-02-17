@@ -78,6 +78,18 @@ contract MockERC6551Account {
     receive() external payable {}
 }
 
+contract MockERC6551RegistryFixedAccount {
+    address private immutable fixedAccount;
+
+    constructor(address fixedAccount_) {
+        fixedAccount = fixedAccount_;
+    }
+
+    function account(address, bytes32, uint256, address, uint256) external view returns (address account) {
+        return fixedAccount;
+    }
+}
+
 contract PositionAgentViewFacetHarness is PositionAgentViewFacet {
     function setConfig(address registry, address implementation, address identityRegistry, bytes32 salt) external {
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
@@ -156,5 +168,25 @@ contract PositionAgentViewFunctionPropertyTest is Test {
         assertEq(reg, address(registry), "getCanonicalRegistries registry mismatch");
         assertEq(impl, address(beaconProxy), "getCanonicalRegistries implementation mismatch");
         assertEq(identity, address(0), "getCanonicalRegistries identity mismatch");
+    }
+
+    function test_viewFunctions_adversarialRegistryAccountWithoutCode() public {
+        uint256 tokenId = 12345;
+        address noCodeAddress = address(0x1111111111111111111111111111111111111111);
+        MockERC6551RegistryFixedAccount fixedRegistry = new MockERC6551RegistryFixedAccount(noCodeAddress);
+        facet.setConfig(address(fixedRegistry), address(beaconProxy), address(0), bytes32(0));
+
+        assertEq(facet.getTBAAddress(tokenId), noCodeAddress, "view should reflect registry.account result");
+        assertFalse(facet.isTBADeployed(tokenId), "no-code account must not be treated as deployed");
+    }
+
+    function test_viewFunctions_adversarialRegistryAccountWithCode() public {
+        uint256 tokenId = 54321;
+        MockERC6551Account codeAccount = new MockERC6551Account();
+        MockERC6551RegistryFixedAccount fixedRegistry = new MockERC6551RegistryFixedAccount(address(codeAccount));
+        facet.setConfig(address(fixedRegistry), address(beaconProxy), address(0), bytes32(0));
+
+        assertEq(facet.getTBAAddress(tokenId), address(codeAccount), "view should reflect registry.account result");
+        assertTrue(facet.isTBADeployed(tokenId), "code-present account should be treated as deployed");
     }
 }

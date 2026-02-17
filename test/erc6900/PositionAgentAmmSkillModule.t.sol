@@ -15,6 +15,7 @@ contract PositionAgentAmmSkillModuleTest is Test {
         bytes4(keccak256("AmmSkill_AuctionNotForThisPosition(uint256,uint256,uint256)"));
     bytes4 internal constant INVALID_DEPENDENCY = bytes4(keccak256("AmmSkill_InvalidDependency(address)"));
     bytes4 internal constant INVALID_POLICY = bytes4(keccak256("AmmSkill_InvalidPolicyConfig()"));
+    bytes4 internal constant UNAUTHORIZED = bytes4(keccak256("AmmSkill_Unauthorized(address)"));
 
     address internal owner = address(0xA11CE);
 
@@ -163,6 +164,18 @@ contract PositionAgentAmmSkillModuleTest is Test {
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(INVALID_POLICY));
         PositionAgentAmmSkillModule(address(account)).setAuctionPolicy(policy);
+    }
+
+    function test_ownerRestrictedSetters_revertForNonOwner() public {
+        address attacker = address(0xB0B);
+        LibAmmSkillStorage.RollPolicy memory rollPolicy = LibAmmSkillStorage.RollPolicy({
+            enabled: true,
+            enforcePoolAllowlist: false
+        });
+
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(UNAUTHORIZED, attacker));
+        PositionAgentAmmSkillModule(address(account)).setRollPolicy(rollPolicy);
     }
 
     function _defaultAuctionParams() internal view returns (DerivativeTypes.CreateAuctionParams memory) {
