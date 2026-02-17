@@ -225,6 +225,42 @@ contract FuturesFacetPropertyTest is Test {
         assertEq(harness.getPrincipal(positionKey, 2) - makerQuoteBefore, payment, "maker receives required amount only");
     }
 
+    function test_createFuturesSeries_supportsNativeUnderlyingFlatFee() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principal = 5e18;
+        uint256 flatFee = 2e16; // 0.02 native
+        vm.deal(address(harness), principal);
+        harness.seedPool(1, address(0), positionKey, principal, principal);
+        harness.seedPool(2, address(quote), positionKey, principal, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setFeeSplits(0, 0);
+        harness.setDefaultCreateFeeConfig(0, uint128(flatFee));
+
+        uint256 principalBefore = harness.getPrincipal(positionKey, 1);
+        vm.prank(maker);
+        uint256 seriesId = harness.createFuturesSeries(
+            DerivativeTypes.CreateFuturesSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                quotePoolId: 2,
+                forwardPrice: 2e18,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: 1e18,
+                isEuropean: false,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        assertGt(seriesId, 0, "series created");
+        assertEq(harness.getPrincipal(positionKey, 1), principalBefore - flatFee, "native flat fee applied");
+    }
+
     function _quoteAmount(uint256 amount, uint256 forwardPrice) internal view returns (uint256) {
         uint256 underlyingScale = 10 ** uint256(underlying.decimals());
         uint256 quoteScale = 10 ** uint256(quote.decimals());
@@ -252,6 +288,20 @@ contract FuturesHarness is FuturesFacet {
         LibDerivativeStorage.derivativeStorage().config.defaultGracePeriodSeconds = gracePeriod;
     }
 
+    function setDefaultCreateFeeConfig(uint16 feeBps, uint128 flatFeeWad) external {
+        LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
+        ds.config.defaultCreateFeeBps = feeBps;
+        ds.config.defaultCreateFeeFlatWad = flatFeeWad;
+    }
+
+    function setFeeSplits(uint16 treasuryBps, uint16 activeCreditBps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = treasuryBps;
+        store.treasuryShareConfigured = true;
+        store.activeCreditShareBps = activeCreditBps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function seedPool(
         uint256 pid,
         address underlying,
@@ -266,7 +316,11 @@ contract FuturesHarness is FuturesFacet {
         p.totalDeposits = principal;
         p.trackedBalance = tracked;
         if (tracked > 0) {
-            MockERC20(underlying).mint(address(this), tracked);
+            if (underlying == address(0)) {
+                LibAppStorage.s().nativeTrackedTotal += tracked;
+            } else {
+                MockERC20(underlying).mint(address(this), tracked);
+            }
         }
         if (p.feeIndex == 0) {
             p.feeIndex = LibFeeIndex.INDEX_SCALE;
