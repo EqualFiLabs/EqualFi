@@ -287,6 +287,8 @@ library LibDirectStorage {
         DirectTypes.DirectStorage storage ds = directStorage();
         _cancelLenderOffersForPosition(ds, positionKey);
         _cancelBorrowerOffersForPosition(ds, positionKey);
+        _cancelRollingLenderOffersForPosition(ds, positionKey);
+        _cancelRollingBorrowerOffersForPosition(ds, positionKey);
         _cancelRatioLenderOffersForPosition(ds, positionKey);
         _cancelBorrowerRatioOffersForPosition(ds, positionKey);
     }
@@ -345,6 +347,64 @@ library LibDirectStorage {
             LibActiveCreditIndex.applyEncumbranceDelta(
                 collateralPool, offer.collateralPoolId, positionKey, encBefore, encAfter
             );
+        }
+    }
+
+    function _cancelRollingLenderOffersForPosition(DirectTypes.DirectStorage storage ds, bytes32 positionKey) internal {
+        (uint256[] memory rollingList, ) = ds.rollingLenderOffers.page(positionKey, 0, 0);
+        for (uint256 i = 0; i < rollingList.length; i++) {
+            uint256 offerId = rollingList[i];
+            untrackRollingLenderOffer(ds, positionKey, offerId);
+            DirectTypes.DirectRollingOffer storage offer = ds.rollingOffers[offerId];
+            if (offer.lenderPositionId == 0 || offer.cancelled || offer.filled) {
+                delete ds.rollingOfferKindById[offerId];
+                continue;
+            }
+            offer.cancelled = true;
+            Types.PoolData storage lenderPool = LibAppStorage.s().pools[offer.lenderPoolId];
+            LibActiveCreditIndex.settle(offer.lenderPoolId, positionKey);
+            LibEncumbrance.Encumbrance storage enc = LibEncumbrance.position(positionKey, offer.lenderPoolId);
+            uint256 encBefore = LibEncumbrance.totalForActiveCredit(positionKey, offer.lenderPoolId);
+            uint256 escrowed = enc.directOfferEscrow;
+            uint256 release = offer.principal;
+            if (release > escrowed) {
+                release = escrowed;
+            }
+            enc.directOfferEscrow = escrowed - release;
+            uint256 encAfter = LibEncumbrance.totalForActiveCredit(positionKey, offer.lenderPoolId);
+            LibActiveCreditIndex.applyEncumbranceDelta(
+                lenderPool, offer.lenderPoolId, positionKey, encBefore, encAfter
+            );
+            delete ds.rollingOfferKindById[offerId];
+        }
+    }
+
+    function _cancelRollingBorrowerOffersForPosition(DirectTypes.DirectStorage storage ds, bytes32 positionKey) internal {
+        (uint256[] memory borrowerList, ) = ds.rollingBorrowerOffersByPosition.page(positionKey, 0, 0);
+        for (uint256 i = 0; i < borrowerList.length; i++) {
+            uint256 offerId = borrowerList[i];
+            untrackRollingBorrowerOffer(ds, positionKey, offerId);
+            DirectTypes.DirectRollingBorrowerOffer storage offer = ds.rollingBorrowerOffers[offerId];
+            if (offer.borrowerPositionId == 0 || offer.cancelled || offer.filled) {
+                delete ds.rollingOfferKindById[offerId];
+                continue;
+            }
+            offer.cancelled = true;
+            Types.PoolData storage collateralPool = LibAppStorage.s().pools[offer.collateralPoolId];
+            LibActiveCreditIndex.settle(offer.collateralPoolId, positionKey);
+            LibEncumbrance.Encumbrance storage enc = LibEncumbrance.position(positionKey, offer.collateralPoolId);
+            uint256 encBefore = LibEncumbrance.totalForActiveCredit(positionKey, offer.collateralPoolId);
+            uint256 locked = enc.directLocked;
+            if (locked >= offer.collateralLockAmount) {
+                enc.directLocked = locked - offer.collateralLockAmount;
+            } else {
+                enc.directLocked = 0;
+            }
+            uint256 encAfter = LibEncumbrance.totalForActiveCredit(positionKey, offer.collateralPoolId);
+            LibActiveCreditIndex.applyEncumbranceDelta(
+                collateralPool, offer.collateralPoolId, positionKey, encBefore, encAfter
+            );
+            delete ds.rollingOfferKindById[offerId];
         }
     }
 
@@ -408,4 +468,3 @@ library LibDirectStorage {
     }
 
 }
-
