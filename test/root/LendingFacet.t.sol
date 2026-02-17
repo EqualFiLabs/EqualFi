@@ -265,6 +265,23 @@ contract LendingFacetUnitTest is Test {
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 15 ether, "active credit total reduced");
     }
 
+    function test_makePayment_overpullAcceptsMaxPaymentAndDonatesExcessAtPrincipalCap() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
+
+        vm.startPrank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+        vm.warp(block.timestamp + 30 days);
+
+        uint256 intendedAmount = 20 ether;
+        uint256 maxPayment = 25 ether;
+        facet.makePaymentFromPosition(tokenId, PID, intendedAmount, maxPayment);
+        vm.stopPrank();
+
+        LendingSnapshot memory snap = facet.snapshot(PID, key);
+        assertEq(snap.rollingLoan.principalRemaining, 0, "principal capped at zero");
+        assertEq(snap.trackedBalance, 100 ether - 20 ether + maxPayment, "tracked increases by maxPayment");
+    }
+
     function test_makePayment_revertsOnStrayEthForERC20Pool() public {
         (uint256 tokenId,) = _seedPosition(100 ether);
         vm.deal(user, 1 ether);
@@ -386,6 +403,23 @@ contract LendingFacetUnitTest is Test {
         facet.closeRollingCreditFromPosition{value: 1}(tokenId, PID, 20 ether);
     }
 
+    function test_closeRolling_overpullAcceptsMaxPaymentAndCreditsExcessToPool() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
+
+        vm.startPrank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+        vm.warp(block.timestamp + 15 days);
+
+        uint256 maxPayment = 25 ether;
+        facet.closeRollingCreditFromPosition(tokenId, PID, maxPayment);
+        vm.stopPrank();
+
+        LendingSnapshot memory snap = facet.snapshot(PID, key);
+        assertEq(snap.rollingLoan.principalRemaining, 0, "principal cleared");
+        assertFalse(snap.rollingLoan.active, "loan inactive");
+        assertEq(snap.trackedBalance, 100 ether - 20 ether + maxPayment, "tracked increases by maxPayment");
+    }
+
     function test_openFixed_createsLoanAndKeepsPrincipalIntact() public {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
@@ -456,6 +490,20 @@ contract LendingFacetUnitTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
         facet.repayFixedFromPosition{value: 1}(tokenId, PID, loanId, 20 ether, 20 ether);
+    }
+
+    function test_repayFixed_overpullAcceptsMaxPaymentAndDoesNotOverReducePrincipal() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
+
+        vm.startPrank(user);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0, 50 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 20 ether, 30 ether);
+        vm.stopPrank();
+
+        Types.FixedTermLoan memory loan = facet.getFixedLoan(PID, loanId);
+        LendingSnapshot memory snap = facet.snapshot(PID, key);
+        assertEq(loan.principalRemaining, 30 ether, "principal reduced by intended amount only");
+        assertEq(snap.trackedBalance, 200 ether - 50 ether + 30 ether, "tracked increases by maxPayment");
     }
 
     /// @dev Deterministic success-path for gas reporting: rolling lifecycle (open + payment).

