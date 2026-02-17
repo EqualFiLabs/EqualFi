@@ -5,6 +5,7 @@ import {DirectDiamondTestBase} from "../DirectDiamondTestBase.sol";
 import {DirectTypes} from "../../../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../../../src/mocks/MockERC20.sol";
 import {DirectError_EarlyExerciseNotAllowed, DirectError_EarlyRepayNotAllowed} from "../../../src/libraries/Errors.sol";
+import {UnexpectedMsgValue} from "../../../src/libraries/Errors.sol";
 
 /// @notice Feature: p2p-rolling-loans, Property 8: Early Action Conditions
 /// @notice Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5
@@ -163,5 +164,14 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
 
         assertEq(asset.balanceOf(lenderOwner), oldLenderBalanceBefore, "old lender receives nothing");
         assertEq(asset.balanceOf(newLenderOwner), newLenderBalanceBefore + 110 ether, "current owner receives full repay");
+    }
+
+    function test_repayRollingInFull_revertsOnStrayEthForErc20() public {
+        (uint256 agreementId,,,) = _setupAgreement(true, true);
+        vm.deal(borrowerOwner, 1 ether);
+        uint256 maxPayment = _rollingMaxPayment(agreementId);
+        vm.prank(borrowerOwner);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        rollingLifecycle.repayRollingInFull{value: 1}(agreementId, maxPayment, 0);
     }
 }

@@ -5,6 +5,7 @@ import {DirectDiamondTestBase} from "../DirectDiamondTestBase.sol";
 import {DirectTypes} from "../../../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../../../src/mocks/MockERC20.sol";
 import {RollingError_AmortizationDisabled, RollingError_DustPayment} from "../../../src/libraries/Errors.sol";
+import {UnexpectedMsgValue} from "../../../src/libraries/Errors.sol";
 
 /// @notice Feature: p2p-rolling-loans, Property 3/4/5: Payment application, interest calc, multi-miss
 /// @notice Validates: Requirements 2.4, 2.5, 3.1, 3.2, 3.3, 3.4
@@ -125,5 +126,13 @@ contract DirectRollingPaymentPropertyTest is DirectDiamondTestBase {
 
         assertEq(asset.balanceOf(lenderOwner), oldLenderBalanceBefore, "old lender receives nothing");
         assertEq(asset.balanceOf(newLenderOwner), newLenderBalanceBefore + payAmount, "current owner receives payment");
+    }
+
+    function test_makeRollingPayment_revertsOnStrayEthForErc20() public {
+        (uint256 agreementId,,) = _setupAgreement(true);
+        vm.deal(borrowerOwner, 1 ether);
+        vm.prank(borrowerOwner);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        rollingPayments.makeRollingPayment{value: 1}(agreementId, 10 ether, 10 ether, 0);
     }
 }

@@ -224,12 +224,12 @@ interface IDirectRollingAgreement {
 interface IDirectRollingLifecycle {
     function recoverRolling(uint256 agreementId) external;
     function exerciseRolling(uint256 agreementId) external;
-    function repayRollingInFull(uint256 agreementId, uint256 maxPayment, uint256 minReceived) external;
+    function repayRollingInFull(uint256 agreementId, uint256 maxPayment, uint256 minReceived) external payable;
 }
 
 /// @notice Interface for rolling payment facet functions
 interface IDirectRollingPayment {
-    function makeRollingPayment(uint256 agreementId, uint256 amount, uint256 maxPayment, uint256 minReceived) external;
+    function makeRollingPayment(uint256 agreementId, uint256 amount, uint256 maxPayment, uint256 minReceived) external payable;
 }
 
 /// @notice Interface for rolling view facet functions

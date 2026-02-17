@@ -19,7 +19,8 @@ import {
     DirectError_LenderCallNotAllowed,
     DirectError_InvalidAgreementState,
     DirectError_InvalidConfiguration,
-    DirectError_InvalidTimestamp
+    DirectError_InvalidTimestamp,
+    UnexpectedMsgValue
 } from "../libraries/Errors.sol";
 
 /// @notice Agreement lifecycle entrypoints for EqualLend direct lending
@@ -98,6 +99,13 @@ contract EqualLendDirectLifecycleFacet is ReentrancyGuardModifiers {
         LibActiveCreditIndex.settle(agreement.lenderPoolId, lenderKey);
 
         uint256 principal = agreement.principal;
+        if (LibCurrency.isNative(agreement.borrowAsset)) {
+            if (msg.value != maxPayment) {
+                revert UnexpectedMsgValue(msg.value);
+            }
+        } else {
+            LibCurrency.assertZeroMsgValue();
+        }
         uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, principal, maxPayment);
 
         uint256 borrowedBefore = ds.directBorrowedPrincipal[borrowerKey][agreement.lenderPoolId];

@@ -22,7 +22,8 @@ import {
     DirectError_InvalidConfiguration,
     DirectError_EarlyExerciseNotAllowed,
     DirectError_EarlyRepayNotAllowed,
-    RollingError_RecoveryNotEligible
+    RollingError_RecoveryNotEligible,
+    UnexpectedMsgValue
 } from "../libraries/Errors.sol";
 
 /// @notice Recovery handling for rolling direct agreements
@@ -242,6 +243,13 @@ contract EqualLendDirectRollingLifecycleFacet is ReentrancyGuardModifiers {
         uint256 arrearsDue = agreement.arrears;
         uint256 principalDue = agreement.outstandingPrincipal;
         uint256 repaymentAmount = principalDue + arrearsDue;
+        if (LibCurrency.isNative(agreement.borrowAsset)) {
+            if (msg.value != maxPayment) {
+                revert UnexpectedMsgValue(msg.value);
+            }
+        } else {
+            LibCurrency.assertZeroMsgValue();
+        }
         uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, repaymentAmount, maxPayment);
         LibCurrency.transferWithMin(agreement.borrowAsset, lenderRecipient, received, minReceived);
         if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {

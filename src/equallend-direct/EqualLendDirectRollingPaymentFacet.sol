@@ -15,7 +15,8 @@ import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
 import {
     RollingError_AmortizationDisabled,
     RollingError_InvalidInterval,
-    RollingError_DustPayment
+    RollingError_DustPayment,
+    UnexpectedMsgValue
 } from "../libraries/Errors.sol";
 import {DirectError_InvalidAgreementState} from "../libraries/Errors.sol";
 
@@ -80,6 +81,14 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
 
         uint256 currentIntervalInterest =
             _rollingInterest(agreement.outstandingPrincipal, agreement.rollingApyBps, agreement.paymentIntervalSeconds);
+
+        if (LibCurrency.isNative(agreement.borrowAsset)) {
+            if (msg.value != maxPayment) {
+                revert UnexpectedMsgValue(msg.value);
+            }
+        } else {
+            LibCurrency.assertZeroMsgValue();
+        }
 
         // Pull funds
         uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, amount, maxPayment);
