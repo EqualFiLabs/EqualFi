@@ -182,17 +182,6 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         );
     }
 
-    function swapExactIn(
-        uint256 auctionId,
-        address tokenIn,
-        uint256 amountIn,
-        uint256 maxIn,
-        uint256 minOut,
-        address recipient
-    ) external payable nonReentrant returns (uint256 amountOut) {
-        return _swapExactInInternal(auctionId, tokenIn, amountIn, maxIn, minOut, recipient);
-    }
-
     function swapExactInOrFinalize(
         uint256 auctionId,
         address tokenIn,

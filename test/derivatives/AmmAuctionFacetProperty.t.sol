@@ -5,8 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {
     AmmAuctionFacet,
-    AmmAuction_NotActive,
-    AmmAuction_Expired
+    AmmAuction_NotActive
 } from "../../src/EqualX/AmmAuctionFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
@@ -89,7 +88,7 @@ contract AmmAuctionFacetPropertyTest is Test {
         tokenA.approve(address(harness), amountIn);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
 
         DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
         uint256 kAfter = Math.mulDiv(auction.reserveA, auction.reserveB, 1);
@@ -132,12 +131,14 @@ contract AmmAuctionFacetPropertyTest is Test {
         vm.warp(startTime - 1);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(AmmAuction_NotActive.selector, auctionId));
-        harness.swapExactIn(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
 
         vm.warp(endTime);
         vm.prank(taker);
-        vm.expectRevert(abi.encodeWithSelector(AmmAuction_Expired.selector, auctionId));
-        harness.swapExactIn(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
+        (uint256 amountOut, bool finalized) =
+            harness.swapExactInOrFinalize(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
+        assertEq(amountOut, 0, "no swap output after expiry");
+        assertTrue(finalized, "expiry path finalizes auction");
     }
 
     /// @notice Property: flash accounting isolation
@@ -176,7 +177,7 @@ contract AmmAuctionFacetPropertyTest is Test {
         tokenA.approve(address(harness), 1e18);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
 
         uint256 principalAfterA = harness.getUserPrincipal(1, positionKey);
         uint256 principalAfterB = harness.getUserPrincipal(2, positionKey);
@@ -225,7 +226,7 @@ contract AmmAuctionFacetPropertyTest is Test {
         uint256 feeIndexBefore = harness.getFeeIndex(1);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
 
         uint256 totalDeposits = harness.getTotalDeposits(1);
         (uint256 makerFeeA, uint256 makerFeeB) = harness.getAuctionFees(auctionId);
@@ -284,7 +285,7 @@ contract AmmAuctionFacetPropertyTest is Test {
         tokenA.approve(address(harness), amountIn);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
 
         uint256 feeAmount = (amountIn * feeBps) / 10_000;
         uint16 makerShareBps = harness.getMakerShareBps();
@@ -369,7 +370,7 @@ contract AmmAuctionFacetPropertyTest is Test {
         tokenA.approve(address(harness), amountIn);
 
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
 
         DerivativeTypes.AmmAuction memory auctionAfter = harness.getAuction(auctionId);
         uint256 deltaA = auctionAfter.reserveA - reserveA;
@@ -431,7 +432,8 @@ contract AmmAuctionFacetPropertyTest is Test {
         uint256 expectedOut = Math.mulDiv(reserveB, expectedReceived, reserveA + expectedReceived);
 
         vm.prank(taker);
-        uint256 amountOut = harness.swapExactIn(auctionId, address(feeToken), amountIn, grossIn, 0, taker);
+        (uint256 amountOut,) =
+            harness.swapExactInOrFinalize(auctionId, address(feeToken), amountIn, grossIn, 0, taker);
 
         DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
         assertEq(auction.reserveA, reserveA + expectedReceived, "reserve A uses actual received");

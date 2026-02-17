@@ -98,7 +98,8 @@ contract DirectAmmRatioLoopIntegrationTest is DirectDiamondTestBase {
             agreements.acceptRatioTrancheOffer(offerId, aPositionId, borrowAmount, 0);
 
             vm.prank(userA);
-            uint256 amountOut = amm.swapExactIn(auctionId, address(token2), borrowAmount, borrowAmount, 0, userA);
+            (uint256 amountOut,) =
+                amm.swapExactInOrFinalize(auctionId, address(token2), borrowAmount, borrowAmount, 0, userA);
             assertGt(amountOut, 0, "swap output");
 
             vm.prank(userA);
@@ -175,14 +176,13 @@ contract DirectAmmRatioLoopIntegrationTest is DirectDiamondTestBase {
     }
 
     function _selectorsAmm() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](8);
+        s = new bytes4[](7);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
-        s[2] = AmmAuctionFacet.swapExactIn.selector;
-        s[3] = AmmAuctionFacet.swapExactInOrFinalize.selector;
-        s[4] = AmmAuctionFacet.finalizeAuction.selector;
-        s[5] = AmmAuctionFacet.cancelAuction.selector;
-        s[6] = AmmAuctionFacet.getAuction.selector;
-        s[7] = AmmAuctionFacet.previewSwap.selector;
+        s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
+        s[3] = AmmAuctionFacet.finalizeAuction.selector;
+        s[4] = AmmAuctionFacet.cancelAuction.selector;
+        s[5] = AmmAuctionFacet.getAuction.selector;
+        s[6] = AmmAuctionFacet.previewSwap.selector;
     }
 }

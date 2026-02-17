@@ -10,6 +10,8 @@ import {
 } from "../../src/libraries/LibDerivativeHelpers.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
+import {LibIndexEncumbrance} from "../../src/libraries/LibIndexEncumbrance.sol";
+import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
 
 /// @notice Property: Collateral lock on creation
 /// @notice Validates: Requirements 2.1, 3.2, 6.2, 6.3, 9.2
@@ -157,6 +159,61 @@ contract DerivativeCollateralLockPropertyTest is Test {
         harness.lockAmmReserves(positionKey, poolId, 1);
     }
 
+    function test_lockCollateral_revertsWithRealDomainMixedCommitments() public {
+        uint256 poolId = 5;
+        bytes32 positionKey = keccak256("real-domains-collateral");
+        harness.seedPool(poolId, positionKey, 100 ether);
+
+        harness.reserveDirectOfferEscrow(positionKey, poolId, 30 ether);
+        harness.encumberIndex(positionKey, poolId, 1, 35 ether);
+        harness.encumberModule(positionKey, poolId, 1, 35 ether);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DerivativeError_InsufficientPrincipal.selector,
+                0,
+                1
+            )
+        );
+        harness.lockCollateral(positionKey, poolId, 1);
+    }
+
+    function test_lockAmmReserves_revertsWithRealDomainMixedCommitments() public {
+        uint256 poolId = 6;
+        bytes32 positionKey = keccak256("real-domains-amm");
+        harness.seedPool(poolId, positionKey, 80 ether);
+
+        harness.reserveDirectOfferEscrow(positionKey, poolId, 20 ether);
+        harness.encumberIndex(positionKey, poolId, 1, 30 ether);
+        harness.encumberModule(positionKey, poolId, 1, 30 ether);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DerivativeError_InsufficientPrincipal.selector,
+                0,
+                1
+            )
+        );
+        harness.lockAmmReserves(positionKey, poolId, 1);
+    }
+
+    function test_lockCollateral_allowsWithinHeadroomAfterRealDomainEncumbrance() public {
+        uint256 poolId = 7;
+        bytes32 positionKey = keccak256("real-domains-headroom");
+        harness.seedPool(poolId, positionKey, 120 ether);
+
+        harness.reserveDirectOfferEscrow(positionKey, poolId, 20 ether);
+        harness.encumberIndex(positionKey, poolId, 1, 30 ether);
+        harness.encumberModule(positionKey, poolId, 1, 40 ether);
+
+        harness.lockCollateral(positionKey, poolId, 25 ether);
+
+        assertEq(harness.getLocked(positionKey, poolId), 25 ether, "derivative lock consumes remaining headroom");
+        assertEq(harness.getDirectOfferEscrow(positionKey, poolId), 20 ether, "direct escrow unchanged");
+        assertEq(harness.getIndexEncumbered(positionKey, poolId), 30 ether, "index encumbrance unchanged");
+        assertEq(harness.getModuleEncumbered(positionKey, poolId), 40 ether, "module encumbrance unchanged");
+    }
+
     function _available(
         uint256 principal,
         uint256 locked,
@@ -195,6 +252,18 @@ contract DerivativeHelpersHarness {
         enc.directOfferEscrow = directOfferEscrow;
         enc.indexEncumbered = indexEncumbered;
         enc.moduleEncumbered = moduleEncumbered;
+    }
+
+    function reserveDirectOfferEscrow(bytes32 positionKey, uint256 pid, uint256 amount) external {
+        LibEncumbrance.position(positionKey, pid).directOfferEscrow += amount;
+    }
+
+    function encumberIndex(bytes32 positionKey, uint256 pid, uint256 indexId, uint256 amount) external {
+        LibIndexEncumbrance.encumber(positionKey, pid, indexId, amount);
+    }
+
+    function encumberModule(bytes32 positionKey, uint256 pid, uint256 moduleId, uint256 amount) external {
+        LibModuleEncumbrance.encumber(positionKey, pid, moduleId, amount);
     }
 
     function lockCollateral(bytes32 positionKey, uint256 poolId, uint256 amount) external {
