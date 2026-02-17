@@ -77,6 +77,32 @@ contract DirectRollingAgreementPropertyTest is DirectDiamondTestBase {
         rollingAgreements.acceptRollingOffer(offerId, ctx.borrowerPositionId, 0, 0);
     }
 
+    function test_acceptRollingOffer_handlesConcurrentBorrowerAndLenderRollingOffers() public {
+        RollingContext memory ctx = _setupContext(7, 8, 1, 2, 1_000 ether, 300 ether);
+        DirectTypes.DirectRollingBorrowerOfferParams memory borrowerParams =
+            _rollingBorrowerOfferParams(ctx.borrowerPositionId, 1, 2);
+        DirectTypes.DirectRollingOfferParams memory lenderParams = _rollingOfferParams(ctx.lenderPositionId, 1, 2);
+
+        vm.prank(borrowerOwner);
+        uint256 borrowerOfferId = rollingOffers.postBorrowerRollingOffer(borrowerParams);
+        vm.prank(lenderOwner);
+        uint256 lenderOfferId = rollingOffers.postRollingOffer(lenderParams);
+
+        assertEq(borrowerOfferId, 1, "borrower rolling id");
+        assertEq(lenderOfferId, 2, "lender rolling id");
+
+        vm.prank(lenderOwner);
+        uint256 borrowerAgreementId = rollingAgreements.acceptRollingOffer(borrowerOfferId, ctx.lenderPositionId, 0, 0);
+        DirectTypes.DirectRollingAgreement memory borrowerAgreement =
+            rollingAgreements.getRollingAgreement(borrowerAgreementId);
+        assertEq(borrowerAgreement.outstandingPrincipal, borrowerParams.principal, "borrower offer accepted");
+
+        vm.prank(borrowerOwner);
+        uint256 lenderAgreementId = rollingAgreements.acceptRollingOffer(lenderOfferId, ctx.borrowerPositionId, 0, 0);
+        DirectTypes.DirectRollingAgreement memory lenderAgreement = rollingAgreements.getRollingAgreement(lenderAgreementId);
+        assertEq(lenderAgreement.outstandingPrincipal, lenderParams.principal, "lender offer accepted");
+    }
+
     function _setupContext(
         uint256 lenderTokenId,
         uint256 borrowerTokenId,

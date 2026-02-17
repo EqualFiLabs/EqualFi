@@ -189,6 +189,33 @@ contract DirectRollingPaymentPropertyTest is DirectDiamondTestBase {
         assertEq(sumOutstanding, 0, "no active outstanding principal");
     }
 
+    function test_makeRollingPayment_acceptsOversizedMaxPaymentForErc20() public {
+        (uint256 agreementId,,) = _setupAgreement(true);
+        asset.mint(borrowerOwner, 100 ether);
+
+        uint256 lenderBalanceBefore = asset.balanceOf(lenderOwner);
+        DirectTypes.DirectRollingAgreement memory beforePayment = rollingAgreements.getRollingAgreement(agreementId);
+        (uint256 intervalInterest,) = rollingViews.calculateRollingPayment(agreementId);
+
+        vm.startPrank(borrowerOwner);
+        asset.approve(address(diamond), type(uint256).max);
+        rollingPayments.makeRollingPayment(agreementId, 10 ether, 15 ether, 0);
+        vm.stopPrank();
+
+        DirectTypes.DirectRollingAgreement memory afterPayment = rollingAgreements.getRollingAgreement(agreementId);
+        uint256 expectedPrincipalPaid = 15 ether > intervalInterest ? 15 ether - intervalInterest : 0;
+        if (expectedPrincipalPaid > beforePayment.outstandingPrincipal) {
+            expectedPrincipalPaid = beforePayment.outstandingPrincipal;
+        }
+
+        assertEq(asset.balanceOf(lenderOwner) - lenderBalanceBefore, 15 ether, "lender receives pulled max");
+        assertEq(
+            beforePayment.outstandingPrincipal - afterPayment.outstandingPrincipal,
+            expectedPrincipalPaid,
+            "principal reduction reflects overpull after interest"
+        );
+    }
+
     function _sumActiveOutstanding(uint256 agreementA, uint256 agreementB) internal view returns (uint256 sum) {
         DirectTypes.DirectRollingAgreement memory a = rollingAgreements.getRollingAgreement(agreementA);
         if (a.status == DirectTypes.DirectStatus.Active) {

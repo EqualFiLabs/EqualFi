@@ -235,4 +235,58 @@ contract DirectRepayFunctionalityPropertyTest is DirectDiamondTestBase {
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
         lifecycle.repay{value: 1}(agreementId, maxPayment);
     }
+
+    function test_repay_acceptsOversizedMaxPaymentForErc20() public {
+        vm.warp(220 days);
+        uint256 lenderPositionId = nft.mint(lenderOwner, 21);
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 22);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 200 ether, true);
+        asset.transfer(lenderOwner, 500 ether);
+        vm.prank(lenderOwner);
+        asset.approve(address(diamond), type(uint256).max);
+
+        DirectTypes.DirectOfferParams memory params = DirectTypes.DirectOfferParams({
+            lenderPositionId: lenderPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(asset),
+            borrowAsset: address(asset),
+            principal: 100 ether,
+            aprBps: 0,
+            durationSeconds: 3 days,
+            collateralLockAmount: 10 ether,
+            allowEarlyRepay: true,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(lenderOwner);
+        uint256 offerId = offers.postOffer(params);
+        vm.prank(borrowerOwner);
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerPositionId, 0);
+
+        uint256 required = _maxPayment(agreementId);
+        uint256 maxPayment = required + 5 ether;
+        asset.transfer(borrowerOwner, 10 ether);
+        vm.prank(borrowerOwner);
+        asset.approve(address(diamond), type(uint256).max);
+        uint256 lenderPrincipalBefore = views.getUserPrincipal(1, lenderKey);
+        uint256 borrowerBalanceBefore = asset.balanceOf(borrowerOwner);
+
+        vm.prank(borrowerOwner);
+        lifecycle.repay(agreementId, maxPayment);
+
+        assertEq(asset.balanceOf(borrowerOwner), borrowerBalanceBefore - maxPayment, "borrower overpull paid");
+        assertEq(
+            views.getUserPrincipal(1, lenderKey),
+            lenderPrincipalBefore + maxPayment,
+            "lender principal credited with pulled max"
+        );
+        assertEq(uint8(views.getAgreement(agreementId).status), uint8(DirectTypes.DirectStatus.Repaid), "agreement repaid");
+    }
 }

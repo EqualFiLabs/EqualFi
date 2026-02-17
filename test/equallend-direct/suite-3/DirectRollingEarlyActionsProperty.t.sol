@@ -174,4 +174,26 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
         rollingLifecycle.repayRollingInFull{value: 1}(agreementId, maxPayment, 0);
     }
+
+    function test_repayRollingInFull_acceptsOversizedMaxPaymentForErc20() public {
+        (uint256 agreementId,,,) = _setupAgreement(true, true);
+        harness.setArrears(agreementId, 10 ether);
+        asset.mint(borrowerOwner, 200 ether);
+
+        uint256 required = _rollingMaxPayment(agreementId);
+        uint256 oversizedMax = required + 5 ether;
+        uint256 lenderBalanceBefore = asset.balanceOf(lenderOwner);
+
+        vm.startPrank(borrowerOwner);
+        asset.approve(address(diamond), type(uint256).max);
+        rollingLifecycle.repayRollingInFull(agreementId, oversizedMax, 0);
+        vm.stopPrank();
+
+        assertEq(asset.balanceOf(lenderOwner) - lenderBalanceBefore, oversizedMax, "lender receives pulled max");
+        assertEq(
+            uint8(rollingAgreements.getRollingAgreement(agreementId).status),
+            uint8(DirectTypes.DirectStatus.Repaid),
+            "agreement repaid"
+        );
+    }
 }
