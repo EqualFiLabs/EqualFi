@@ -11,6 +11,7 @@ import {
     ModuleRegistrationDisabled,
     ModuleIncorrectFee,
     NotModuleOwner,
+    InvalidModuleOwner,
     ModuleAumOutOfBounds,
     TreasuryNotSet,
     PoolCreationFeeTransferFailed,
@@ -60,6 +61,9 @@ contract ModuleRegistryFacet is IModuleRegistryFacet {
     function setModuleOwner(uint256 moduleId, address newOwner) external {
         LibModuleRegistry.Module storage m = _requireModule(moduleId);
         _enforceModuleOwner(moduleId, m.owner);
+        if (newOwner == address(0)) {
+            revert InvalidModuleOwner(newOwner);
+        }
         address oldOwner = m.owner;
         m.owner = newOwner;
         LibModuleRegistry.emitModuleOwnerUpdated(moduleId, oldOwner, newOwner);

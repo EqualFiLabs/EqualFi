@@ -12,6 +12,7 @@ import {
     ModuleNotFound,
     ModuleInactive,
     NotModuleOwner,
+    InvalidModuleOwner,
     ModuleAumOutOfBounds,
     InvalidAumFeeBounds
 } from "../../src/libraries/Errors.sol";
@@ -169,6 +170,15 @@ contract ModuleRegistryFacetTest is Test {
 
         (address ownerAfter,,,,) = facet.getModule(moduleId);
         assertEq(ownerAfter, newOwner);
+    }
+
+    function test_setModuleOwner_revertsForZeroAddress() public {
+        vm.prank(OWNER);
+        uint256 moduleId = facet.registerModule(keccak256("m5-zero"));
+
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(InvalidModuleOwner.selector, address(0)));
+        facet.setModuleOwner(moduleId, address(0));
     }
 
     function test_pauseUnpause_ownerAndGovernance_withInactiveNoReactivation() public {
