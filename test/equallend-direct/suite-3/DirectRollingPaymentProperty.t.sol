@@ -135,4 +135,68 @@ contract DirectRollingPaymentPropertyTest is DirectDiamondTestBase {
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
         rollingPayments.makeRollingPayment{value: 1}(agreementId, 10 ether, 10 ether, 0);
     }
+
+    function test_invariant_activeDirectLent_matchesSumOfActiveOutstandingPrincipal() public {
+        (uint256 agreementA, uint256 lenderPositionId, uint256 borrowerPositionId) = _setupAgreement(true);
+
+        DirectTypes.DirectRollingOfferParams memory offerParams = DirectTypes.DirectRollingOfferParams({
+            lenderPositionId: lenderPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(asset),
+            borrowAsset: address(asset),
+            principal: 100 ether,
+            collateralLockAmount: 50 ether,
+            paymentIntervalSeconds: 7 days,
+            rollingApyBps: 800,
+            gracePeriodSeconds: 6 days,
+            maxPaymentCount: 520,
+            upfrontPremium: 0,
+            allowAmortization: true,
+            allowEarlyRepay: true,
+            allowEarlyExercise: false
+        });
+        vm.prank(lenderOwner);
+        uint256 offerIdB = rollingOffers.postRollingOffer(offerParams);
+        vm.prank(borrowerOwner);
+        uint256 agreementB = rollingAgreements.acceptRollingOffer(offerIdB, borrowerPositionId, 0, 0);
+
+        vm.startPrank(borrowerOwner);
+        asset.mint(borrowerOwner, 500 ether);
+        asset.approve(address(diamond), type(uint256).max);
+        vm.stopPrank();
+
+        uint256 sumOutstanding = _sumActiveOutstanding(agreementA, agreementB);
+        assertEq(views.getActiveDirectLent(1), sumOutstanding, "initial active lent invariant");
+
+        uint256 closeBMaxPayment = _rollingMaxPayment(agreementB);
+        vm.prank(borrowerOwner);
+        rollingLifecycle.repayRollingInFull(agreementB, closeBMaxPayment, 0);
+        sumOutstanding = _sumActiveOutstanding(agreementA, agreementB);
+        assertEq(views.getActiveDirectLent(1), sumOutstanding, "after close B invariant");
+
+        vm.warp(block.timestamp + 8 days);
+        vm.prank(borrowerOwner);
+        rollingPayments.makeRollingPayment(agreementA, 20 ether, 20 ether, 0);
+        sumOutstanding = _sumActiveOutstanding(agreementA, agreementB);
+        assertEq(views.getActiveDirectLent(1), sumOutstanding, "after amortization invariant");
+
+        uint256 closeAMaxPayment = _rollingMaxPayment(agreementA);
+        vm.prank(borrowerOwner);
+        rollingLifecycle.repayRollingInFull(agreementA, closeAMaxPayment, 0);
+        sumOutstanding = _sumActiveOutstanding(agreementA, agreementB);
+        assertEq(views.getActiveDirectLent(1), sumOutstanding, "after full close invariant");
+        assertEq(sumOutstanding, 0, "no active outstanding principal");
+    }
+
+    function _sumActiveOutstanding(uint256 agreementA, uint256 agreementB) internal view returns (uint256 sum) {
+        DirectTypes.DirectRollingAgreement memory a = rollingAgreements.getRollingAgreement(agreementA);
+        if (a.status == DirectTypes.DirectStatus.Active) {
+            sum += a.outstandingPrincipal;
+        }
+        DirectTypes.DirectRollingAgreement memory b = rollingAgreements.getRollingAgreement(agreementB);
+        if (b.status == DirectTypes.DirectStatus.Active) {
+            sum += b.outstandingPrincipal;
+        }
+    }
 }

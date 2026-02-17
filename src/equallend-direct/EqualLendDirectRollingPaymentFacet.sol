@@ -118,6 +118,9 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
             LibActiveCreditIndex.applyEncumbranceDelta(
                 lenderPool, agreement.lenderPoolId, lenderKey, lenderEncBefore, lenderEncAfter
             );
+            uint256 activeLent = ds.activeDirectLentPerPool[agreement.lenderPoolId];
+            ds.activeDirectLentPerPool[agreement.lenderPoolId] =
+                activeLent >= principalPaid ? activeLent - principalPaid : 0;
             if (collateralPool.activeCreditPrincipalTotal >= principalPaid) {
                 collateralPool.activeCreditPrincipalTotal -= principalPaid;
             } else {
