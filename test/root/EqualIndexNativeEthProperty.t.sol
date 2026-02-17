@@ -10,7 +10,7 @@ import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 import {Types} from "../../src/libraries/Types.sol";
-import {UnexpectedMsgValue} from "../../src/libraries/Errors.sol";
+import {NativeTransferFailed, UnexpectedMsgValue} from "../../src/libraries/Errors.sol";
 
 contract EqualIndexNativeHarness is EqualIndexActionsFacetV3 {
     function initIndex(
@@ -129,6 +129,22 @@ contract NativeIndexFlashReceiver is IEqualIndexFlashReceiver {
     receive() external payable {}
 }
 
+contract RejectingRefundReceiver {
+    function mintWithNative(
+        EqualIndexNativeHarness facet,
+        uint256 indexId,
+        uint256 units,
+        address to,
+        uint256[] calldata maxInputs
+    ) external payable returns (uint256 minted) {
+        minted = facet.mint{value: msg.value}(indexId, units, to, maxInputs);
+    }
+
+    receive() external payable {
+        revert("reject refund");
+    }
+}
+
 contract EqualIndexNativeEthPropertyTest is Test {
     EqualIndexNativeHarness internal facet;
     IndexToken internal indexToken;
@@ -243,5 +259,18 @@ contract EqualIndexNativeEthPropertyTest is Test {
 
         assertEq(treasury.balance - treasuryBefore, toTreasury, "treasury fee");
         assertEq(facet.nativeTrackedTotal(), nativeTrackedBefore + fee - toTreasury, "native tracked");
+    }
+
+    function test_nativeMintRevertsWhenRefundFails() public {
+        RejectingRefundReceiver rejector = new RejectingRefundReceiver();
+        uint256 units = 1 * SCALE;
+        uint256[] memory maxInputs = facet.previewMintInputs(INDEX_ID, units);
+        uint256 total = maxInputs[0];
+        vm.deal(address(rejector), total);
+
+        uint256 trackedBefore = facet.nativeTrackedTotal();
+        vm.expectRevert(abi.encodeWithSelector(NativeTransferFailed.selector, address(rejector), total));
+        rejector.mintWithNative{value: total}(facet, INDEX_ID, units, address(rejector), maxInputs);
+        assertEq(facet.nativeTrackedTotal(), trackedBefore, "tracked should roll back on refund failure");
     }
 }

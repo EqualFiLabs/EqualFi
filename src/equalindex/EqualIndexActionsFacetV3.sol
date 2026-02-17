@@ -258,7 +258,7 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         if (preAvailable >= amount) {
             (bool success,) = msg.sender.call{value: msg.value}("");
             if (!success) {
-                // Refunds are best-effort; keep funds if receiver rejects.
+                revert NativeTransferFailed(msg.sender, msg.value);
             }
         }
     }
