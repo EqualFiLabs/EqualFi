@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {LibPositionAgentStorage} from "../../libraries/LibPositionAgentStorage.sol";
 import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
 import {DirectError_InvalidPositionNFT} from "../../libraries/Errors.sol";
+import {PositionAgent_CreateAccountAddressMismatch, PositionAgent_TBANotDeployed} from "../../libraries/PositionAgentErrors.sol";
 import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 /// @title PositionAgentTBAFacet
@@ -40,8 +41,6 @@ contract PositionAgentTBAFacet {
             return tbaAddress;
         }
 
-        ds.tbaDeployed[positionTokenId] = true;
-
         address registry = ds.erc6551Registry;
         address implementation = ds.erc6551Implementation;
         address positionNFT = _positionNFTAddress();
@@ -54,6 +53,14 @@ contract PositionAgentTBAFacet {
             positionTokenId
         );
 
+        if (deployed != tbaAddress) {
+            revert PositionAgent_CreateAccountAddressMismatch(tbaAddress, deployed);
+        }
+        if (deployed.code.length == 0) {
+            revert PositionAgent_TBANotDeployed(deployed);
+        }
+
+        ds.tbaDeployed[positionTokenId] = true;
         emit TBADeployed(positionTokenId, deployed);
         return deployed;
     }
