@@ -44,6 +44,7 @@ import {PositionAgentConfigFacet} from "../src/agent-wallet/erc6551/PositionAgen
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);
@@ -51,6 +52,71 @@ interface IPoolManagementFacetInitDefault {
 
 interface IPoolManagementFacetInitConfig {
     function initPool(uint256 pid, address underlying, Types.PoolConfig calldata config) external payable;
+}
+
+contract LocalERC6551Registry is IERC6551Registry {
+    function createAccount(
+        address implementation,
+        bytes32 salt,
+        uint256 chainId,
+        address,
+        uint256
+    ) external returns (address) {
+        assembly {
+            pop(chainId)
+            calldatacopy(0x8c, 0x24, 0x80)
+            mstore(0x6c, 0x5af43d82803e903d91602b57fd5bf3)
+            mstore(0x5d, implementation)
+            mstore(0x49, 0x3d60ad80600a3d3981f3363d3d373d3d3d363d73)
+
+            mstore8(0x00, 0xff)
+            mstore(0x35, keccak256(0x55, 0xb7))
+            mstore(0x01, shl(96, address()))
+            mstore(0x15, salt)
+
+            let computed := keccak256(0x00, 0x55)
+
+            if iszero(extcodesize(computed)) {
+                let deployed := create2(0, 0x55, 0xb7, salt)
+                if iszero(deployed) {
+                    mstore(0x00, 0x20188a59)
+                    revert(0x1c, 0x04)
+                }
+                mstore(0x6c, deployed)
+                return(0x6c, 0x20)
+            }
+
+            mstore(0x00, shr(96, shl(96, computed)))
+            return(0x00, 0x20)
+        }
+    }
+
+    function account(
+        address implementation,
+        bytes32 salt,
+        uint256 chainId,
+        address tokenContract,
+        uint256 tokenId
+    ) external view returns (address) {
+        assembly {
+            pop(chainId)
+            pop(tokenContract)
+            pop(tokenId)
+
+            calldatacopy(0x8c, 0x24, 0x80)
+            mstore(0x6c, 0x5af43d82803e903d91602b57fd5bf3)
+            mstore(0x5d, implementation)
+            mstore(0x49, 0x3d60ad80600a3d3981f3363d3d373d3d3d363d73)
+
+            mstore8(0x00, 0xff)
+            mstore(0x35, keccak256(0x55, 0xb7))
+            mstore(0x01, shl(96, address()))
+            mstore(0x15, salt)
+
+            mstore(0x00, shr(96, shl(96, keccak256(0x00, 0x55))))
+            return(0x00, 0x20)
+        }
+    }
 }
 
 /// @notice Lean deployment script for EqualIndex, AMM auctions, MAM curves, and self-secured lending.
@@ -234,11 +300,13 @@ contract LeanDeployScript is Script {
 
         address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(beaconProxy));
         address identityRegistry = _resolveIdentityRegistry();
-        PositionAgentConfigFacet(address(diamond)).setERC6551Registry(ERC6551_REGISTRY);
+        address erc6551Registry = _resolveERC6551Registry();
+        PositionAgentConfigFacet(address(diamond)).setERC6551Registry(erc6551Registry);
         if (erc6551Implementation == address(0)) {
             erc6551Implementation = address(beaconProxy);
         }
         PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
+        console2.log("Using ERC6551 registry:", erc6551Registry);
         console2.log("Using ERC6551 implementation:", erc6551Implementation);
         if (identityRegistry != address(0)) {
             PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
@@ -306,6 +374,20 @@ contract LeanDeployScript is Script {
             return ERC8004_SEPOLIA;
         }
         return vm.envOr("IDENTITY_REGISTRY", address(0));
+    }
+
+    function _resolveERC6551Registry() internal returns (address) {
+        if (ERC6551_REGISTRY.code.length > 0) {
+            return ERC6551_REGISTRY;
+        }
+
+        address configured = vm.envOr("ERC6551_REGISTRY", address(0));
+        if (configured != address(0) && configured.code.length > 0) {
+            return configured;
+        }
+
+        LocalERC6551Registry localRegistry = new LocalERC6551Registry();
+        return address(localRegistry);
     }
 
     function _resolveEntryPoint() internal view returns (address) {
