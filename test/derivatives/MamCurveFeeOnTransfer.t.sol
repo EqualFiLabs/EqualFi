@@ -35,6 +35,10 @@ contract MamCurveFoTHarness is MamCurveCreationFacet, MamCurveManagementFacet, M
         LibDerivativeStorage.derivativeStorage().config.mamMakerShareBps = shareBps;
     }
 
+    function getMakerShareBps() external view returns (uint16) {
+        return LibDerivativeStorage.derivativeStorage().config.mamMakerShareBps;
+    }
+
     function seedPool(
         uint256 pid,
         address underlying,
@@ -152,5 +156,68 @@ contract MamCurveFeeOnTransferTest is Test {
         assertEq(out, 1e18, "base out");
         assertEq(baseToken.balanceOf(taker), 1e18, "taker received base");
         assertGt(quoteToken.balanceOf(feeSink), sinkBefore, "fee charged");
+    }
+
+    function test_curveSwap_overCapMax_preservesOutputAndAccounting() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principalA = 5e18;
+        uint256 principalB = 5e18;
+        harness.seedPool(1, address(baseToken), positionKey, principalA, principalA);
+        harness.seedPool(2, address(quoteToken), positionKey, principalB, principalB);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(baseToken),
+            tokenB: address(quoteToken),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 1e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 8
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 amountIn = 2e18;
+        uint256 netQuote = harness.previewCurveQuote(curveId, amountIn);
+        uint256 gross = _grossWithFee(netQuote);
+        uint256 overCapGross = gross + 1e18;
+        quoteToken.mint(taker, overCapGross);
+
+        uint256 makerQuoteBefore = harness.getUserPrincipal(2, positionKey);
+        uint256 trackedBefore = harness.getTrackedBalance(2);
+        uint256 sinkBefore = quoteToken.balanceOf(feeSink);
+
+        vm.startPrank(taker);
+        quoteToken.approve(address(harness), overCapGross);
+        uint256 out = harness.executeCurveSwap(curveId, amountIn, overCapGross, 1e18, uint64(block.timestamp + 1 days), taker);
+        vm.stopPrank();
+
+        uint256 feeAmount = (amountIn * 100) / 10_000;
+        uint256 makerFee = (feeAmount * harness.getMakerShareBps()) / 10_000;
+
+        assertEq(out, 1e18, "base out");
+        assertEq(baseToken.balanceOf(taker), 1e18, "taker received base");
+        assertEq(
+            harness.getUserPrincipal(2, positionKey),
+            makerQuoteBefore + amountIn + makerFee,
+            "maker accounting independent of over-cap max"
+        );
+        assertGt(harness.getTrackedBalance(2), trackedBefore, "tracked increased");
+        assertGt(quoteToken.balanceOf(feeSink), sinkBefore, "FoT charged on transfer/refund path");
     }
 }

@@ -334,6 +334,80 @@ contract AtomicDeskIntegrationTest is AtomicDeskDiamondTestBase {
         assertEq(r.amount, 0, "amount cleared");
     }
 
+    function testMakerFeeReserveRefundLoop_doesNotLeakMakerFunds() public {
+        (bytes32 deskId, bytes32 positionKey,) = _createDesk(true);
+        harness.setTreasury(address(0xBEEF));
+
+        vm.prank(maker);
+        bytes32 trancheId =
+            atomicDesk.openTranche(deskId, 6e18, 1e18, 1, 1, 150, AtomicTypes.FeePayer.Maker, 0);
+
+        uint256 principalBefore = harness.getPrincipal(POOL_A, positionKey);
+        uint256 trackedBefore = harness.getTracked(POOL_A);
+
+        escrow.setCommittee(committee, true);
+        uint64 window = escrow.refundSafetyWindow();
+        uint256 loopTs = block.timestamp;
+        for (uint256 i = 0; i < 3; i++) {
+            vm.warp(loopTs);
+            bytes32 settlementDigest = keccak256(abi.encodePacked("loop", i));
+            uint64 expiry = uint64(block.timestamp + 1 hours);
+            vm.prank(taker);
+            bytes32 reservationId = atomicDesk.reserveFromTranche(trancheId, 2e18, settlementDigest, expiry);
+
+            assertEq(harness.getPrincipal(POOL_A, positionKey), principalBefore, "reserve should not debit principal");
+            assertEq(harness.getTracked(POOL_A), trackedBefore, "reserve should not debit tracked");
+
+            AtomicTypes.Reservation memory r = escrow.getReservation(reservationId);
+            vm.warp(uint256(r.createdAt) + window + 1);
+            vm.prank(committee);
+            escrow.refund(reservationId, keccak256(abi.encodePacked("no-spend", i)));
+
+            assertEq(harness.getPrincipal(POOL_A, positionKey), principalBefore, "refund should preserve principal");
+            assertEq(harness.getTracked(POOL_A), trackedBefore, "refund should preserve tracked");
+            loopTs = block.timestamp + 1;
+        }
+    }
+
+    function testSettleIgnoresSettlementDigestBytesAndOnlyUsesHashlock() public {
+        (bytes32 deskId, bytes32 positionKey,) = _createDesk(true);
+        uint256 amount = 1e18;
+        bytes32 reservationId = _reserve(deskId, address(tokenA), amount);
+
+        AtomicTypes.Reservation memory r = escrow.getReservation(reservationId);
+        bytes32 tau = keccak256("different-preimage");
+        bytes32 hashlock = keccak256(abi.encodePacked(tau));
+        assertTrue(r.settlementDigest != hashlock, "digest/hashlock differ");
+
+        vm.prank(maker);
+        escrow.setHashlock(reservationId, hashlock);
+
+        uint256 principalBefore = harness.getPrincipal(POOL_A, positionKey);
+        vm.prank(maker);
+        escrow.settle(reservationId, tau, 0);
+
+        assertEq(harness.getPrincipal(POOL_A, positionKey), principalBefore - amount, "settle succeeds independent of digest");
+    }
+
+    function testRefundEvidenceTrustBoundary_onlyNonZeroEvidenceIsEnforced() public {
+        (bytes32 deskId,,) = _createDesk(true);
+        bytes32 reservationId = _reserve(deskId, address(tokenA), 1e18);
+
+        escrow.setCommittee(committee, true);
+        AtomicTypes.Reservation memory r = escrow.getReservation(reservationId);
+        vm.warp(uint256(r.createdAt) + escrow.refundSafetyWindow() + 1);
+
+        vm.prank(committee);
+        vm.expectRevert(abi.encodeWithSignature("SettlementEscrow_InvalidParam()"));
+        escrow.refund(reservationId, bytes32(0));
+
+        vm.prank(committee);
+        escrow.refund(reservationId, bytes32(uint256(1)));
+
+        r = escrow.getReservation(reservationId);
+        assertEq(uint256(r.status), uint256(AtomicTypes.ReservationStatus.Refunded), "non-zero evidence accepted");
+    }
+
     function testTrancheMakerFeeAppliedOnSettle_notReserve() public {
         (bytes32 deskId, bytes32 positionKey,) = _createDesk(true);
         uint256 totalLiquidity = 5e18;

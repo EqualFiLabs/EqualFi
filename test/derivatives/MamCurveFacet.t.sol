@@ -283,6 +283,93 @@ contract MamCurveFacetTest is Test {
         assertEq(lockedAfter, desc.maxVolume - 1e18);
     }
 
+    function test_overCapMaxQuote_refundsExcess_withoutExtraOutput_nonFoT() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principalA = 10e18;
+        uint256 principalB = 10e18;
+        harness.seedPool(1, address(tokenA), positionKey, principalA, principalA);
+        harness.seedPool(2, address(tokenB), positionKey, principalB, principalB);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 700
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 amountIn = 2e18;
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        uint256 overCapQuote = totalQuote + 1e18;
+        tokenB.mint(taker, overCapQuote);
+
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), overCapQuote);
+        uint256 takerQuoteBefore = tokenB.balanceOf(taker);
+        uint256 out =
+            harness.executeCurveSwap(curveId, amountIn, overCapQuote, 1e18, uint64(block.timestamp + 1 days), taker);
+        uint256 takerSpent = takerQuoteBefore - tokenB.balanceOf(taker);
+        vm.stopPrank();
+
+        assertEq(out, 1e18, "no extra output from over-cap maxQuote");
+        assertEq(tokenA.balanceOf(taker), 1e18, "base out");
+        assertEq(takerSpent, totalQuote, "excess refunded to net quote");
+    }
+
+    function test_nativeQuoteTokenDescriptor_isRejected() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principalA = 10e18;
+        harness.seedPool(1, address(tokenA), positionKey, principalA, principalA);
+        harness.seedPool(2, address(0), positionKey, 0, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 703
+        });
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSignature("MamCurve_InvalidDescriptor()"));
+        harness.createCurve(desc);
+    }
+
     function testFuzz_overCapGrossPullDoesNotChangeOutputOrDebt(uint256 extraQuote) public {
         extraQuote = bound(extraQuote, 1, 10e18);
 

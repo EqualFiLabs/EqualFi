@@ -13,6 +13,10 @@ contract EncPubRegistryValidationTest is Test {
         hex"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
     bytes internal constant INVALID_NON_CURVE_X5 =
         hex"020000000000000000000000000000000000000000000000000000000000000005";
+    bytes internal constant INVALID_X_ZERO =
+        hex"020000000000000000000000000000000000000000000000000000000000000000";
+    bytes internal constant INVALID_X_GE_FIELD =
+        hex"02fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
     bytes internal constant INVALID_PREFIX =
         hex"040000000000000000000000000000000000000000000000000000000000000001";
     bytes internal constant INVALID_LENGTH = hex"02";
@@ -35,6 +39,14 @@ contract EncPubRegistryValidationTest is Test {
         registry.registerEncPub(INVALID_LENGTH);
     }
 
+    function test_registerEncPub_revertsForOutOfFieldX() public {
+        vm.expectRevert(abi.encodeWithSignature("InvalidPubkey()"));
+        registry.registerEncPub(INVALID_X_ZERO);
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidPubkey()"));
+        registry.registerEncPub(INVALID_X_GE_FIELD);
+    }
+
     function test_registerEncPub_acceptsValidCompressedPoint() public {
         registry.registerEncPub(VALID_GENERATOR_COMPRESSED);
         assertTrue(registry.isRegistered(address(this)));
@@ -44,6 +56,9 @@ contract EncPubRegistryValidationTest is Test {
     function test_mailboxUsesSharedPubkeyValidation() public {
         vm.expectRevert(abi.encodeWithSignature("InvalidPubkey()"));
         mailbox.registerPubkey(INVALID_NON_CURVE_X5);
+
+        vm.expectRevert(abi.encodeWithSignature("InvalidPubkey()"));
+        mailbox.registerPubkey(INVALID_X_GE_FIELD);
 
         mailbox.registerPubkey(VALID_GENERATOR_COMPRESSED);
         assertEq(mailbox.deskEncryptionPubkey(address(this)), VALID_GENERATOR_COMPRESSED);
