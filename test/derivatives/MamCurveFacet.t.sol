@@ -807,6 +807,751 @@ contract MamCurveFacetTest is Test {
         vm.stopPrank();
     }
 
+    function test_nativeQuoteSwap_happyPath() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 10e18, 10e18);
+        harness.seedPool(2, address(0), positionKey, 0, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 710
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 amountIn = 2e18;
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+
+        uint256 makerBaseBefore = harness.getUserPrincipal(1, positionKey);
+        uint256 makerQuoteBefore = harness.getUserPrincipal(2, positionKey);
+        uint256 trackedQuoteBefore = harness.getTrackedBalance(2);
+        uint256 nativeBefore = harness.getNativeTrackedTotal();
+        uint256 treasuryNativeBefore = treasury.balance;
+
+        vm.deal(taker, totalQuote);
+        vm.prank(taker);
+        uint256 out =
+            harness.executeCurveSwap{value: totalQuote}(curveId, amountIn, totalQuote, 1e18, uint64(block.timestamp + 1 days), taker);
+
+        uint256 feeAmount = totalQuote - amountIn;
+        uint256 makerFee = (feeAmount * harness.getMakerShareBps()) / 10_000;
+        uint256 protocolFee = feeAmount - makerFee;
+        uint256 treasuryFee = harness.getTreasuryAddress() != address(0)
+            ? (protocolFee * harness.getTreasurySplitBps()) / 10_000
+            : 0;
+
+        assertEq(out, 1e18);
+        assertEq(tokenA.balanceOf(taker), 1e18);
+        assertEq(harness.getUserPrincipal(1, positionKey), makerBaseBefore - 1e18);
+        assertEq(harness.getUserPrincipal(2, positionKey), makerQuoteBefore + amountIn + makerFee);
+        assertEq(harness.getTrackedBalance(2), trackedQuoteBefore + totalQuote - treasuryFee);
+        assertEq(harness.getNativeTrackedTotal(), nativeBefore + totalQuote - treasuryFee);
+        assertEq(treasury.balance - treasuryNativeBefore, treasuryFee);
+    }
+
+    function testFuzz_nativeQuoteOverCapInvariant(uint256 amountIn, uint256 extraQuote) public {
+        amountIn = bound(amountIn, 2, 2e18);
+        extraQuote = bound(extraQuote, 1, 10e18);
+
+        uint256 makerTokenIdExact = nft.mint(maker, 1);
+        bytes32 keyExact = nft.getPositionKey(makerTokenIdExact);
+        uint256 makerTokenIdOver = nft.mint(maker, 1);
+        bytes32 keyOver = nft.getPositionKey(makerTokenIdOver);
+
+        harness.seedPool(1, address(tokenA), keyExact, 10e18, 10e18);
+        harness.seedPool(2, address(0), keyExact, 0, 0);
+        harness.seedPool(3, address(tokenA), keyOver, 10e18, 10e18);
+        harness.seedPool(4, address(0), keyOver, 0, 0);
+        harness.joinPool(keyExact, 1);
+        harness.joinPool(keyExact, 2);
+        harness.joinPool(keyOver, 3);
+        harness.joinPool(keyOver, 4);
+
+        MamTypes.CurveDescriptor memory exactDesc = MamTypes.CurveDescriptor({
+            makerPositionKey: keyExact,
+            makerPositionId: makerTokenIdExact,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 711
+        });
+        MamTypes.CurveDescriptor memory overDesc = MamTypes.CurveDescriptor({
+            makerPositionKey: keyOver,
+            makerPositionId: makerTokenIdOver,
+            poolIdA: 3,
+            poolIdB: 4,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 712
+        });
+
+        vm.startPrank(maker);
+        uint256 exactCurveId = harness.createCurve(exactDesc);
+        uint256 overCurveId = harness.createCurve(overDesc);
+        vm.stopPrank();
+
+        uint256 totalQuote = harness.previewCurveQuote(exactCurveId, amountIn);
+        uint256 overCapQuote = totalQuote + extraQuote;
+        vm.deal(taker, totalQuote + overCapQuote);
+
+        uint256 exactMakerQuoteBefore = harness.getUserPrincipal(2, keyExact);
+        uint256 exactTrackedBefore = harness.getTrackedBalance(2);
+        uint256 exactNativeBefore = harness.getNativeTrackedTotal();
+        vm.prank(taker);
+        uint256 exactOut =
+            harness.executeCurveSwap{value: totalQuote}(exactCurveId, amountIn, totalQuote, 0, uint64(block.timestamp + 1 days), taker);
+        uint256 exactMakerQuoteDelta = harness.getUserPrincipal(2, keyExact) - exactMakerQuoteBefore;
+        uint256 exactTrackedDelta = harness.getTrackedBalance(2) - exactTrackedBefore;
+        uint256 exactNativeDelta = harness.getNativeTrackedTotal() - exactNativeBefore;
+
+        uint256 overMakerQuoteBefore = harness.getUserPrincipal(4, keyOver);
+        uint256 overTrackedBefore = harness.getTrackedBalance(4);
+        uint256 overNativeBefore = harness.getNativeTrackedTotal();
+        vm.prank(taker);
+        uint256 overOut =
+            harness.executeCurveSwap{value: overCapQuote}(overCurveId, amountIn, overCapQuote, 0, uint64(block.timestamp + 1 days), taker);
+        uint256 overMakerQuoteDelta = harness.getUserPrincipal(4, keyOver) - overMakerQuoteBefore;
+        uint256 overTrackedDelta = harness.getTrackedBalance(4) - overTrackedBefore;
+        uint256 overNativeDelta = harness.getNativeTrackedTotal() - overNativeBefore;
+
+        assertEq(overOut, exactOut, "amount out invariant");
+        assertEq(overMakerQuoteDelta, exactMakerQuoteDelta, "maker debt invariant");
+        assertEq(overTrackedDelta, exactTrackedDelta, "quote tracked invariant");
+        assertEq(overNativeDelta, exactNativeDelta, "native tracked invariant");
+    }
+
+    function testFuzz_nativeQuoteRefundCorrectness(uint256 amountIn, uint256 extraQuote) public {
+        amountIn = bound(amountIn, 2, 2e18);
+        extraQuote = bound(extraQuote, 1, 10e18);
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 10e18, 10e18);
+        harness.seedPool(2, address(0), positionKey, 0, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 713
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        uint256 overCapQuote = totalQuote + extraQuote;
+        vm.deal(taker, overCapQuote);
+
+        uint256 takerEthBefore = taker.balance;
+        vm.prank(taker);
+        uint256 out =
+            harness.executeCurveSwap{value: overCapQuote}(curveId, amountIn, overCapQuote, 0, uint64(block.timestamp + 1 days), taker);
+        uint256 takerEthSpent = takerEthBefore - taker.balance;
+
+        assertEq(out, amountIn / 2);
+        assertEq(takerEthSpent, totalQuote);
+    }
+
+    function test_nativeQuoteRefundFailure_revertsWhenCallerRejectsEth() public {
+        ETHRejector rejector = new ETHRejector();
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 10e18, 10e18);
+        harness.seedPool(2, address(0), positionKey, 0, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 714
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 amountIn = 2e18;
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        uint256 overCapQuote = totalQuote + 1e18;
+        uint256 refundAmount = overCapQuote - totalQuote;
+        vm.deal(address(rejector), overCapQuote);
+
+        vm.expectRevert(abi.encodeWithSignature("NativeTransferFailed(address,uint256)", address(rejector), refundAmount));
+        rejector.executeSwap{value: overCapQuote}(
+            harness,
+            curveId,
+            amountIn,
+            overCapQuote,
+            0,
+            uint64(block.timestamp + 1 days),
+            maker
+        );
+    }
+
+    function test_nativeBaseSwap_happyPath() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        vm.deal(address(harness), 3e18);
+        harness.seedPool(1, address(0), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 10e18, 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(0),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 715
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 amountIn = 2e18;
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        uint256 feeAmount = totalQuote - amountIn;
+        uint256 makerFee = (feeAmount * harness.getMakerShareBps()) / 10_000;
+        uint256 protocolFee = feeAmount - makerFee;
+        uint256 treasuryFee = harness.getTreasuryAddress() != address(0)
+            ? (protocolFee * harness.getTreasurySplitBps()) / 10_000
+            : 0;
+
+        tokenB.mint(taker, totalQuote);
+        uint256 recipientNativeBefore = taker.balance;
+        uint256 nativeBefore = harness.getNativeTrackedTotal();
+        uint256 makerBaseBefore = harness.getUserPrincipal(1, positionKey);
+        uint256 makerQuoteBefore = harness.getUserPrincipal(2, positionKey);
+        uint256 trackedQuoteBefore = harness.getTrackedBalance(2);
+        uint256 trackedBaseBefore = harness.getTrackedBalance(1);
+
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), totalQuote);
+        uint256 out =
+            harness.executeCurveSwap(curveId, amountIn, totalQuote, 1e18, uint64(block.timestamp + 1 days), taker);
+        vm.stopPrank();
+
+        assertEq(out, 1e18);
+        assertEq(taker.balance - recipientNativeBefore, 1e18);
+        assertEq(harness.getUserPrincipal(1, positionKey), makerBaseBefore - 1e18);
+        assertEq(harness.getUserPrincipal(2, positionKey), makerQuoteBefore + amountIn + makerFee);
+        assertEq(harness.getTrackedBalance(2), trackedQuoteBefore + totalQuote - treasuryFee);
+        assertEq(harness.getTrackedBalance(1), trackedBaseBefore - 1e18);
+        assertEq(harness.getNativeTrackedTotal(), nativeBefore - 1e18);
+    }
+
+    function testFuzz_nativeBasePayoutDelivery(uint256 amountIn) public {
+        amountIn = bound(amountIn, 2, 2e18);
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        vm.deal(address(harness), 3e18);
+        harness.seedPool(1, address(0), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 10e18, 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(0),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 716
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        tokenB.mint(taker, totalQuote);
+
+        uint256 recipientNativeBefore = taker.balance;
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), totalQuote);
+        uint256 out = harness.executeCurveSwap(curveId, amountIn, totalQuote, 0, uint64(block.timestamp + 1 days), taker);
+        vm.stopPrank();
+
+        assertEq(taker.balance - recipientNativeBefore, out);
+        assertGt(out, 0);
+    }
+
+    function test_nativeBasePayout_revertsWhenRecipientRejectsEth() public {
+        ETHRejector rejector = new ETHRejector();
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        vm.deal(address(harness), 3e18);
+        harness.seedPool(1, address(0), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 10e18, 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(0),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 717
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 amountIn = 2e18;
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        tokenB.mint(taker, totalQuote);
+
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), totalQuote);
+        vm.expectRevert(abi.encodeWithSignature("NativeTransferFailed(address,uint256)", address(rejector), 1e18));
+        harness.executeCurveSwap(curveId, amountIn, totalQuote, 0, uint64(block.timestamp + 1 days), address(rejector));
+        vm.stopPrank();
+    }
+
+    function test_nativeBaseSwap_revertsWhenMinOutTooHigh() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        vm.deal(address(harness), 3e18);
+        harness.seedPool(1, address(0), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 10e18, 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(0),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 718
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 amountIn = 2e18;
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        uint256 expectedOut = amountIn / 2;
+        uint256 minOut = expectedOut + 1;
+        tokenB.mint(taker, totalQuote);
+
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), totalQuote);
+        vm.expectRevert(abi.encodeWithSignature("MamCurve_Slippage(uint256,uint256)", minOut, expectedOut));
+        harness.executeCurveSwap(curveId, amountIn, totalQuote, minOut, uint64(block.timestamp + 1 days), taker);
+        vm.stopPrank();
+    }
+
+    function testFuzz_nativeQuoteSwapAccountingDeltas(uint256 amountIn) public {
+        amountIn = bound(amountIn, 2, 2e18);
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 10e18, 10e18);
+        harness.seedPool(2, address(0), positionKey, 0, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 719
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        uint256 feeAmount = totalQuote - amountIn;
+        uint256 makerFee = (feeAmount * harness.getMakerShareBps()) / 10_000;
+        uint256 protocolFee = feeAmount - makerFee;
+        uint256 treasuryFee = harness.getTreasuryAddress() != address(0)
+            ? (protocolFee * harness.getTreasurySplitBps()) / 10_000
+            : 0;
+
+        uint256 makerBaseBefore = harness.getUserPrincipal(1, positionKey);
+        uint256 makerQuoteBefore = harness.getUserPrincipal(2, positionKey);
+        uint256 baseTrackedBefore = harness.getTrackedBalance(1);
+        uint256 quoteTrackedBefore = harness.getTrackedBalance(2);
+        uint256 nativeBefore = harness.getNativeTrackedTotal();
+
+        vm.deal(taker, totalQuote);
+        vm.prank(taker);
+        uint256 out =
+            harness.executeCurveSwap{value: totalQuote}(curveId, amountIn, totalQuote, 0, uint64(block.timestamp + 1 days), taker);
+
+        assertEq(harness.getUserPrincipal(1, positionKey), makerBaseBefore - out);
+        assertEq(harness.getUserPrincipal(2, positionKey), makerQuoteBefore + amountIn + makerFee);
+        assertEq(harness.getTrackedBalance(1), baseTrackedBefore - out);
+        assertEq(harness.getTrackedBalance(2), quoteTrackedBefore + totalQuote - treasuryFee);
+        assertEq(harness.getNativeTrackedTotal(), nativeBefore + totalQuote - treasuryFee);
+    }
+
+    function testFuzz_nativeBaseSwapAccountingDeltas(uint256 amountIn) public {
+        amountIn = bound(amountIn, 2, 2e18);
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        vm.deal(address(harness), 3e18);
+        harness.seedPool(1, address(0), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 10e18, 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(0),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 720
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 totalQuote = harness.previewCurveQuote(curveId, amountIn);
+        uint256 feeAmount = totalQuote - amountIn;
+        uint256 makerFee = (feeAmount * harness.getMakerShareBps()) / 10_000;
+        uint256 protocolFee = feeAmount - makerFee;
+        uint256 treasuryFee = harness.getTreasuryAddress() != address(0)
+            ? (protocolFee * harness.getTreasurySplitBps()) / 10_000
+            : 0;
+
+        uint256 makerBaseBefore = harness.getUserPrincipal(1, positionKey);
+        uint256 makerQuoteBefore = harness.getUserPrincipal(2, positionKey);
+        uint256 baseTrackedBefore = harness.getTrackedBalance(1);
+        uint256 quoteTrackedBefore = harness.getTrackedBalance(2);
+        uint256 nativeBefore = harness.getNativeTrackedTotal();
+
+        tokenB.mint(taker, totalQuote);
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), totalQuote);
+        uint256 out = harness.executeCurveSwap(curveId, amountIn, totalQuote, 0, uint64(block.timestamp + 1 days), taker);
+        vm.stopPrank();
+
+        assertEq(harness.getUserPrincipal(1, positionKey), makerBaseBefore - out);
+        assertEq(harness.getUserPrincipal(2, positionKey), makerQuoteBefore + amountIn + makerFee);
+        assertEq(harness.getTrackedBalance(1), baseTrackedBefore - out);
+        assertEq(harness.getTrackedBalance(2), quoteTrackedBefore + totalQuote - treasuryFee);
+        assertEq(harness.getNativeTrackedTotal(), nativeBefore - out);
+    }
+
+    function testFuzz_amountOutTokenTypeIndependence(uint256 amountIn) public {
+        amountIn = bound(amountIn, 2, 2e18);
+
+        uint256 makerTokenIdErc = nft.mint(maker, 1);
+        bytes32 keyErc = nft.getPositionKey(makerTokenIdErc);
+        uint256 makerTokenIdNative = nft.mint(maker, 1);
+        bytes32 keyNative = nft.getPositionKey(makerTokenIdNative);
+
+        harness.seedPool(1, address(tokenA), keyErc, 10e18, 10e18);
+        harness.seedPool(2, address(tokenB), keyErc, 10e18, 10e18);
+        harness.seedPool(3, address(tokenA), keyNative, 10e18, 10e18);
+        harness.seedPool(4, address(0), keyNative, 0, 0);
+        harness.joinPool(keyErc, 1);
+        harness.joinPool(keyErc, 2);
+        harness.joinPool(keyNative, 3);
+        harness.joinPool(keyNative, 4);
+
+        MamTypes.CurveDescriptor memory ercDesc = MamTypes.CurveDescriptor({
+            makerPositionKey: keyErc,
+            makerPositionId: makerTokenIdErc,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 721
+        });
+        MamTypes.CurveDescriptor memory nativeDesc = MamTypes.CurveDescriptor({
+            makerPositionKey: keyNative,
+            makerPositionId: makerTokenIdNative,
+            poolIdA: 3,
+            poolIdB: 4,
+            tokenA: address(tokenA),
+            tokenB: address(0),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 722
+        });
+
+        vm.startPrank(maker);
+        uint256 ercCurveId = harness.createCurve(ercDesc);
+        uint256 nativeCurveId = harness.createCurve(nativeDesc);
+        vm.stopPrank();
+
+        uint256 ercTotalQuote = harness.previewCurveQuote(ercCurveId, amountIn);
+        uint256 nativeTotalQuote = harness.previewCurveQuote(nativeCurveId, amountIn);
+
+        tokenB.mint(taker, ercTotalQuote);
+        vm.deal(taker, nativeTotalQuote);
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), ercTotalQuote);
+        uint256 ercOut = harness.executeCurveSwap(ercCurveId, amountIn, ercTotalQuote, 0, uint64(block.timestamp + 1 days), taker);
+        uint256 nativeOut = harness.executeCurveSwap{value: nativeTotalQuote}(
+            nativeCurveId,
+            amountIn,
+            nativeTotalQuote,
+            0,
+            uint64(block.timestamp + 1 days),
+            taker
+        );
+        vm.stopPrank();
+
+        assertEq(nativeOut, ercOut);
+    }
+
+    function testFuzz_curveFilledActualInSemantics(uint256 amountIn, uint256 extraQuote) public {
+        amountIn = bound(amountIn, 2, 2e18);
+        extraQuote = bound(extraQuote, 1, 10e18);
+
+        uint256 makerTokenIdExact = nft.mint(maker, 1);
+        bytes32 keyExact = nft.getPositionKey(makerTokenIdExact);
+        uint256 makerTokenIdOver = nft.mint(maker, 1);
+        bytes32 keyOver = nft.getPositionKey(makerTokenIdOver);
+
+        harness.seedPool(1, address(tokenA), keyExact, 10e18, 10e18);
+        harness.seedPool(2, address(tokenB), keyExact, 10e18, 10e18);
+        harness.seedPool(3, address(tokenA), keyOver, 10e18, 10e18);
+        harness.seedPool(4, address(tokenB), keyOver, 10e18, 10e18);
+        harness.joinPool(keyExact, 1);
+        harness.joinPool(keyExact, 2);
+        harness.joinPool(keyOver, 3);
+        harness.joinPool(keyOver, 4);
+
+        MamTypes.CurveDescriptor memory exactDesc = MamTypes.CurveDescriptor({
+            makerPositionKey: keyExact,
+            makerPositionId: makerTokenIdExact,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 723
+        });
+        MamTypes.CurveDescriptor memory overDesc = MamTypes.CurveDescriptor({
+            makerPositionKey: keyOver,
+            makerPositionId: makerTokenIdOver,
+            poolIdA: 3,
+            poolIdB: 4,
+            tokenA: address(tokenA),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 100,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 724
+        });
+
+        vm.startPrank(maker);
+        uint256 exactCurveId = harness.createCurve(exactDesc);
+        uint256 overCurveId = harness.createCurve(overDesc);
+        vm.stopPrank();
+
+        uint256 totalQuote = harness.previewCurveQuote(exactCurveId, amountIn);
+        uint256 overCapQuote = totalQuote + extraQuote;
+        uint256 expectedOut = amountIn / 2;
+        uint256 feeAmount = totalQuote - amountIn;
+        uint256 expectedRemaining = 2e18 - expectedOut;
+        tokenB.mint(taker, totalQuote + overCapQuote);
+
+        vm.startPrank(taker);
+        tokenB.approve(address(harness), totalQuote + overCapQuote);
+
+        vm.expectEmit(true, true, true, true, address(harness));
+        emit CurveFilled(exactCurveId, taker, taker, amountIn, totalQuote, expectedOut, feeAmount, expectedRemaining);
+        harness.executeCurveSwap(exactCurveId, amountIn, totalQuote, 0, uint64(block.timestamp + 1 days), taker);
+
+        vm.expectEmit(true, true, true, true, address(harness));
+        emit CurveFilled(overCurveId, taker, taker, amountIn, totalQuote, expectedOut, feeAmount, expectedRemaining);
+        harness.executeCurveSwap(overCurveId, amountIn, overCapQuote, 0, uint64(block.timestamp + 1 days), taker);
+        vm.stopPrank();
+    }
+
     function testUpdateCurveBumpsGeneration() public {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
@@ -1155,7 +1900,11 @@ contract MamCurveHarness is MamCurveCreationFacet, MamCurveManagementFacet, MamC
         p.totalDeposits = principal;
         p.trackedBalance = tracked;
         if (tracked > 0) {
-            MockERC20(underlying).mint(address(this), tracked);
+            if (underlying == address(0)) {
+                LibAppStorage.s().nativeTrackedTotal += tracked;
+            } else {
+                MockERC20(underlying).mint(address(this), tracked);
+            }
         }
         if (p.feeIndex == 0) {
             p.feeIndex = LibFeeIndex.INDEX_SCALE;
@@ -1194,7 +1943,25 @@ contract MamCurveHarness is MamCurveCreationFacet, MamCurveManagementFacet, MamC
         return LibEncumbrance.position(positionKey, pid).directLocked;
     }
 
+    function getNativeTrackedTotal() external view returns (uint256) {
+        return LibAppStorage.s().nativeTrackedTotal;
+    }
+
     function getStoredCurve(uint256 curveId) external view returns (MamTypes.StoredCurve memory) {
         return LibDerivativeStorage.derivativeStorage().curves[curveId];
+    }
+}
+
+contract ETHRejector {
+    function executeSwap(
+        MamCurveHarness harness,
+        uint256 curveId,
+        uint256 amountIn,
+        uint256 maxQuote,
+        uint256 minOut,
+        uint64 deadline,
+        address recipient
+    ) external payable returns (uint256) {
+        return harness.executeCurveSwap{value: msg.value}(curveId, amountIn, maxQuote, minOut, deadline, recipient);
     }
 }
