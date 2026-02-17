@@ -234,6 +234,9 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
                     }
                     pool.userPrincipal[positionKey] = currentPrincipal + potOut;
                     pool.totalDeposits += potOut;
+                    pool.trackedBalance += potOut;
+                    // potOut is a reclassification from index fee pot into pool principal.
+                    // Native backing is already counted in nativeTrackedTotal, so no global adjustment here.
                     if (isNewUser && potOut > 0) {
                         pool.userCount += 1;
                     }
