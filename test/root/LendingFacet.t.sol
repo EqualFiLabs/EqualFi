@@ -12,7 +12,7 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
-import {LoanBelowMinimum, RollingError_MinPayment} from "../../src/libraries/Errors.sol";
+import {LoanBelowMinimum, RollingError_MinPayment, UnexpectedMsgValue} from "../../src/libraries/Errors.sol";
 
 struct LendingSnapshot {
     Types.RollingCreditLoan rollingLoan;
@@ -259,6 +259,18 @@ contract LendingFacetUnitTest is Test {
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 15 ether, "active credit total reduced");
     }
 
+    function test_makePayment_revertsOnStrayEthForERC20Pool() public {
+        (uint256 tokenId,) = _seedPosition(100 ether);
+        vm.deal(user, 1 ether);
+
+        vm.prank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        facet.makePaymentFromPosition{value: 1}(tokenId, PID, 5 ether, 5 ether);
+    }
+
     function test_makePayment_revertsWhenBelowMinimumBps() public {
         (uint256 tokenId,) = _seedPosition(100 ether);
         facet.setRollingMinPaymentBps(500);
@@ -342,6 +354,18 @@ contract LendingFacetUnitTest is Test {
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 0, "active credit total cleared");
     }
 
+    function test_closeRolling_revertsOnStrayEthForERC20Pool() public {
+        (uint256 tokenId,) = _seedPosition(100 ether);
+        vm.deal(user, 1 ether);
+
+        vm.prank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        facet.closeRollingCreditFromPosition{value: 1}(tokenId, PID, 20 ether);
+    }
+
     function test_openFixed_createsLoanAndKeepsPrincipalIntact() public {
         (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
 
@@ -400,6 +424,18 @@ contract LendingFacetUnitTest is Test {
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
         assertEq(debtState.principal, 30 ether, "active credit principal reduced");
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 30 ether, "active credit total reduced");
+    }
+
+    function test_repayFixed_revertsOnStrayEthForERC20Pool() public {
+        (uint256 tokenId,) = _seedPosition(200 ether);
+        vm.deal(user, 1 ether);
+
+        vm.prank(user);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0, 50 ether);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        facet.repayFixedFromPosition{value: 1}(tokenId, PID, loanId, 20 ether, 20 ether);
     }
 
     /// @dev Deterministic success-path for gas reporting: rolling lifecycle (open + payment).

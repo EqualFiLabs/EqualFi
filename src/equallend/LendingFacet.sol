@@ -23,7 +23,8 @@ import {
     InsufficientPrincipal,
     SolvencyViolation,
     LoanBelowMinimum,
-    RollingError_MinPayment
+    RollingError_MinPayment,
+    UnexpectedMsgValue
 } from "../libraries/Errors.sol";
 
 /// @title LendingFacet
@@ -153,6 +154,14 @@ contract LendingFacet is ReentrancyGuardModifiers {
         uint256 newDebt
     ) internal view returns (bool isSolvent) {
         return LibSolvencyChecks.checkSolvency(p, positionKey, newPrincipal, newDebt);
+    }
+
+    function _assertRepayOrCloseMsgValue(Types.PoolData storage p, uint256 maxPayment) internal view {
+        if (LibCurrency.isNative(p.underlying)) {
+            if (msg.value != maxPayment) revert UnexpectedMsgValue(msg.value);
+        } else {
+            LibCurrency.assertZeroMsgValue();
+        }
     }
 
     function _calculateTotalDebt(
@@ -297,6 +306,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
+        _assertRepayOrCloseMsgValue(p, maxPayment);
         bytes32 positionKey = _getPositionKey(tokenId);
         _ensurePoolMembership(positionKey, pid, false);
 
@@ -449,6 +459,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
+        _assertRepayOrCloseMsgValue(p, maxPayment);
         bytes32 positionKey = _getPositionKey(tokenId);
         _ensurePoolMembership(positionKey, pid, false);
 
@@ -616,6 +627,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
+        _assertRepayOrCloseMsgValue(p, maxPayment);
         bytes32 positionKey = _getPositionKey(tokenId);
         _ensurePoolMembership(positionKey, pid, false);
 
