@@ -11,7 +11,6 @@ import {LibActiveCreditIndex} from "../libraries/LibActiveCreditIndex.sol";
 import {LibAccess} from "../libraries/LibAccess.sol";
 import {LibCurrency} from "../libraries/LibCurrency.sol";
 import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
-import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {Types} from "../libraries/Types.sol";
@@ -41,9 +40,7 @@ error AtomicDesk_InvalidPostingFee(uint256 expected, uint256 received);
 /// @notice AtomicDesk entrypoint using Position NFT collateral.
 contract AtomicDeskFacet is ReentrancyGuardModifiers {
     uint64 public constant MIN_EXPIRY_WINDOW = 5 minutes;
-    uint16 internal constant MAKER_FEE_BPS = 7000;
     uint256 internal constant BPS_DENOMINATOR = 10_000;
-    bytes32 internal constant ATOMIC_SWAP_FEE_SOURCE = keccak256("ATOMIC_SWAP_FEE");
 
     event ReservationCreated(
         bytes32 indexed reservationId,
@@ -405,9 +402,6 @@ contract AtomicDeskFacet is ReentrancyGuardModifiers {
         LibActiveCreditIndex.settle(cfg.poolIdB, cfg.positionKey);
 
         uint256 basePoolId = cfg.baseIsA ? cfg.poolIdA : cfg.poolIdB;
-        if (tranche.feePayer == AtomicTypes.FeePayer.Maker) {
-            _applyMakerFee(basePoolId, cfg.positionKey, amount, tranche.feeBps);
-        }
         LibDerivativeHelpers._lockCollateral(cfg.positionKey, basePoolId, amount);
 
         tranche.remainingLiquidity -= amount;
@@ -516,9 +510,6 @@ contract AtomicDeskFacet is ReentrancyGuardModifiers {
         LibActiveCreditIndex.settle(cfg.poolIdB, cfg.positionKey);
 
         uint256 basePoolId = cfg.baseIsA ? cfg.poolIdA : cfg.poolIdB;
-        if (tranche.feePayer == AtomicTypes.FeePayer.Maker) {
-            _applyMakerFee(basePoolId, cfg.positionKey, amount, tranche.feeBps);
-        }
         LibDerivativeHelpers._lockCollateral(cfg.positionKey, basePoolId, amount);
 
         tranche.remainingLiquidity -= amount;
@@ -715,21 +706,6 @@ contract AtomicDeskFacet is ReentrancyGuardModifiers {
         if (uint8(feePayer) > uint8(AtomicTypes.FeePayer.Taker)) {
             revert AtomicDesk_InvalidFeePayer();
         }
-    }
-
-    function _applyMakerFee(uint256 poolId, bytes32 positionKey, uint256 amount, uint16 feeBps) internal {
-        if (feeBps == 0) return;
-        uint256 feeAmount = (amount * feeBps) / BPS_DENOMINATOR;
-        if (feeAmount == 0) return;
-        uint256 makerShare = (feeAmount * MAKER_FEE_BPS) / BPS_DENOMINATOR;
-        uint256 protocolFee = feeAmount - makerShare;
-        if (protocolFee == 0) return;
-
-        Types.PoolData storage pool = LibDirectHelpers._pool(poolId);
-        pool.userPrincipal[positionKey] -= protocolFee;
-        pool.totalDeposits = pool.totalDeposits >= protocolFee ? pool.totalDeposits - protocolFee : 0;
-
-        LibFeeRouter.routeSamePool(poolId, protocolFee, ATOMIC_SWAP_FEE_SOURCE, true, 0);
     }
 
     function _collectTakerTranchePostingFee(uint256 feeWei) internal {

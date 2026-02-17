@@ -80,31 +80,39 @@ contract SettlementEscrowFacet is ReentrancyGuardModifiers {
 
         Types.PoolData storage pool = LibDirectHelpers._pool(basePoolId);
         uint256 principal = pool.userPrincipal[r.positionKey];
-        if (principal < amount) revert InsufficientPrincipal(amount, principal);
         uint256 payout = amount;
         uint256 protocolFee;
-        uint256 makerShare;
+        uint256 principalCredit;
+        uint256 principalDebit = amount;
         uint256 toTreasury;
 
-        if (r.feePayer == AtomicTypes.FeePayer.Taker && r.feeBps > 0) {
+        if (r.feeBps > 0) {
             uint256 feeAmount = (amount * r.feeBps) / BPS_DENOMINATOR;
             if (feeAmount > amount) feeAmount = amount;
-            makerShare = (feeAmount * MAKER_FEE_BPS) / BPS_DENOMINATOR;
+            uint256 makerShare = (feeAmount * MAKER_FEE_BPS) / BPS_DENOMINATOR;
             protocolFee = feeAmount - makerShare;
-            payout = amount - feeAmount;
+            if (r.feePayer == AtomicTypes.FeePayer.Taker) {
+                payout = amount - feeAmount;
+                principalCredit = makerShare;
+            } else {
+                principalDebit += protocolFee;
+            }
             if (protocolFee > 0) {
                 (toTreasury,,) = LibFeeRouter.previewSplit(protocolFee);
             }
         }
+        if (principal < principalDebit) revert InsufficientPrincipal(principalDebit, principal);
 
         uint256 requiredTracked = payout + toTreasury;
         if (pool.trackedBalance < requiredTracked) {
             revert InsufficientPrincipal(requiredTracked, pool.trackedBalance);
         }
 
-        pool.userPrincipal[r.positionKey] = principal - amount + makerShare;
+        pool.userPrincipal[r.positionKey] = principal - principalDebit + principalCredit;
         pool.totalDeposits =
-            pool.totalDeposits >= amount ? pool.totalDeposits - amount + makerShare : makerShare;
+            pool.totalDeposits >= principalDebit
+                ? pool.totalDeposits - principalDebit + principalCredit
+                : principalCredit;
         pool.trackedBalance -= payout;
         if (LibCurrency.isNative(pool.underlying)) {
             LibAppStorage.s().nativeTrackedTotal -= payout;
