@@ -282,7 +282,7 @@ contract PositionNFTSharedUtilitiesPropertyTest is Test {
         uint8 existingMissed
     ) public {
         intervalSecs = uint32(bound(intervalSecs, 1 days, 90 days));
-        existingMissed = uint8(bound(existingMissed, 0, 3));
+        existingMissed = uint8(bound(existingMissed, 0, type(uint8).max));
 
         vm.warp(10_000_000);
 
@@ -307,7 +307,7 @@ contract PositionNFTSharedUtilitiesPropertyTest is Test {
         assertEq(storageMissed, viewMissed, "storage vs view missed epochs diverged");
 
         uint8 synced = harness.syncAndReturnMissed(POOL_ID, positionKey);
-        uint256 capped = storageMissed > 3 ? 3 : storageMissed;
+        uint256 capped = storageMissed > type(uint8).max ? type(uint8).max : storageMissed;
         uint8 expectedSynced = storageMissed > existingMissed ? uint8(capped) : existingMissed;
         assertEq(synced, expectedSynced, "sync missed payments not consistent");
     }

@@ -34,6 +34,12 @@ contract LendingFacetHarness is LendingFacet {
         LibAppStorage.s().rollingMinPaymentBps = minPaymentBps;
     }
 
+    function setRollingDelinquencyThresholds(uint8 delinquentEpochs, uint8 penaltyEpochs) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.rollingDelinquencyEpochs = delinquentEpochs;
+        store.rollingPenaltyEpochs = penaltyEpochs;
+    }
+
     function initPool(
         uint256 pid,
         address underlying,
@@ -324,6 +330,20 @@ contract LendingFacetUnitTest is Test {
         vm.prank(user);
         vm.expectRevert(bytes("PositionNFT: no principal"));
         facet.expandRollingFromPosition(tokenId, PID, 1 ether, 1 ether);
+    }
+
+    function test_expandRolling_revertsWhenThresholdExceedsLegacyCap() public {
+        (uint256 tokenId,) = _seedPosition(200 ether);
+        facet.setRollingDelinquencyThresholds(4, 5);
+
+        vm.prank(user);
+        facet.openRollingFromPosition(tokenId, PID, 40 ether, 40 ether);
+
+        vm.warp(block.timestamp + 120 days);
+
+        vm.prank(user);
+        vm.expectRevert(bytes("PositionNFT: loan delinquent"));
+        facet.expandRollingFromPosition(tokenId, PID, 10 ether, 10 ether);
     }
 
     function test_closeRolling_clearsLoan() public {

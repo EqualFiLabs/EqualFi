@@ -52,7 +52,7 @@ library LibLoanHelpers {
     function syncMissedPayments(Types.RollingCreditLoan storage loan) internal {
         uint256 missedEpochs = calculateMissedEpochs(loan);
         if (missedEpochs > loan.missedPayments) {
-            uint256 capped = missedEpochs > 3 ? 3 : missedEpochs;
+            uint256 capped = missedEpochs > type(uint8).max ? type(uint8).max : missedEpochs;
             loan.missedPayments = uint8(capped);
         }
     }
