@@ -30,6 +30,7 @@ error Options_InvalidSeries(uint256 seriesId);
 error Options_ExerciseWindowClosed(uint256 seriesId);
 error Options_NotExpired(uint256 seriesId);
 error Options_Reclaimed(uint256 seriesId);
+error Options_NotReclaimed(uint256 seriesId);
 error Options_NotTokenHolder(address caller, uint256 seriesId);
 error Options_InvalidRecipient(address recipient);
 error Options_InsufficientBalance(address holder, uint256 required, uint256 available);
@@ -68,6 +69,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 remainingSize,
         uint256 collateralUnlocked
     );
+    event ReclaimedClaimsBurned(uint256 indexed seriesId, address indexed holder, uint256 amount);
 
     event OptionTokenUpdated(address indexed token);
     event OptionsPausedUpdated(bool paused);
@@ -296,13 +298,6 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 remaining = series.remaining;
         uint256 collateralUnlocked;
         if (remaining > 0) {
-            OptionToken token = _optionToken();
-            uint256 balance = token.balanceOf(msg.sender, seriesId);
-            if (balance < remaining) {
-                revert Options_InsufficientBalance(msg.sender, remaining, balance);
-            }
-            token.managerBurn(msg.sender, seriesId, remaining);
-
             collateralUnlocked = series.isCall
                 ? remaining
                 : _normalizeStrikeAmount(
@@ -333,6 +328,22 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.removeOptionSeries(positionKey, seriesId);
 
         emit Reclaimed(seriesId, positionKey, remaining, collateralUnlocked);
+    }
+
+    /// @notice Permissionless cleanup for already reclaimed series claim tokens.
+    function burnReclaimedOptionsClaims(address holder, uint256 seriesId, uint256 amount) external nonReentrant {
+        if (amount == 0) revert Options_InvalidAmount(amount);
+        DerivativeTypes.OptionSeries storage series = LibDerivativeStorage.derivativeStorage().optionSeries[seriesId];
+        if (series.makerPositionKey == bytes32(0)) revert Options_InvalidSeries(seriesId);
+        if (!series.reclaimed) revert Options_NotReclaimed(seriesId);
+
+        OptionToken token = _optionToken();
+        uint256 balance = token.balanceOf(holder, seriesId);
+        if (balance < amount) {
+            revert Options_InsufficientBalance(holder, amount, balance);
+        }
+        token.managerBurn(holder, seriesId, amount);
+        emit ReclaimedClaimsBurned(seriesId, holder, amount);
     }
 
     function getOptionSeries(uint256 seriesId) external view returns (DerivativeTypes.OptionSeries memory) {

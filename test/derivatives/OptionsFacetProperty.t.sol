@@ -7,7 +7,7 @@ import {OptionToken} from "../../src/derivatives/OptionToken.sol";
 import {
     OptionsFacet,
     Options_ExerciseWindowClosed,
-    Options_InsufficientBalance
+    Options_NotReclaimed
 } from "../../src/derivatives/OptionsFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
@@ -367,9 +367,9 @@ contract OptionsFacetPropertyTest is Test {
         assertEq(supply, series.remaining, "erc1155 supply matches series remaining");
     }
 
-    /// @notice Property: reclaim burns remaining supply
+    /// @notice Property: reclaim unlocks by series state even if maker does not hold all claims
     /// @notice Validates: Requirements 8.2
-    function testProperty_ReclaimBurnRequirement() public {
+    function testProperty_ReclaimDecoupledFromMakerClaimBalance() public {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
 
@@ -402,19 +402,25 @@ contract OptionsFacetPropertyTest is Test {
 
         vm.prank(maker);
         optionToken.safeTransferFrom(maker, holder, seriesId, totalSize / 2, "");
+        uint256 holderBalanceBefore = optionToken.balanceOf(holder, seriesId);
+        vm.prank(address(0xCAFE));
+        vm.expectRevert(abi.encodeWithSelector(Options_NotReclaimed.selector, seriesId));
+        harness.burnReclaimedOptionsClaims(holder, seriesId, 1);
 
         vm.warp(block.timestamp + 2 days);
         vm.prank(maker);
-        vm.expectRevert(abi.encodeWithSelector(Options_InsufficientBalance.selector, maker, totalSize, totalSize / 2));
         harness.reclaimOptions(seriesId);
 
-        vm.prank(holder);
-        optionToken.safeTransferFrom(holder, maker, seriesId, totalSize / 2, "");
-        vm.prank(maker);
-        harness.reclaimOptions(seriesId);
-
-        assertEq(optionToken.balanceOf(maker, seriesId), 0, "reclaim burns remaining supply");
+        assertEq(optionToken.balanceOf(holder, seriesId), holderBalanceBefore, "holder claims remain outstanding");
+        assertEq(optionToken.balanceOf(maker, seriesId), totalSize / 2, "maker claims remain outstanding");
         assertEq(harness.getLocked(positionKey, 1), 0, "collateral unlocked");
+        DerivativeTypes.OptionSeries memory series = harness.getOptionSeries(seriesId);
+        assertEq(series.remaining, 0, "series marked fully reclaimed");
+        assertTrue(series.reclaimed, "series reclaimed");
+
+        vm.prank(address(0xCAFE));
+        harness.burnReclaimedOptionsClaims(holder, seriesId, holderBalanceBefore / 2);
+        assertEq(optionToken.balanceOf(holder, seriesId), holderBalanceBefore / 2, "post-reclaim claims burnable");
     }
 
     function _strikeAmount(uint256 amount, uint256 strikePrice) internal view returns (uint256) {

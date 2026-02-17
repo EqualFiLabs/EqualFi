@@ -6,7 +6,8 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {FuturesToken} from "../../src/derivatives/FuturesToken.sol";
 import {
     FuturesFacet,
-    Futures_GracePeriodNotElapsed
+    Futures_GracePeriodNotElapsed,
+    Futures_NotReclaimed
 } from "../../src/derivatives/FuturesFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
@@ -77,6 +78,12 @@ contract FuturesFacetPropertyTest is Test {
 
         vm.prank(maker);
         uint256 seriesId = harness.createFuturesSeries(params);
+        vm.prank(maker);
+        futuresToken.safeTransferFrom(maker, holder, seriesId, totalSize / 2, "");
+        uint256 holderBalanceBefore = futuresToken.balanceOf(holder, seriesId);
+        vm.prank(address(0xCAFE));
+        vm.expectRevert(abi.encodeWithSelector(Futures_NotReclaimed.selector, seriesId));
+        harness.burnReclaimedFuturesClaims(holder, seriesId, 1);
         uint64 graceUnlockTime = harness.getGraceUnlockTime(seriesId);
 
         vm.warp(graceUnlockTime - 1);
@@ -88,8 +95,16 @@ contract FuturesFacetPropertyTest is Test {
         vm.prank(maker);
         harness.reclaimFutures(seriesId);
 
-        assertEq(futuresToken.balanceOf(maker, seriesId), 0, "reclaim burns remaining supply");
+        assertEq(futuresToken.balanceOf(holder, seriesId), holderBalanceBefore, "holder claims remain outstanding");
+        assertEq(futuresToken.balanceOf(maker, seriesId), totalSize / 2, "maker claims remain outstanding");
         assertEq(harness.getLocked(positionKey, 1), 0, "collateral unlocked");
+        DerivativeTypes.FuturesSeries memory series = harness.getFuturesSeries(seriesId);
+        assertEq(series.remaining, 0, "series marked fully reclaimed");
+        assertTrue(series.reclaimed, "series reclaimed");
+
+        vm.prank(address(0xCAFE));
+        harness.burnReclaimedFuturesClaims(holder, seriesId, holderBalanceBefore / 2);
+        assertEq(futuresToken.balanceOf(holder, seriesId), holderBalanceBefore / 2, "post-reclaim claims burnable");
     }
 
     /// @notice Property: Principal conservation on settlement
