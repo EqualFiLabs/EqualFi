@@ -221,6 +221,7 @@ contract EqualLendDirectRollingLifecycleFacet is ReentrancyGuardModifiers {
 
         PositionNFT nft = LibDirectHelpers._positionNFT();
         LibDirectHelpers._requireBorrowerAuthority(nft, agreement.borrowerPositionId);
+        address lenderRecipient = nft.ownerOf(agreement.lenderPositionId);
         bytes32 borrowerKey = nft.getPositionKey(agreement.borrowerPositionId);
         bytes32 lenderKey = nft.getPositionKey(agreement.lenderPositionId);
 
@@ -242,7 +243,7 @@ contract EqualLendDirectRollingLifecycleFacet is ReentrancyGuardModifiers {
         uint256 principalDue = agreement.outstandingPrincipal;
         uint256 repaymentAmount = principalDue + arrearsDue;
         uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, repaymentAmount, maxPayment);
-        LibCurrency.transferWithMin(agreement.borrowAsset, agreement.lender, received, minReceived);
+        LibCurrency.transferWithMin(agreement.borrowAsset, lenderRecipient, received, minReceived);
         if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {
             LibAppStorage.s().nativeTrackedTotal -= received;
         }

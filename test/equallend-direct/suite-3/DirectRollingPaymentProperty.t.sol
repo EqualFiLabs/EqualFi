@@ -13,6 +13,7 @@ contract DirectRollingPaymentPropertyTest is DirectDiamondTestBase {
     MockERC20 internal asset;
     address internal lenderOwner = address(0xA11CE);
     address internal borrowerOwner = address(0xB0B);
+    address internal newLenderOwner = address(0xC0FFEE);
 
     function setUp() public {
         setUpDiamond();
@@ -104,5 +105,25 @@ contract DirectRollingPaymentPropertyTest is DirectDiamondTestBase {
         vm.expectRevert(abi.encodeWithSelector(RollingError_DustPayment.selector, 0, minPayment));
         rollingPayments.makeRollingPayment(agreementId, 0, 0, 0);
         vm.stopPrank();
+    }
+
+    function test_makeRollingPayment_routesToCurrentLenderPositionOwner() public {
+        (uint256 agreementId, uint256 lenderPositionId,) = _setupAgreement(true);
+
+        vm.prank(lenderOwner);
+        nft.transferFrom(lenderOwner, newLenderOwner, lenderPositionId);
+
+        uint256 payAmount = 10 ether;
+        asset.mint(borrowerOwner, payAmount);
+        uint256 oldLenderBalanceBefore = asset.balanceOf(lenderOwner);
+        uint256 newLenderBalanceBefore = asset.balanceOf(newLenderOwner);
+
+        vm.startPrank(borrowerOwner);
+        asset.approve(address(diamond), payAmount);
+        rollingPayments.makeRollingPayment(agreementId, payAmount, payAmount, 0);
+        vm.stopPrank();
+
+        assertEq(asset.balanceOf(lenderOwner), oldLenderBalanceBefore, "old lender receives nothing");
+        assertEq(asset.balanceOf(newLenderOwner), newLenderBalanceBefore + payAmount, "current owner receives payment");
     }
 }
