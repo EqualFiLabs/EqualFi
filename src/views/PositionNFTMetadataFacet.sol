@@ -46,7 +46,7 @@ contract PositionNFTMetadataFacet {
                 '</linearGradient>',
                 '</defs>',
                 '<rect width="400" height="400" fill="url(#grad)"/>',
-                '<text x="200" y="150" font-family="Arial, sans-serif" font-size="24" fill="white" text-anchor="middle" font-weight="bold">EqualLend Position</text>',
+                '<text x="200" y="150" font-family="Arial, sans-serif" font-size="24" fill="white" text-anchor="middle" font-weight="bold">Equalis Position</text>',
                 '<text x="200" y="200" font-family="Arial, sans-serif" font-size="48" fill="white" text-anchor="middle" font-weight="bold">#',
                 Strings.toString(tokenId),
                 '</text>',
