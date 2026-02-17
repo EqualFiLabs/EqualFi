@@ -429,6 +429,56 @@ contract OptionsFacetPropertyTest is Test {
         uint256 normalizedUnderlying = Math.mulDiv(amount, strikePrice, underlyingScale);
         return Math.mulDiv(normalizedUnderlying, strikeScale, 1e18);
     }
+
+    function test_exerciseOptions_refundsExcessAndCreditsOnlyRequiredPayment() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 totalSize = 1e18;
+        uint256 strikePrice = 2e18;
+        uint256 requiredStrike = _strikeAmount(totalSize, strikePrice);
+
+        harness.seedPool(1, address(underlying), positionKey, totalSize + 1e6, totalSize + 1e6);
+        harness.seedPool(2, address(strike), positionKey, requiredStrike + 1e6, requiredStrike + 1e6);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 seriesId = harness.createOptionSeries(
+            DerivativeTypes.CreateOptionSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                strikePoolId: 2,
+                strikePrice: strikePrice,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: totalSize,
+                isCall: true,
+                isAmerican: true,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        vm.prank(maker);
+        optionToken.safeTransferFrom(maker, holder, seriesId, totalSize, "");
+
+        uint256 payment = harness.previewExercisePayment(seriesId, totalSize);
+        uint256 maxPayment = payment + 1e17;
+        strike.mint(holder, maxPayment);
+        vm.prank(holder);
+        strike.approve(address(harness), maxPayment);
+
+        uint256 holderStrikeBefore = strike.balanceOf(holder);
+        uint256 makerStrikeBefore = harness.getPrincipal(positionKey, 2);
+
+        vm.prank(holder);
+        harness.exerciseOptions(seriesId, totalSize, holder, maxPayment, 0);
+
+        assertEq(holderStrikeBefore - strike.balanceOf(holder), payment, "holder pays required amount only");
+        assertEq(harness.getPrincipal(positionKey, 2) - makerStrikeBefore, payment, "maker receives required amount only");
+    }
 }
 
 contract OptionsHarness is OptionsFacet {
@@ -481,5 +531,9 @@ contract OptionsHarness is OptionsFacet {
 
     function getLocked(bytes32 positionKey, uint256 pid) external view returns (uint256) {
         return LibEncumbrance.position(positionKey, pid).directLocked;
+    }
+
+    function getPrincipal(bytes32 positionKey, uint256 pid) external view returns (uint256) {
+        return LibAppStorage.s().pools[pid].userPrincipal[positionKey];
     }
 }

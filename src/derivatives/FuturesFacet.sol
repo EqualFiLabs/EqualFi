@@ -474,6 +474,14 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint128 flatFeeWad
     ) internal returns (uint256 feeAmount, uint256 received) {
         received = LibCurrency.pullAtLeast(paymentAsset, payer, paymentAmount, maxPaymentAmount);
+        if (received > paymentAmount) {
+            uint256 excess = received - paymentAmount;
+            if (LibCurrency.isNative(paymentAsset)) {
+                LibAppStorage.s().nativeTrackedTotal -= excess;
+            }
+            LibCurrency.transfer(paymentAsset, payer, excess);
+            received = paymentAmount;
+        }
         pool.trackedBalance += received;
         if (feeBps == 0 && flatFeeWad == 0) {
             return (0, received);

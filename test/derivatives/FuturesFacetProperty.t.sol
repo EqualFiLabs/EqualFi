@@ -175,6 +175,56 @@ contract FuturesFacetPropertyTest is Test {
         assertEq(quote.balanceOf(holder), 0, "holder pays quote amount");
     }
 
+    function test_settleFutures_refundsExcessAndCreditsOnlyRequiredPayment() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 totalSize = 1e18;
+        uint256 forwardPrice = 2e18;
+        uint256 requiredQuote = _quoteAmount(totalSize, forwardPrice);
+
+        harness.seedPool(1, address(underlying), positionKey, totalSize + 1e6, totalSize + 1e6);
+        harness.seedPool(2, address(quote), positionKey, requiredQuote + 1e6, requiredQuote + 1e6);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 seriesId = harness.createFuturesSeries(
+            DerivativeTypes.CreateFuturesSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                quotePoolId: 2,
+                forwardPrice: forwardPrice,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: totalSize,
+                isEuropean: true,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        vm.prank(maker);
+        futuresToken.safeTransferFrom(maker, holder, seriesId, totalSize, "");
+
+        uint256 payment = harness.previewSettlePayment(seriesId, totalSize);
+        uint256 maxPayment = payment + 1e17;
+        quote.mint(holder, maxPayment);
+        vm.prank(holder);
+        quote.approve(address(harness), maxPayment);
+
+        uint256 holderQuoteBefore = quote.balanceOf(holder);
+        uint256 makerQuoteBefore = harness.getPrincipal(positionKey, 2);
+
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(holder);
+        harness.settleFutures(seriesId, totalSize, holder, maxPayment, 0);
+
+        assertEq(holderQuoteBefore - quote.balanceOf(holder), payment, "holder pays required amount only");
+        assertEq(harness.getPrincipal(positionKey, 2) - makerQuoteBefore, payment, "maker receives required amount only");
+    }
+
     function _quoteAmount(uint256 amount, uint256 forwardPrice) internal view returns (uint256) {
         uint256 underlyingScale = 10 ** uint256(underlying.decimals());
         uint256 quoteScale = 10 ** uint256(quote.decimals());
