@@ -179,6 +179,15 @@ contract ModuleRegistryFacetTest is Test {
         vm.prank(OWNER);
         vm.expectRevert(abi.encodeWithSelector(InvalidModuleOwner.selector, address(0)));
         facet.setModuleOwner(moduleId, address(0));
+
+        (address ownerAfterReject,,,,) = facet.getModule(moduleId);
+        assertEq(ownerAfterReject, OWNER, "rejected zero-address update must keep existing owner");
+
+        address newOwner = address(new DummyOwner());
+        vm.prank(OWNER);
+        facet.setModuleOwner(moduleId, newOwner);
+        (address ownerAfterValidTransfer,,,,) = facet.getModule(moduleId);
+        assertEq(ownerAfterValidTransfer, newOwner, "valid owner transfer should still work after rejection");
     }
 
     function test_pauseUnpause_ownerAndGovernance_withInactiveNoReactivation() public {
