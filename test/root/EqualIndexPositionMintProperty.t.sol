@@ -13,6 +13,7 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract EqualIndexPositionHarness is EqualIndexPositionFacet {
     function setPositionNFT(address nft) external {
@@ -85,6 +86,10 @@ contract EqualIndexPositionHarness is EqualIndexPositionFacet {
 
     function getUserPrincipal(uint256 pid, bytes32 positionKey) external view returns (uint256) {
         return LibAppStorage.s().pools[pid].userPrincipal[positionKey];
+    }
+
+    function getFeePot(uint256 indexId, address asset) external view returns (uint256) {
+        return s().feePots[indexId][asset];
     }
 }
 
@@ -183,6 +188,61 @@ contract EqualIndexPositionMintPropertyTest is Test {
         assertEq(vaultAfterB - vaultBeforeB, requiredB);
         assertEq(principalBeforeA - principalAfterA, feeA);
         assertEq(principalBeforeB - principalAfterB, feeB);
+    }
+
+    function test_secondMintFromPositionPaysFeePotBuyIn() public {
+        MockERC20 assetA = new MockERC20("AssetA", "A", 18, 0);
+        MockERC20 assetB = new MockERC20("AssetB", "B", 18, 0);
+
+        EqualIndexPositionHarness facet = new EqualIndexPositionHarness();
+        PositionNFT nft = new PositionNFT();
+        nft.setMinter(address(this));
+        address owner = address(0xBEEF);
+        uint256 tokenId = nft.mint(owner, 1);
+        facet.setPositionNFT(address(nft));
+
+        bytes32 positionKey = nft.getPositionKey(tokenId);
+        facet.seedPool(1, address(assetA), 10_000 ether);
+        facet.seedPool(2, address(assetB), 10_000 ether);
+        facet.setUser(1, positionKey, 5_000 ether);
+        facet.setUser(2, positionKey, 5_000 ether);
+        facet.joinPool(positionKey, 1);
+        facet.joinPool(positionKey, 2);
+        facet.setAssetToPoolId(address(assetA), 1);
+        facet.setAssetToPoolId(address(assetB), 2);
+
+        IndexToken token = _deployIndexToken(facet, assetA, assetB);
+        facet.seedPool(9, address(token), 0);
+        facet.setAssetToPoolId(address(token), 9);
+        facet.setIndexPoolId(0, 9);
+        facet.setIndex(0, address(token), _assets(assetA, assetB), _bundle(), _mintFees());
+
+        uint256 units = LibEqualIndex.INDEX_SCALE;
+        vm.startPrank(owner);
+        facet.mintFromPosition(tokenId, 0, units);
+
+        uint256 supplyBefore = token.totalSupply();
+        uint256 vaultBeforeA = facet.getVaultBalance(0, address(assetA));
+        uint256 potBeforeA = facet.getFeePot(0, address(assetA));
+        uint256 principalBeforeA = facet.getUserPrincipal(1, positionKey);
+
+        facet.mintFromPosition(tokenId, 0, units);
+        vm.stopPrank();
+
+        uint256 vaultInA = Math.mulDiv(vaultBeforeA, units, supplyBefore, Math.Rounding.Ceil);
+        uint256 potBuyInA = Math.mulDiv(potBeforeA, units, supplyBefore, Math.Rounding.Ceil);
+        uint256 grossA = vaultInA + potBuyInA;
+        uint256 mintFeeA = Math.mulDiv(grossA, 200, 10_000, Math.Rounding.Ceil);
+        uint256 poolShareA = Math.mulDiv(mintFeeA, 1000, 10_000);
+        uint256 potFeeA = mintFeeA - poolShareA;
+
+        assertEq(facet.getVaultBalance(0, address(assetA)) - vaultBeforeA, vaultInA, "vault share mismatch");
+        assertEq(
+            facet.getFeePot(0, address(assetA)) - potBeforeA,
+            potBuyInA + potFeeA,
+            "fee pot should include buy-in + mint fee share"
+        );
+        assertEq(principalBeforeA - facet.getUserPrincipal(1, positionKey), potBuyInA + mintFeeA, "principal deduction");
     }
 
     function _deployIndexToken(

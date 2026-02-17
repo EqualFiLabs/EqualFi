@@ -182,10 +182,26 @@ contract IndexToken is ERC20, ERC20Permit, ReentrancyGuard {
         required = new uint256[](len);
         feeAmounts = new uint256[](len);
         IEqualIndexData.Index memory idx = IEqualIndexData(minter).getIndex(indexId);
+        uint256 totalUnits = idx.totalUnits;
         for (uint256 i = 0; i < len; i++) {
-            uint256 need = Math.mulDiv(_bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
-            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
-            required[i] = need + fee;
+            uint256 need;
+            uint256 potBuyIn;
+            if (totalUnits == 0) {
+                need = Math.mulDiv(_bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            } else {
+                need = Math.mulDiv(
+                    IEqualIndexData(minter).getVaultBalance(indexId, _assets[i]),
+                    units,
+                    totalUnits,
+                    Math.Rounding.Ceil
+                );
+                potBuyIn = Math.mulDiv(
+                    IEqualIndexData(minter).getFeePot(indexId, _assets[i]), units, totalUnits, Math.Rounding.Ceil
+                );
+            }
+            uint256 grossIn = need + potBuyIn;
+            uint256 fee = Math.mulDiv(grossIn, idx.mintFeeBps[i], 10_000, Math.Rounding.Ceil);
+            required[i] = grossIn + fee;
             feeAmounts[i] = fee;
         }
     }
@@ -205,10 +221,26 @@ contract IndexToken is ERC20, ERC20Permit, ReentrancyGuard {
         required = new uint256[](len);
         feeAmounts = new uint256[](len);
         IEqualIndexData.Index memory idx = IEqualIndexData(minter).getIndex(indexId);
+        uint256 totalUnits = idx.totalUnits;
         for (uint256 i = 0; i < len; i++) {
-            uint256 need = Math.mulDiv(bundleSlice[i], units, LibEqualIndex.INDEX_SCALE);
-            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[offset + i], 10_000);
-            required[i] = need + fee;
+            uint256 need;
+            uint256 potBuyIn;
+            if (totalUnits == 0) {
+                need = Math.mulDiv(bundleSlice[i], units, LibEqualIndex.INDEX_SCALE);
+            } else {
+                need = Math.mulDiv(
+                    IEqualIndexData(minter).getVaultBalance(indexId, assetsOut[i]),
+                    units,
+                    totalUnits,
+                    Math.Rounding.Ceil
+                );
+                potBuyIn = Math.mulDiv(
+                    IEqualIndexData(minter).getFeePot(indexId, assetsOut[i]), units, totalUnits, Math.Rounding.Ceil
+                );
+            }
+            uint256 grossIn = need + potBuyIn;
+            uint256 fee = Math.mulDiv(grossIn, idx.mintFeeBps[offset + i], 10_000, Math.Rounding.Ceil);
+            required[i] = grossIn + fee;
             feeAmounts[i] = fee;
         }
     }

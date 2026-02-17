@@ -17,7 +17,8 @@ import "../libraries/Errors.sol";
 contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers {
     bytes32 internal constant INDEX_FEE_SOURCE = keccak256("INDEX_FEE");
 
-    /// @notice Mint index tokens. `units` must be a multiple of 1e18 (INDEX_SCALE).
+    /// @notice Mint index tokens priced pro-rata against current total assets (vault + fee pot).
+    /// `units` must be a multiple of 1e18 (INDEX_SCALE).
     function mint(uint256 indexId, uint256 units, address to, uint256[] calldata maxInputAmounts)
         external
         payable
@@ -34,15 +35,26 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
 
         uint256 nativeTotal;
         bool hasNative;
+        uint256[] memory vaultInputs = new uint256[](len);
         uint256[] memory required = new uint256[](len);
+        uint256[] memory potBuyIns = new uint256[](len);
         uint256[] memory fees = new uint256[](len);
         uint16 feeIndexShareBps = _mintBurnFeeIndexShareBps();
+        uint256 totalSupply = idx.totalUnits;
 
         for (uint256 i = 0; i < len; i++) {
-            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
-            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
-            uint256 total = need + fee;
             address asset = idx.assets[i];
+            uint256 need;
+            uint256 potBuyIn;
+            if (totalSupply == 0) {
+                need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            } else {
+                need = Math.mulDiv(s().vaultBalances[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+                potBuyIn = Math.mulDiv(s().feePots[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+            }
+            uint256 grossIn = need + potBuyIn;
+            uint256 fee = Math.mulDiv(grossIn, idx.mintFeeBps[i], 10_000, Math.Rounding.Ceil);
+            uint256 total = grossIn + fee;
             if (LibCurrency.isNative(asset)) {
                 hasNative = true;
                 nativeTotal += total;
@@ -54,7 +66,9 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
                 // We only ensure we received enough.
                 if (received < total) revert LibCurrency.LibCurrency_InsufficientReceived(received, total);
             }
-            required[i] = need;
+            vaultInputs[i] = need;
+            required[i] = grossIn;
+            potBuyIns[i] = potBuyIn;
             fees[i] = fee;
         }
         if (hasNative) {
@@ -67,7 +81,10 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         }
         for (uint256 i = 0; i < len; i++) {
             address asset = idx.assets[i];
-            s().vaultBalances[indexId][asset] += required[i];
+            s().vaultBalances[indexId][asset] += vaultInputs[i];
+            if (potBuyIns[i] > 0) {
+                s().feePots[indexId][asset] += potBuyIns[i];
+            }
             _distributeIndexFee(indexId, asset, fees[i], feeIndexShareBps);
         }
 

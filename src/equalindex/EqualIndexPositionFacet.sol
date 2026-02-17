@@ -20,7 +20,8 @@ import "../libraries/Errors.sol";
 contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
     bytes32 internal constant INDEX_FEE_SOURCE = keccak256("INDEX_FEE");
 
-    /// @notice Mint index tokens from position's encumbered assets.
+    /// @notice Mint index tokens from position principal, priced pro-rata against
+    /// current total assets (vault + fee pot).
     function mintFromPosition(
         uint256 positionId,
         uint256 indexId,
@@ -40,6 +41,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
 
         LibAppStorage.AppStorage storage store = LibAppStorage.s();
         uint16 poolFeeShareBps = _poolFeeShareBps();
+        uint256 totalSupply = idx.totalUnits;
 
         for (uint256 i = 0; i < len; i++) {
             address asset = idx.assets[i];
@@ -49,9 +51,17 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
                 revert NotMemberOfRequiredPool(positionKey, poolId);
             }
 
-            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
-            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
-            uint256 total = need + fee;
+            uint256 vaultIn;
+            uint256 potBuyIn;
+            if (totalSupply == 0) {
+                vaultIn = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            } else {
+                vaultIn = Math.mulDiv(s().vaultBalances[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+                potBuyIn = Math.mulDiv(s().feePots[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+            }
+            uint256 grossIn = vaultIn + potBuyIn;
+            uint256 fee = Math.mulDiv(grossIn, idx.mintFeeBps[i], 10_000, Math.Rounding.Ceil);
+            uint256 total = grossIn + fee;
 
             Types.PoolData storage pool = store.pools[poolId];
             uint256 available = LibSolvencyChecks.calculateAvailablePrincipal(pool, positionKey, poolId);
@@ -59,21 +69,32 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
                 revert InsufficientUnencumberedPrincipal(total, available);
             }
 
-            required[i] = need;
+            required[i] = grossIn;
             fees[i] = fee;
 
-            LibIndexEncumbrance.encumber(positionKey, poolId, indexId, need);
-            s().vaultBalances[indexId][asset] += need;
+            LibIndexEncumbrance.encumber(positionKey, poolId, indexId, vaultIn);
+            s().vaultBalances[indexId][asset] += vaultIn;
 
-            if (fee > 0) {
+            if (potBuyIn > 0 || fee > 0) {
                 LibFeeIndex.settle(poolId, positionKey);
                 uint256 principal = pool.userPrincipal[positionKey];
-                if (principal < fee) {
-                    revert InsufficientPrincipal(fee, principal);
+                uint256 principalDeduction = potBuyIn + fee;
+                if (principal < principalDeduction) {
+                    revert InsufficientPrincipal(principalDeduction, principal);
                 }
-                pool.userPrincipal[positionKey] = principal - fee;
-                pool.totalDeposits -= fee;
+                pool.userPrincipal[positionKey] = principal - principalDeduction;
+                pool.totalDeposits -= principalDeduction;
+            }
 
+            if (potBuyIn > 0) {
+                if (pool.trackedBalance < potBuyIn) {
+                    revert InsufficientPoolLiquidity(potBuyIn, pool.trackedBalance);
+                }
+                pool.trackedBalance -= potBuyIn;
+                s().feePots[indexId][asset] += potBuyIn;
+            }
+
+            if (fee > 0) {
                 uint256 poolShare = Math.mulDiv(fee, poolFeeShareBps, 10_000);
                 uint256 potShare = fee - poolShare;
                 if (potShare > 0) {

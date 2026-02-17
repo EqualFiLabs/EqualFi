@@ -45,11 +45,21 @@ contract EqualIndexActionsHarness is EqualIndexActionsFacetV3 {
     function previewMintInputs(uint256 indexId, uint256 units) external view virtual returns (uint256[] memory maxInputs) {
         Index storage idx = s().indexes[indexId];
         uint256 len = idx.assets.length;
+        uint256 totalSupply = idx.totalUnits;
         maxInputs = new uint256[](len);
         for (uint256 i = 0; i < len; i++) {
-            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
-            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
-            maxInputs[i] = need + fee;
+            address asset = idx.assets[i];
+            uint256 need;
+            uint256 potBuyIn;
+            if (totalSupply == 0) {
+                need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            } else {
+                need = Math.mulDiv(s().vaultBalances[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+                potBuyIn = Math.mulDiv(s().feePots[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+            }
+            uint256 grossIn = need + potBuyIn;
+            uint256 fee = Math.mulDiv(grossIn, idx.mintFeeBps[i], 10_000, Math.Rounding.Ceil);
+            maxInputs[i] = grossIn + fee;
         }
     }
 
@@ -321,6 +331,34 @@ contract EqualIndexActionsFacetV3Test is Test {
         uint256 expectedIncrease = toActive + toIndex;
 
         assertEq(yieldAfter - yieldBefore, expectedIncrease);
+    }
+
+    function testMintIncludesFeePotBuyInOnExistingSupply() public {
+        uint256 firstMintUnits = 10 * SCALE;
+        facet.mint(INDEX_ID, firstMintUnits, address(this), facet.previewMintInputs(INDEX_ID, firstMintUnits));
+
+        uint256 secondMintUnits = 2 * SCALE;
+        uint256 supplyBefore = indexToken.totalSupply();
+        uint256 vaultBefore = facet.getVaultBalance(INDEX_ID, address(tokenA));
+        uint256 potBefore = facet.getFeePot(INDEX_ID, address(tokenA));
+        uint256 userBalanceBefore = tokenA.balanceOf(address(this));
+
+        facet.mint(INDEX_ID, secondMintUnits, address(this), facet.previewMintInputs(INDEX_ID, secondMintUnits));
+
+        uint256 vaultIn = Math.mulDiv(vaultBefore, secondMintUnits, supplyBefore, Math.Rounding.Ceil);
+        uint256 potBuyIn = Math.mulDiv(potBefore, secondMintUnits, supplyBefore, Math.Rounding.Ceil);
+        uint256 grossIn = vaultIn + potBuyIn;
+        uint256 mintFee = Math.mulDiv(grossIn, 100, 10_000, Math.Rounding.Ceil);
+        uint256 poolShare = Math.mulDiv(mintFee, 4000, 10_000);
+        uint256 potFee = mintFee - poolShare;
+
+        assertEq(facet.getVaultBalance(INDEX_ID, address(tokenA)) - vaultBefore, vaultIn, "vault share mismatch");
+        assertEq(
+            facet.getFeePot(INDEX_ID, address(tokenA)) - potBefore,
+            potBuyIn + potFee,
+            "fee pot should include buy-in + mint fee share"
+        );
+        assertEq(userBalanceBefore - tokenA.balanceOf(address(this)), grossIn + mintFee, "second mint input mismatch");
     }
 
     function testMintInvalidUnits() public {

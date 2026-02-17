@@ -63,11 +63,21 @@ contract EqualIndexNativeHarness is EqualIndexActionsFacetV3 {
     function previewMintInputs(uint256 indexId, uint256 units) external view returns (uint256[] memory maxInputs) {
         Index storage idx = s().indexes[indexId];
         uint256 len = idx.assets.length;
+        uint256 totalSupply = idx.totalUnits;
         maxInputs = new uint256[](len);
         for (uint256 i = 0; i < len; i++) {
-            uint256 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
-            uint256 fee = Math.mulDiv(need, idx.mintFeeBps[i], 10_000);
-            maxInputs[i] = need + fee;
+            address asset = idx.assets[i];
+            uint256 need;
+            uint256 potBuyIn;
+            if (totalSupply == 0) {
+                need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
+            } else {
+                need = Math.mulDiv(s().vaultBalances[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+                potBuyIn = Math.mulDiv(s().feePots[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+            }
+            uint256 grossIn = need + potBuyIn;
+            uint256 fee = Math.mulDiv(grossIn, idx.mintFeeBps[i], 10_000, Math.Rounding.Ceil);
+            maxInputs[i] = grossIn + fee;
         }
     }
 
