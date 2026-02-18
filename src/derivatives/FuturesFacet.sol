@@ -161,7 +161,7 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.addFuturesSeries(positionKey, seriesId);
 
         _futuresToken().managerMint(makerOwner, seriesId, params.totalSize, "");
-        LibPoints.accrue(makerOwner, LibPoints.ACTION_DERIVATIVE_CREATE);
+        LibPoints.accrue(makerOwner, LibPoints.ACTION_DERIVATIVE_CREATE_FUTURES);
 
         emit SeriesCreated(
             seriesId,

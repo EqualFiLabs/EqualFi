@@ -165,7 +165,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             LibDerivativeStorage.addAuctionByToken(auction.tokenB, auctionId);
         }
         LibDerivativeStorage.addAuctionByPair(auction.tokenA, auction.tokenB, auctionId);
-        LibPoints.accrue(makerOwner, LibPoints.ACTION_DERIVATIVE_CREATE);
+        LibPoints.accrue(makerOwner, LibPoints.ACTION_DERIVATIVE_CREATE_AMM_AUCTION);
 
         emit AuctionCreated(
             auctionId,
@@ -337,7 +337,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(tokenOut) && outputToRecipient > 0) {
             LibAppStorage.s().nativeTrackedTotal -= outputToRecipient;
         }
-        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP);
+        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP_AMM_AUCTION);
 
         emit AuctionSwapped(
             auctionId,

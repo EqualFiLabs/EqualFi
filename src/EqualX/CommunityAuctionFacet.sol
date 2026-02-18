@@ -629,7 +629,7 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(tokenOut) && outputToRecipient > 0) {
             LibAppStorage.s().nativeTrackedTotal -= outputToRecipient;
         }
-        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP);
+        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP_COMMUNITY_AUCTION);
 
         emit CommunityAuctionSwapped(
             auctionId,

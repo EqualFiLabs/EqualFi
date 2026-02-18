@@ -184,7 +184,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             params.lenderPoolId,
             params.collateralPoolId
         );
-        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_POST_OFFER);
+        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_POST_ROLLING_BORROWER_OFFER);
     }
 
     function postRollingOffer(DirectTypes.DirectRollingOfferParams calldata params)
@@ -289,7 +289,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             params.lenderPoolId,
             params.collateralPoolId
         );
-        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_POST_OFFER);
+        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_POST_ROLLING_LENDER_OFFER);
     }
 
     function cancelRollingOffer(uint256 offerId) external nonReentrant {

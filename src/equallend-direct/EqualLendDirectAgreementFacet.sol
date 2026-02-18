@@ -320,7 +320,11 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         }
 
         emit BorrowerOfferAccepted(offerId, agreementId, lenderPositionId);
-        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_ACCEPT);
+        _accrueDirectAcceptIfNotSelfMatch(
+            lenderOwner,
+            nft.ownerOf(offer.borrowerPositionId),
+            LibPoints.ACTION_DIRECT_ACCEPT_BORROWER_OFFER
+        );
     }
 
     function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived)
@@ -533,7 +537,11 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
             offer.isTranche ? tranche.trancheRemainingAfter / offer.principal : 0,
             offer.isTranche ? tranche.trancheRemainingAfter == 0 : true
         );
-        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_ACCEPT);
+        _accrueDirectAcceptIfNotSelfMatch(
+            borrowerOwner,
+            nft.ownerOf(offer.lenderPositionId),
+            LibPoints.ACTION_DIRECT_ACCEPT_LENDER_OFFER
+        );
     }
 
     
@@ -709,7 +717,11 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         emit RatioTrancheOfferAccepted(
             offerId, agreementId, borrowerPositionId, principalAmount, offer.principalRemaining, collateralRequired
         );
-        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_ACCEPT);
+        _accrueDirectAcceptIfNotSelfMatch(
+            borrowerOwner,
+            nft.ownerOf(offer.lenderPositionId),
+            LibPoints.ACTION_DIRECT_ACCEPT_RATIO_LENDER_OFFER
+        );
 
     }
 
@@ -940,7 +952,18 @@ function _checkAndConsumeTranche(
         emit BorrowerRatioTrancheOfferAccepted(
             offerId, agreementId, lenderPositionId, collateralAmount, offer.collateralRemaining, principalAmount
         );
-        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_ACCEPT);
+        _accrueDirectAcceptIfNotSelfMatch(
+            lenderOwner,
+            nft.ownerOf(offer.borrowerPositionId),
+            LibPoints.ACTION_DIRECT_ACCEPT_RATIO_BORROWER_OFFER
+        );
 
+    }
+
+    function _accrueDirectAcceptIfNotSelfMatch(address callerOwner, address counterpartyOwner, bytes32 actionType)
+        internal
+    {
+        if (callerOwner == counterpartyOwner) return;
+        LibPoints.accrue(callerOwner, actionType);
     }
 }

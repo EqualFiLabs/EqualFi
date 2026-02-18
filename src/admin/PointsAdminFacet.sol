@@ -38,6 +38,16 @@ contract PointsAdminFacet {
         }
     }
 
+    function setDailyPointsCap(uint256 amount) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibPoints.setDailyPointsCap(amount);
+    }
+
+    function setAccrualCooldown(bytes32 actionType, uint256 cooldownSecs) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibPoints.setAccrualCooldown(actionType, cooldownSecs);
+    }
+
     function _validateIndexWeightsForSingleUpdate(bytes32 actionType, uint256 amount) internal view {
         if (!_isIndexWeightAction(actionType)) return;
 

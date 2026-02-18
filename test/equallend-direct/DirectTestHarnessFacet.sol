@@ -202,8 +202,16 @@ contract DirectTestHarnessFacet {
         LibPoints.setPointsPerAction(actionType, amount);
     }
 
+    function setDailyPointsCap(uint256 amount) external {
+        LibPoints.setDailyPointsCap(amount);
+    }
+
     function pointsBalance(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
+    }
+
+    function dailyPointsCap() external view returns (uint256) {
+        return LibPoints.dailyPointsCap();
     }
 
     function setArrears(uint256 agreementId, uint256 arrears) external {

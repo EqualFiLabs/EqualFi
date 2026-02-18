@@ -130,9 +130,9 @@ contract DerivativeAccessControlPropertyTest is Test {
         _seedPools(address(optionsHarness), positionKey, 1, 2, 1e24, 1e24);
         _seedPools(address(futuresHarness), positionKey, 1, 2, 1e24, 1e24);
         _seedPools(address(ammHarness), positionKey, 1, 2, 1e24, 1e24);
-        optionsHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE, 7);
-        futuresHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE, 11);
-        ammHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE, 13);
+        optionsHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE_OPTION, 7);
+        futuresHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE_FUTURES, 11);
+        ammHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE_AMM_AUCTION, 13);
         vm.prank(maker);
         nft.setApprovalForAll(operator, true);
 

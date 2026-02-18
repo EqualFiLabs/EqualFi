@@ -13,6 +13,14 @@ contract PointsViewHarness is PointsViewFacet {
     function accrue(address user, bytes32 actionType) external {
         LibPoints.accrue(user, actionType);
     }
+
+    function setDailyPointsCap(uint256 amount) external {
+        LibPoints.setDailyPointsCap(amount);
+    }
+
+    function setAccrualCooldown(bytes32 actionType, uint256 cooldownSecs) external {
+        LibPoints.setAccrualCooldown(actionType, cooldownSecs);
+    }
 }
 
 contract PointsViewFacetTest is Test {
@@ -53,5 +61,28 @@ contract PointsViewFacetTest is Test {
 
     function test_getPoints_zeroBalanceAddress() public {
         assertEq(facet.getPoints(address(0xCAFE)), 0);
+    }
+
+    function test_getDailyPointsCap_roundTrip() public {
+        facet.setDailyPointsCap(1234);
+        assertEq(facet.getDailyPointsCap(), 1234);
+    }
+
+    function test_getPointsAccruedToday_tracksCurrentDay() public {
+        address user = address(0xABCD);
+        facet.setPointsPerAction(ACTION_A, 7);
+        facet.setDailyPointsCap(100);
+
+        facet.accrue(user, ACTION_A);
+        facet.accrue(user, ACTION_A);
+
+        assertEq(facet.getPointsAccruedToday(user), 14);
+        vm.warp(block.timestamp + 1 days);
+        assertEq(facet.getPointsAccruedToday(user), 0);
+    }
+
+    function test_getAccrualCooldown_roundTrip() public {
+        facet.setAccrualCooldown(ACTION_A, 30 minutes);
+        assertEq(facet.getAccrualCooldown(ACTION_A), 30 minutes);
     }
 }

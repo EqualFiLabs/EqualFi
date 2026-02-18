@@ -33,7 +33,20 @@ contract DirectPointsRecipientPropertyTest is DirectDiamondTestBase {
         harness.setConfig(cfg);
         harness.setTreasuryShare(protocolTreasury, DirectTestUtils.treasurySplitFromLegacy(7000, 1000));
         harness.setActiveCreditShare(DirectTestUtils.activeSplitFromLegacy(7000, 0));
-        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_ACCEPT, ACCEPT_POINTS);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_ACCEPT_LENDER_OFFER, ACCEPT_POINTS);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_ACCEPT_ROLLING_OFFER, ACCEPT_POINTS);
+        harness.setDailyPointsCap(0);
+
+        DirectTypes.DirectRollingConfig memory rollingCfg = DirectTypes.DirectRollingConfig({
+            minPaymentIntervalSeconds: 604_800,
+            maxPaymentCount: 520,
+            maxUpfrontPremiumBps: 5_000,
+            minRollingApyBps: 1,
+            maxRollingApyBps: 10_000,
+            defaultPenaltyBps: 1_000,
+            minPaymentBps: 1
+        });
+        harness.setRollingConfig(rollingCfg);
     }
 
     function _finalizeMinter() internal {
@@ -85,5 +98,85 @@ contract DirectPointsRecipientPropertyTest is DirectDiamondTestBase {
         assertEq(harness.pointsBalance(borrowerOwner), ownerPointsBefore + ACCEPT_POINTS);
         assertEq(harness.pointsBalance(operator), operatorPointsBefore);
         assertEq(views.getAgreement(agreementId).borrower, borrowerOwner);
+    }
+
+    function testProperty_AcceptOfferSelfMatchDoesNotAccruePoints() public {
+        address selfOwner = address(0xCAFE);
+
+        uint256 lenderPositionId = nft.mint(selfOwner, 11);
+        uint256 borrowerPositionId = nft.mint(selfOwner, 12);
+        _finalizeMinter();
+
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 200 ether, true);
+
+        DirectTypes.DirectOfferParams memory params = DirectTypes.DirectOfferParams({
+            lenderPositionId: lenderPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(asset),
+            borrowAsset: address(asset),
+            principal: 100 ether,
+            aprBps: 0,
+            durationSeconds: 3 days,
+            collateralLockAmount: 10 ether,
+            allowEarlyRepay: true,
+            allowEarlyExercise: true,
+            allowLenderCall: false
+        });
+
+        vm.prank(selfOwner);
+        uint256 offerId =
+            offers.postOffer(params, DirectTypes.DirectTrancheOfferParams({isTranche: false, trancheAmount: 0}));
+
+        uint256 pointsBefore = harness.pointsBalance(selfOwner);
+        vm.prank(selfOwner);
+        agreements.acceptOffer(offerId, borrowerPositionId, 0);
+
+        assertEq(harness.pointsBalance(selfOwner), pointsBefore);
+    }
+
+    function testProperty_AcceptRollingOfferSelfMatchDoesNotAccruePoints() public {
+        address selfOwner = address(0xD00D);
+
+        uint256 lenderPositionId = nft.mint(selfOwner, 21);
+        uint256 borrowerPositionId = nft.mint(selfOwner, 22);
+        _finalizeMinter();
+
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 1_000 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 300 ether, true);
+
+        DirectTypes.DirectRollingOfferParams memory params = DirectTypes.DirectRollingOfferParams({
+            lenderPositionId: lenderPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(asset),
+            borrowAsset: address(asset),
+            principal: 100 ether,
+            collateralLockAmount: 50 ether,
+            paymentIntervalSeconds: 604_800,
+            rollingApyBps: 800,
+            gracePeriodSeconds: 604_000,
+            maxPaymentCount: 520,
+            upfrontPremium: 5 ether,
+            allowAmortization: true,
+            allowEarlyRepay: true,
+            allowEarlyExercise: false
+        });
+
+        vm.prank(selfOwner);
+        uint256 offerId = rollingOffers.postRollingOffer(params);
+
+        uint256 pointsBefore = harness.pointsBalance(selfOwner);
+        vm.prank(selfOwner);
+        rollingAgreements.acceptRollingOffer(offerId, borrowerPositionId, 0, 0);
+
+        assertEq(harness.pointsBalance(selfOwner), pointsBefore);
     }
 }

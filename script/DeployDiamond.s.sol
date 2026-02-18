@@ -405,9 +405,11 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(PointsAdminFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](2);
+        s = new bytes4[](4);
         s[0] = PointsAdminFacet.setPointsPerAction.selector;
         s[1] = PointsAdminFacet.setPointsPerActionBatch.selector;
+        s[2] = PointsAdminFacet.setDailyPointsCap.selector;
+        s[3] = PointsAdminFacet.setAccrualCooldown.selector;
     }
 
     function _selectors(MaintenanceFacet) internal pure returns (bytes4[] memory s) {

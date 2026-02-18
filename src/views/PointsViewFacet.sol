@@ -12,6 +12,18 @@ contract PointsViewFacet {
         return LibPoints.pointsForAction(actionType);
     }
 
+    function getAccrualCooldown(bytes32 actionType) external view returns (uint256) {
+        return LibPoints.accrualCooldownForAction(actionType);
+    }
+
+    function getDailyPointsCap() external view returns (uint256) {
+        return LibPoints.dailyPointsCap();
+    }
+
+    function getPointsAccruedToday(address user) external view returns (uint256) {
+        return LibPoints.accruedToday(user);
+    }
+
     function getPointsBatch(address[] calldata users) external view returns (uint256[] memory balances) {
         uint256 len = users.length;
         balances = new uint256[](len);
@@ -21,9 +33,12 @@ contract PointsViewFacet {
     }
 
     function selectors() external pure returns (bytes4[] memory selectorsArr) {
-        selectorsArr = new bytes4[](3);
+        selectorsArr = new bytes4[](6);
         selectorsArr[0] = PointsViewFacet.getPoints.selector;
         selectorsArr[1] = PointsViewFacet.getPointsPerAction.selector;
         selectorsArr[2] = PointsViewFacet.getPointsBatch.selector;
+        selectorsArr[3] = PointsViewFacet.getDailyPointsCap.selector;
+        selectorsArr[4] = PointsViewFacet.getPointsAccruedToday.selector;
+        selectorsArr[5] = PointsViewFacet.getAccrualCooldown.selector;
     }
 }

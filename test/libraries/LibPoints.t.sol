@@ -20,11 +20,37 @@ contract LibPointsHarness {
     function getPointsPerAction(bytes32 actionType) external view returns (uint256) {
         return LibPoints.pointsForAction(actionType);
     }
+
+    function setDailyPointsCap(uint256 amount) external {
+        LibPoints.setDailyPointsCap(amount);
+    }
+
+    function setAccrualCooldown(bytes32 actionType, uint256 cooldownSecs) external {
+        LibPoints.setAccrualCooldown(actionType, cooldownSecs);
+    }
+
+    function getDailyPointsCap() external view returns (uint256) {
+        return LibPoints.dailyPointsCap();
+    }
+
+    function getAccrualCooldown(bytes32 actionType) external view returns (uint256) {
+        return LibPoints.accrualCooldownForAction(actionType);
+    }
+
+    function getAccruedToday(address user) external view returns (uint256) {
+        return LibPoints.accruedToday(user);
+    }
+
+    function getLastAccruedAt(address user, bytes32 actionType) external view returns (uint256) {
+        return LibPoints.lastAccruedAt(user, actionType);
+    }
 }
 
 contract LibPointsTest is Test {
     event PointsAccrued(address indexed user, bytes32 indexed actionType, uint256 amount);
     event PointsPerActionUpdated(bytes32 indexed actionType, uint256 newAmount);
+    event PointsDailyCapUpdated(uint256 newDailyCap);
+    event PointsAccrualCooldownUpdated(bytes32 indexed actionType, uint256 cooldownSecs);
 
     LibPointsHarness internal h;
 
@@ -42,6 +68,20 @@ contract LibPointsTest is Test {
         h.setPointsPerAction(ACTION_A, 42);
 
         assertEq(h.getPointsPerAction(ACTION_A), 42);
+    }
+
+    function test_setDailyPointsCap_roundTripAndEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit PointsDailyCapUpdated(100);
+        h.setDailyPointsCap(100);
+        assertEq(h.getDailyPointsCap(), 100);
+    }
+
+    function test_setAccrualCooldown_roundTripAndEvent() public {
+        vm.expectEmit(true, false, false, true);
+        emit PointsAccrualCooldownUpdated(ACTION_A, 1 hours);
+        h.setAccrualCooldown(ACTION_A, 1 hours);
+        assertEq(h.getAccrualCooldown(ACTION_A), 1 hours);
     }
 
     /// **Feature: point-system, Property 1: Accrual increments by configured amount**
@@ -116,5 +156,95 @@ contract LibPointsTest is Test {
         h.setPointsPerAction(ACTION_A, 7);
         h.accrue(address(0), ACTION_A);
         assertEq(h.getPoints(address(0)), 7);
+    }
+
+    function test_accrue_dailyCapClampsWithPartialCredit() public {
+        address user = address(0xA11CE);
+        h.setPointsPerAction(ACTION_A, 10);
+        h.setDailyPointsCap(25);
+
+        h.accrue(user, ACTION_A);
+        h.accrue(user, ACTION_A);
+        h.accrue(user, ACTION_A);
+        h.accrue(user, ACTION_A);
+
+        assertEq(h.getPoints(user), 25);
+        assertEq(h.getAccruedToday(user), 25);
+    }
+
+    function test_accrue_dailyCapResetsNextDay() public {
+        address user = address(0xBEEF);
+        h.setPointsPerAction(ACTION_A, 10);
+        h.setDailyPointsCap(10);
+
+        h.accrue(user, ACTION_A);
+        h.accrue(user, ACTION_A);
+        assertEq(h.getPoints(user), 10);
+        assertEq(h.getAccruedToday(user), 10);
+
+        vm.warp(block.timestamp + 1 days);
+        assertEq(h.getAccruedToday(user), 0);
+        h.accrue(user, ACTION_A);
+
+        assertEq(h.getPoints(user), 20);
+        assertEq(h.getAccruedToday(user), 10);
+    }
+
+    function test_accrue_cooldownBlocksRapidRepeatAndAllowsAfterWindow() public {
+        address user = address(0xABCD);
+        h.setPointsPerAction(ACTION_A, 9);
+        h.setAccrualCooldown(ACTION_A, 1 hours);
+
+        h.accrue(user, ACTION_A);
+        assertEq(h.getPoints(user), 9);
+
+        uint256 firstAccrualTs = h.getLastAccruedAt(user, ACTION_A);
+        h.accrue(user, ACTION_A);
+        assertEq(h.getPoints(user), 9);
+        assertEq(h.getLastAccruedAt(user, ACTION_A), firstAccrualTs);
+
+        vm.warp(block.timestamp + 1 hours);
+        h.accrue(user, ACTION_A);
+        assertEq(h.getPoints(user), 18);
+        assertEq(h.getLastAccruedAt(user, ACTION_A), block.timestamp);
+    }
+
+    function test_accrue_cooldownIsPerActionNotGlobal() public {
+        address user = address(0xC0FFEE);
+        h.setPointsPerAction(ACTION_A, 3);
+        h.setPointsPerAction(ACTION_B, 5);
+        h.setAccrualCooldown(ACTION_A, 1 days);
+        h.setAccrualCooldown(ACTION_B, 1 days);
+
+        h.accrue(user, ACTION_A);
+        h.accrue(user, ACTION_A);
+        h.accrue(user, ACTION_B);
+
+        assertEq(h.getPoints(user), 8);
+    }
+
+    function test_accrue_borrowAndRepayCooldownsApplyIndependently() public {
+        address user = address(0xD00D);
+        h.setPointsPerAction(LibPoints.ACTION_BORROW_ROLLING, 10);
+        h.setPointsPerAction(LibPoints.ACTION_REPAY_ROLLING, 6);
+        h.setAccrualCooldown(LibPoints.ACTION_BORROW_ROLLING, 1 days);
+        h.setAccrualCooldown(LibPoints.ACTION_REPAY_ROLLING, 2 days);
+
+        h.accrue(user, LibPoints.ACTION_BORROW_ROLLING);
+        h.accrue(user, LibPoints.ACTION_REPAY_ROLLING);
+        assertEq(h.getPoints(user), 16);
+
+        h.accrue(user, LibPoints.ACTION_BORROW_ROLLING);
+        h.accrue(user, LibPoints.ACTION_REPAY_ROLLING);
+        assertEq(h.getPoints(user), 16);
+
+        vm.warp(block.timestamp + 1 days);
+        h.accrue(user, LibPoints.ACTION_BORROW_ROLLING);
+        h.accrue(user, LibPoints.ACTION_REPAY_ROLLING);
+        assertEq(h.getPoints(user), 26);
+
+        vm.warp(block.timestamp + 2 days);
+        h.accrue(user, LibPoints.ACTION_REPAY_ROLLING);
+        assertEq(h.getPoints(user), 32);
     }
 }

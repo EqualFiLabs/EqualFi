@@ -462,7 +462,7 @@ contract CommunityAuctionFacetPropertyTest is Test {
         harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
         harness.joinPool(positionKey, 1);
         harness.joinPool(positionKey, 2);
-        harness.setPointsPerAction(LibPoints.ACTION_SWAP, 4);
+        harness.setPointsPerAction(LibPoints.ACTION_SWAP_COMMUNITY_AUCTION, 4);
 
         vm.prank(maker);
         uint256 auctionId = harness.createCommunityAuction(

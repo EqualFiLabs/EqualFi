@@ -50,6 +50,14 @@ contract LeanDeploySelectorsTest is Test {
             loupe.facetAddress(PointsAdminFacet.setPointsPerActionBatch.selector) != address(0),
             "missing setPointsPerActionBatch selector"
         );
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setDailyPointsCap.selector) != address(0),
+            "missing setDailyPointsCap selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setAccrualCooldown.selector) != address(0),
+            "missing setAccrualCooldown selector"
+        );
         assertTrue(loupe.facetAddress(PointsViewFacet.getPoints.selector) != address(0), "missing getPoints selector");
         assertTrue(
             loupe.facetAddress(PointsViewFacet.getPointsPerAction.selector) != address(0),
@@ -58,6 +66,18 @@ contract LeanDeploySelectorsTest is Test {
         assertTrue(
             loupe.facetAddress(PointsViewFacet.getPointsBatch.selector) != address(0),
             "missing getPointsBatch selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getDailyPointsCap.selector) != address(0),
+            "missing getDailyPointsCap selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getPointsAccruedToday.selector) != address(0),
+            "missing getPointsAccruedToday selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getAccrualCooldown.selector) != address(0),
+            "missing getAccrualCooldown selector"
         );
 
         PointsAdminFacet pointsAdmin = PointsAdminFacet(deployment.diamond);
@@ -87,5 +107,12 @@ contract LeanDeploySelectorsTest is Test {
         assertEq(balances.length, 2, "batch length");
         assertEq(balances[0], 0, "batch points self");
         assertEq(balances[1], 0, "batch points other");
+
+        pointsAdmin.setDailyPointsCap(123);
+        assertEq(pointsView.getDailyPointsCap(), 123, "daily cap setter not callable");
+        assertEq(pointsView.getPointsAccruedToday(address(this)), 0, "unexpected accrued today");
+
+        pointsAdmin.setAccrualCooldown(actionTypeA, 3600);
+        assertEq(pointsView.getAccrualCooldown(actionTypeA), 3600, "cooldown setter not callable");
     }
 }

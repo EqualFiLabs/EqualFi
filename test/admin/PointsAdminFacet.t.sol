@@ -20,10 +20,20 @@ contract PointsAdminHarness is PointsAdminFacet {
     function pointsForAction(bytes32 actionType) external view returns (uint256) {
         return LibPoints.pointsForAction(actionType);
     }
+
+    function dailyPointsCap() external view returns (uint256) {
+        return LibPoints.dailyPointsCap();
+    }
+
+    function accrualCooldown(bytes32 actionType) external view returns (uint256) {
+        return LibPoints.accrualCooldownForAction(actionType);
+    }
 }
 
 contract PointsAdminFacetTest is Test {
     event PointsPerActionUpdated(bytes32 indexed actionType, uint256 newAmount);
+    event PointsDailyCapUpdated(uint256 newDailyCap);
+    event PointsAccrualCooldownUpdated(bytes32 indexed actionType, uint256 cooldownSecs);
 
     PointsAdminHarness internal facet;
 
@@ -155,6 +165,44 @@ contract PointsAdminFacetTest is Test {
         facet.setPointsPerAction(actionType, 123);
 
         assertEq(facet.pointsForAction(actionType), 123);
+    }
+
+    function test_setDailyPointsCap_governanceSetterCorrectness() public {
+        vm.prank(OWNER);
+        facet.setDailyPointsCap(777);
+        assertEq(facet.dailyPointsCap(), 777);
+    }
+
+    function test_setDailyPointsCap_nonGovernanceReverts() public {
+        vm.expectRevert(bytes("LibAccess: not owner or timelock"));
+        facet.setDailyPointsCap(1);
+    }
+
+    function test_setDailyPointsCap_emitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit PointsDailyCapUpdated(999);
+        vm.prank(OWNER);
+        facet.setDailyPointsCap(999);
+    }
+
+    function test_setAccrualCooldown_governanceSetterCorrectness() public {
+        bytes32 actionType = keccak256("POINTS_TEST_COOLDOWN");
+        vm.prank(OWNER);
+        facet.setAccrualCooldown(actionType, 2 hours);
+        assertEq(facet.accrualCooldown(actionType), 2 hours);
+    }
+
+    function test_setAccrualCooldown_nonGovernanceReverts() public {
+        vm.expectRevert(bytes("LibAccess: not owner or timelock"));
+        facet.setAccrualCooldown(keccak256("POINTS_TEST_COOLDOWN"), 1);
+    }
+
+    function test_setAccrualCooldown_emitsEvent() public {
+        bytes32 actionType = keccak256("POINTS_TEST_COOLDOWN");
+        vm.expectEmit(true, false, false, true);
+        emit PointsAccrualCooldownUpdated(actionType, 6 hours);
+        vm.prank(OWNER);
+        facet.setAccrualCooldown(actionType, 6 hours);
     }
 
     function _setValidIndexWeights(uint256 mintPoints, uint256 burnPoints, uint256 mintPositionPoints, uint256 burnPositionPoints)

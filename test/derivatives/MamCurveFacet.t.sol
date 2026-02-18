@@ -303,7 +303,7 @@ contract MamCurveFacetTest is Test {
         harness.seedPool(2, address(tokenB), positionKey, 10e18, 10e18);
         harness.joinPool(positionKey, 1);
         harness.joinPool(positionKey, 2);
-        harness.setPointsPerAction(LibPoints.ACTION_SWAP, 5);
+        harness.setPointsPerAction(LibPoints.ACTION_SWAP_MAM_CURVE, 5);
 
         MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
             makerPositionKey: positionKey,

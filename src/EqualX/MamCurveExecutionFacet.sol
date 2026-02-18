@@ -165,7 +165,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
             LibAppStorage.s().nativeTrackedTotal -= baseFill;
         }
         LibCurrency.transferWithMin(baseToken, recipient, baseFill, minOut);
-        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP);
+        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP_MAM_CURVE);
 
         emit CurveFilled(curveId, msg.sender, recipient, amountIn, totalQuote, amountOut, feeAmount, remaining);
     }
