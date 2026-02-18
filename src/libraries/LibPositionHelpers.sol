@@ -29,9 +29,9 @@ library LibPositionHelpers {
 
     /// @notice Require that the caller owns the specified NFT
     /// @param tokenId The token ID to check ownership for
-    function requireOwnership(uint256 tokenId) internal view {
+    function requireOwnership(uint256 tokenId) internal view returns (address owner) {
         PositionNFT nft = PositionNFT(LibPositionNFT.s().positionNFTContract);
-        address owner = nft.ownerOf(tokenId);
+        owner = nft.ownerOf(tokenId);
         if (owner != msg.sender) {
             revert NotNFTOwner(msg.sender, tokenId);
         }

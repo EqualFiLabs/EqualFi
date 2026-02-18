@@ -12,6 +12,7 @@ import {LibCurrency} from "../libraries/LibCurrency.sol";
 import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {
     RollingError_AmortizationDisabled,
     RollingError_InvalidInterval,
@@ -50,7 +51,7 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         if (agreement.status != DirectTypes.DirectStatus.Active) revert DirectError_InvalidAgreementState();
 
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, agreement.borrowerPositionId);
+        address borrowerOwner = LibDirectHelpers._requireNFTOwnership(nft, agreement.borrowerPositionId);
         address lenderRecipient = nft.ownerOf(agreement.lenderPositionId);
 
         Types.PoolData storage lenderPool = LibDirectHelpers._pool(agreement.lenderPoolId);
@@ -155,6 +156,7 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {
             LibAppStorage.s().nativeTrackedTotal -= received;
         }
+        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_ROLLING_PAYMENT);
 
         emit RollingPaymentMade(
             agreementId,

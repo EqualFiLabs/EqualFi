@@ -21,15 +21,16 @@ import {
 library LibDirectHelpers {
 
     /// @notice Require msg.sender to own the PositionNFT
-    function _requireNFTOwnership(PositionNFT nft, uint256 tokenId) internal view {
-        if (nft.ownerOf(tokenId) != msg.sender) {
+    function _requireNFTOwnership(PositionNFT nft, uint256 tokenId) internal view returns (address owner) {
+        owner = nft.ownerOf(tokenId);
+        if (owner != msg.sender) {
             revert NotNFTOwner(msg.sender, tokenId);
         }
     }
 
     /// @notice Require msg.sender to be owner or approved for the PositionNFT
-    function _requireBorrowerAuthority(PositionNFT nft, uint256 tokenId) internal view {
-        address owner = nft.ownerOf(tokenId);
+    function _requireBorrowerAuthority(PositionNFT nft, uint256 tokenId) internal view returns (address owner) {
+        owner = nft.ownerOf(tokenId);
         if (
             msg.sender != owner &&
             nft.getApproved(tokenId) != msg.sender &&

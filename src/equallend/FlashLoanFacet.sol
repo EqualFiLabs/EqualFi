@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibCurrency} from "../libraries/LibCurrency.sol";
 import {LibFeeTreasury} from "../libraries/LibFeeTreasury.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {Types} from "../libraries/Types.sol";
 
@@ -91,6 +92,7 @@ contract FlashLoanFacet is ReentrancyGuardModifiers {
             }
             LibFeeTreasury.accrueWithTreasury(p, pid, fee, bytes32("flashLoan"));
         }
+        LibPoints.accrue(msg.sender, LibPoints.ACTION_FLASH_LOAN);
 
         emit FlashLoan(pid, receiver, amount, fee, feeBps);
     }

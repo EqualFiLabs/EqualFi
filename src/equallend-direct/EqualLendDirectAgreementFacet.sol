@@ -17,6 +17,7 @@ import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {IDirectOfferEvents} from "../interfaces/IDirectOfferEvents.sol";
 import {
     DirectError_InvalidAsset,
@@ -154,7 +155,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         returns (uint256 agreementId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, lenderPositionId);
+        address lenderOwner = LibDirectHelpers._requireBorrowerAuthority(nft, lenderPositionId);
 
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.DirectBorrowerOffer storage offer = ds.borrowerOffers[offerId];
@@ -281,7 +282,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
 
         ds.agreements[agreementId] = DirectTypes.DirectAgreement({
             agreementId: agreementId,
-            lender: msg.sender,
+            lender: lenderOwner,
             borrower: offer.borrower,
             lenderPositionId: lenderPositionId,
             lenderPoolId: offer.lenderPoolId,
@@ -319,6 +320,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         }
 
         emit BorrowerOfferAccepted(offerId, agreementId, lenderPositionId);
+        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_ACCEPT);
     }
 
     function acceptOffer(uint256 offerId, uint256 borrowerPositionId, uint256 minReceived)
@@ -326,9 +328,8 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         nonReentrant
         returns (uint256 agreementId)
     {
-        LibDirectHelpers._requireNFTOwnership(LibDirectHelpers._positionNFT(), borrowerPositionId);
-
         PositionNFT nft = LibDirectHelpers._positionNFT();
+        address borrowerOwner = LibDirectHelpers._requireBorrowerAuthority(nft, borrowerPositionId);
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.DirectOffer storage offer = ds.offers[offerId];
         if (offer.lender == address(0) || offer.cancelled || offer.filled) {
@@ -485,7 +486,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         ds.agreements[agreementId] = DirectTypes.DirectAgreement({
             agreementId: agreementId,
             lender: offer.lender,
-            borrower: msg.sender,
+            borrower: borrowerOwner,
             lenderPositionId: offer.lenderPositionId,
             lenderPoolId: offer.lenderPoolId,
             borrowerPositionId: borrowerPositionId,
@@ -506,7 +507,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
         // Transfer net principal from lender pool liquidity to the borrower
-        LibCurrency.transferWithMin(offer.borrowAsset, msg.sender, offer.principal - totalFee, minReceived);
+        LibCurrency.transferWithMin(offer.borrowAsset, borrowerOwner, offer.principal - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(
@@ -532,6 +533,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
             offer.isTranche ? tranche.trancheRemainingAfter / offer.principal : 0,
             offer.isTranche ? tranche.trancheRemainingAfter == 0 : true
         );
+        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_ACCEPT);
     }
 
     
@@ -544,7 +546,8 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
     {
         if (principalAmount == 0) revert DirectError_InvalidFillAmount();
 
-        LibDirectHelpers._requireNFTOwnership(LibDirectHelpers._positionNFT(), borrowerPositionId);
+        PositionNFT nft = LibDirectHelpers._positionNFT();
+        address borrowerOwner = LibDirectHelpers._requireBorrowerAuthority(nft, borrowerPositionId);
 
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.DirectRatioTrancheOffer storage offer = ds.ratioOffers[offerId];
@@ -557,7 +560,7 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         Types.PoolData storage lenderPool = LibDirectHelpers._pool(offer.lenderPoolId);
         if (offer.borrowAsset != lenderPool.underlying) revert DirectError_InvalidAsset();
 
-        bytes32 lenderKey = LibDirectHelpers._positionNFT().getPositionKey(offer.lenderPositionId);
+        bytes32 lenderKey = nft.getPositionKey(offer.lenderPositionId);
         LibFeeIndex.settle(offer.lenderPoolId, lenderKey);
         LibActiveCreditIndex.settle(offer.lenderPoolId, lenderKey);
         if (!LibPoolMembership.isMember(lenderKey, offer.lenderPoolId)) revert DirectError_InvalidOffer();
@@ -566,7 +569,7 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         uint256 lenderPrincipalBefore = lenderPool.userPrincipal[lenderKey];
         if (lenderPrincipalBefore < principalAmount) revert InsufficientPrincipal(principalAmount, lenderPrincipalBefore);
 
-        bytes32 borrowerKey = LibDirectHelpers._positionNFT().getPositionKey(borrowerPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
         LibFeeIndex.settle(offer.collateralPoolId, borrowerKey);
         LibActiveCreditIndex.settle(offer.collateralPoolId, borrowerKey);
         Types.PoolData storage pool = LibDirectHelpers._pool(offer.collateralPoolId);
@@ -667,7 +670,7 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         ds.agreements[agreementId] = DirectTypes.DirectAgreement({
             agreementId: agreementId,
             lender: offer.lender,
-            borrower: msg.sender,
+            borrower: borrowerOwner,
             lenderPositionId: offer.lenderPositionId,
             lenderPoolId: offer.lenderPoolId,
             borrowerPositionId: borrowerPositionId,
@@ -687,7 +690,7 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         LibDirectStorage.addBorrowerAgreement(ds, borrowerKey, agreementId);
         LibDirectStorage.addLenderAgreement(ds, lenderKey, agreementId);
 
-        LibCurrency.transferWithMin(offer.borrowAsset, msg.sender, principalAmount - totalFee, minReceived);
+        LibCurrency.transferWithMin(offer.borrowAsset, borrowerOwner, principalAmount - totalFee, minReceived);
 
         if (totalFee > 0) {
             _distributeDirectFees(
@@ -706,6 +709,7 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
         emit RatioTrancheOfferAccepted(
             offerId, agreementId, borrowerPositionId, principalAmount, offer.principalRemaining, collateralRequired
         );
+        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_ACCEPT);
 
     }
 
@@ -783,7 +787,7 @@ function _checkAndConsumeTranche(
         if (collateralAmount == 0) revert DirectError_InvalidFillAmount();
 
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, lenderPositionId);
+        address lenderOwner = LibDirectHelpers._requireBorrowerAuthority(nft, lenderPositionId);
 
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.DirectBorrowerRatioTrancheOffer storage offer = ds.borrowerRatioOffers[offerId];
@@ -896,7 +900,7 @@ function _checkAndConsumeTranche(
 
         ds.agreements[agreementId] = DirectTypes.DirectAgreement({
             agreementId: agreementId,
-            lender: msg.sender,
+            lender: lenderOwner,
             borrower: offer.borrower,
             lenderPositionId: lenderPositionId,
             lenderPoolId: offer.lenderPoolId,
@@ -936,6 +940,7 @@ function _checkAndConsumeTranche(
         emit BorrowerRatioTrancheOfferAccepted(
             offerId, agreementId, lenderPositionId, collateralAmount, offer.collateralRemaining, principalAmount
         );
+        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_ACCEPT);
 
     }
 }

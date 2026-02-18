@@ -15,6 +15,7 @@ import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {DirectError_InvalidAsset, DirectError_InvalidOffer, DirectError_InvalidTimestamp} from "../libraries/Errors.sol";
 
 /// @notice Rolling agreement acceptance and initialization
@@ -34,7 +35,7 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
     {
         LibCurrency.assertZeroMsgValue();
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, callerPositionId);
+        address callerOwner = LibDirectHelpers._requireBorrowerAuthority(nft, callerPositionId);
 
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.RollingOfferKind kind = ds.rollingOfferKindById[offerId];
@@ -68,6 +69,7 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
             revert DirectError_InvalidOffer();
         }
 
+        LibPoints.accrue(callerOwner, LibPoints.ACTION_DIRECT_ACCEPT);
         emit RollingOfferAccepted(offerId, agreementId, borrower);
     }
 

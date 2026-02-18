@@ -12,6 +12,7 @@ import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibSolvencyChecks} from "../../src/libraries/LibSolvencyChecks.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
@@ -195,6 +196,14 @@ contract DirectTestHarnessFacet {
 
     function setConfig(DirectTypes.DirectConfig memory cfg) external {
         LibDirectStorage.directStorage().config = cfg;
+    }
+
+    function setPointsPerAction(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
     }
 
     function setArrears(uint256 agreementId, uint256 arrears) external {

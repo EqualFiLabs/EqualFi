@@ -14,6 +14,7 @@ import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
 import {LibDirectRolling} from "../libraries/LibDirectRolling.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {DirectError_InvalidAsset, DirectError_InvalidOffer, DirectError_ZeroAmount} from "../libraries/Errors.sol";
 
 /// @notice Rolling-offer entrypoints for EqualLend Direct
@@ -82,7 +83,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
+        address borrowerOwner = LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
         _validateRollingOfferFlags(params.allowEarlyRepay, params.allowEarlyExercise, params.allowAmortization);
         _validateRollingAmounts(params.principal, params.collateralLockAmount, params.borrowAsset, params.collateralAsset);
 
@@ -183,6 +184,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             params.lenderPoolId,
             params.collateralPoolId
         );
+        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_POST_OFFER);
     }
 
     function postRollingOffer(DirectTypes.DirectRollingOfferParams calldata params)
@@ -191,7 +193,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
+        address lenderOwner = LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
         _validateRollingOfferFlags(params.allowEarlyRepay, params.allowEarlyExercise, params.allowAmortization);
         _validateRollingAmounts(params.principal, params.collateralLockAmount, params.borrowAsset, params.collateralAsset);
 
@@ -287,6 +289,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             params.lenderPoolId,
             params.collateralPoolId
         );
+        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_POST_OFFER);
     }
 
     function cancelRollingOffer(uint256 offerId) external nonReentrant {

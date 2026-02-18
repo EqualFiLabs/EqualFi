@@ -14,6 +14,7 @@ import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
 import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {DerivativeTypes} from "../libraries/DerivativeTypes.sol";
 import {LibAuctionSwap} from "../libraries/LibAuctionSwap.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
@@ -116,7 +117,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             revert AmmAuction_InvalidFee(params.feeBps, ds.config.maxFeeBps);
         }
 
-        bytes32 positionKey = LibDerivativeHelpers._requirePositionOwnership(params.positionId);
+        (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
         Types.PoolData storage poolA = LibDirectHelpers._pool(params.poolIdA);
         Types.PoolData storage poolB = LibDirectHelpers._pool(params.poolIdB);
 
@@ -164,6 +165,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             LibDerivativeStorage.addAuctionByToken(auction.tokenB, auctionId);
         }
         LibDerivativeStorage.addAuctionByPair(auction.tokenA, auction.tokenB, auctionId);
+        LibPoints.accrue(makerOwner, LibPoints.ACTION_DERIVATIVE_CREATE);
 
         emit AuctionCreated(
             auctionId,

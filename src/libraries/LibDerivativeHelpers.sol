@@ -24,6 +24,16 @@ library LibDerivativeHelpers {
         positionKey = LibPositionNFT.getPositionKey(address(nft), positionId);
     }
 
+    function _requirePositionOwnershipAndOwner(uint256 positionId)
+        internal
+        view
+        returns (bytes32 positionKey, address owner)
+    {
+        PositionNFT nft = LibDirectHelpers._positionNFT();
+        owner = LibDirectHelpers._requireBorrowerAuthority(nft, positionId);
+        positionKey = LibPositionNFT.getPositionKey(address(nft), positionId);
+    }
+
     function _validateTimeWindow(uint64 startTime, uint64 endTime) internal pure {
         if (endTime <= startTime) {
             revert DerivativeError_InvalidTimeWindow(startTime, endTime);

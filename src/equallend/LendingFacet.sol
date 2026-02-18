@@ -16,6 +16,7 @@ import {LibLoanManager} from "../libraries/LibLoanManager.sol";
 import {LibLoanHelpers} from "../libraries/LibLoanHelpers.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {
     NotNFTOwner,
@@ -112,8 +113,8 @@ contract LendingFacet is ReentrancyGuardModifiers {
     }
 
     /// @notice Require that the caller owns the specified NFT
-    function _requireOwnership(uint256 tokenId) internal view {
-        LibPositionHelpers.requireOwnership(tokenId);
+    function _requireOwnership(uint256 tokenId) internal view returns (address owner) {
+        owner = LibPositionHelpers.requireOwnership(tokenId);
     }
 
     /// @notice Get the position key for a token ID
@@ -222,7 +223,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
     ) public payable nonReentrant {
         LibCurrency.assertZeroMsgValue();
         // Verify NFT ownership
-        _requireOwnership(tokenId);
+        address owner = _requireOwnership(tokenId);
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
@@ -288,6 +289,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         loan.principalAtOpen = principalAtOpen;
 
         _increaseActiveCreditDebt(p, pid, positionKey, amount);
+        LibPoints.accrue(owner, LibPoints.ACTION_BORROW);
 
         emit RollingLoanOpenedFromPosition(tokenId, msg.sender, pid, amount, true);
     }
@@ -302,7 +304,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         uint256 maxPayment
     ) public payable nonReentrant {
         // Verify NFT ownership
-        _requireOwnership(tokenId);
+        address owner = _requireOwnership(tokenId);
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
@@ -360,6 +362,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         if (loan.principalRemaining == 0) {
             loan.active = false;
         }
+        LibPoints.accrue(owner, LibPoints.ACTION_REPAY);
 
         emit PaymentMadeFromPosition(
             tokenId,
@@ -517,7 +520,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
     ) public payable nonReentrant returns (uint256 loanId) {
         LibCurrency.assertZeroMsgValue();
         // Verify NFT ownership
-        _requireOwnership(tokenId);
+        address owner = _requireOwnership(tokenId);
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
@@ -605,6 +608,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         _addLoanIdWithIndex(p, pid, positionKey, loanId);
 
         _increaseActiveCreditDebt(p, pid, positionKey, amount);
+        LibPoints.accrue(owner, LibPoints.ACTION_BORROW);
 
         emit FixedLoanOpenedFromPosition(
             tokenId, msg.sender, pid, loanId, amount, 0, loan.expiry, cfg.apyBps, false
@@ -623,7 +627,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         uint256 maxPayment
     ) public payable nonReentrant {
         // Verify NFT ownership
-        _requireOwnership(tokenId);
+        address owner = _requireOwnership(tokenId);
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
@@ -666,6 +670,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
             uint256 loanIndex = p.loanIdToIndex[positionKey][loanId];
             _removeLoanIdByIndex(p, pid, positionKey, loanId, loanIndex);
         }
+        LibPoints.accrue(owner, LibPoints.ACTION_REPAY);
 
         emit FixedLoanRepaidFromPosition(
             tokenId,

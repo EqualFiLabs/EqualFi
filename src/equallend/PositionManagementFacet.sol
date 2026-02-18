@@ -14,6 +14,7 @@ import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
 import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibPoolMembership} from "../libraries/LibPoolMembership.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {
     NotNFTOwner,
@@ -83,8 +84,8 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
 
     /// @notice Require that the caller owns the specified NFT
     /// @param tokenId The token ID to check ownership for
-    function _requireOwnership(uint256 tokenId) internal view {
-        LibPositionHelpers.requireOwnership(tokenId);
+    function _requireOwnership(uint256 tokenId) internal view returns (address owner) {
+        owner = LibPositionHelpers.requireOwnership(tokenId);
     }
 
     /// @notice Get the position key for a token ID
@@ -283,6 +284,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         // Mint the NFT
         PositionNFT nft = PositionNFT(LibPositionNFT.s().positionNFTContract);
         tokenId = nft.mint(msg.sender, pid);
+        address owner = nft.ownerOf(tokenId);
 
         // Get position key for the new NFT
         bytes32 positionKey = _getPositionKey(tokenId);
@@ -307,6 +309,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         _incrementUserCount(p, true, received);
         p.userFeeIndex[positionKey] = p.feeIndex;
         p.userMaintenanceIndex[positionKey] = p.maintenanceIndex;
+        LibPoints.accrue(owner, LibPoints.ACTION_DEPOSIT);
 
         emit PositionMinted(tokenId, msg.sender, pid);
         emit DepositedToPosition(tokenId, msg.sender, pid, received, received);
@@ -322,7 +325,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         uint256 maxAmount
     ) public payable nonReentrant {
         // Verify ownership
-        _requireOwnership(tokenId);
+        address owner = _requireOwnership(tokenId);
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
@@ -356,6 +359,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         p.totalDeposits += received;
         p.trackedBalance += received;
         p.userFeeIndex[positionKey] = p.feeIndex;
+        LibPoints.accrue(owner, LibPoints.ACTION_DEPOSIT);
 
         emit DepositedToPosition(tokenId, msg.sender, pid, received, p.userPrincipal[positionKey]);
     }

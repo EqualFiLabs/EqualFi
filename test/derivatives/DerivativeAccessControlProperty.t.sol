@@ -15,6 +15,7 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibDiamond} from "../../src/libraries/LibDiamond.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {NotNFTOwner} from "../../src/libraries/Errors.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
@@ -129,6 +130,9 @@ contract DerivativeAccessControlPropertyTest is Test {
         _seedPools(address(optionsHarness), positionKey, 1, 2, 1e24, 1e24);
         _seedPools(address(futuresHarness), positionKey, 1, 2, 1e24, 1e24);
         _seedPools(address(ammHarness), positionKey, 1, 2, 1e24, 1e24);
+        optionsHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE, 7);
+        futuresHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE, 11);
+        ammHarness.setPointsPerActionHarness(LibPoints.ACTION_DERIVATIVE_CREATE, 13);
         vm.prank(maker);
         nft.setApprovalForAll(operator, true);
 
@@ -181,6 +185,13 @@ contract DerivativeAccessControlPropertyTest is Test {
                 feeAsset: DerivativeTypes.FeeAsset.TokenIn
             })
         );
+
+        assertEq(optionsHarness.pointsBalance(maker), 7);
+        assertEq(optionsHarness.pointsBalance(operator), 0);
+        assertEq(futuresHarness.pointsBalance(maker), 11);
+        assertEq(futuresHarness.pointsBalance(operator), 0);
+        assertEq(ammHarness.pointsBalance(maker), 13);
+        assertEq(ammHarness.pointsBalance(operator), 0);
     }
 
     function testProperty_ExerciseAuthorization() public {
@@ -555,6 +566,14 @@ contract OptionsAccessHarness is OptionsFacet {
     function joinPool(bytes32 positionKey, uint256 pid) external {
         LibPoolMembership._joinPool(positionKey, pid);
     }
+
+    function setPointsPerActionHarness(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
+    }
 }
 
 contract FuturesAccessHarness is FuturesFacet {
@@ -612,6 +631,14 @@ contract FuturesAccessHarness is FuturesFacet {
     function joinPool(bytes32 positionKey, uint256 pid) external {
         LibPoolMembership._joinPool(positionKey, pid);
     }
+
+    function setPointsPerActionHarness(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
+    }
 }
 
 contract AmmAccessHarness is AmmAuctionFacet {
@@ -656,5 +683,13 @@ contract AmmAccessHarness is AmmAuctionFacet {
 
     function joinPool(bytes32 positionKey, uint256 pid) external {
         LibPoolMembership._joinPool(positionKey, pid);
+    }
+
+    function setPointsPerActionHarness(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
     }
 }

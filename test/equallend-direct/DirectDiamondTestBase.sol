@@ -45,6 +45,8 @@ interface IDirectTestHarness {
     function setUserPrincipal(uint256 pid, bytes32 positionKey, uint256 principal) external;
     function joinPool(uint256 pid, bytes32 positionKey) external;
     function setConfig(DirectTypes.DirectConfig memory cfg) external;
+    function setPointsPerAction(bytes32 actionType, uint256 amount) external;
+    function pointsBalance(address user) external view returns (uint256);
     function setArrears(uint256 agreementId, uint256 arrears) external;
     function setPaymentCount(uint256 agreementId, uint16 count) external;
     function forceNextDue(uint256 agreementId, uint64 nextDue) external;
@@ -480,7 +482,7 @@ abstract contract DirectDiamondTestBase is Test {
     }
 
     function _selectorsHarness() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](54);
+        s = new bytes4[](56);
         s[0] = DirectTestHarnessFacet.setPositionNFT.selector;
         s[1] = DirectTestHarnessFacet.setOwner.selector;
         s[2] = DirectTestHarnessFacet.setTimelock.selector;
@@ -535,6 +537,8 @@ abstract contract DirectDiamondTestBase is Test {
         s[51] = DirectTestHarnessFacet.setActiveCreditShare.selector;
         s[52] = DirectTestHarnessFacet.setNativeTrackedTotal.selector;
         s[53] = DirectTestHarnessFacet.nativeTrackedTotal.selector;
+        s[54] = DirectTestHarnessFacet.setPointsPerAction.selector;
+        s[55] = DirectTestHarnessFacet.pointsBalance.selector;
     }
 
     function _selectorsView() internal pure returns (bytes4[] memory s) {

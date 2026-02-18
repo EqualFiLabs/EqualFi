@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {PositionNFT} from "../nft/PositionNFT.sol";
 import {FuturesToken} from "../derivatives/FuturesToken.sol";
 import {LibAccess} from "../libraries/LibAccess.sol";
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
@@ -15,6 +14,7 @@ import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
 import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
 import {LibDerivativeFees} from "../libraries/LibDerivativeFees.sol";
 import {LibFeeTreasury} from "../libraries/LibFeeTreasury.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {DerivativeTypes} from "../libraries/DerivativeTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {InsufficientPrincipal, PoolMembershipRequired} from "../libraries/Errors.sol";
@@ -102,7 +102,7 @@ contract FuturesFacet is ReentrancyGuardModifiers {
             revert Futures_InvalidPool(params.underlyingPoolId);
         }
 
-        bytes32 positionKey = LibDerivativeHelpers._requirePositionOwnership(params.positionId);
+        (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
 
         Types.PoolData storage underlyingPool = LibDirectHelpers._pool(params.underlyingPoolId);
         Types.PoolData storage quotePool = LibDirectHelpers._pool(params.quotePoolId);
@@ -160,9 +160,8 @@ contract FuturesFacet is ReentrancyGuardModifiers {
 
         LibDerivativeStorage.addFuturesSeries(positionKey, seriesId);
 
-        PositionNFT nft = LibDirectHelpers._positionNFT();
-        address makerOwner = nft.ownerOf(params.positionId);
         _futuresToken().managerMint(makerOwner, seriesId, params.totalSize, "");
+        LibPoints.accrue(makerOwner, LibPoints.ACTION_DERIVATIVE_CREATE);
 
         emit SeriesCreated(
             seriesId,
