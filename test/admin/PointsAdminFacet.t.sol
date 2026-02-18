@@ -28,12 +28,41 @@ contract PointsAdminHarness is PointsAdminFacet {
     function accrualCooldown(bytes32 actionType) external view returns (uint256) {
         return LibPoints.accrualCooldownForAction(actionType);
     }
+
+    function redemptionToken() external view returns (address) {
+        return LibPoints.redemptionToken();
+    }
+
+    function redemptionEnabled() external view returns (bool) {
+        return LibPoints.redemptionEnabled();
+    }
+
+    function redemptionRate() external view returns (uint256) {
+        return LibPoints.redemptionRate();
+    }
+
+    function redemptionGlobalMintCap() external view returns (uint256) {
+        return LibPoints.redemptionGlobalMintCap();
+    }
+
+    function redemptionEpochLength() external view returns (uint64) {
+        return LibPoints.redemptionEpochLength();
+    }
+
+    function redemptionEpochMintCap() external view returns (uint256) {
+        return LibPoints.redemptionEpochMintCap();
+    }
 }
 
 contract PointsAdminFacetTest is Test {
     event PointsPerActionUpdated(bytes32 indexed actionType, uint256 newAmount);
     event PointsDailyCapUpdated(uint256 newDailyCap);
     event PointsAccrualCooldownUpdated(bytes32 indexed actionType, uint256 cooldownSecs);
+    event PointsRedemptionTokenUpdated(address indexed token);
+    event PointsRedemptionEnabledUpdated(bool enabled);
+    event PointsRedemptionRateUpdated(uint256 tokensPerPointWad);
+    event PointsRedemptionGlobalMintCapUpdated(uint256 newCap);
+    event PointsRedemptionEpochConfigUpdated(uint64 epochLengthSecs, uint256 epochMintCap);
 
     PointsAdminHarness internal facet;
 
@@ -203,6 +232,97 @@ contract PointsAdminFacetTest is Test {
         emit PointsAccrualCooldownUpdated(actionType, 6 hours);
         vm.prank(OWNER);
         facet.setAccrualCooldown(actionType, 6 hours);
+    }
+
+    function test_setRedemptionToken_governanceSetterCorrectness() public {
+        vm.prank(OWNER);
+        facet.setRedemptionToken(address(0xCAFE));
+        assertEq(facet.redemptionToken(), address(0xCAFE));
+    }
+
+    function test_setRedemptionToken_nonGovernanceReverts() public {
+        vm.expectRevert(bytes("LibAccess: not owner or timelock"));
+        facet.setRedemptionToken(address(0xCAFE));
+    }
+
+    function test_setRedemptionToken_emitsEvent() public {
+        vm.expectEmit(true, false, false, true);
+        emit PointsRedemptionTokenUpdated(address(0xCAFE));
+        vm.prank(OWNER);
+        facet.setRedemptionToken(address(0xCAFE));
+    }
+
+    function test_setRedemptionEnabled_governanceSetterCorrectness() public {
+        vm.prank(OWNER);
+        facet.setRedemptionEnabled(true);
+        assertEq(facet.redemptionEnabled(), true);
+    }
+
+    function test_setRedemptionEnabled_nonGovernanceReverts() public {
+        vm.expectRevert(bytes("LibAccess: not owner or timelock"));
+        facet.setRedemptionEnabled(true);
+    }
+
+    function test_setRedemptionEnabled_emitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit PointsRedemptionEnabledUpdated(true);
+        vm.prank(OWNER);
+        facet.setRedemptionEnabled(true);
+    }
+
+    function test_setRedemptionRate_governanceSetterCorrectness() public {
+        vm.prank(OWNER);
+        facet.setRedemptionRate(2e18);
+        assertEq(facet.redemptionRate(), 2e18);
+    }
+
+    function test_setRedemptionRate_nonGovernanceReverts() public {
+        vm.expectRevert(bytes("LibAccess: not owner or timelock"));
+        facet.setRedemptionRate(2e18);
+    }
+
+    function test_setRedemptionRate_emitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit PointsRedemptionRateUpdated(2e18);
+        vm.prank(OWNER);
+        facet.setRedemptionRate(2e18);
+    }
+
+    function test_setRedemptionGlobalMintCap_governanceSetterCorrectness() public {
+        vm.prank(OWNER);
+        facet.setRedemptionGlobalMintCap(1_000_000);
+        assertEq(facet.redemptionGlobalMintCap(), 1_000_000);
+    }
+
+    function test_setRedemptionGlobalMintCap_nonGovernanceReverts() public {
+        vm.expectRevert(bytes("LibAccess: not owner or timelock"));
+        facet.setRedemptionGlobalMintCap(1_000_000);
+    }
+
+    function test_setRedemptionGlobalMintCap_emitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit PointsRedemptionGlobalMintCapUpdated(1234);
+        vm.prank(OWNER);
+        facet.setRedemptionGlobalMintCap(1234);
+    }
+
+    function test_setRedemptionEpochConfig_governanceSetterCorrectness() public {
+        vm.prank(OWNER);
+        facet.setRedemptionEpochConfig(1 days, 5000);
+        assertEq(facet.redemptionEpochLength(), 1 days);
+        assertEq(facet.redemptionEpochMintCap(), 5000);
+    }
+
+    function test_setRedemptionEpochConfig_nonGovernanceReverts() public {
+        vm.expectRevert(bytes("LibAccess: not owner or timelock"));
+        facet.setRedemptionEpochConfig(1 days, 5000);
+    }
+
+    function test_setRedemptionEpochConfig_emitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit PointsRedemptionEpochConfigUpdated(1 days, 5000);
+        vm.prank(OWNER);
+        facet.setRedemptionEpochConfig(1 days, 5000);
     }
 
     function _setValidIndexWeights(uint256 mintPoints, uint256 burnPoints, uint256 mintPositionPoints, uint256 burnPositionPoints)

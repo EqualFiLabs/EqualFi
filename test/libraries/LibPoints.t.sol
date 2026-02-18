@@ -17,6 +17,22 @@ contract LibPointsHarness {
         return LibPoints.balanceOf(user);
     }
 
+    function getPointsEarned(address user) external view returns (uint256) {
+        return LibPoints.earnedOf(user);
+    }
+
+    function getPointsBurned(address user) external view returns (uint256) {
+        return LibPoints.burnedOf(user);
+    }
+
+    function getTotalPointsEarned() external view returns (uint256) {
+        return LibPoints.totalEarned();
+    }
+
+    function getTotalPointsBurned() external view returns (uint256) {
+        return LibPoints.totalBurned();
+    }
+
     function getPointsPerAction(bytes32 actionType) external view returns (uint256) {
         return LibPoints.pointsForAction(actionType);
     }
@@ -44,13 +60,84 @@ contract LibPointsHarness {
     function getLastAccruedAt(address user, bytes32 actionType) external view returns (uint256) {
         return LibPoints.lastAccruedAt(user, actionType);
     }
+
+    function burn(address user, uint256 amount, bytes32 reason) external {
+        LibPoints.burn(user, amount, reason);
+    }
+
+    function setRedemptionToken(address token) external {
+        LibPoints.setRedemptionToken(token);
+    }
+
+    function setRedemptionEnabled(bool enabled) external {
+        LibPoints.setRedemptionEnabled(enabled);
+    }
+
+    function setRedemptionRate(uint256 tokensPerPointWad) external {
+        LibPoints.setRedemptionRate(tokensPerPointWad);
+    }
+
+    function setRedemptionGlobalMintCap(uint256 newCap) external {
+        LibPoints.setRedemptionGlobalMintCap(newCap);
+    }
+
+    function setRedemptionEpochConfig(uint64 epochLengthSecs, uint256 epochMintCap) external {
+        LibPoints.setRedemptionEpochConfig(epochLengthSecs, epochMintCap);
+    }
+
+    function consumeRedemption(address user, uint256 pointsIn) external returns (address token, uint256 tokenOut) {
+        return LibPoints.consumeRedemption(user, pointsIn);
+    }
+
+    function previewRedemption(uint256 pointsIn) external view returns (uint256 tokenOut) {
+        return LibPoints.previewRedemption(pointsIn);
+    }
+
+    function redemptionToken() external view returns (address) {
+        return LibPoints.redemptionToken();
+    }
+
+    function redemptionEnabled() external view returns (bool) {
+        return LibPoints.redemptionEnabled();
+    }
+
+    function redemptionRate() external view returns (uint256) {
+        return LibPoints.redemptionRate();
+    }
+
+    function redemptionGlobalMintCap() external view returns (uint256) {
+        return LibPoints.redemptionGlobalMintCap();
+    }
+
+    function redemptionTotalMinted() external view returns (uint256) {
+        return LibPoints.redemptionTotalMinted();
+    }
+
+    function redemptionEpochLength() external view returns (uint64) {
+        return LibPoints.redemptionEpochLength();
+    }
+
+    function redemptionEpochMintCap() external view returns (uint256) {
+        return LibPoints.redemptionEpochMintCap();
+    }
+
+    function redemptionMintedInCurrentEpoch() external view returns (uint256) {
+        return LibPoints.redemptionMintedInCurrentEpoch();
+    }
 }
 
 contract LibPointsTest is Test {
     event PointsAccrued(address indexed user, bytes32 indexed actionType, uint256 amount);
+    event PointsBurned(address indexed user, bytes32 indexed reason, uint256 amount);
     event PointsPerActionUpdated(bytes32 indexed actionType, uint256 newAmount);
     event PointsDailyCapUpdated(uint256 newDailyCap);
     event PointsAccrualCooldownUpdated(bytes32 indexed actionType, uint256 cooldownSecs);
+    event PointsRedemptionTokenUpdated(address indexed token);
+    event PointsRedemptionEnabledUpdated(bool enabled);
+    event PointsRedemptionRateUpdated(uint256 tokensPerPointWad);
+    event PointsRedemptionGlobalMintCapUpdated(uint256 newCap);
+    event PointsRedemptionEpochConfigUpdated(uint64 epochLengthSecs, uint256 epochMintCap);
+    event PointsRedemptionRecorded(address indexed user, uint256 pointsIn, uint256 tokenOut);
 
     LibPointsHarness internal h;
 
@@ -156,6 +243,166 @@ contract LibPointsTest is Test {
         h.setPointsPerAction(ACTION_A, 7);
         h.accrue(address(0), ACTION_A);
         assertEq(h.getPoints(address(0)), 7);
+    }
+
+    function test_accrue_tracksEarnedAndTotalEarned() public {
+        address user = address(0xA11CE);
+        h.setPointsPerAction(ACTION_A, 4);
+        h.accrue(user, ACTION_A);
+        h.accrue(user, ACTION_A);
+
+        assertEq(h.getPoints(user), 8);
+        assertEq(h.getPointsEarned(user), 8);
+        assertEq(h.getPointsBurned(user), 0);
+        assertEq(h.getTotalPointsEarned(), 8);
+        assertEq(h.getTotalPointsBurned(), 0);
+    }
+
+    function test_burn_reducesBalanceAndTracksBurnTotals() public {
+        address user = address(0xBEEF);
+        bytes32 reason = keccak256("POINTS_BURN_TEST");
+        h.setPointsPerAction(ACTION_A, 15);
+        h.accrue(user, ACTION_A);
+
+        vm.expectEmit(true, true, false, true);
+        emit PointsBurned(user, reason, 9);
+        h.burn(user, 9, reason);
+
+        assertEq(h.getPoints(user), 6);
+        assertEq(h.getPointsEarned(user), 15);
+        assertEq(h.getPointsBurned(user), 9);
+        assertEq(h.getTotalPointsEarned(), 15);
+        assertEq(h.getTotalPointsBurned(), 9);
+    }
+
+    function test_burn_revertsWhenInsufficientBalance() public {
+        h.setPointsPerAction(ACTION_A, 3);
+        h.accrue(address(this), ACTION_A);
+
+        vm.expectRevert(LibPoints.Points_InsufficientBalance.selector);
+        h.burn(address(this), 4, keccak256("POINTS_BURN_TOO_MUCH"));
+    }
+
+    function test_redemptionConfig_settersRoundTripAndEvents() public {
+        vm.expectEmit(true, false, false, true);
+        emit PointsRedemptionTokenUpdated(address(0xCAFE));
+        h.setRedemptionToken(address(0xCAFE));
+
+        vm.expectEmit(false, false, false, true);
+        emit PointsRedemptionEnabledUpdated(true);
+        h.setRedemptionEnabled(true);
+
+        vm.expectEmit(false, false, false, true);
+        emit PointsRedemptionRateUpdated(2e18);
+        h.setRedemptionRate(2e18);
+
+        vm.expectEmit(false, false, false, true);
+        emit PointsRedemptionGlobalMintCapUpdated(1_000_000 ether);
+        h.setRedemptionGlobalMintCap(1_000_000 ether);
+
+        vm.expectEmit(false, false, false, true);
+        emit PointsRedemptionEpochConfigUpdated(1 days, 10_000 ether);
+        h.setRedemptionEpochConfig(1 days, 10_000 ether);
+
+        assertEq(h.redemptionToken(), address(0xCAFE));
+        assertEq(h.redemptionEnabled(), true);
+        assertEq(h.redemptionRate(), 2e18);
+        assertEq(h.redemptionGlobalMintCap(), 1_000_000 ether);
+        assertEq(h.redemptionEpochLength(), 1 days);
+        assertEq(h.redemptionEpochMintCap(), 10_000 ether);
+    }
+
+    function test_previewRedemption_usesWadRate() public {
+        h.setRedemptionRate(15e17); // 1.5 tokens / point
+        assertEq(h.previewRedemption(4), 6);
+    }
+
+    function test_consumeRedemption_revertsWhenDisabled() public {
+        h.setPointsPerAction(ACTION_A, 10);
+        h.accrue(address(this), ACTION_A);
+        h.setRedemptionToken(address(0xCAFE));
+        h.setRedemptionRate(1e18);
+
+        vm.expectRevert(LibPoints.Points_RedemptionDisabled.selector);
+        h.consumeRedemption(address(this), 5);
+    }
+
+    function test_consumeRedemption_revertsWhenTokenNotSet() public {
+        h.setPointsPerAction(ACTION_A, 10);
+        h.accrue(address(this), ACTION_A);
+        h.setRedemptionEnabled(true);
+        h.setRedemptionRate(1e18);
+
+        vm.expectRevert(LibPoints.Points_RedemptionTokenNotSet.selector);
+        h.consumeRedemption(address(this), 5);
+    }
+
+    function test_consumeRedemption_revertsWhenRateProducesZeroOutput() public {
+        h.setPointsPerAction(ACTION_A, 10);
+        h.accrue(address(this), ACTION_A);
+        h.setRedemptionEnabled(true);
+        h.setRedemptionToken(address(0xCAFE));
+
+        vm.expectRevert(LibPoints.Points_RedemptionOutputZero.selector);
+        h.consumeRedemption(address(this), 5);
+    }
+
+    function test_consumeRedemption_burnsPointsAndTracksMinted() public {
+        h.setPointsPerAction(ACTION_A, 12);
+        h.accrue(address(this), ACTION_A);
+
+        h.setRedemptionEnabled(true);
+        h.setRedemptionToken(address(0xCAFE));
+        h.setRedemptionRate(2e18); // 2 tokens per point
+
+        vm.expectEmit(true, true, false, true);
+        emit PointsBurned(address(this), keccak256("POINTS_BURN_REDEEM"), 5);
+        vm.expectEmit(true, false, false, true);
+        emit PointsRedemptionRecorded(address(this), 5, 10);
+        (address token, uint256 tokenOut) = h.consumeRedemption(address(this), 5);
+
+        assertEq(token, address(0xCAFE));
+        assertEq(tokenOut, 10);
+        assertEq(h.getPoints(address(this)), 7);
+        assertEq(h.getPointsBurned(address(this)), 5);
+        assertEq(h.redemptionTotalMinted(), 10);
+    }
+
+    function test_consumeRedemption_respectsGlobalMintCap() public {
+        h.setPointsPerAction(ACTION_A, 30);
+        h.accrue(address(this), ACTION_A);
+
+        h.setRedemptionEnabled(true);
+        h.setRedemptionToken(address(0xCAFE));
+        h.setRedemptionRate(1e18);
+        h.setRedemptionGlobalMintCap(20);
+
+        h.consumeRedemption(address(this), 10);
+        h.consumeRedemption(address(this), 10);
+
+        vm.expectRevert(LibPoints.Points_GlobalMintCapExceeded.selector);
+        h.consumeRedemption(address(this), 1);
+    }
+
+    function test_consumeRedemption_respectsEpochMintCapAndResetsByEpoch() public {
+        h.setPointsPerAction(ACTION_A, 50);
+        h.accrue(address(this), ACTION_A);
+
+        h.setRedemptionEnabled(true);
+        h.setRedemptionToken(address(0xCAFE));
+        h.setRedemptionRate(1e18);
+        h.setRedemptionEpochConfig(1 days, 20);
+
+        h.consumeRedemption(address(this), 12);
+        assertEq(h.redemptionMintedInCurrentEpoch(), 12);
+
+        vm.expectRevert(LibPoints.Points_EpochMintCapExceeded.selector);
+        h.consumeRedemption(address(this), 9);
+
+        vm.warp(block.timestamp + 1 days);
+        assertEq(h.redemptionMintedInCurrentEpoch(), 0);
+        h.consumeRedemption(address(this), 20);
+        assertEq(h.redemptionMintedInCurrentEpoch(), 20);
     }
 
     function test_accrue_dailyCapClampsWithPartialCredit() public {

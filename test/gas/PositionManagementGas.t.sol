@@ -6,6 +6,7 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {PositionManagementFacet} from "../../src/equallend/PositionManagementFacet.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 
@@ -27,6 +28,8 @@ contract PositionManagementGasHarness is PositionManagementFacet {
 }
 
 contract PositionManagementGasTest is Test {
+    bytes32 internal constant POINTS_STORAGE_POSITION = keccak256("equallend.points.storage");
+
     PositionNFT internal nft;
     PositionManagementGasHarness internal facet;
     MockERC20 internal token;
@@ -42,6 +45,7 @@ contract PositionManagementGasTest is Test {
         facet.configurePositionNFT(address(nft));
         nft.setMinter(address(facet));
         facet.initPool(PID, address(token), 1, 1, 8000);
+        _configurePointsIfEnabled();
 
         token.transfer(user, 1_000_000 ether / 2);
         vm.prank(user);
@@ -52,5 +56,17 @@ contract PositionManagementGasTest is Test {
         vm.prank(user);
         vm.resumeGasMetering();
         facet.mintPositionWithDeposit(PID, 10 ether, 10 ether, 0);
+    }
+
+    function _configurePointsIfEnabled() internal {
+        if (!vm.envOr("POINTS_ON_GAS", false)) return;
+        _setPoints(address(facet), LibPoints.ACTION_MINT_POSITION_WITH_DEPOSIT, 1);
+        _setPoints(address(facet), LibPoints.ACTION_DEPOSIT_TO_POSITION, 1);
+    }
+
+    function _setPoints(address target, bytes32 actionType, uint256 amount) internal {
+        bytes32 pointsPerActionSlot = bytes32(uint256(POINTS_STORAGE_POSITION) + 1);
+        bytes32 valueSlot = keccak256(abi.encode(actionType, pointsPerActionSlot));
+        vm.store(target, valueSlot, bytes32(amount));
     }
 }

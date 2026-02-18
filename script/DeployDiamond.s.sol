@@ -10,6 +10,7 @@ import {DiamondLoupeFacet} from "../src/core/DiamondLoupeFacet.sol";
 import {OwnershipFacet} from "../src/core/OwnershipFacet.sol";
 import {AdminFacet} from "../src/admin/AdminFacet.sol";
 import {PointsAdminFacet} from "../src/admin/PointsAdminFacet.sol";
+import {PointsRedemptionFacet} from "../src/points/PointsRedemptionFacet.sol";
 import {MaintenanceFacet} from "../src/core/MaintenanceFacet.sol";
 import {FlashLoanFacet} from "../src/equallend/FlashLoanFacet.sol";
 import {FeeFacet} from "../src/core/FeeFacet.sol";
@@ -152,6 +153,7 @@ contract DeployDiamondScript is Script {
         OwnershipFacet own = new OwnershipFacet();
         AdminFacet adminFacet = new AdminFacet();
         PointsAdminFacet pointsAdmin = new PointsAdminFacet();
+        PointsRedemptionFacet pointsRedemption = new PointsRedemptionFacet();
         MaintenanceFacet maintenance = new MaintenanceFacet();
         FlashLoanFacet flash = new FlashLoanFacet();
         FeeFacet fee = new FeeFacet();
@@ -222,7 +224,7 @@ contract DeployDiamondScript is Script {
         cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[13] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](42);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](43);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -265,6 +267,7 @@ contract DeployDiamondScript is Script {
         more[39] = _cut(address(moduleView), _selectors(moduleView));
         more[40] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
         more[41] = _cut(address(pointsView), _selectors(pointsView));
+        more[42] = _cut(address(pointsRedemption), _selectors(pointsRedemption));
 
         // Deploy diamond
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
@@ -405,11 +408,21 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(PointsAdminFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](4);
+        s = new bytes4[](9);
         s[0] = PointsAdminFacet.setPointsPerAction.selector;
         s[1] = PointsAdminFacet.setPointsPerActionBatch.selector;
         s[2] = PointsAdminFacet.setDailyPointsCap.selector;
         s[3] = PointsAdminFacet.setAccrualCooldown.selector;
+        s[4] = PointsAdminFacet.setRedemptionToken.selector;
+        s[5] = PointsAdminFacet.setRedemptionEnabled.selector;
+        s[6] = PointsAdminFacet.setRedemptionRate.selector;
+        s[7] = PointsAdminFacet.setRedemptionGlobalMintCap.selector;
+        s[8] = PointsAdminFacet.setRedemptionEpochConfig.selector;
+    }
+
+    function _selectors(PointsRedemptionFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](1);
+        s[0] = PointsRedemptionFacet.redeem.selector;
     }
 
     function _selectors(MaintenanceFacet) internal pure returns (bytes4[] memory s) {

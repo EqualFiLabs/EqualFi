@@ -18,6 +18,7 @@ import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
@@ -225,6 +226,8 @@ contract PenaltyHarness is PenaltyFacet {
 }
 
 contract GasScenarioReportTest is DirectDiamondTestBase {
+    bytes32 internal constant POINTS_STORAGE_POSITION = keccak256("equallend.points.storage");
+
     address internal user = address(0xA11CE);
     address internal lender = address(0xBEEF);
     address internal treasury = address(0x9999);
@@ -358,6 +361,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         pm.configurePositionNFT(address(nft));
         nft.setMinter(address(pm));
         pm.initPool(1, address(token), 1, 1, 8000);
+        _configurePositionPointsIfEnabled(pm);
 
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
@@ -379,6 +383,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         pm.configurePositionNFT(address(nft));
         nft.setMinter(address(pm));
         pm.initPool(1, address(token), 1, 1, 8000);
+        _configurePositionPointsIfEnabled(pm);
 
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
@@ -398,6 +403,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         pm.configurePositionNFT(address(nft));
         nft.setMinter(address(pm));
         pm.initPool(1, address(token), 1, 1, 8000);
+        _configurePositionPointsIfEnabled(pm);
 
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
@@ -418,6 +424,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         pm.configurePositionNFT(address(nft));
         nft.setMinter(address(pm));
         pm.initPool(1, address(token), 1, 1, 8000);
+        _configurePositionPointsIfEnabled(pm);
 
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
@@ -444,6 +451,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         pm.configurePositionNFT(address(nft));
         nft.setMinter(address(pm));
         pm.initPool(1, address(token), 1, 1, 8000);
+        _configurePositionPointsIfEnabled(pm);
 
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
@@ -463,6 +471,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         pm.configurePositionNFT(address(nft));
         nft.setMinter(address(pm));
         pm.initPool(1, address(token), 1, 1, 8000);
+        _configurePositionPointsIfEnabled(pm);
 
         token.transfer(user, 1_000 ether);
         vm.startPrank(user);
@@ -482,6 +491,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         lending.configurePositionNFT(address(nft));
         nft.setMinter(address(lending));
         lending.initPool(1, address(token), 8000, 500);
+        _configureLendingPointsIfEnabled(lending);
 
         uint256 tokenId = _mintPosition(nft, address(lending), user, 1);
         bytes32 key = nft.getPositionKey(tokenId);
@@ -506,6 +516,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         lending.configurePositionNFT(address(nft));
         nft.setMinter(address(lending));
         lending.initPool(1, address(token), 8000, 500);
+        _configureLendingPointsIfEnabled(lending);
 
         uint256 tokenId = _mintPosition(nft, address(lending), user, 1);
         bytes32 key = nft.getPositionKey(tokenId);
@@ -528,6 +539,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         lending.configurePositionNFT(address(nft));
         nft.setMinter(address(lending));
         lending.initPool(1, address(token), 8000, 500);
+        _configureLendingPointsIfEnabled(lending);
 
         lending.addFixedTermConfig(1, 30 days, 200);
 
@@ -553,6 +565,7 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         lending.configurePositionNFT(address(nft));
         nft.setMinter(address(lending));
         lending.initPool(1, address(token), 8000, 500);
+        _configureLendingPointsIfEnabled(lending);
         lending.addFixedTermConfig(1, 30 days, 200);
 
         uint256 tokenId = _mintPosition(nft, address(lending), user, 1);
@@ -834,6 +847,12 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
         views.setDirectConfig(_directConfig());
         harness.setTreasuryShare(protocolTreasury, 4000);
         harness.setActiveCreditShare(0);
+        if (_pointsOnGas()) {
+            _setPoints(address(diamond), LibPoints.ACTION_DIRECT_POST_LENDER_OFFER, 1);
+            _setPoints(address(diamond), LibPoints.ACTION_DIRECT_POST_BORROWER_OFFER, 1);
+            _setPoints(address(diamond), LibPoints.ACTION_DIRECT_ACCEPT_LENDER_OFFER, 1);
+            _setPoints(address(diamond), LibPoints.ACTION_DIRECT_ACCEPT_BORROWER_OFFER, 1);
+        }
     }
 
     function _directConfig() internal pure returns (DirectTypes.DirectConfig memory) {
@@ -892,6 +911,10 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
 
         facet.setAssetPool(address(token), 1, 1_000_000 ether);
         facet.setDefaultPoolConfig();
+        if (_pointsOnGas()) {
+            _setPoints(address(facet), LibPoints.ACTION_INDEX_MINT, 1);
+            _setPoints(address(facet), LibPoints.ACTION_INDEX_BURN, 1);
+        }
 
         (indexId,) = facet.createIndex{value: 0.1 ether}(
             EqualIndexBaseV3.CreateIndexParams({
@@ -904,5 +927,29 @@ contract GasScenarioReportTest is DirectDiamondTestBase {
                 flashFeeBps: 50
             })
         );
+    }
+
+    function _pointsOnGas() internal view returns (bool) {
+        return vm.envOr("POINTS_ON_GAS", false);
+    }
+
+    function _setPoints(address target, bytes32 actionType, uint256 amount) internal {
+        bytes32 pointsPerActionSlot = bytes32(uint256(POINTS_STORAGE_POSITION) + 1);
+        bytes32 valueSlot = keccak256(abi.encode(actionType, pointsPerActionSlot));
+        vm.store(target, valueSlot, bytes32(amount));
+    }
+
+    function _configurePositionPointsIfEnabled(PositionManagementHarness pm) internal {
+        if (!_pointsOnGas()) return;
+        _setPoints(address(pm), LibPoints.ACTION_DEPOSIT_TO_POSITION, 1);
+        _setPoints(address(pm), LibPoints.ACTION_MINT_POSITION_WITH_DEPOSIT, 1);
+    }
+
+    function _configureLendingPointsIfEnabled(LendingHarness lending) internal {
+        if (!_pointsOnGas()) return;
+        _setPoints(address(lending), LibPoints.ACTION_BORROW_ROLLING, 1);
+        _setPoints(address(lending), LibPoints.ACTION_REPAY_ROLLING, 1);
+        _setPoints(address(lending), LibPoints.ACTION_BORROW_FIXED, 1);
+        _setPoints(address(lending), LibPoints.ACTION_REPAY_FIXED, 1);
     }
 }

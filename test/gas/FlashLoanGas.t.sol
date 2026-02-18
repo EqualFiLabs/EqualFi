@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {FlashLoanFacet} from "../../src/equallend/FlashLoanFacet.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 
@@ -30,6 +31,8 @@ contract FlashLoanReceiverMock {
 }
 
 contract FlashLoanGasTest is Test {
+    bytes32 internal constant POINTS_STORAGE_POSITION = keccak256("equallend.points.storage");
+
     MockERC20 internal token;
     FlashLoanGasHarness internal facet;
     FlashLoanReceiverMock internal receiver;
@@ -44,6 +47,7 @@ contract FlashLoanGasTest is Test {
         receiver = new FlashLoanReceiverMock();
 
         facet.initPool(PID, address(token), FEE_BPS, LOAN_AMOUNT);
+        _configurePointsIfEnabled();
         token.mint(address(facet), LOAN_AMOUNT);
         token.mint(address(receiver), 1 ether);
     }
@@ -51,5 +55,16 @@ contract FlashLoanGasTest is Test {
     function test_gas_FlashLoan() public {
         vm.resumeGasMetering();
         facet.flashLoan(PID, address(receiver), LOAN_AMOUNT, bytes(""), facet.previewFlashLoanRepayment(PID, LOAN_AMOUNT));
+    }
+
+    function _configurePointsIfEnabled() internal {
+        if (!vm.envOr("POINTS_ON_GAS", false)) return;
+        _setPoints(address(facet), LibPoints.ACTION_FLASH_LOAN, 1);
+    }
+
+    function _setPoints(address target, bytes32 actionType, uint256 amount) internal {
+        bytes32 pointsPerActionSlot = bytes32(uint256(POINTS_STORAGE_POSITION) + 1);
+        bytes32 valueSlot = keccak256(abi.encode(actionType, pointsPerActionSlot));
+        vm.store(target, valueSlot, bytes32(amount));
     }
 }

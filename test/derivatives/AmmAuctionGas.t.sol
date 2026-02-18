@@ -10,11 +10,14 @@ import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 
 contract AmmAuctionGasTest is Test {
+    bytes32 internal constant POINTS_STORAGE_POSITION = keccak256("equallend.points.storage");
+
     AmmAuctionGasHarness internal harness;
     PositionNFT internal nft;
     MockERC20 internal tokenA;
@@ -32,6 +35,7 @@ contract AmmAuctionGasTest is Test {
         tokenB = new MockERC20("TokenB", "B", 18, 0);
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(treasury);
+        _configurePointsIfEnabled();
     }
 
     function _setupPosition() internal returns (uint256 makerTokenId, bytes32 positionKey) {
@@ -106,6 +110,18 @@ contract AmmAuctionGasTest is Test {
         vm.resumeGasMetering();
 
         harness.finalizeAuction(createdAuctionId);
+    }
+
+    function _configurePointsIfEnabled() internal {
+        if (!vm.envOr("POINTS_ON_GAS", false)) return;
+        _setPoints(address(harness), LibPoints.ACTION_DERIVATIVE_CREATE_AMM_AUCTION, 1);
+        _setPoints(address(harness), LibPoints.ACTION_SWAP_AMM_AUCTION, 1);
+    }
+
+    function _setPoints(address target, bytes32 actionType, uint256 amount) internal {
+        bytes32 pointsPerActionSlot = bytes32(uint256(POINTS_STORAGE_POSITION) + 1);
+        bytes32 valueSlot = keccak256(abi.encode(actionType, pointsPerActionSlot));
+        vm.store(target, valueSlot, bytes32(amount));
     }
 }
 

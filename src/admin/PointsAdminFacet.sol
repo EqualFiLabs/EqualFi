@@ -48,6 +48,31 @@ contract PointsAdminFacet {
         LibPoints.setAccrualCooldown(actionType, cooldownSecs);
     }
 
+    function setRedemptionToken(address token) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibPoints.setRedemptionToken(token);
+    }
+
+    function setRedemptionEnabled(bool enabled) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibPoints.setRedemptionEnabled(enabled);
+    }
+
+    function setRedemptionRate(uint256 tokensPerPointWad) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibPoints.setRedemptionRate(tokensPerPointWad);
+    }
+
+    function setRedemptionGlobalMintCap(uint256 newCap) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibPoints.setRedemptionGlobalMintCap(newCap);
+    }
+
+    function setRedemptionEpochConfig(uint64 epochLengthSecs, uint256 epochMintCap) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibPoints.setRedemptionEpochConfig(epochLengthSecs, epochMintCap);
+    }
+
     function _validateIndexWeightsForSingleUpdate(bytes32 actionType, uint256 amount) internal view {
         if (!_isIndexWeightAction(actionType)) return;
 

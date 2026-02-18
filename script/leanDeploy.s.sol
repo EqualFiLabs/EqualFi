@@ -10,6 +10,7 @@ import {DiamondLoupeFacet} from "../src/core/DiamondLoupeFacet.sol";
 import {OwnershipFacet} from "../src/core/OwnershipFacet.sol";
 import {AdminFacet} from "../src/admin/AdminFacet.sol";
 import {PointsAdminFacet} from "../src/admin/PointsAdminFacet.sol";
+import {PointsRedemptionFacet} from "../src/points/PointsRedemptionFacet.sol";
 import {MaintenanceFacet} from "../src/core/MaintenanceFacet.sol";
 import {AdminGovernanceFacet} from "../src/admin/AdminGovernanceFacet.sol";
 import {PoolManagementFacet} from "../src/equallend/PoolManagementFacet.sol";
@@ -243,8 +244,9 @@ contract LeanDeployScript is Script {
         PositionAgentRegistryFacet positionAgentRegistry = new PositionAgentRegistryFacet();
         PositionAgentViewFacet positionAgentView = new PositionAgentViewFacet();
         PositionAgentConfigFacet positionAgentConfig = new PositionAgentConfigFacet();
+        PointsRedemptionFacet pointsRedemption = new PointsRedemptionFacet();
 
-        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](32);
+        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](33);
         cuts[0] = _cut(address(cut), _selectors(cut));
         cuts[1] = _cut(address(loupe), _selectors(loupe));
         cuts[2] = _cut(address(own), _selectors(own));
@@ -277,6 +279,7 @@ contract LeanDeployScript is Script {
         cuts[29] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
         cuts[30] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
         cuts[31] = _cut(address(pointsView), _selectors(pointsView));
+        cuts[32] = _cut(address(pointsRedemption), _selectors(pointsRedemption));
 
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
         diamondAddress = address(diamond);
@@ -433,11 +436,21 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(PointsAdminFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](4);
+        s = new bytes4[](9);
         s[0] = PointsAdminFacet.setPointsPerAction.selector;
         s[1] = PointsAdminFacet.setPointsPerActionBatch.selector;
         s[2] = PointsAdminFacet.setDailyPointsCap.selector;
         s[3] = PointsAdminFacet.setAccrualCooldown.selector;
+        s[4] = PointsAdminFacet.setRedemptionToken.selector;
+        s[5] = PointsAdminFacet.setRedemptionEnabled.selector;
+        s[6] = PointsAdminFacet.setRedemptionRate.selector;
+        s[7] = PointsAdminFacet.setRedemptionGlobalMintCap.selector;
+        s[8] = PointsAdminFacet.setRedemptionEpochConfig.selector;
+    }
+
+    function _selectors(PointsRedemptionFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](1);
+        s[0] = PointsRedemptionFacet.redeem.selector;
     }
 
     function _selectors(MaintenanceFacet) internal pure returns (bytes4[] memory s) {

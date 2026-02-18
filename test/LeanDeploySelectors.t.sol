@@ -6,6 +6,9 @@ import {LeanDeployScript} from "../script/leanDeploy.s.sol";
 import {IDiamondLoupe} from "../src/interfaces/IDiamondLoupe.sol";
 import {PointsAdminFacet} from "../src/admin/PointsAdminFacet.sol";
 import {PointsViewFacet} from "../src/views/PointsViewFacet.sol";
+import {PointsRedemptionFacet} from "../src/points/PointsRedemptionFacet.sol";
+import {LibPoints} from "../src/libraries/LibPoints.sol";
+import {MockERC20} from "../src/mocks/MockERC20.sol";
 
 contract LeanDeploySelectorsTest is Test {
     function testLeanDeployCutsPositionViewSelectors() public {
@@ -58,7 +61,43 @@ contract LeanDeploySelectorsTest is Test {
             loupe.facetAddress(PointsAdminFacet.setAccrualCooldown.selector) != address(0),
             "missing setAccrualCooldown selector"
         );
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setRedemptionToken.selector) != address(0),
+            "missing setRedemptionToken selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setRedemptionEnabled.selector) != address(0),
+            "missing setRedemptionEnabled selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setRedemptionRate.selector) != address(0),
+            "missing setRedemptionRate selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setRedemptionGlobalMintCap.selector) != address(0),
+            "missing setRedemptionGlobalMintCap selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsAdminFacet.setRedemptionEpochConfig.selector) != address(0),
+            "missing setRedemptionEpochConfig selector"
+        );
         assertTrue(loupe.facetAddress(PointsViewFacet.getPoints.selector) != address(0), "missing getPoints selector");
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getPointsEarned.selector) != address(0),
+            "missing getPointsEarned selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getPointsBurned.selector) != address(0),
+            "missing getPointsBurned selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getTotalPointsEarned.selector) != address(0),
+            "missing getTotalPointsEarned selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getTotalPointsBurned.selector) != address(0),
+            "missing getTotalPointsBurned selector"
+        );
         assertTrue(
             loupe.facetAddress(PointsViewFacet.getPointsPerAction.selector) != address(0),
             "missing getPointsPerAction selector"
@@ -79,9 +118,22 @@ contract LeanDeploySelectorsTest is Test {
             loupe.facetAddress(PointsViewFacet.getAccrualCooldown.selector) != address(0),
             "missing getAccrualCooldown selector"
         );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.previewRedeem.selector) != address(0),
+            "missing previewRedeem selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsViewFacet.getRedemptionConfig.selector) != address(0),
+            "missing getRedemptionConfig selector"
+        );
+        assertTrue(
+            loupe.facetAddress(PointsRedemptionFacet.redeem.selector) != address(0),
+            "missing redeem selector"
+        );
 
         PointsAdminFacet pointsAdmin = PointsAdminFacet(deployment.diamond);
         PointsViewFacet pointsView = PointsViewFacet(deployment.diamond);
+        PointsRedemptionFacet pointsRedemption = PointsRedemptionFacet(deployment.diamond);
 
         bytes32 actionTypeA = keccak256("POINTS_TEST_A");
         bytes32 actionTypeB = keccak256("POINTS_TEST_B");
@@ -114,5 +166,36 @@ contract LeanDeploySelectorsTest is Test {
 
         pointsAdmin.setAccrualCooldown(actionTypeA, 3600);
         assertEq(pointsView.getAccrualCooldown(actionTypeA), 3600, "cooldown setter not callable");
+
+        MockERC20 emission = new MockERC20("Emission", "EMS", 18, 0);
+        pointsAdmin.setRedemptionToken(address(emission));
+        pointsAdmin.setRedemptionRate(2e18);
+        pointsAdmin.setRedemptionGlobalMintCap(1_000_000 ether);
+        pointsAdmin.setRedemptionEpochConfig(1 days, 100_000 ether);
+        pointsAdmin.setRedemptionEnabled(true);
+
+        (
+            address token,
+            bool enabled,
+            uint256 rate,
+            uint256 globalCap,
+            uint256 totalMinted,
+            uint64 epochLength,
+            uint256 epochCap,
+            uint256 epochMinted
+        ) = pointsView.getRedemptionConfig();
+
+        assertEq(token, address(emission), "redemption token not set");
+        assertEq(enabled, true, "redemption enabled not set");
+        assertEq(rate, 2e18, "redemption rate not set");
+        assertEq(globalCap, 1_000_000 ether, "redemption global cap not set");
+        assertEq(totalMinted, 0, "unexpected redemption minted");
+        assertEq(epochLength, 1 days, "redemption epoch length not set");
+        assertEq(epochCap, 100_000 ether, "redemption epoch cap not set");
+        assertEq(epochMinted, 0, "unexpected redemption epoch minted");
+        assertEq(pointsView.previewRedeem(7), 14, "preview redeem mismatch");
+
+        vm.expectRevert(LibPoints.Points_InsufficientBalance.selector);
+        pointsRedemption.redeem(1, 0, address(this));
     }
 }
