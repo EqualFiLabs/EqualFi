@@ -83,7 +83,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
+        address borrowerOwner = LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
         _validateRollingOfferFlags(params.allowEarlyRepay, params.allowEarlyExercise, params.allowAmortization);
         _validateRollingAmounts(params.principal, params.collateralLockAmount, params.borrowAsset, params.collateralAsset);
 
@@ -184,7 +184,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             params.lenderPoolId,
             params.collateralPoolId
         );
-        LibPoints.accrue(positionKey, LibPoints.ACTION_DIRECT_POST_ROLLING_BORROWER_OFFER);
+        LibPoints.accrueToKey(borrowerOwner, positionKey, LibPoints.ACTION_DIRECT_POST_ROLLING_BORROWER_OFFER);
     }
 
     function postRollingOffer(DirectTypes.DirectRollingOfferParams calldata params)
@@ -193,7 +193,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
+        address lenderOwner = LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
         _validateRollingOfferFlags(params.allowEarlyRepay, params.allowEarlyExercise, params.allowAmortization);
         _validateRollingAmounts(params.principal, params.collateralLockAmount, params.borrowAsset, params.collateralAsset);
 
@@ -289,7 +289,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             params.lenderPoolId,
             params.collateralPoolId
         );
-        LibPoints.accrue(positionKey, LibPoints.ACTION_DIRECT_POST_ROLLING_LENDER_OFFER);
+        LibPoints.accrueToKey(lenderOwner, positionKey, LibPoints.ACTION_DIRECT_POST_ROLLING_LENDER_OFFER);
     }
 
     function cancelRollingOffer(uint256 offerId) external nonReentrant {

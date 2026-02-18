@@ -65,4 +65,36 @@ contract PositionNFTEnumerableTest is Test {
         assertEq(nft.tokenOfOwnerByIndex(user1, 0), token2);
         assertEq(nft.tokenOfOwnerByIndex(user2, 0), token1);
     }
+
+    function test_DefaultPointsTokenId_OnMintAndTransfer() public {
+        uint256 token1 = nft.mint(user1, 1);
+        uint256 token2 = nft.mint(user1, 1);
+        uint256 token3 = nft.mint(user2, 2);
+
+        assertEq(nft.defaultPointsTokenId(user1), token1);
+        assertEq(nft.defaultPointsTokenId(user2), token3);
+
+        vm.prank(user1);
+        nft.transferFrom(user1, user2, token1);
+
+        assertEq(nft.defaultPointsTokenId(user1), token2);
+        assertEq(nft.defaultPointsTokenId(user2), token3);
+
+        vm.prank(user2);
+        nft.transferFrom(user2, user1, token3);
+
+        assertEq(nft.defaultPointsTokenId(user1), token2);
+        assertEq(nft.defaultPointsTokenId(user2), token1);
+    }
+
+    function test_DefaultPointsTokenId_ClearsWhenOwnerHasNoTokens() public {
+        uint256 token1 = nft.mint(user1, 1);
+        assertEq(nft.defaultPointsTokenId(user1), token1);
+
+        vm.prank(user1);
+        nft.transferFrom(user1, user2, token1);
+
+        assertEq(nft.defaultPointsTokenId(user1), 0);
+        assertEq(nft.defaultPointsTokenId(user2), token1);
+    }
 }

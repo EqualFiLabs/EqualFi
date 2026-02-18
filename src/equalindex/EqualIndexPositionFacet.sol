@@ -148,7 +148,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         }
         indexPool.userFeeIndex[positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[positionKey] = indexPool.maintenanceIndex;
-        LibPoints.accrue(positionKey, LibPoints.ACTION_INDEX_MINT_POSITION);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_INDEX_MINT_POSITION);
     }
 
     /// @notice Burn index tokens and unencumber underlying assets.
@@ -264,6 +264,6 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         }
         indexPool.userFeeIndex[positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[positionKey] = indexPool.maintenanceIndex;
-        LibPoints.accrue(positionKey, LibPoints.ACTION_INDEX_BURN_POSITION);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_INDEX_BURN_POSITION);
     }
 }

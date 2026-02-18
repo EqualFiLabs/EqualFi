@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {LibPositionHelpers} from "./LibPositionHelpers.sol";
+import {LibPositionNFT} from "./LibPositionNFT.sol";
+import {PositionNFT} from "../nft/PositionNFT.sol";
 
 library LibPoints {
     bytes32 internal constant STORAGE_POSITION = keccak256("equallend.points.storage");
@@ -94,18 +96,59 @@ library LibPoints {
         return LibPositionHelpers.systemPositionKey(account);
     }
 
+    function resolveDefaultPositionKey(address account) internal view returns (bytes32 pointsKey, bool hasPosition) {
+        address nftAddr = LibPositionNFT.s().positionNFTContract;
+        if (nftAddr == address(0)) return (bytes32(0), false);
+
+        PositionNFT nft = PositionNFT(nftAddr);
+        if (nft.balanceOf(account) == 0) return (bytes32(0), false);
+
+        uint256 tokenId = nft.defaultPointsTokenId(account);
+        if (tokenId != 0) {
+            try nft.ownerOf(tokenId) returns (address owner) {
+                if (owner == account) {
+                    return (nft.getPositionKey(tokenId), true);
+                }
+            } catch {}
+        }
+
+        tokenId = nft.tokenOfOwnerByIndex(account, 0);
+        return (nft.getPositionKey(tokenId), true);
+    }
+
     function accrue(address account, bytes32 actionType) internal {
-        accrue(keyForAccount(account), actionType);
+        bytes32 accountKey = keyForAccount(account);
+        _accrueWithGuard(accountKey, accountKey, actionType);
     }
 
     function accrue(bytes32 pointsKey, bytes32 actionType) internal {
+        // Legacy behavior: use points key for both guard and credit.
+        _accrueWithGuard(pointsKey, pointsKey, actionType);
+    }
+
+    function accrueToKey(address account, bytes32 pointsKey, bytes32 actionType) internal {
+        _accrueWithGuard(pointsKey, keyForAccount(account), actionType);
+    }
+
+    function accrueToDefaultPosition(address account, bytes32 actionType) internal {
+        PointsStorage storage ps = s();
+        uint256 points = ps.pointsPerAction[actionType];
+        if (points == 0) return;
+
+        (bytes32 pointsKey, bool hasPosition) = resolveDefaultPositionKey(account);
+        if (!hasPosition) return;
+
+        _accrueWithGuard(pointsKey, keyForAccount(account), actionType);
+    }
+
+    function _accrueWithGuard(bytes32 pointsKey, bytes32 guardKey, bytes32 actionType) private {
         PointsStorage storage ps = s();
         uint256 points = ps.pointsPerAction[actionType];
         if (points == 0) return;
 
         uint256 cooldownSecs = ps.accrualCooldownSecs[actionType];
         if (cooldownSecs > 0) {
-            uint64 lastTs = ps.lastAccrualTs[pointsKey][actionType];
+            uint64 lastTs = ps.lastAccrualTs[guardKey][actionType];
             if (lastTs != 0 && block.timestamp < uint256(lastTs) + cooldownSecs) {
                 return;
             }
@@ -115,22 +158,22 @@ library LibPoints {
         uint256 dailyCap = ps.dailyPointsCap;
         if (dailyCap > 0) {
             uint64 dayKey = uint64(block.timestamp / 1 days);
-            if (ps.lastAccrualDay[pointsKey] != dayKey) {
-                ps.lastAccrualDay[pointsKey] = dayKey;
-                ps.accruedOnDay[pointsKey] = 0;
+            if (ps.lastAccrualDay[guardKey] != dayKey) {
+                ps.lastAccrualDay[guardKey] = dayKey;
+                ps.accruedOnDay[guardKey] = 0;
             }
 
-            uint256 accrued = ps.accruedOnDay[pointsKey];
+            uint256 accrued = ps.accruedOnDay[guardKey];
             if (accrued >= dailyCap) return;
             uint256 remaining = dailyCap - accrued;
             if (credited > remaining) {
                 credited = remaining;
             }
-            ps.accruedOnDay[pointsKey] = accrued + credited;
+            ps.accruedOnDay[guardKey] = accrued + credited;
         }
 
         if (credited == 0) return;
-        ps.lastAccrualTs[pointsKey][actionType] = uint64(block.timestamp);
+        ps.lastAccrualTs[guardKey][actionType] = uint64(block.timestamp);
         ps.earned[pointsKey] += credited;
         ps.totalEarned += credited;
         ps.balances[pointsKey] += credited;

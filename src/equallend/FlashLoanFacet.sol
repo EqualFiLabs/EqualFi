@@ -92,7 +92,7 @@ contract FlashLoanFacet is ReentrancyGuardModifiers {
             }
             LibFeeTreasury.accrueWithTreasury(p, pid, fee, bytes32("flashLoan"));
         }
-        LibPoints.accrue(msg.sender, LibPoints.ACTION_FLASH_LOAN);
+        LibPoints.accrueToDefaultPosition(msg.sender, LibPoints.ACTION_FLASH_LOAN);
 
         emit FlashLoan(pid, receiver, amount, fee, feeBps);
     }

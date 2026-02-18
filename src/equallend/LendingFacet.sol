@@ -289,7 +289,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         loan.principalAtOpen = principalAtOpen;
 
         _increaseActiveCreditDebt(p, pid, positionKey, amount);
-        LibPoints.accrue(positionKey, LibPoints.ACTION_BORROW_ROLLING);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_BORROW_ROLLING);
 
         emit RollingLoanOpenedFromPosition(tokenId, msg.sender, pid, amount, true);
     }
@@ -362,7 +362,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         if (loan.principalRemaining == 0) {
             loan.active = false;
         }
-        LibPoints.accrue(positionKey, LibPoints.ACTION_REPAY_ROLLING);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_REPAY_ROLLING);
 
         emit PaymentMadeFromPosition(
             tokenId,
@@ -608,7 +608,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         _addLoanIdWithIndex(p, pid, positionKey, loanId);
 
         _increaseActiveCreditDebt(p, pid, positionKey, amount);
-        LibPoints.accrue(positionKey, LibPoints.ACTION_BORROW_FIXED);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_BORROW_FIXED);
 
         emit FixedLoanOpenedFromPosition(
             tokenId, msg.sender, pid, loanId, amount, 0, loan.expiry, cfg.apyBps, false
@@ -670,7 +670,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
             uint256 loanIndex = p.loanIdToIndex[positionKey][loanId];
             _removeLoanIdByIndex(p, pid, positionKey, loanId, loanIndex);
         }
-        LibPoints.accrue(positionKey, LibPoints.ACTION_REPAY_FIXED);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_REPAY_FIXED);
 
         emit FixedLoanRepaidFromPosition(
             tokenId,

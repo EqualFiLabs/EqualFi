@@ -9,8 +9,10 @@ import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibPoints} from "../../src/libraries/LibPoints.sol";
+import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -49,6 +51,14 @@ contract EqualIndexActionsHarness is EqualIndexActionsFacetV3 {
 
     function pointsBalance(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
+    }
+
+    function pointsBalanceForKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
+    }
+
+    function setPositionNFT(address nftAddr) external {
+        LibPositionNFT.s().positionNFTContract = nftAddr;
     }
 
     function previewMintInputs(uint256 indexId, uint256 units) external view virtual returns (uint256[] memory maxInputs) {
@@ -163,6 +173,10 @@ contract EqualIndexActionsFacetV3Test is Test {
     
     uint256 internal constant INDEX_ID = 1;
     uint256 internal constant SCALE = 1e18;
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
 
     function setUp() public {
         facet = new EqualIndexActionsHarness();
@@ -327,15 +341,23 @@ contract EqualIndexActionsFacetV3Test is Test {
     function test_pointsAccrueOnIndexMintAndBurn() public {
         facet.setPointsPerAction(LibPoints.ACTION_INDEX_MINT, 3);
         facet.setPointsPerAction(LibPoints.ACTION_INDEX_BURN, 7);
+        PositionNFT nft = new PositionNFT();
+        nft.setMinter(address(this));
+        facet.setPositionNFT(address(nft));
+        uint256 tokenId = nft.mint(address(this), 1);
+        bytes32 pointsKey = nft.getPositionKey(tokenId);
 
         uint256 units = 2 * SCALE;
         assertEq(facet.pointsBalance(address(this)), 0);
+        assertEq(facet.pointsBalanceForKey(pointsKey), 0);
 
         facet.mint(INDEX_ID, units, address(this), facet.previewMintInputs(INDEX_ID, units));
-        assertEq(facet.pointsBalance(address(this)), 3);
+        assertEq(facet.pointsBalance(address(this)), 0);
+        assertEq(facet.pointsBalanceForKey(pointsKey), 3);
 
         facet.burn(INDEX_ID, units, address(this));
-        assertEq(facet.pointsBalance(address(this)), 10);
+        assertEq(facet.pointsBalance(address(this)), 0);
+        assertEq(facet.pointsBalanceForKey(pointsKey), 10);
     }
 
     function testMintUsesExtraBackingWhenPoolShort() public {

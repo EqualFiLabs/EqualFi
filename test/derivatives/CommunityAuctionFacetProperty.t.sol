@@ -457,6 +457,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
     function test_CommunitySwapAccruesPointsToSwapper() public {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
+        uint256 swapperTokenId = nft.mint(swapper, 1);
+        bytes32 swapperKey = nft.getPositionKey(swapperTokenId);
 
         harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
         harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
@@ -484,9 +486,11 @@ contract CommunityAuctionFacetPropertyTest is Test {
         tokenA.approve(address(harness), 1e18);
 
         assertEq(harness.pointsBalance(swapper), 0);
+        assertEq(harness.pointsBalanceForKey(swapperKey), 0);
         vm.prank(swapper);
         harness.swapExactIn(auctionId, address(tokenA), 1e18, 1e18, 0, swapper);
-        assertEq(harness.pointsBalance(swapper), 4);
+        assertEq(harness.pointsBalance(swapper), 0);
+        assertEq(harness.pointsBalanceForKey(swapperKey), 4);
     }
 
     function testProperty_FinalizationDistributesAllReserves(uint96 reserveA, uint96 reserveB, uint96 amountA) public {
@@ -936,6 +940,10 @@ contract CommunityAuctionHarness is CommunityAuctionFacet {
 
     function pointsBalance(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
+    }
+
+    function pointsBalanceForKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
     }
 
     function getMakerShareBps() external view returns (uint16) {

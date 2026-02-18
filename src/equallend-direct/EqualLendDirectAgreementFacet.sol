@@ -971,6 +971,6 @@ function _checkAndConsumeTranche(
         bytes32 actionType
     ) internal {
         if (callerOwner == counterpartyOwner) return;
-        LibPoints.accrue(callerKey, actionType);
+        LibPoints.accrueToKey(callerOwner, callerKey, actionType);
     }
 }

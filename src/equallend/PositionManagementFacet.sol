@@ -308,7 +308,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         _incrementUserCount(p, true, received);
         p.userFeeIndex[positionKey] = p.feeIndex;
         p.userMaintenanceIndex[positionKey] = p.maintenanceIndex;
-        LibPoints.accrue(positionKey, LibPoints.ACTION_MINT_POSITION_WITH_DEPOSIT);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_MINT_POSITION_WITH_DEPOSIT);
 
         emit PositionMinted(tokenId, msg.sender, pid);
         emit DepositedToPosition(tokenId, msg.sender, pid, received, received);
@@ -358,7 +358,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         p.totalDeposits += received;
         p.trackedBalance += received;
         p.userFeeIndex[positionKey] = p.feeIndex;
-        LibPoints.accrue(positionKey, LibPoints.ACTION_DEPOSIT_TO_POSITION);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_DEPOSIT_TO_POSITION);
 
         emit DepositedToPosition(tokenId, msg.sender, pid, received, p.userPrincipal[positionKey]);
     }

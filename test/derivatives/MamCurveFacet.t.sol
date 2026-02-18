@@ -298,6 +298,8 @@ contract MamCurveFacetTest is Test {
     function test_curveSwapAccruesPointsToTaker() public {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
+        uint256 takerTokenId = nft.mint(taker, 1);
+        bytes32 takerKey = nft.getPositionKey(takerTokenId);
 
         harness.seedPool(1, address(tokenA), positionKey, 10e18, 10e18);
         harness.seedPool(2, address(tokenB), positionKey, 10e18, 10e18);
@@ -335,9 +337,11 @@ contract MamCurveFacetTest is Test {
         tokenB.approve(address(harness), maxQuote);
 
         assertEq(harness.pointsBalance(taker), 0);
+        assertEq(harness.pointsBalanceForKey(takerKey), 0);
         vm.prank(taker);
         harness.executeCurveSwap(curveId, amountIn, maxQuote, 1e18, uint64(block.timestamp + 1 days), taker);
-        assertEq(harness.pointsBalance(taker), 5);
+        assertEq(harness.pointsBalance(taker), 0);
+        assertEq(harness.pointsBalanceForKey(takerKey), 5);
     }
 
     function test_overCapMaxQuote_refundsExcess_withoutExtraOutput_nonFoT() public {
@@ -1926,6 +1930,10 @@ contract MamCurveHarness is MamCurveCreationFacet, MamCurveManagementFacet, MamC
 
     function pointsBalance(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
+    }
+
+    function pointsBalanceForKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
     }
 
     function getMakerShareBps() external view returns (uint16) {

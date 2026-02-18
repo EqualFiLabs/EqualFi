@@ -93,7 +93,7 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         idx.totalUnits += minted;
         IndexToken(idx.token).mintIndexUnits(to, minted);
         IndexToken(idx.token).recordMintDetails(to, minted, idx.assets, required, fees, 0);
-        LibPoints.accrue(msg.sender, LibPoints.ACTION_INDEX_MINT);
+        LibPoints.accrueToDefaultPosition(msg.sender, LibPoints.ACTION_INDEX_MINT);
 
         emit LibEqualIndex.Minted(indexId, to, minted, required);
     }
@@ -149,7 +149,7 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
         idx.totalUnits = totalSupply - units;
         IndexToken(idx.token).burnIndexUnits(msg.sender, units);
         IndexToken(idx.token).recordBurnDetails(msg.sender, units, idx.assets, assetsOut, feeAmounts, 0);
-        LibPoints.accrue(msg.sender, LibPoints.ACTION_INDEX_BURN);
+        LibPoints.accrueToDefaultPosition(msg.sender, LibPoints.ACTION_INDEX_BURN);
 
         emit LibEqualIndex.Burned(indexId, to, units, assetsOut);
     }

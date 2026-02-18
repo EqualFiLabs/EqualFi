@@ -17,6 +17,10 @@ contract LibPointsHarness {
         LibPoints.accrue(pointsKey, actionType);
     }
 
+    function accrueToKey(address account, bytes32 pointsKey, bytes32 actionType) external {
+        LibPoints.accrueToKey(account, pointsKey, actionType);
+    }
+
     function setPointsPerAction(bytes32 actionType, uint256 amount) external {
         LibPoints.setPointsPerAction(actionType, amount);
     }
@@ -535,5 +539,37 @@ contract LibPointsTest is Test {
         vm.warp(block.timestamp + 2 days);
         h.accrue(user, LibPoints.ACTION_REPAY_ROLLING);
         assertEq(h.getPoints(user), 32);
+    }
+
+    function test_accrueToKey_dailyCapUsesAccountGuardAcrossMultipleKeys() public {
+        address user = address(0xA11CE);
+        bytes32 keyA = keccak256("POINTS_KEY_A");
+        bytes32 keyB = keccak256("POINTS_KEY_B");
+        h.setPointsPerAction(ACTION_A, 7);
+        h.setDailyPointsCap(10);
+
+        h.accrueToKey(user, keyA, ACTION_A);
+        h.accrueToKey(user, keyB, ACTION_A);
+
+        assertEq(h.getPointsForKey(keyA), 7);
+        assertEq(h.getPointsForKey(keyB), 3);
+        assertEq(h.getAccruedToday(user), 10);
+    }
+
+    function test_accrueToKey_cooldownUsesAccountGuardAcrossMultipleKeys() public {
+        address user = address(0xBEEF);
+        bytes32 keyA = keccak256("POINTS_KEY_A");
+        bytes32 keyB = keccak256("POINTS_KEY_B");
+        h.setPointsPerAction(ACTION_A, 5);
+        h.setAccrualCooldown(ACTION_A, 1 hours);
+
+        h.accrueToKey(user, keyA, ACTION_A);
+        h.accrueToKey(user, keyB, ACTION_A);
+        assertEq(h.getPointsForKey(keyA), 5);
+        assertEq(h.getPointsForKey(keyB), 0);
+
+        vm.warp(block.timestamp + 1 hours);
+        h.accrueToKey(user, keyB, ACTION_A);
+        assertEq(h.getPointsForKey(keyB), 5);
     }
 }

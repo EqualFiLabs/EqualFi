@@ -31,6 +31,9 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
     /// @notice Mapping from token ID to creation timestamp
     mapping(uint256 => uint40) public tokenCreationTime;
 
+    /// @notice Deterministic default token id used for position-keyed points routing.
+    mapping(address => uint256) public defaultPointsTokenId;
+
     /// @notice Emitted when a new Position NFT is minted
     /// @param tokenId The unique token ID
     /// @param owner The address that owns the NFT
@@ -89,6 +92,9 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         
         tokenToPool[tokenId] = poolId;
         tokenCreationTime[tokenId] = uint40(block.timestamp);
+        if (defaultPointsTokenId[to] == 0) {
+            defaultPointsTokenId[to] = tokenId;
+        }
         
         emit PositionMinted(tokenId, to, poolId);
     }
@@ -176,6 +182,15 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         address auth
     ) internal virtual override(ERC721Enumerable) returns (address) {
         address from = super._update(to, tokenId, auth);
+
+        if (from != to) {
+            if (from != address(0) && defaultPointsTokenId[from] == tokenId) {
+                defaultPointsTokenId[from] = balanceOf(from) > 0 ? tokenOfOwnerByIndex(from, 0) : 0;
+            }
+            if (to != address(0) && defaultPointsTokenId[to] == 0) {
+                defaultPointsTokenId[to] = tokenId;
+            }
+        }
         
         // Position key derivation: address(uint160(uint256(keccak256(abi.encodePacked(nftContract, tokenId)))))
         // This key is deterministic and depends only on the contract address and token ID

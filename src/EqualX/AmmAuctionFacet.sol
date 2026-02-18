@@ -117,7 +117,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             revert AmmAuction_InvalidFee(params.feeBps, ds.config.maxFeeBps);
         }
 
-        (bytes32 positionKey,) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
+        (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
         Types.PoolData storage poolA = LibDirectHelpers._pool(params.poolIdA);
         Types.PoolData storage poolB = LibDirectHelpers._pool(params.poolIdB);
 
@@ -165,7 +165,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             LibDerivativeStorage.addAuctionByToken(auction.tokenB, auctionId);
         }
         LibDerivativeStorage.addAuctionByPair(auction.tokenA, auction.tokenB, auctionId);
-        LibPoints.accrue(positionKey, LibPoints.ACTION_DERIVATIVE_CREATE_AMM_AUCTION);
+        LibPoints.accrueToKey(makerOwner, positionKey, LibPoints.ACTION_DERIVATIVE_CREATE_AMM_AUCTION);
 
         emit AuctionCreated(
             auctionId,
@@ -337,7 +337,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(tokenOut) && outputToRecipient > 0) {
             LibAppStorage.s().nativeTrackedTotal -= outputToRecipient;
         }
-        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP_AMM_AUCTION);
+        LibPoints.accrueToDefaultPosition(msg.sender, LibPoints.ACTION_SWAP_AMM_AUCTION);
 
         emit AuctionSwapped(
             auctionId,

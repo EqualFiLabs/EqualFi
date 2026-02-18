@@ -175,7 +175,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.addOptionSeries(positionKey, seriesId);
 
         _optionToken().managerMint(makerOwner, seriesId, params.totalSize, "");
-        LibPoints.accrue(positionKey, LibPoints.ACTION_DERIVATIVE_CREATE_OPTION);
+        LibPoints.accrueToKey(makerOwner, positionKey, LibPoints.ACTION_DERIVATIVE_CREATE_OPTION);
 
         emit SeriesCreated(
             seriesId,

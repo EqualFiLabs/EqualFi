@@ -74,7 +74,7 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         }
 
         if (callerOwner != counterpartyOwner) {
-            LibPoints.accrue(callerKey, LibPoints.ACTION_DIRECT_ACCEPT_ROLLING_OFFER);
+            LibPoints.accrueToKey(callerOwner, callerKey, LibPoints.ACTION_DIRECT_ACCEPT_ROLLING_OFFER);
         }
         emit RollingOfferAccepted(offerId, agreementId, borrower);
     }

@@ -99,6 +99,8 @@ contract AmmAuctionFacetPropertyTest is Test {
     function test_AmmSwapAccruesPointsToSwapper() public {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
+        uint256 takerTokenId = nft.mint(taker, 1);
+        bytes32 takerKey = nft.getPositionKey(takerTokenId);
 
         harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
         harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
@@ -126,9 +128,11 @@ contract AmmAuctionFacetPropertyTest is Test {
         tokenA.approve(address(harness), 1e18);
 
         assertEq(harness.pointsBalance(taker), 0);
+        assertEq(harness.pointsBalanceForKey(takerKey), 0);
         vm.prank(taker);
         harness.swapExactInOrFinalize(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
-        assertEq(harness.pointsBalance(taker), 9);
+        assertEq(harness.pointsBalance(taker), 0);
+        assertEq(harness.pointsBalanceForKey(takerKey), 9);
     }
 
     /// @notice Property: swap time window enforcement
@@ -659,6 +663,10 @@ contract AmmAuctionHarness is AmmAuctionFacet {
 
     function pointsBalance(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
+    }
+
+    function pointsBalanceForKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
     }
 
     function getMakerShareBps() external view returns (uint16) {

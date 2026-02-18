@@ -51,7 +51,7 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         if (agreement.status != DirectTypes.DirectStatus.Active) revert DirectError_InvalidAgreementState();
 
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, agreement.borrowerPositionId);
+        address borrowerOwner = LibDirectHelpers._requireNFTOwnership(nft, agreement.borrowerPositionId);
         address lenderRecipient = nft.ownerOf(agreement.lenderPositionId);
 
         Types.PoolData storage lenderPool = LibDirectHelpers._pool(agreement.lenderPoolId);
@@ -156,7 +156,7 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {
             LibAppStorage.s().nativeTrackedTotal -= received;
         }
-        LibPoints.accrue(borrowerKey, LibPoints.ACTION_ROLLING_PAYMENT);
+        LibPoints.accrueToKey(borrowerOwner, borrowerKey, LibPoints.ACTION_ROLLING_PAYMENT);
 
         emit RollingPaymentMade(
             agreementId,
