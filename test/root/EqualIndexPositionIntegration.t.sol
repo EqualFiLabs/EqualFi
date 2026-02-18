@@ -31,6 +31,10 @@ contract EqualIndexPositionIntegrationHarness is EqualIndexAdminFacetV3, EqualIn
         return LibPoints.balanceOf(user);
     }
 
+    function pointsBalanceByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
+    }
+
     function setPositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;
@@ -211,14 +215,14 @@ contract EqualIndexPositionIntegrationTest is Test {
         EqualIndexBaseV3.CreateIndexParams memory params = _paramsForAssets(address(assetA), address(assetB), 0, 0);
         (uint256 indexId,) = facet.createIndex(params);
 
-        assertEq(facet.pointsBalance(owner), 0);
+        assertEq(facet.pointsBalanceByKey(positionKey), 0);
         vm.prank(owner);
         facet.mintFromPosition(tokenId, indexId, LibEqualIndex.INDEX_SCALE);
-        assertEq(facet.pointsBalance(owner), 6);
+        assertEq(facet.pointsBalanceByKey(positionKey), 6);
 
         vm.prank(owner);
         facet.burnFromPosition(tokenId, indexId, LibEqualIndex.INDEX_SCALE);
-        assertEq(facet.pointsBalance(owner), 16);
+        assertEq(facet.pointsBalanceByKey(positionKey), 16);
     }
 
     function test_multiPositionProportionalBurn() public {

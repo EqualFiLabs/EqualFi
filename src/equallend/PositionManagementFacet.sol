@@ -284,7 +284,6 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         // Mint the NFT
         PositionNFT nft = PositionNFT(LibPositionNFT.s().positionNFTContract);
         tokenId = nft.mint(msg.sender, pid);
-        address owner = nft.ownerOf(tokenId);
 
         // Get position key for the new NFT
         bytes32 positionKey = _getPositionKey(tokenId);
@@ -309,7 +308,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         _incrementUserCount(p, true, received);
         p.userFeeIndex[positionKey] = p.feeIndex;
         p.userMaintenanceIndex[positionKey] = p.maintenanceIndex;
-        LibPoints.accrue(owner, LibPoints.ACTION_MINT_POSITION_WITH_DEPOSIT);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_MINT_POSITION_WITH_DEPOSIT);
 
         emit PositionMinted(tokenId, msg.sender, pid);
         emit DepositedToPosition(tokenId, msg.sender, pid, received, received);
@@ -325,7 +324,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         uint256 maxAmount
     ) public payable nonReentrant {
         // Verify ownership
-        address owner = _requireOwnership(tokenId);
+        _requireOwnership(tokenId);
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
@@ -359,7 +358,7 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
         p.totalDeposits += received;
         p.trackedBalance += received;
         p.userFeeIndex[positionKey] = p.feeIndex;
-        LibPoints.accrue(owner, LibPoints.ACTION_DEPOSIT_TO_POSITION);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_DEPOSIT_TO_POSITION);
 
         emit DepositedToPosition(tokenId, msg.sender, pid, received, p.userPrincipal[positionKey]);
     }

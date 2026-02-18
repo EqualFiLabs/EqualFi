@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
+import {LibPositionHelpers} from "./LibPositionHelpers.sol";
+
 library LibPoints {
     bytes32 internal constant STORAGE_POSITION = keccak256("equallend.points.storage");
     uint256 internal constant WAD = 1e18;
@@ -20,12 +22,16 @@ library LibPoints {
     bytes32 internal constant ACTION_DIRECT_POST_BORROWER_OFFER = keccak256("POINTS_DIRECT_POST_BORROWER_OFFER");
     bytes32 internal constant ACTION_DIRECT_POST_RATIO_LENDER_OFFER = keccak256("POINTS_DIRECT_POST_RATIO_LENDER_OFFER");
     bytes32 internal constant ACTION_DIRECT_POST_RATIO_BORROWER_OFFER = keccak256("POINTS_DIRECT_POST_RATIO_BORROWER_OFFER");
-    bytes32 internal constant ACTION_DIRECT_POST_ROLLING_LENDER_OFFER = keccak256("POINTS_DIRECT_POST_ROLLING_LENDER_OFFER");
-    bytes32 internal constant ACTION_DIRECT_POST_ROLLING_BORROWER_OFFER = keccak256("POINTS_DIRECT_POST_ROLLING_BORROWER_OFFER");
+    bytes32 internal constant ACTION_DIRECT_POST_ROLLING_LENDER_OFFER =
+        keccak256("POINTS_DIRECT_POST_ROLLING_LENDER_OFFER");
+    bytes32 internal constant ACTION_DIRECT_POST_ROLLING_BORROWER_OFFER =
+        keccak256("POINTS_DIRECT_POST_ROLLING_BORROWER_OFFER");
     bytes32 internal constant ACTION_DIRECT_ACCEPT_LENDER_OFFER = keccak256("POINTS_DIRECT_ACCEPT_LENDER_OFFER");
     bytes32 internal constant ACTION_DIRECT_ACCEPT_BORROWER_OFFER = keccak256("POINTS_DIRECT_ACCEPT_BORROWER_OFFER");
-    bytes32 internal constant ACTION_DIRECT_ACCEPT_RATIO_LENDER_OFFER = keccak256("POINTS_DIRECT_ACCEPT_RATIO_LENDER_OFFER");
-    bytes32 internal constant ACTION_DIRECT_ACCEPT_RATIO_BORROWER_OFFER = keccak256("POINTS_DIRECT_ACCEPT_RATIO_BORROWER_OFFER");
+    bytes32 internal constant ACTION_DIRECT_ACCEPT_RATIO_LENDER_OFFER =
+        keccak256("POINTS_DIRECT_ACCEPT_RATIO_LENDER_OFFER");
+    bytes32 internal constant ACTION_DIRECT_ACCEPT_RATIO_BORROWER_OFFER =
+        keccak256("POINTS_DIRECT_ACCEPT_RATIO_BORROWER_OFFER");
     bytes32 internal constant ACTION_DIRECT_ACCEPT_ROLLING_OFFER = keccak256("POINTS_DIRECT_ACCEPT_ROLLING_OFFER");
     bytes32 internal constant ACTION_ROLLING_PAYMENT = keccak256("POINTS_ROLLING_PAYMENT");
     bytes32 internal constant ACTION_SWAP_AMM_AUCTION = keccak256("POINTS_SWAP_AMM_AUCTION");
@@ -37,15 +43,15 @@ library LibPoints {
     bytes32 internal constant ACTION_INDEX_BURN_POSITION = keccak256("POINTS_INDEX_BURN_POSITION");
 
     struct PointsStorage {
-        mapping(address => uint256) balances;
+        mapping(bytes32 => uint256) balances;
         mapping(bytes32 => uint256) pointsPerAction;
         mapping(bytes32 => uint256) accrualCooldownSecs;
         uint256 dailyPointsCap;
-        mapping(address => uint64) lastAccrualDay;
-        mapping(address => uint256) accruedOnDay;
-        mapping(address => mapping(bytes32 => uint64)) lastAccrualTs;
-        mapping(address => uint256) earned;
-        mapping(address => uint256) burned;
+        mapping(bytes32 => uint64) lastAccrualDay;
+        mapping(bytes32 => uint256) accruedOnDay;
+        mapping(bytes32 => mapping(bytes32 => uint64)) lastAccrualTs;
+        mapping(bytes32 => uint256) earned;
+        mapping(bytes32 => uint256) burned;
         uint256 totalEarned;
         uint256 totalBurned;
         address redemptionToken;
@@ -58,8 +64,8 @@ library LibPoints {
         mapping(uint64 => uint256) redemptionMintedByEpoch;
     }
 
-    event PointsAccrued(address indexed user, bytes32 indexed actionType, uint256 amount);
-    event PointsBurned(address indexed user, bytes32 indexed reason, uint256 amount);
+    event PointsAccrued(bytes32 indexed pointsKey, bytes32 indexed actionType, uint256 amount);
+    event PointsBurned(bytes32 indexed pointsKey, bytes32 indexed reason, uint256 amount);
     event PointsPerActionUpdated(bytes32 indexed actionType, uint256 newAmount);
     event PointsDailyCapUpdated(uint256 newDailyCap);
     event PointsAccrualCooldownUpdated(bytes32 indexed actionType, uint256 cooldownSecs);
@@ -68,7 +74,7 @@ library LibPoints {
     event PointsRedemptionRateUpdated(uint256 tokensPerPointWad);
     event PointsRedemptionGlobalMintCapUpdated(uint256 newCap);
     event PointsRedemptionEpochConfigUpdated(uint64 epochLengthSecs, uint256 epochMintCap);
-    event PointsRedemptionRecorded(address indexed user, uint256 pointsIn, uint256 tokenOut);
+    event PointsRedemptionRecorded(bytes32 indexed pointsKey, uint256 pointsIn, uint256 tokenOut);
 
     error Points_InsufficientBalance();
     error Points_RedemptionDisabled();
@@ -84,14 +90,22 @@ library LibPoints {
         }
     }
 
-    function accrue(address user, bytes32 actionType) internal {
+    function keyForAccount(address account) internal pure returns (bytes32) {
+        return LibPositionHelpers.systemPositionKey(account);
+    }
+
+    function accrue(address account, bytes32 actionType) internal {
+        accrue(keyForAccount(account), actionType);
+    }
+
+    function accrue(bytes32 pointsKey, bytes32 actionType) internal {
         PointsStorage storage ps = s();
         uint256 points = ps.pointsPerAction[actionType];
         if (points == 0) return;
 
         uint256 cooldownSecs = ps.accrualCooldownSecs[actionType];
         if (cooldownSecs > 0) {
-            uint64 lastTs = ps.lastAccrualTs[user][actionType];
+            uint64 lastTs = ps.lastAccrualTs[pointsKey][actionType];
             if (lastTs != 0 && block.timestamp < uint256(lastTs) + cooldownSecs) {
                 return;
             }
@@ -101,26 +115,26 @@ library LibPoints {
         uint256 dailyCap = ps.dailyPointsCap;
         if (dailyCap > 0) {
             uint64 dayKey = uint64(block.timestamp / 1 days);
-            if (ps.lastAccrualDay[user] != dayKey) {
-                ps.lastAccrualDay[user] = dayKey;
-                ps.accruedOnDay[user] = 0;
+            if (ps.lastAccrualDay[pointsKey] != dayKey) {
+                ps.lastAccrualDay[pointsKey] = dayKey;
+                ps.accruedOnDay[pointsKey] = 0;
             }
 
-            uint256 accrued = ps.accruedOnDay[user];
+            uint256 accrued = ps.accruedOnDay[pointsKey];
             if (accrued >= dailyCap) return;
             uint256 remaining = dailyCap - accrued;
             if (credited > remaining) {
                 credited = remaining;
             }
-            ps.accruedOnDay[user] = accrued + credited;
+            ps.accruedOnDay[pointsKey] = accrued + credited;
         }
 
         if (credited == 0) return;
-        ps.lastAccrualTs[user][actionType] = uint64(block.timestamp);
-        ps.earned[user] += credited;
+        ps.lastAccrualTs[pointsKey][actionType] = uint64(block.timestamp);
+        ps.earned[pointsKey] += credited;
         ps.totalEarned += credited;
-        ps.balances[user] += credited;
-        emit PointsAccrued(user, actionType, credited);
+        ps.balances[pointsKey] += credited;
+        emit PointsAccrued(pointsKey, actionType, credited);
     }
 
     function setPointsPerAction(bytes32 actionType, uint256 amount) internal {
@@ -138,16 +152,28 @@ library LibPoints {
         emit PointsAccrualCooldownUpdated(actionType, cooldownSecs);
     }
 
-    function balanceOf(address user) internal view returns (uint256) {
-        return s().balances[user];
+    function balanceOf(address account) internal view returns (uint256) {
+        return balanceOf(keyForAccount(account));
     }
 
-    function earnedOf(address user) internal view returns (uint256) {
-        return s().earned[user];
+    function balanceOf(bytes32 pointsKey) internal view returns (uint256) {
+        return s().balances[pointsKey];
     }
 
-    function burnedOf(address user) internal view returns (uint256) {
-        return s().burned[user];
+    function earnedOf(address account) internal view returns (uint256) {
+        return earnedOf(keyForAccount(account));
+    }
+
+    function earnedOf(bytes32 pointsKey) internal view returns (uint256) {
+        return s().earned[pointsKey];
+    }
+
+    function burnedOf(address account) internal view returns (uint256) {
+        return burnedOf(keyForAccount(account));
+    }
+
+    function burnedOf(bytes32 pointsKey) internal view returns (uint256) {
+        return s().burned[pointsKey];
     }
 
     function totalEarned() internal view returns (uint256) {
@@ -170,29 +196,41 @@ library LibPoints {
         return s().dailyPointsCap;
     }
 
-    function accruedToday(address user) internal view returns (uint256) {
+    function accruedToday(address account) internal view returns (uint256) {
+        return accruedToday(keyForAccount(account));
+    }
+
+    function accruedToday(bytes32 pointsKey) internal view returns (uint256) {
         PointsStorage storage ps = s();
         uint64 dayKey = uint64(block.timestamp / 1 days);
-        if (ps.lastAccrualDay[user] != dayKey) {
+        if (ps.lastAccrualDay[pointsKey] != dayKey) {
             return 0;
         }
-        return ps.accruedOnDay[user];
+        return ps.accruedOnDay[pointsKey];
     }
 
-    function lastAccruedAt(address user, bytes32 actionType) internal view returns (uint256) {
-        return s().lastAccrualTs[user][actionType];
+    function lastAccruedAt(address account, bytes32 actionType) internal view returns (uint256) {
+        return lastAccruedAt(keyForAccount(account), actionType);
     }
 
-    function burn(address user, uint256 amount, bytes32 reason) internal {
+    function lastAccruedAt(bytes32 pointsKey, bytes32 actionType) internal view returns (uint256) {
+        return s().lastAccrualTs[pointsKey][actionType];
+    }
+
+    function burn(address account, uint256 amount, bytes32 reason) internal {
+        burn(keyForAccount(account), amount, reason);
+    }
+
+    function burn(bytes32 pointsKey, uint256 amount, bytes32 reason) internal {
         if (amount == 0) return;
         PointsStorage storage ps = s();
-        uint256 bal = ps.balances[user];
+        uint256 bal = ps.balances[pointsKey];
         if (amount > bal) revert Points_InsufficientBalance();
 
-        ps.balances[user] = bal - amount;
-        ps.burned[user] += amount;
+        ps.balances[pointsKey] = bal - amount;
+        ps.burned[pointsKey] += amount;
         ps.totalBurned += amount;
-        emit PointsBurned(user, reason, amount);
+        emit PointsBurned(pointsKey, reason, amount);
     }
 
     function setRedemptionToken(address token) internal {
@@ -226,7 +264,11 @@ library LibPoints {
         return (pointsIn * s().tokensPerPointWad) / WAD;
     }
 
-    function consumeRedemption(address user, uint256 pointsIn) internal returns (address token, uint256 tokenOut) {
+    function consumeRedemption(address account, uint256 pointsIn) internal returns (address token, uint256 tokenOut) {
+        return consumeRedemption(keyForAccount(account), pointsIn);
+    }
+
+    function consumeRedemption(bytes32 pointsKey, uint256 pointsIn) internal returns (address token, uint256 tokenOut) {
         PointsStorage storage ps = s();
         if (!ps.redemptionEnabled) revert Points_RedemptionDisabled();
 
@@ -253,9 +295,9 @@ library LibPoints {
             }
         }
 
-        burn(user, pointsIn, BURN_REASON_REDEEM);
+        burn(pointsKey, pointsIn, BURN_REASON_REDEEM);
         ps.redemptionTotalMinted += tokenOut;
-        emit PointsRedemptionRecorded(user, pointsIn, tokenOut);
+        emit PointsRedemptionRecorded(pointsKey, pointsIn, tokenOut);
     }
 
     function redemptionToken() internal view returns (address) {

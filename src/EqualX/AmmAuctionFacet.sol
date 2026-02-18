@@ -117,7 +117,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             revert AmmAuction_InvalidFee(params.feeBps, ds.config.maxFeeBps);
         }
 
-        (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
+        (bytes32 positionKey,) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
         Types.PoolData storage poolA = LibDirectHelpers._pool(params.poolIdA);
         Types.PoolData storage poolB = LibDirectHelpers._pool(params.poolIdB);
 
@@ -165,7 +165,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             LibDerivativeStorage.addAuctionByToken(auction.tokenB, auctionId);
         }
         LibDerivativeStorage.addAuctionByPair(auction.tokenA, auction.tokenB, auctionId);
-        LibPoints.accrue(makerOwner, LibPoints.ACTION_DERIVATIVE_CREATE_AMM_AUCTION);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_DERIVATIVE_CREATE_AMM_AUCTION);
 
         emit AuctionCreated(
             auctionId,

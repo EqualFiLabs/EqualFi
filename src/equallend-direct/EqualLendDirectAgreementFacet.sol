@@ -321,6 +321,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
 
         emit BorrowerOfferAccepted(offerId, agreementId, lenderPositionId);
         _accrueDirectAcceptIfNotSelfMatch(
+            lenderKey,
             lenderOwner,
             nft.ownerOf(offer.borrowerPositionId),
             LibPoints.ACTION_DIRECT_ACCEPT_BORROWER_OFFER
@@ -538,6 +539,7 @@ contract EqualLendDirectAgreementFacet is ReentrancyGuardModifiers, IDirectOffer
             offer.isTranche ? tranche.trancheRemainingAfter == 0 : true
         );
         _accrueDirectAcceptIfNotSelfMatch(
+            borrowerKey,
             borrowerOwner,
             nft.ownerOf(offer.lenderPositionId),
             LibPoints.ACTION_DIRECT_ACCEPT_LENDER_OFFER
@@ -718,6 +720,7 @@ function acceptRatioTrancheOffer(uint256 offerId, uint256 borrowerPositionId, ui
             offerId, agreementId, borrowerPositionId, principalAmount, offer.principalRemaining, collateralRequired
         );
         _accrueDirectAcceptIfNotSelfMatch(
+            borrowerKey,
             borrowerOwner,
             nft.ownerOf(offer.lenderPositionId),
             LibPoints.ACTION_DIRECT_ACCEPT_RATIO_LENDER_OFFER
@@ -953,6 +956,7 @@ function _checkAndConsumeTranche(
             offerId, agreementId, lenderPositionId, collateralAmount, offer.collateralRemaining, principalAmount
         );
         _accrueDirectAcceptIfNotSelfMatch(
+            lenderKey,
             lenderOwner,
             nft.ownerOf(offer.borrowerPositionId),
             LibPoints.ACTION_DIRECT_ACCEPT_RATIO_BORROWER_OFFER
@@ -960,10 +964,13 @@ function _checkAndConsumeTranche(
 
     }
 
-    function _accrueDirectAcceptIfNotSelfMatch(address callerOwner, address counterpartyOwner, bytes32 actionType)
-        internal
-    {
+    function _accrueDirectAcceptIfNotSelfMatch(
+        bytes32 callerKey,
+        address callerOwner,
+        address counterpartyOwner,
+        bytes32 actionType
+    ) internal {
         if (callerOwner == counterpartyOwner) return;
-        LibPoints.accrue(callerOwner, actionType);
+        LibPoints.accrue(callerKey, actionType);
     }
 }

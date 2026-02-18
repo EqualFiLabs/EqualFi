@@ -89,13 +89,13 @@ contract DirectPointsRecipientPropertyTest is DirectDiamondTestBase {
         vm.prank(borrowerOwner);
         nft.approve(operator, borrowerPositionId);
 
-        uint256 ownerPointsBefore = harness.pointsBalance(borrowerOwner);
+        uint256 ownerPointsBefore = harness.pointsBalanceByKey(borrowerKey);
         uint256 operatorPointsBefore = harness.pointsBalance(operator);
 
         vm.prank(operator);
         uint256 agreementId = agreements.acceptOffer(offerId, borrowerPositionId, 0);
 
-        assertEq(harness.pointsBalance(borrowerOwner), ownerPointsBefore + ACCEPT_POINTS);
+        assertEq(harness.pointsBalanceByKey(borrowerKey), ownerPointsBefore + ACCEPT_POINTS);
         assertEq(harness.pointsBalance(operator), operatorPointsBefore);
         assertEq(views.getAgreement(agreementId).borrower, borrowerOwner);
     }
@@ -132,11 +132,11 @@ contract DirectPointsRecipientPropertyTest is DirectDiamondTestBase {
         uint256 offerId =
             offers.postOffer(params, DirectTypes.DirectTrancheOfferParams({isTranche: false, trancheAmount: 0}));
 
-        uint256 pointsBefore = harness.pointsBalance(selfOwner);
+        uint256 pointsBefore = harness.pointsBalanceByKey(borrowerKey);
         vm.prank(selfOwner);
         agreements.acceptOffer(offerId, borrowerPositionId, 0);
 
-        assertEq(harness.pointsBalance(selfOwner), pointsBefore);
+        assertEq(harness.pointsBalanceByKey(borrowerKey), pointsBefore);
     }
 
     function testProperty_AcceptRollingOfferSelfMatchDoesNotAccruePoints() public {
@@ -173,10 +173,10 @@ contract DirectPointsRecipientPropertyTest is DirectDiamondTestBase {
         vm.prank(selfOwner);
         uint256 offerId = rollingOffers.postRollingOffer(params);
 
-        uint256 pointsBefore = harness.pointsBalance(selfOwner);
+        uint256 pointsBefore = harness.pointsBalanceByKey(borrowerKey);
         vm.prank(selfOwner);
         rollingAgreements.acceptRollingOffer(offerId, borrowerPositionId, 0, 0);
 
-        assertEq(harness.pointsBalance(selfOwner), pointsBefore);
+        assertEq(harness.pointsBalanceByKey(borrowerKey), pointsBefore);
     }
 }

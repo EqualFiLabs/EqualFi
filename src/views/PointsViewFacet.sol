@@ -2,18 +2,35 @@
 pragma solidity ^0.8.20;
 
 import {LibPoints} from "../libraries/LibPoints.sol";
+import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
 
 contract PointsViewFacet {
     function getPoints(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
     }
 
+    function getPointsByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
+    }
+
+    function getPointsByPosition(uint256 positionId) external view returns (uint256) {
+        return LibPoints.balanceOf(LibPositionHelpers.positionKey(positionId));
+    }
+
     function getPointsEarned(address user) external view returns (uint256) {
         return LibPoints.earnedOf(user);
     }
 
+    function getPointsEarnedByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.earnedOf(pointsKey);
+    }
+
     function getPointsBurned(address user) external view returns (uint256) {
         return LibPoints.burnedOf(user);
+    }
+
+    function getPointsBurnedByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.burnedOf(pointsKey);
     }
 
     function getTotalPointsEarned() external view returns (uint256) {
@@ -40,11 +57,23 @@ contract PointsViewFacet {
         return LibPoints.accruedToday(user);
     }
 
+    function getPointsAccruedTodayByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.accruedToday(pointsKey);
+    }
+
     function getPointsBatch(address[] calldata users) external view returns (uint256[] memory balances) {
         uint256 len = users.length;
         balances = new uint256[](len);
         for (uint256 i = 0; i < len; i++) {
             balances[i] = LibPoints.balanceOf(users[i]);
+        }
+    }
+
+    function getPointsBatchByKey(bytes32[] calldata pointsKeys) external view returns (uint256[] memory balances) {
+        uint256 len = pointsKeys.length;
+        balances = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            balances[i] = LibPoints.balanceOf(pointsKeys[i]);
         }
     }
 
@@ -77,18 +106,24 @@ contract PointsViewFacet {
     }
 
     function selectors() external pure returns (bytes4[] memory selectorsArr) {
-        selectorsArr = new bytes4[](12);
+        selectorsArr = new bytes4[](18);
         selectorsArr[0] = PointsViewFacet.getPoints.selector;
-        selectorsArr[1] = PointsViewFacet.getPointsEarned.selector;
-        selectorsArr[2] = PointsViewFacet.getPointsBurned.selector;
-        selectorsArr[3] = PointsViewFacet.getTotalPointsEarned.selector;
-        selectorsArr[4] = PointsViewFacet.getTotalPointsBurned.selector;
-        selectorsArr[5] = PointsViewFacet.getPointsPerAction.selector;
-        selectorsArr[6] = PointsViewFacet.getPointsBatch.selector;
-        selectorsArr[7] = PointsViewFacet.getDailyPointsCap.selector;
-        selectorsArr[8] = PointsViewFacet.getPointsAccruedToday.selector;
-        selectorsArr[9] = PointsViewFacet.getAccrualCooldown.selector;
-        selectorsArr[10] = PointsViewFacet.previewRedeem.selector;
-        selectorsArr[11] = PointsViewFacet.getRedemptionConfig.selector;
+        selectorsArr[1] = PointsViewFacet.getPointsByKey.selector;
+        selectorsArr[2] = PointsViewFacet.getPointsByPosition.selector;
+        selectorsArr[3] = PointsViewFacet.getPointsEarned.selector;
+        selectorsArr[4] = PointsViewFacet.getPointsEarnedByKey.selector;
+        selectorsArr[5] = PointsViewFacet.getPointsBurned.selector;
+        selectorsArr[6] = PointsViewFacet.getPointsBurnedByKey.selector;
+        selectorsArr[7] = PointsViewFacet.getTotalPointsEarned.selector;
+        selectorsArr[8] = PointsViewFacet.getTotalPointsBurned.selector;
+        selectorsArr[9] = PointsViewFacet.getPointsPerAction.selector;
+        selectorsArr[10] = PointsViewFacet.getPointsBatch.selector;
+        selectorsArr[11] = PointsViewFacet.getPointsBatchByKey.selector;
+        selectorsArr[12] = PointsViewFacet.getDailyPointsCap.selector;
+        selectorsArr[13] = PointsViewFacet.getPointsAccruedToday.selector;
+        selectorsArr[14] = PointsViewFacet.getPointsAccruedTodayByKey.selector;
+        selectorsArr[15] = PointsViewFacet.getAccrualCooldown.selector;
+        selectorsArr[16] = PointsViewFacet.previewRedeem.selector;
+        selectorsArr[17] = PointsViewFacet.getRedemptionConfig.selector;
     }
 }

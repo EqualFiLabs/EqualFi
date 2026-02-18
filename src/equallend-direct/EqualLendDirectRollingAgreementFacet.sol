@@ -36,6 +36,7 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         LibCurrency.assertZeroMsgValue();
         PositionNFT nft = LibDirectHelpers._positionNFT();
         address callerOwner = LibDirectHelpers._requireBorrowerAuthority(nft, callerPositionId);
+        bytes32 callerKey = nft.getPositionKey(callerPositionId);
 
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         DirectTypes.RollingOfferKind kind = ds.rollingOfferKindById[offerId];
@@ -73,7 +74,7 @@ contract EqualLendDirectRollingAgreementFacet is ReentrancyGuardModifiers {
         }
 
         if (callerOwner != counterpartyOwner) {
-            LibPoints.accrue(callerOwner, LibPoints.ACTION_DIRECT_ACCEPT_ROLLING_OFFER);
+            LibPoints.accrue(callerKey, LibPoints.ACTION_DIRECT_ACCEPT_ROLLING_OFFER);
         }
         emit RollingOfferAccepted(offerId, agreementId, borrower);
     }

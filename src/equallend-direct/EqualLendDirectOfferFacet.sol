@@ -82,7 +82,7 @@ contract EqualLendDirectOfferFacet is ReentrancyGuardModifiers, IDirectOfferEven
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        address borrowerOwner = LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
+        LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
         LibDirectHelpers._validateBorrowerOfferParams(params);
 
         Types.PoolData storage lenderPool = LibDirectHelpers._pool(params.lenderPoolId);
@@ -170,7 +170,7 @@ contract EqualLendDirectOfferFacet is ReentrancyGuardModifiers, IDirectOfferEven
             params.lenderPoolId,
             params.collateralPoolId
         );
-        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_POST_BORROWER_OFFER);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_DIRECT_POST_BORROWER_OFFER);
     }
 
     function cancelBorrowerOffer(uint256 offerId) external nonReentrant {
@@ -223,7 +223,7 @@ contract EqualLendDirectOfferFacet is ReentrancyGuardModifiers, IDirectOfferEven
         DirectTypes.DirectTrancheOfferParams memory tranche
     ) internal returns (uint256 offerId) {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        address lenderOwner = LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
+        LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
         LibDirectHelpers._validateOfferParams(params);
 
         Types.PoolData storage lenderPool = LibDirectHelpers._pool(params.lenderPoolId);
@@ -334,7 +334,7 @@ contract EqualLendDirectOfferFacet is ReentrancyGuardModifiers, IDirectOfferEven
             params.lenderPoolId,
             params.collateralPoolId
         );
-        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_POST_LENDER_OFFER);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_DIRECT_POST_LENDER_OFFER);
     }
 
     
@@ -346,7 +346,7 @@ function postRatioTrancheOffer(DirectTypes.DirectRatioTrancheParams calldata par
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        address lenderOwner = LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
+        LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
         LibDirectHelpers._validateRatioTrancheParams(params);
 
         Types.PoolData storage lenderPool = LibDirectHelpers._pool(params.lenderPoolId);
@@ -425,7 +425,7 @@ function postRatioTrancheOffer(DirectTypes.DirectRatioTrancheParams calldata par
             params.aprBps,
             params.durationSeconds
         );
-        LibPoints.accrue(lenderOwner, LibPoints.ACTION_DIRECT_POST_RATIO_LENDER_OFFER);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_DIRECT_POST_RATIO_LENDER_OFFER);
     }
 
 function cancelOffer(uint256 offerId) external nonReentrant {
@@ -544,7 +544,7 @@ function cancelOffer(uint256 offerId) external nonReentrant {
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        address borrowerOwner = LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
+        LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
         LibDirectHelpers._validateBorrowerRatioTrancheParams(params);
 
         Types.PoolData storage lenderPool = LibDirectHelpers._pool(params.lenderPoolId);
@@ -630,7 +630,7 @@ function cancelOffer(uint256 offerId) external nonReentrant {
             params.aprBps,
             params.durationSeconds
         );
-        LibPoints.accrue(borrowerOwner, LibPoints.ACTION_DIRECT_POST_RATIO_BORROWER_OFFER);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_DIRECT_POST_RATIO_BORROWER_OFFER);
     }
 
     /// @notice Cancel a borrower ratio tranche offer

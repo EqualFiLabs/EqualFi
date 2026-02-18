@@ -186,11 +186,11 @@ contract DerivativeAccessControlPropertyTest is Test {
             })
         );
 
-        assertEq(optionsHarness.pointsBalance(maker), 7);
+        assertEq(optionsHarness.pointsBalanceByKey(positionKey), 7);
         assertEq(optionsHarness.pointsBalance(operator), 0);
-        assertEq(futuresHarness.pointsBalance(maker), 11);
+        assertEq(futuresHarness.pointsBalanceByKey(positionKey), 11);
         assertEq(futuresHarness.pointsBalance(operator), 0);
-        assertEq(ammHarness.pointsBalance(maker), 13);
+        assertEq(ammHarness.pointsBalanceByKey(positionKey), 13);
         assertEq(ammHarness.pointsBalance(operator), 0);
     }
 
@@ -574,6 +574,10 @@ contract OptionsAccessHarness is OptionsFacet {
     function pointsBalance(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
     }
+
+    function pointsBalanceByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
+    }
 }
 
 contract FuturesAccessHarness is FuturesFacet {
@@ -639,6 +643,10 @@ contract FuturesAccessHarness is FuturesFacet {
     function pointsBalance(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
     }
+
+    function pointsBalanceByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
+    }
 }
 
 contract AmmAccessHarness is AmmAuctionFacet {
@@ -691,5 +699,9 @@ contract AmmAccessHarness is AmmAuctionFacet {
 
     function pointsBalance(address user) external view returns (uint256) {
         return LibPoints.balanceOf(user);
+    }
+
+    function pointsBalanceByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
     }
 }

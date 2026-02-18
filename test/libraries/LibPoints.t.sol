@@ -5,8 +5,16 @@ import {Test} from "forge-std/Test.sol";
 import {LibPoints} from "../../src/libraries/LibPoints.sol";
 
 contract LibPointsHarness {
+    function keyForAccount(address account) external pure returns (bytes32) {
+        return LibPoints.keyForAccount(account);
+    }
+
     function accrue(address user, bytes32 actionType) external {
         LibPoints.accrue(user, actionType);
+    }
+
+    function accrueForKey(bytes32 pointsKey, bytes32 actionType) external {
+        LibPoints.accrue(pointsKey, actionType);
     }
 
     function setPointsPerAction(bytes32 actionType, uint256 amount) external {
@@ -17,12 +25,24 @@ contract LibPointsHarness {
         return LibPoints.balanceOf(user);
     }
 
+    function getPointsForKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
+    }
+
     function getPointsEarned(address user) external view returns (uint256) {
         return LibPoints.earnedOf(user);
     }
 
+    function getPointsEarnedForKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.earnedOf(pointsKey);
+    }
+
     function getPointsBurned(address user) external view returns (uint256) {
         return LibPoints.burnedOf(user);
+    }
+
+    function getPointsBurnedForKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.burnedOf(pointsKey);
     }
 
     function getTotalPointsEarned() external view returns (uint256) {
@@ -57,12 +77,24 @@ contract LibPointsHarness {
         return LibPoints.accruedToday(user);
     }
 
+    function getAccruedTodayForKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.accruedToday(pointsKey);
+    }
+
     function getLastAccruedAt(address user, bytes32 actionType) external view returns (uint256) {
         return LibPoints.lastAccruedAt(user, actionType);
     }
 
+    function getLastAccruedAtForKey(bytes32 pointsKey, bytes32 actionType) external view returns (uint256) {
+        return LibPoints.lastAccruedAt(pointsKey, actionType);
+    }
+
     function burn(address user, uint256 amount, bytes32 reason) external {
         LibPoints.burn(user, amount, reason);
+    }
+
+    function burnForKey(bytes32 pointsKey, uint256 amount, bytes32 reason) external {
+        LibPoints.burn(pointsKey, amount, reason);
     }
 
     function setRedemptionToken(address token) external {
@@ -87,6 +119,13 @@ contract LibPointsHarness {
 
     function consumeRedemption(address user, uint256 pointsIn) external returns (address token, uint256 tokenOut) {
         return LibPoints.consumeRedemption(user, pointsIn);
+    }
+
+    function consumeRedemptionForKey(bytes32 pointsKey, uint256 pointsIn)
+        external
+        returns (address token, uint256 tokenOut)
+    {
+        return LibPoints.consumeRedemption(pointsKey, pointsIn);
     }
 
     function previewRedemption(uint256 pointsIn) external view returns (uint256 tokenOut) {
@@ -127,8 +166,8 @@ contract LibPointsHarness {
 }
 
 contract LibPointsTest is Test {
-    event PointsAccrued(address indexed user, bytes32 indexed actionType, uint256 amount);
-    event PointsBurned(address indexed user, bytes32 indexed reason, uint256 amount);
+    event PointsAccrued(bytes32 indexed pointsKey, bytes32 indexed actionType, uint256 amount);
+    event PointsBurned(bytes32 indexed pointsKey, bytes32 indexed reason, uint256 amount);
     event PointsPerActionUpdated(bytes32 indexed actionType, uint256 newAmount);
     event PointsDailyCapUpdated(uint256 newDailyCap);
     event PointsAccrualCooldownUpdated(bytes32 indexed actionType, uint256 cooldownSecs);
@@ -137,7 +176,7 @@ contract LibPointsTest is Test {
     event PointsRedemptionRateUpdated(uint256 tokensPerPointWad);
     event PointsRedemptionGlobalMintCapUpdated(uint256 newCap);
     event PointsRedemptionEpochConfigUpdated(uint64 epochLengthSecs, uint256 epochMintCap);
-    event PointsRedemptionRecorded(address indexed user, uint256 pointsIn, uint256 tokenOut);
+    event PointsRedemptionRecorded(bytes32 indexed pointsKey, uint256 pointsIn, uint256 tokenOut);
 
     LibPointsHarness internal h;
 
@@ -229,9 +268,10 @@ contract LibPointsTest is Test {
     function testFuzz_accrue_emitsEvent(address user, bytes32 actionType, uint256 points) public {
         points = bound(points, 1, type(uint128).max);
         h.setPointsPerAction(actionType, points);
+        bytes32 pointsKey = h.keyForAccount(user);
 
         vm.expectEmit(true, true, false, true);
-        emit PointsAccrued(user, actionType, points);
+        emit PointsAccrued(pointsKey, actionType, points);
         h.accrue(user, actionType);
     }
 
@@ -261,11 +301,12 @@ contract LibPointsTest is Test {
     function test_burn_reducesBalanceAndTracksBurnTotals() public {
         address user = address(0xBEEF);
         bytes32 reason = keccak256("POINTS_BURN_TEST");
+        bytes32 pointsKey = h.keyForAccount(user);
         h.setPointsPerAction(ACTION_A, 15);
         h.accrue(user, ACTION_A);
 
         vm.expectEmit(true, true, false, true);
-        emit PointsBurned(user, reason, 9);
+        emit PointsBurned(pointsKey, reason, 9);
         h.burn(user, 9, reason);
 
         assertEq(h.getPoints(user), 6);
@@ -354,11 +395,12 @@ contract LibPointsTest is Test {
         h.setRedemptionEnabled(true);
         h.setRedemptionToken(address(0xCAFE));
         h.setRedemptionRate(2e18); // 2 tokens per point
+        bytes32 pointsKey = h.keyForAccount(address(this));
 
         vm.expectEmit(true, true, false, true);
-        emit PointsBurned(address(this), keccak256("POINTS_BURN_REDEEM"), 5);
+        emit PointsBurned(pointsKey, keccak256("POINTS_BURN_REDEEM"), 5);
         vm.expectEmit(true, false, false, true);
-        emit PointsRedemptionRecorded(address(this), 5, 10);
+        emit PointsRedemptionRecorded(pointsKey, 5, 10);
         (address token, uint256 tokenOut) = h.consumeRedemption(address(this), 5);
 
         assertEq(token, address(0xCAFE));

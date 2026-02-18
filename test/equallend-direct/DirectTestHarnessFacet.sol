@@ -210,6 +210,10 @@ contract DirectTestHarnessFacet {
         return LibPoints.balanceOf(user);
     }
 
+    function pointsBalanceByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
+    }
+
     function dailyPointsCap() external view returns (uint256) {
         return LibPoints.dailyPointsCap();
     }

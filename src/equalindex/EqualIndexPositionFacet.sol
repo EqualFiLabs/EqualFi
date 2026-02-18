@@ -30,7 +30,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
     ) external nonReentrant indexExists(indexId) returns (uint256 minted) {
         if (units == 0 || units % LibEqualIndex.INDEX_SCALE != 0) revert InvalidUnits();
 
-        address owner = LibPositionHelpers.requireOwnership(positionId);
+        LibPositionHelpers.requireOwnership(positionId);
         bytes32 positionKey = LibPositionHelpers.positionKey(positionId);
 
         Index storage idx = s().indexes[indexId];
@@ -148,7 +148,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         }
         indexPool.userFeeIndex[positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[positionKey] = indexPool.maintenanceIndex;
-        LibPoints.accrue(owner, LibPoints.ACTION_INDEX_MINT_POSITION);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_INDEX_MINT_POSITION);
     }
 
     /// @notice Burn index tokens and unencumber underlying assets.
@@ -159,7 +159,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
     ) external nonReentrant indexExists(indexId) returns (uint256[] memory assetsOut) {
         if (units == 0 || units % LibEqualIndex.INDEX_SCALE != 0) revert InvalidUnits();
 
-        address owner = LibPositionHelpers.requireOwnership(positionId);
+        LibPositionHelpers.requireOwnership(positionId);
         bytes32 positionKey = LibPositionHelpers.positionKey(positionId);
 
         Index storage idx = s().indexes[indexId];
@@ -264,6 +264,6 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         }
         indexPool.userFeeIndex[positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[positionKey] = indexPool.maintenanceIndex;
-        LibPoints.accrue(owner, LibPoints.ACTION_INDEX_BURN_POSITION);
+        LibPoints.accrue(positionKey, LibPoints.ACTION_INDEX_BURN_POSITION);
     }
 }

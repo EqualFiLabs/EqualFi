@@ -130,6 +130,10 @@ contract LeanDeploySelectorsTest is Test {
             loupe.facetAddress(PointsRedemptionFacet.redeem.selector) != address(0),
             "missing redeem selector"
         );
+        assertTrue(
+            loupe.facetAddress(PointsRedemptionFacet.redeemFromPosition.selector) != address(0),
+            "missing redeemFromPosition selector"
+        );
 
         PointsAdminFacet pointsAdmin = PointsAdminFacet(deployment.diamond);
         PointsViewFacet pointsView = PointsViewFacet(deployment.diamond);

@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {LibPoints} from "../libraries/LibPoints.sol";
+import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
 import {IPointsEmissionToken} from "../interfaces/IPointsEmissionToken.sol";
 
 error Points_InvalidRedeemRecipient();
@@ -23,6 +24,23 @@ contract PointsRedemptionFacet is ReentrancyGuardModifiers {
 
         IPointsEmissionToken(token).mint(to, out);
         emit PointsRedeemed(msg.sender, to, pointsIn, out);
+        return out;
+    }
+
+    function redeemFromPosition(uint256 positionId, uint256 pointsIn, uint256 minTokenOut, address to)
+        external
+        nonReentrant
+        returns (uint256 tokenOut)
+    {
+        if (to == address(0)) revert Points_InvalidRedeemRecipient();
+        address owner = LibPositionHelpers.requireOwnership(positionId);
+        bytes32 pointsKey = LibPositionHelpers.positionKey(positionId);
+
+        (address token, uint256 out) = LibPoints.consumeRedemption(pointsKey, pointsIn);
+        if (out < minTokenOut) revert Points_SlippageExceeded();
+
+        IPointsEmissionToken(token).mint(to, out);
+        emit PointsRedeemed(owner, to, pointsIn, out);
         return out;
     }
 }

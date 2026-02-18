@@ -14,6 +14,10 @@ contract PointsViewHarness is PointsViewFacet {
         LibPoints.accrue(user, actionType);
     }
 
+    function accrueForKey(bytes32 pointsKey, bytes32 actionType) external {
+        LibPoints.accrue(pointsKey, actionType);
+    }
+
     function setDailyPointsCap(uint256 amount) external {
         LibPoints.setDailyPointsCap(amount);
     }
@@ -89,6 +93,15 @@ contract PointsViewFacetTest is Test {
 
     function test_getPoints_zeroBalanceAddress() public {
         assertEq(facet.getPoints(address(0xCAFE)), 0);
+    }
+
+    function test_getPointsByKey_positionScopedQuery() public {
+        bytes32 pointsKey = keccak256("POINTS_VIEW_KEY");
+        facet.setPointsPerAction(ACTION_A, 11);
+        facet.accrueForKey(pointsKey, ACTION_A);
+
+        assertEq(facet.getPointsByKey(pointsKey), 11);
+        assertEq(facet.getPoints(address(0xBEEF)), 0);
     }
 
     function test_getPointsEarnedAndBurned_roundTrip() public {

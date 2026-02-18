@@ -421,8 +421,9 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(PointsRedemptionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](1);
+        s = new bytes4[](2);
         s[0] = PointsRedemptionFacet.redeem.selector;
+        s[1] = PointsRedemptionFacet.redeemFromPosition.selector;
     }
 
     function _selectors(MaintenanceFacet) internal pure returns (bytes4[] memory s) {
