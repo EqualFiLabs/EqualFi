@@ -382,7 +382,11 @@ contract LeanDeployScript is Script {
         if (block.chainid == 11155111) {
             return ERC8004_SEPOLIA;
         }
-        return vm.envOr("IDENTITY_REGISTRY", address(0));
+        address configured = vm.envOr("IDENTITY_REGISTRY", address(0));
+        if (configured != address(0) && configured.code.length > 0) {
+            return configured;
+        }
+        return address(0);
     }
 
     function _resolveERC6551Registry() internal returns (address) {

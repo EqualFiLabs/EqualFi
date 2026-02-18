@@ -15,6 +15,7 @@ import {MockERC20} from "../../src/mocks/MockERC20.sol";
 // Production facets
 import {EqualLendDirectOfferFacet} from "../../src/equallend-direct/EqualLendDirectOfferFacet.sol";
 import {EqualLendDirectAgreementFacet} from "../../src/equallend-direct/EqualLendDirectAgreementFacet.sol";
+import {EqualLendDirectAgreementRatioFacet} from "../../src/equallend-direct/EqualLendDirectAgreementRatioFacet.sol";
 import {EqualLendDirectLifecycleFacet} from "../../src/equallend-direct/EqualLendDirectLifecycleFacet.sol";
 import {EqualLendDirectRollingOfferFacet} from "../../src/equallend-direct/EqualLendDirectRollingOfferFacet.sol";
 import {EqualLendDirectRollingAgreementFacet} from "../../src/equallend-direct/EqualLendDirectRollingAgreementFacet.sol";
@@ -287,6 +288,7 @@ abstract contract DirectDiamondTestBase is Test {
     struct DirectFacets {
         address offerFacet;
         address agreementFacet;
+        address agreementRatioFacet;
         address lifecycleFacet;
     }
 
@@ -316,17 +318,18 @@ abstract contract DirectDiamondTestBase is Test {
         RollingFacets memory rolling = _deployRollingFacets();
         HarnessFacets memory harnessFacets = _deployHarnessFacets();
 
-        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](10);
+        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](11);
         addCuts[0] = _cut(direct.offerFacet, _selectorsOffer());
         addCuts[1] = _cut(direct.agreementFacet, _selectorsAgreement());
-        addCuts[2] = _cut(direct.lifecycleFacet, _selectorsLifecycle());
-        addCuts[3] = _cut(harnessFacets.harnessFacet, _selectorsHarness());
-        addCuts[4] = _cut(harnessFacets.viewFacet, _selectorsView());
-        addCuts[5] = _cut(rolling.rollingOfferFacet, _selectorsRollingOffer());
-        addCuts[6] = _cut(rolling.rollingAgreementFacet, _selectorsRollingAgreement());
-        addCuts[7] = _cut(rolling.rollingLifecycleFacet, _selectorsRollingLifecycle());
-        addCuts[8] = _cut(rolling.rollingPaymentFacet, _selectorsRollingPayment());
-        addCuts[9] = _cut(rolling.rollingViewFacet, _selectorsRollingView());
+        addCuts[2] = _cut(direct.agreementRatioFacet, _selectorsAgreementRatio());
+        addCuts[3] = _cut(direct.lifecycleFacet, _selectorsLifecycle());
+        addCuts[4] = _cut(harnessFacets.harnessFacet, _selectorsHarness());
+        addCuts[5] = _cut(harnessFacets.viewFacet, _selectorsView());
+        addCuts[6] = _cut(rolling.rollingOfferFacet, _selectorsRollingOffer());
+        addCuts[7] = _cut(rolling.rollingAgreementFacet, _selectorsRollingAgreement());
+        addCuts[8] = _cut(rolling.rollingLifecycleFacet, _selectorsRollingLifecycle());
+        addCuts[9] = _cut(rolling.rollingPaymentFacet, _selectorsRollingPayment());
+        addCuts[10] = _cut(rolling.rollingViewFacet, _selectorsRollingView());
         IDiamondCut(address(diamond)).diamondCut(addCuts, address(0), "");
     }
 
@@ -368,6 +371,7 @@ abstract contract DirectDiamondTestBase is Test {
     function _deployDirectFacets() internal returns (DirectFacets memory direct) {
         direct.offerFacet = address(new EqualLendDirectOfferFacet());
         direct.agreementFacet = address(new EqualLendDirectAgreementFacet());
+        direct.agreementRatioFacet = address(new EqualLendDirectAgreementRatioFacet());
         direct.lifecycleFacet = address(new EqualLendDirectLifecycleFacet());
     }
 
@@ -435,11 +439,15 @@ abstract contract DirectDiamondTestBase is Test {
     }
 
     function _selectorsAgreement() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](4);
+        s = new bytes4[](2);
         s[0] = EqualLendDirectAgreementFacet.acceptOffer.selector;
         s[1] = EqualLendDirectAgreementFacet.acceptBorrowerOffer.selector;
-        s[2] = EqualLendDirectAgreementFacet.acceptRatioTrancheOffer.selector;
-        s[3] = EqualLendDirectAgreementFacet.acceptBorrowerRatioTrancheOffer.selector;
+    }
+
+    function _selectorsAgreementRatio() internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = EqualLendDirectAgreementRatioFacet.acceptRatioTrancheOffer.selector;
+        s[1] = EqualLendDirectAgreementRatioFacet.acceptBorrowerRatioTrancheOffer.selector;
     }
 
     function _selectorsLifecycle() internal pure returns (bytes4[] memory s) {

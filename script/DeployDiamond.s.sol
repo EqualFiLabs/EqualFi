@@ -39,6 +39,7 @@ import {PositionNFT} from "../src/nft/PositionNFT.sol";
 import {DiamondInit} from "../src/core/DiamondInit.sol";
 import {EqualLendDirectOfferFacet} from "../src/equallend-direct/EqualLendDirectOfferFacet.sol";
 import {EqualLendDirectAgreementFacet} from "../src/equallend-direct/EqualLendDirectAgreementFacet.sol";
+import {EqualLendDirectAgreementRatioFacet} from "../src/equallend-direct/EqualLendDirectAgreementRatioFacet.sol";
 import {EqualLendDirectLifecycleFacet} from "../src/equallend-direct/EqualLendDirectLifecycleFacet.sol";
 import {EqualLendDirectRollingOfferFacet} from "../src/equallend-direct/EqualLendDirectRollingOfferFacet.sol";
 import {EqualLendDirectRollingAgreementFacet} from "../src/equallend-direct/EqualLendDirectRollingAgreementFacet.sol";
@@ -74,6 +75,7 @@ import {ModuleViewFacet} from "../src/modules/ModuleViewFacet.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);
@@ -81,6 +83,71 @@ interface IPoolManagementFacetInitDefault {
 
 interface IPoolManagementFacetInitConfig {
     function initPool(uint256 pid, address underlying, Types.PoolConfig calldata config) external payable;
+}
+
+contract LocalERC6551Registry is IERC6551Registry {
+    function createAccount(
+        address implementation,
+        bytes32 salt,
+        uint256 chainId,
+        address,
+        uint256
+    ) external returns (address) {
+        assembly {
+            pop(chainId)
+            calldatacopy(0x8c, 0x24, 0x80)
+            mstore(0x6c, 0x5af43d82803e903d91602b57fd5bf3)
+            mstore(0x5d, implementation)
+            mstore(0x49, 0x3d60ad80600a3d3981f3363d3d373d3d3d363d73)
+
+            mstore8(0x00, 0xff)
+            mstore(0x35, keccak256(0x55, 0xb7))
+            mstore(0x01, shl(96, address()))
+            mstore(0x15, salt)
+
+            let computed := keccak256(0x00, 0x55)
+
+            if iszero(extcodesize(computed)) {
+                let deployed := create2(0, 0x55, 0xb7, salt)
+                if iszero(deployed) {
+                    mstore(0x00, 0x20188a59)
+                    revert(0x1c, 0x04)
+                }
+                mstore(0x6c, deployed)
+                return(0x6c, 0x20)
+            }
+
+            mstore(0x00, shr(96, shl(96, computed)))
+            return(0x00, 0x20)
+        }
+    }
+
+    function account(
+        address implementation,
+        bytes32 salt,
+        uint256 chainId,
+        address tokenContract,
+        uint256 tokenId
+    ) external view returns (address) {
+        assembly {
+            pop(chainId)
+            pop(tokenContract)
+            pop(tokenId)
+
+            calldatacopy(0x8c, 0x24, 0x80)
+            mstore(0x6c, 0x5af43d82803e903d91602b57fd5bf3)
+            mstore(0x5d, implementation)
+            mstore(0x49, 0x3d60ad80600a3d3981f3363d3d373d3d3d363d73)
+
+            mstore8(0x00, 0xff)
+            mstore(0x35, keccak256(0x55, 0xb7))
+            mstore(0x01, shl(96, address()))
+            mstore(0x15, salt)
+
+            mstore(0x00, shr(96, shl(96, keccak256(0x00, 0x55))))
+            return(0x00, 0x20)
+        }
+    }
 }
 
 /// @notice Example deployment script assembling the Diamond with default pool config.
@@ -144,6 +211,7 @@ contract DeployDiamondScript is Script {
         treasury = vm.envAddress("TREASURY");
         address deployer = vm.addr(vm.envUint("PRIVATE_KEY"));
         bool isGov = (deployer == owner || deployer == timelock);
+        require(isGov, "DeployDiamond: PRIVATE_KEY must be OWNER or TIMELOCK");
 
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
@@ -180,6 +248,7 @@ contract DeployDiamondScript is Script {
         PenaltyFacet penalty = new PenaltyFacet();
         EqualLendDirectOfferFacet directOffer = new EqualLendDirectOfferFacet();
         EqualLendDirectAgreementFacet directAgreement = new EqualLendDirectAgreementFacet();
+        EqualLendDirectAgreementRatioFacet directAgreementRatio = new EqualLendDirectAgreementRatioFacet();
         EqualLendDirectLifecycleFacet directLifecycle = new EqualLendDirectLifecycleFacet();
         EqualLendDirectRollingOfferFacet directRollingOffer = new EqualLendDirectRollingOfferFacet();
         EqualLendDirectRollingAgreementFacet directRollingAgreement = new EqualLendDirectRollingAgreementFacet();
@@ -224,7 +293,7 @@ contract DeployDiamondScript is Script {
         cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[13] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](43);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](44);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -239,38 +308,40 @@ contract DeployDiamondScript is Script {
         more[11] = _cut(address(penalty), _selectors(penalty));
         more[12] = _cut(address(directOffer), _selectors(directOffer));
         more[13] = _cut(address(directAgreement), _selectors(directAgreement));
-        more[14] = _cut(address(directLifecycle), _selectors(directLifecycle));
-        more[15] = _cut(address(directView), _selectors(directView));
-        more[16] = _cut(address(directRollingOffer), _selectors(directRollingOffer));
-        more[17] = _cut(address(directRollingAgreement), _selectors(directRollingAgreement));
-        more[18] = _cut(address(directRollingLifecycle), _selectors(directRollingLifecycle));
-        more[19] = _cut(address(directRollingPayment), _selectors(directRollingPayment));
-        more[20] = _cut(address(directRollingView), _selectors(directRollingView));
-        more[21] = _cut(address(activeCreditView), _selectors(activeCreditView));
-        more[22] = _cut(address(ammAuction), _selectors(ammAuction));
-        more[23] = _cut(address(communityAuction), _selectors(communityAuction));
-        more[24] = _cut(address(atomicDesk), _selectors(atomicDesk));
-        more[25] = _cut(address(settlementEscrow), _selectors(settlementEscrow));
-        more[26] = _cut(address(mamCurveCreate), _selectors(mamCurveCreate));
-        more[27] = _cut(address(mamCurveManage), _selectors(mamCurveManage));
-        more[28] = _cut(address(mamCurveExec), _selectors(mamCurveExec));
-        more[29] = _cut(address(optionsFacet), _selectors(optionsFacet));
-        more[30] = _cut(address(futuresFacet), _selectors(futuresFacet));
-        more[31] = _cut(address(derivativeView), _selectors(derivativeView));
-        more[32] = _cut(address(mamCurveView), _selectors(mamCurveView));
-        more[33] = _cut(address(positionAgentTBA), _selectors(positionAgentTBA));
-        more[34] = _cut(address(positionAgentRegistry), _selectors(positionAgentRegistry));
-        more[35] = _cut(address(positionAgentView), _selectors(positionAgentView));
-        more[36] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
-        more[37] = _cut(address(moduleRegistry), _selectors(moduleRegistry));
-        more[38] = _cut(address(moduleGateway), _selectors(moduleGateway));
-        more[39] = _cut(address(moduleView), _selectors(moduleView));
-        more[40] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
-        more[41] = _cut(address(pointsView), _selectors(pointsView));
-        more[42] = _cut(address(pointsRedemption), _selectors(pointsRedemption));
+        more[14] = _cut(address(directAgreementRatio), _selectors(directAgreementRatio));
+        more[15] = _cut(address(directLifecycle), _selectors(directLifecycle));
+        more[16] = _cut(address(directView), _selectors(directView));
+        more[17] = _cut(address(directRollingOffer), _selectors(directRollingOffer));
+        more[18] = _cut(address(directRollingAgreement), _selectors(directRollingAgreement));
+        more[19] = _cut(address(directRollingLifecycle), _selectors(directRollingLifecycle));
+        more[20] = _cut(address(directRollingPayment), _selectors(directRollingPayment));
+        more[21] = _cut(address(directRollingView), _selectors(directRollingView));
+        more[22] = _cut(address(activeCreditView), _selectors(activeCreditView));
+        more[23] = _cut(address(ammAuction), _selectors(ammAuction));
+        more[24] = _cut(address(communityAuction), _selectors(communityAuction));
+        more[25] = _cut(address(atomicDesk), _selectors(atomicDesk));
+        more[26] = _cut(address(settlementEscrow), _selectors(settlementEscrow));
+        more[27] = _cut(address(mamCurveCreate), _selectors(mamCurveCreate));
+        more[28] = _cut(address(mamCurveManage), _selectors(mamCurveManage));
+        more[29] = _cut(address(mamCurveExec), _selectors(mamCurveExec));
+        more[30] = _cut(address(optionsFacet), _selectors(optionsFacet));
+        more[31] = _cut(address(futuresFacet), _selectors(futuresFacet));
+        more[32] = _cut(address(derivativeView), _selectors(derivativeView));
+        more[33] = _cut(address(mamCurveView), _selectors(mamCurveView));
+        more[34] = _cut(address(positionAgentTBA), _selectors(positionAgentTBA));
+        more[35] = _cut(address(positionAgentRegistry), _selectors(positionAgentRegistry));
+        more[36] = _cut(address(positionAgentView), _selectors(positionAgentView));
+        more[37] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
+        more[38] = _cut(address(moduleRegistry), _selectors(moduleRegistry));
+        more[39] = _cut(address(moduleGateway), _selectors(moduleGateway));
+        more[40] = _cut(address(moduleView), _selectors(moduleView));
+        more[41] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
+        more[42] = _cut(address(pointsView), _selectors(pointsView));
+        more[43] = _cut(address(pointsRedemption), _selectors(pointsRedemption));
 
         // Deploy diamond
-        Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
+        // Use broadcaster as temporary owner so subsequent diamondCut in this script is authorized.
+        Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: deployer}));
         diamondAddress = address(diamond);
         
         // Deploy PositionNFT contract
@@ -296,8 +367,7 @@ contract DeployDiamondScript is Script {
 
         console2.log("OptionToken", address(optionToken));
         console2.log("FuturesToken", address(futuresToken));
-        optionToken.setManager(diamondAddress);
-        futuresToken.setManager(diamondAddress);
+        // Manager is set in token constructors; avoid onlyOwner calls from non-owner broadcasters.
         
         // add remaining view facets and initialize timelock storage + PositionNFT
         DiamondInit initializer = new DiamondInit();
@@ -305,12 +375,14 @@ contract DeployDiamondScript is Script {
             .diamondCut(more, address(initializer), abi.encodeWithSelector(DiamondInit.init.selector, timelock, address(nftContract)));
 
         address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(beaconProxy));
+        address erc6551Registry = _resolveERC6551Registry();
         address identityRegistry = _resolveIdentityRegistry();
-        PositionAgentConfigFacet(address(diamond)).setERC6551Registry(ERC6551_REGISTRY);
+        PositionAgentConfigFacet(address(diamond)).setERC6551Registry(erc6551Registry);
         if (erc6551Implementation == address(0)) {
             erc6551Implementation = address(beaconProxy);
         }
         PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
+        console2.log("Using ERC6551 registry:", erc6551Registry);
         console2.log("Using ERC6551 implementation:", erc6551Implementation);
         if (identityRegistry != address(0)) {
             PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
@@ -351,6 +423,11 @@ contract DeployDiamondScript is Script {
         SettlementEscrowFacet(address(diamond)).setCommittee(timelock, true);
         SettlementEscrowFacet(address(diamond)).transferGovernor(timelock);
 
+        // Hand ownership to configured OWNER if deployment was run by TIMELOCK.
+        if (deployer != owner) {
+            OwnershipFacet(address(diamond)).transferOwnership(owner);
+        }
+
         vm.stopBroadcast();
     }
 
@@ -367,7 +444,25 @@ contract DeployDiamondScript is Script {
         if (block.chainid == 11155111) {
             return ERC8004_SEPOLIA;
         }
-        return vm.envOr("IDENTITY_REGISTRY", address(0));
+        address configured = vm.envOr("IDENTITY_REGISTRY", address(0));
+        if (configured != address(0) && configured.code.length > 0) {
+            return configured;
+        }
+        return address(0);
+    }
+
+    function _resolveERC6551Registry() internal returns (address) {
+        if (ERC6551_REGISTRY.code.length > 0) {
+            return ERC6551_REGISTRY;
+        }
+
+        address configured = vm.envOr("ERC6551_REGISTRY", address(0));
+        if (configured != address(0) && configured.code.length > 0) {
+            return configured;
+        }
+
+        LocalERC6551Registry localRegistry = new LocalERC6551Registry();
+        return address(localRegistry);
     }
 
     function _resolveEntryPoint() internal view returns (address) {
@@ -621,11 +716,15 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(EqualLendDirectAgreementFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](4);
+        s = new bytes4[](2);
         s[0] = EqualLendDirectAgreementFacet.acceptBorrowerOffer.selector;
         s[1] = EqualLendDirectAgreementFacet.acceptOffer.selector;
-        s[2] = EqualLendDirectAgreementFacet.acceptRatioTrancheOffer.selector;
-        s[3] = EqualLendDirectAgreementFacet.acceptBorrowerRatioTrancheOffer.selector;
+    }
+
+    function _selectors(EqualLendDirectAgreementRatioFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = EqualLendDirectAgreementRatioFacet.acceptRatioTrancheOffer.selector;
+        s[1] = EqualLendDirectAgreementRatioFacet.acceptBorrowerRatioTrancheOffer.selector;
     }
 
     function _selectors(EqualLendDirectLifecycleFacet) internal pure returns (bytes4[] memory s) {

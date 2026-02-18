@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {EqualLendDirectOfferFacet} from "../../src/equallend-direct/EqualLendDirectOfferFacet.sol";
 import {EqualLendDirectAgreementFacet} from "../../src/equallend-direct/EqualLendDirectAgreementFacet.sol";
+import {EqualLendDirectAgreementRatioFacet} from "../../src/equallend-direct/EqualLendDirectAgreementRatioFacet.sol";
 import {EqualLendDirectLifecycleFacet} from "../../src/equallend-direct/EqualLendDirectLifecycleFacet.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
@@ -15,6 +16,7 @@ import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 contract DirectFacetHarness is
     EqualLendDirectOfferFacet,
     EqualLendDirectAgreementFacet,
+    EqualLendDirectAgreementRatioFacet,
     EqualLendDirectLifecycleFacet
 {
     /// @notice Set direct config (moved from ViewFacet to avoid stack-too-deep)

@@ -19,6 +19,12 @@ import {ModuleRegistryFacet} from "../../src/modules/ModuleRegistryFacet.sol";
 import {ModuleGatewayFacet} from "../../src/modules/ModuleGatewayFacet.sol";
 import {ModuleViewFacet} from "../../src/modules/ModuleViewFacet.sol";
 
+contract MockIdentityRegistry {
+    function ownerOf(uint256) external pure returns (address) {
+        return address(0);
+    }
+}
+
 contract DeployDiamondScriptTest is Test {
     uint256 internal constant DEPLOYER_PK = 0xA11CE;
     address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
@@ -27,7 +33,7 @@ contract DeployDiamondScriptTest is Test {
         address owner = vm.addr(DEPLOYER_PK);
         address timelock = address(0xBEEF);
         address treasury = address(0xCAFE);
-        address identityRegistry = address(0x8004);
+        address identityRegistry = address(new MockIdentityRegistry());
         address entryPoint = address(0x1337);
 
         vm.deal(owner, 1_000 ether);
@@ -125,7 +131,11 @@ contract DeployDiamondScriptTest is Test {
 
         (address registry, address implementation, address idRegistry) =
             PositionAgentViewFacet(diamond).getCanonicalRegistries();
-        assertEq(registry, ERC6551_REGISTRY, "erc6551 registry");
+        assertTrue(registry != address(0), "erc6551 registry unset");
+        assertGt(registry.code.length, 0, "erc6551 registry must be contract");
+        if (ERC6551_REGISTRY.code.length > 0) {
+            assertEq(registry, ERC6551_REGISTRY, "erc6551 registry");
+        }
         assertTrue(implementation != address(0), "erc6551 implementation");
         assertEq(idRegistry, identityRegistry, "identity registry");
 
