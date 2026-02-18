@@ -13,6 +13,7 @@ import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
@@ -292,6 +293,51 @@ contract MamCurveFacetTest is Test {
 
         uint256 lockedAfter = harness.getDirectLocked(positionKey, 1);
         assertEq(lockedAfter, desc.maxVolume - 1e18);
+    }
+
+    function test_curveSwapAccruesPointsToTaker() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 10e18, 10e18);
+        harness.seedPool(2, address(tokenB), positionKey, 10e18, 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setPointsPerAction(LibPoints.ACTION_SWAP, 5);
+
+        MamTypes.CurveDescriptor memory desc = MamTypes.CurveDescriptor({
+            makerPositionKey: positionKey,
+            makerPositionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            tokenA: address(tokenA),
+            tokenB: address(tokenB),
+            side: false,
+            priceIsQuotePerBase: true,
+            maxVolume: 2e18,
+            startPrice: 2e18,
+            endPrice: 1e18,
+            startTime: uint64(block.timestamp),
+            duration: 1 days,
+            generation: 1,
+            feeRateBps: 0,
+            feeAsset: MamTypes.FeeAsset.TokenIn,
+            salt: 999
+        });
+
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        uint256 amountIn = 2e18;
+        uint256 maxQuote = harness.previewCurveQuote(curveId, amountIn);
+        tokenB.mint(taker, maxQuote);
+        vm.prank(taker);
+        tokenB.approve(address(harness), maxQuote);
+
+        assertEq(harness.pointsBalance(taker), 0);
+        vm.prank(taker);
+        harness.executeCurveSwap(curveId, amountIn, maxQuote, 1e18, uint64(block.timestamp + 1 days), taker);
+        assertEq(harness.pointsBalance(taker), 5);
     }
 
     function test_overCapMaxQuote_refundsExcess_withoutExtraOutput_nonFoT() public {
@@ -1872,6 +1918,14 @@ contract MamCurveHarness is MamCurveCreationFacet, MamCurveManagementFacet, MamC
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.mamMakerShareBps = shareBps;
+    }
+
+    function setPointsPerAction(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
     }
 
     function getMakerShareBps() external view returns (uint16) {

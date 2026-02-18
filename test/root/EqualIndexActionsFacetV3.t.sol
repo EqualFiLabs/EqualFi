@@ -8,6 +8,7 @@ import {IndexToken} from "../../src/equalindex/IndexToken.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -40,6 +41,14 @@ contract EqualIndexActionsHarness is EqualIndexActionsFacetV3 {
 
     function setPaused(uint256 indexId, bool paused) external {
         s().indexes[indexId].paused = paused;
+    }
+
+    function setPointsPerAction(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
     }
 
     function previewMintInputs(uint256 indexId, uint256 units) external view virtual returns (uint256[] memory maxInputs) {
@@ -313,6 +322,20 @@ contract EqualIndexActionsFacetV3Test is Test {
         (uint256 toTreasury,,) = _splitProtocol(poolShare);
         assertEq(tokenA.balanceOf(treasury), toTreasury);
         assertEq(facet.getFeePot(INDEX_ID, address(tokenA)), potFee);
+    }
+
+    function test_pointsAccrueOnIndexMintAndBurn() public {
+        facet.setPointsPerAction(LibPoints.ACTION_INDEX_MINT, 3);
+        facet.setPointsPerAction(LibPoints.ACTION_INDEX_BURN, 7);
+
+        uint256 units = 2 * SCALE;
+        assertEq(facet.pointsBalance(address(this)), 0);
+
+        facet.mint(INDEX_ID, units, address(this), facet.previewMintInputs(INDEX_ID, units));
+        assertEq(facet.pointsBalance(address(this)), 3);
+
+        facet.burn(INDEX_ID, units, address(this));
+        assertEq(facet.pointsBalance(address(this)), 10);
     }
 
     function testMintUsesExtraBackingWhenPoolShort() public {

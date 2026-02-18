@@ -12,6 +12,7 @@ import {LibIndexEncumbrance} from "../libraries/LibIndexEncumbrance.sol";
 import {LibPoolMembership} from "../libraries/LibPoolMembership.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {Types} from "../libraries/Types.sol";
 import "../libraries/Errors.sol";
@@ -29,7 +30,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
     ) external nonReentrant indexExists(indexId) returns (uint256 minted) {
         if (units == 0 || units % LibEqualIndex.INDEX_SCALE != 0) revert InvalidUnits();
 
-        LibPositionHelpers.requireOwnership(positionId);
+        address owner = LibPositionHelpers.requireOwnership(positionId);
         bytes32 positionKey = LibPositionHelpers.positionKey(positionId);
 
         Index storage idx = s().indexes[indexId];
@@ -147,6 +148,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         }
         indexPool.userFeeIndex[positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[positionKey] = indexPool.maintenanceIndex;
+        LibPoints.accrue(owner, LibPoints.ACTION_INDEX_MINT_POSITION);
     }
 
     /// @notice Burn index tokens and unencumber underlying assets.
@@ -157,7 +159,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
     ) external nonReentrant indexExists(indexId) returns (uint256[] memory assetsOut) {
         if (units == 0 || units % LibEqualIndex.INDEX_SCALE != 0) revert InvalidUnits();
 
-        LibPositionHelpers.requireOwnership(positionId);
+        address owner = LibPositionHelpers.requireOwnership(positionId);
         bytes32 positionKey = LibPositionHelpers.positionKey(positionId);
 
         Index storage idx = s().indexes[indexId];
@@ -262,5 +264,6 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         }
         indexPool.userFeeIndex[positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[positionKey] = indexPool.maintenanceIndex;
+        LibPoints.accrue(owner, LibPoints.ACTION_INDEX_BURN_POSITION);
     }
 }

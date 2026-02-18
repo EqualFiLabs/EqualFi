@@ -7,6 +7,7 @@ import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
 import {LibMamMath} from "../libraries/LibMamMath.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
 import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {InsufficientPrincipal} from "../libraries/Errors.sol";
@@ -164,6 +165,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
             LibAppStorage.s().nativeTrackedTotal -= baseFill;
         }
         LibCurrency.transferWithMin(baseToken, recipient, baseFill, minOut);
+        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP);
 
         emit CurveFilled(curveId, msg.sender, recipient, amountIn, totalQuote, amountOut, feeAmount, remaining);
     }

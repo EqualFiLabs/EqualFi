@@ -18,6 +18,7 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
@@ -451,6 +452,41 @@ contract CommunityAuctionFacetPropertyTest is Test {
         assertLt(auction.reserveB, 2e18, "reserve B reduced");
         assertEq(harness.getTrackedBalance(1), trackedBeforeA + indexFee + activeFee, "tracked A updated");
         assertEq(harness.getTrackedBalance(2), trackedBeforeB, "tracked B unchanged during swap");
+    }
+
+    function test_CommunitySwapAccruesPointsToSwapper() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setPointsPerAction(LibPoints.ACTION_SWAP, 4);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 2e18,
+                reserveB: 2e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            })
+        );
+
+        tokenA.mint(swapper, 1e18);
+        vm.prank(swapper);
+        tokenA.approve(address(harness), 1e18);
+
+        assertEq(harness.pointsBalance(swapper), 0);
+        vm.prank(swapper);
+        harness.swapExactIn(auctionId, address(tokenA), 1e18, 1e18, 0, swapper);
+        assertEq(harness.pointsBalance(swapper), 4);
     }
 
     function testProperty_FinalizationDistributesAllReserves(uint96 reserveA, uint96 reserveB, uint96 amountA) public {
@@ -892,6 +928,14 @@ contract CommunityAuctionHarness is CommunityAuctionFacet {
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.communityMakerShareBps = shareBps;
+    }
+
+    function setPointsPerAction(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
     }
 
     function getMakerShareBps() external view returns (uint16) {

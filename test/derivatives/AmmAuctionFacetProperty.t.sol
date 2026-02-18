@@ -13,6 +13,7 @@ import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
@@ -93,6 +94,41 @@ contract AmmAuctionFacetPropertyTest is Test {
         DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
         uint256 kAfter = Math.mulDiv(auction.reserveA, auction.reserveB, 1);
         assertGe(kAfter, kBefore, "invariant preserved or increased");
+    }
+
+    function test_AmmSwapAccruesPointsToSwapper() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setPointsPerAction(LibPoints.ACTION_SWAP, 9);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            })
+        );
+
+        tokenA.mint(taker, 1e18);
+        vm.prank(taker);
+        tokenA.approve(address(harness), 1e18);
+
+        assertEq(harness.pointsBalance(taker), 0);
+        vm.prank(taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), 1e18, 1e18, 0, taker);
+        assertEq(harness.pointsBalance(taker), 9);
     }
 
     /// @notice Property: swap time window enforcement
@@ -615,6 +651,14 @@ contract AmmAuctionHarness is AmmAuctionFacet {
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.ammMakerShareBps = shareBps;
+    }
+
+    function setPointsPerAction(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
     }
 
     function getMakerShareBps() external view returns (uint16) {

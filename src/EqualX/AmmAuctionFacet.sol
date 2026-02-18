@@ -337,6 +337,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(tokenOut) && outputToRecipient > 0) {
             LibAppStorage.s().nativeTrackedTotal -= outputToRecipient;
         }
+        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP);
 
         emit AuctionSwapped(
             auctionId,

@@ -14,6 +14,7 @@ import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibCommunityAuctionFeeIndex} from "../libraries/LibCommunityAuctionFeeIndex.sol";
 import {LibAuctionSwap} from "../libraries/LibAuctionSwap.sol";
 import {DerivativeTypes} from "../libraries/DerivativeTypes.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {PositionNFT} from "../nft/PositionNFT.sol";
@@ -628,6 +629,7 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         if (LibCurrency.isNative(tokenOut) && outputToRecipient > 0) {
             LibAppStorage.s().nativeTrackedTotal -= outputToRecipient;
         }
+        LibPoints.accrue(msg.sender, LibPoints.ACTION_SWAP);
 
         emit CommunityAuctionSwapped(
             auctionId,
