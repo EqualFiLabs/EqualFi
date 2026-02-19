@@ -98,6 +98,7 @@ contract PositionAgentConfigPropertyTest is Test {
         vm.assume(candidate != address(facet));
         vm.assume(candidate != owner);
         vm.assume(candidate != attacker);
-        vm.assume(uint160(candidate) > 9); // avoid precompiles
+        // Avoid low-address reserved space (precompiles/system contracts) where vm.etch is disallowed.
+        vm.assume(uint160(candidate) > 0xFFFF);
     }
 }
