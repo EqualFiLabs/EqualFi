@@ -73,7 +73,6 @@ import {PositionAgentConfigFacet} from "../src/agent-wallet/erc6551/PositionAgen
 import {ModuleRegistryFacet} from "../src/modules/ModuleRegistryFacet.sol";
 import {ModuleGatewayFacet} from "../src/modules/ModuleGatewayFacet.sol";
 import {ModuleViewFacet} from "../src/modules/ModuleViewFacet.sol";
-import {IdentityRegistry} from "../test/IdentityRegistry.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
@@ -499,25 +498,10 @@ contract DeployDiamondScript is Script {
         c.functionSelectors = selectors_;
     }
 
-    function _resolveIdentityRegistry() internal returns (address) {
-        // Mainnets (Ethereum, Arbitrum, Base, Optimism)
-        if (block.chainid == 1 || block.chainid == 42161 || block.chainid == 8453 || block.chainid == 10) {
-            return ERC8004_MAINNET;
-        }
-        // Testnets (Sepolia, Arbitrum Sepolia, Base Sepolia, Optimism Sepolia)
-        if (block.chainid == 11155111 || block.chainid == 421614 || block.chainid == 84532 || block.chainid == 11155420) {
-            return ERC8004_TESTNET;
-        }
-        
-        // Check env var
-        address configured = vm.envOr("IDENTITY_REGISTRY", address(0));
-        if (configured != address(0) && configured.code.length > 0) {
-            return configured;
-        }
-        
-        // Deploy local for testing
-        IdentityRegistry localRegistry = new IdentityRegistry(address(0));
-        return address(localRegistry);
+    function _resolveIdentityRegistry() internal view returns (address) {
+        // Always use canonical ERC-8004 testnet address
+        // This address has the registry deployed on local anvil chains
+        return ERC8004_TESTNET;
     }
 
     function _resolveERC6551Registry() internal returns (address) {
@@ -1141,7 +1125,14 @@ contract DeployDiamondScript is Script {
             // Calculate amounts based on decimals
             uint256 unit = 10 ** uint256(spec.decimals);
             uint256 faucetFundAmount = 100_000_000 * unit; // 100M tokens
-            uint256 claimAmount = claimAmountMultiplier * unit; // 1000 tokens per claim
+            
+            // Special case for USDC: 100,000 per claim
+            uint256 claimAmount;
+            if (keccak256(bytes(spec.id)) == keccak256(bytes("USDC"))) {
+                claimAmount = 100_000 * unit; // 100,000 USDC per claim
+            } else {
+                claimAmount = claimAmountMultiplier * unit; // 1000 tokens per claim
+            }
 
             // Mint 100M tokens to faucet
             MockERC20(tokenAddr).mint(faucetAddress, faucetFundAmount);
