@@ -15,11 +15,16 @@ interface IEqualIndex {
 
     function createIndex(CreateIndexParams calldata params) external payable returns (uint256 indexId, address token);
 
-    function mint(uint256 indexId, uint256 units, address to) external returns (uint256 minted);
+    function mint(
+        uint256 indexId,
+        uint256 units,
+        address to,
+        uint256[] calldata maxInputAmounts
+    ) external payable returns (uint256 minted);
 
-    function burn(uint256 indexId, uint256 units, address to) external returns (uint256[] memory assetsOut);
+    function burn(uint256 indexId, uint256 units, address to) external payable returns (uint256[] memory assetsOut);
 
-    function flashLoan(uint256 indexId, uint256 units, address receiver, bytes calldata data) external;
+    function flashLoan(uint256 indexId, uint256 units, address receiver, bytes calldata data) external payable;
 
     function setPaused(uint256 indexId, bool paused) external;
 

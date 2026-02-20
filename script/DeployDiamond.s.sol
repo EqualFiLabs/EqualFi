@@ -62,6 +62,7 @@ import {DerivativeViewFacet} from "../src/views/DerivativeViewFacet.sol";
 import {MamCurveViewFacet} from "../src/views/MamCurveViewFacet.sol";
 import {DirectTypes} from "../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
+import {Faucet} from "../src/faucet/Faucet.sol";
 import {Types} from "../src/libraries/Types.sol";
 import {OptionToken} from "../src/derivatives/OptionToken.sol";
 import {FuturesToken} from "../src/derivatives/FuturesToken.sol";
@@ -72,10 +73,20 @@ import {PositionAgentConfigFacet} from "../src/agent-wallet/erc6551/PositionAgen
 import {ModuleRegistryFacet} from "../src/modules/ModuleRegistryFacet.sol";
 import {ModuleGatewayFacet} from "../src/modules/ModuleGatewayFacet.sol";
 import {ModuleViewFacet} from "../src/modules/ModuleViewFacet.sol";
+import {IdentityRegistry} from "../test/IdentityRegistry.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
+import {PositionAgentAmmSkillModule} from "../src/agent-wallet/erc6900/PositionAgentAmmSkillModule.sol";
+import {SessionKeyValidationModule} from "@agent-wallet-core/modules/validation/SessionKeyValidationModule.sol";
+import {OwnerValidationModule} from "@agent-wallet-core/modules/validation/OwnerValidationModule.sol";
+import {SIWAValidationModule} from "@agent-wallet-core/modules/validation/SIWAValidationModule.sol";
+import {ERC8128AAValidationModule} from "@agent-wallet-core/modules/validation/ERC8128AAValidationModule.sol";
+import {ERC8128PolicyRegistry} from "@agent-wallet-core/core/ERC8128PolicyRegistry.sol";
 import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
+import {IERC6900Account} from "@agent-wallet-core/interfaces/IERC6900Account.sol";
+import {ValidationConfig} from "@agent-wallet-core/libraries/ModuleTypes.sol";
+import {ValidationConfigLib} from "@agent-wallet-core/libraries/ValidationConfigLib.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);
@@ -160,6 +171,7 @@ contract DeployDiamondScript is Script {
     address internal optionTokenAddress;
     address internal futuresTokenAddress;
     address internal mailboxAddress;
+    address internal faucetAddress;
 
     uint16 internal constant DEFAULT_DEPOSITOR_LTV_BPS = 7_500;
     uint16 internal constant DEFAULT_EXTERNAL_CR_BPS = 15_000;
@@ -176,12 +188,15 @@ contract DeployDiamondScript is Script {
     bytes32 internal constant ACTION_WITHDRAW = keccak256("ACTION_WITHDRAW");
     bytes32 internal constant ACTION_CLOSE_ROLLING = keccak256("ACTION_CLOSE_ROLLING");
     uint64 internal constant ATOMIC_REFUND_SAFETY_WINDOW = 3 days;
+    // Canonical ERC-6551 Registry (same address on all chains)
     address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
+    
+    // ERC-8004 Identity Registry addresses (canonical)
     address internal constant ERC8004_MAINNET = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
-    address internal constant ERC8004_SEPOLIA = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
-    // ERC-4337 EntryPoint v0.7 addresses
-    address internal constant ENTRYPOINT_V07_MAINNET = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
-    address internal constant ENTRYPOINT_V07_SEPOLIA = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
+    address internal constant ERC8004_TESTNET = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
+    
+    // ERC-4337 EntryPoint v0.7 (same address on all chains)
+    address internal constant ENTRYPOINT_V07 = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
 
     struct TokenSpec {
         string id;
@@ -384,10 +399,56 @@ contract DeployDiamondScript is Script {
         PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
         console2.log("Using ERC6551 registry:", erc6551Registry);
         console2.log("Using ERC6551 implementation:", erc6551Implementation);
-        if (identityRegistry != address(0)) {
-            PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
+        if (identityRegistry == address(0)) {
+            revert("Identity registry not configured");
+        }
+        PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
+
+        // Deploy SessionKeyValidationModule (ERC-6900 validation module)
+        SessionKeyValidationModule sessionKeyModule = new SessionKeyValidationModule();
+        console2.log("SessionKeyValidationModule", address(sessionKeyModule));
+
+        // Deploy additional validation modules
+        OwnerValidationModule ownerValidationModule = new OwnerValidationModule();
+        console2.log("OwnerValidationModule", address(ownerValidationModule));
+        ERC8128PolicyRegistry policyRegistry = new ERC8128PolicyRegistry();
+        console2.log("ERC8128PolicyRegistry", address(policyRegistry));
+        SIWAValidationModule siwaValidationModule = new SIWAValidationModule(address(policyRegistry));
+        console2.log("SIWAValidationModule", address(siwaValidationModule));
+        ERC8128AAValidationModule erc8128ValidationModule = new ERC8128AAValidationModule(address(policyRegistry));
+        console2.log("ERC8128AAValidationModule", address(erc8128ValidationModule));
+
+        // Deploy AMM Skill Execution Module
+        PositionAgentAmmSkillModule ammSkillModule = new PositionAgentAmmSkillModule();
+        console2.log("PositionAgentAmmSkillModule", address(ammSkillModule));
+
+        // Optional: install session key module on a specific Position MSCA
+        uint256 sessionKeyPositionId = vm.envOr("SESSION_KEY_POSITION_ID", uint256(0));
+        uint32 sessionKeyEntityId = uint32(vm.envOr("SESSION_KEY_ENTITY_ID", uint256(7)));
+        if (sessionKeyPositionId != 0) {
+            bytes32 tbaSalt = bytes32(0);
+            address tba = IERC6551Registry(erc6551Registry).account(
+                erc6551Implementation,
+                tbaSalt,
+                block.chainid,
+                address(nftContract),
+                sessionKeyPositionId
+            );
+            if (tba.code.length == 0) {
+                tba = IERC6551Registry(erc6551Registry).createAccount(
+                    erc6551Implementation,
+                    tbaSalt,
+                    block.chainid,
+                    address(nftContract),
+                    sessionKeyPositionId
+                );
+            }
+
+            ValidationConfig cfg = ValidationConfigLib.pack(address(sessionKeyModule), sessionKeyEntityId, true, true, true);
+            IERC6900Account(tba).installValidation(cfg, new bytes4[](0), "", new bytes[](0));
+            console2.log("Installed SessionKeyValidationModule on TBA", tba);
         } else {
-            console2.log("Identity registry unknown; skipping identity config");
+            console2.log("SESSION_KEY_POSITION_ID not set; skipping session key install");
         }
 
         AdminGovernanceFacet gov = AdminGovernanceFacet(address(diamond));
@@ -411,6 +472,7 @@ contract DeployDiamondScript is Script {
         gov.setDerivativeFeeConfig(0, 500, 5, 10, 2, 7000, 7000, 7000, 5e18, 0, 0);
 
         _deployTokensAndPools(PoolManagementFacet(address(diamond)), isGov, 0.5 ether);
+        _deployFaucet();
         _deployIndexTokens(isGov, 0.2 ether);
         EqualLendDirectViewFacet(address(diamond)).setDirectConfig(_defaultDirectConfig());
         OptionsFacet(address(diamond)).setOptionToken(address(optionToken));
@@ -437,41 +499,51 @@ contract DeployDiamondScript is Script {
         c.functionSelectors = selectors_;
     }
 
-    function _resolveIdentityRegistry() internal view returns (address) {
-        if (block.chainid == 1) {
+    function _resolveIdentityRegistry() internal returns (address) {
+        // Mainnets (Ethereum, Arbitrum, Base, Optimism)
+        if (block.chainid == 1 || block.chainid == 42161 || block.chainid == 8453 || block.chainid == 10) {
             return ERC8004_MAINNET;
         }
-        if (block.chainid == 11155111) {
-            return ERC8004_SEPOLIA;
+        // Testnets (Sepolia, Arbitrum Sepolia, Base Sepolia, Optimism Sepolia)
+        if (block.chainid == 11155111 || block.chainid == 421614 || block.chainid == 84532 || block.chainid == 11155420) {
+            return ERC8004_TESTNET;
         }
+        
+        // Check env var
         address configured = vm.envOr("IDENTITY_REGISTRY", address(0));
         if (configured != address(0) && configured.code.length > 0) {
             return configured;
         }
-        return address(0);
+        
+        // Deploy local for testing
+        IdentityRegistry localRegistry = new IdentityRegistry(address(0));
+        return address(localRegistry);
     }
 
     function _resolveERC6551Registry() internal returns (address) {
+        // Check if canonical registry is deployed
         if (ERC6551_REGISTRY.code.length > 0) {
             return ERC6551_REGISTRY;
         }
 
+        // Check env var
         address configured = vm.envOr("ERC6551_REGISTRY", address(0));
         if (configured != address(0) && configured.code.length > 0) {
             return configured;
         }
 
+        // Deploy local for testing
         LocalERC6551Registry localRegistry = new LocalERC6551Registry();
         return address(localRegistry);
     }
 
     function _resolveEntryPoint() internal view returns (address) {
-        if (block.chainid == 1) {
-            return ENTRYPOINT_V07_MAINNET;
+        // EntryPoint v0.7 is deployed at same address on all supported chains
+        if (ENTRYPOINT_V07.code.length > 0) {
+            return ENTRYPOINT_V07;
         }
-        if (block.chainid == 11155111) {
-            return ENTRYPOINT_V07_SEPOLIA;
-        }
+        
+        // Fallback to env var
         return vm.envOr("ENTRYPOINT_ADDRESS", address(0));
     }
 
@@ -1045,6 +1117,46 @@ contract DeployDiamondScript is Script {
         // This function is kept for any additional post-creation configuration
     }
 
+    /// @notice Deploy and fund the testnet faucet with 100M of each token
+    function _deployFaucet() internal {
+        address deployer = vm.addr(vm.envUint("PRIVATE_KEY"));
+        
+        // Deploy faucet with deployer as initial owner (for configuration)
+        Faucet faucet = new Faucet(deployer);
+        faucetAddress = address(faucet);
+        console2.log("Faucet deployed:", faucetAddress);
+
+        TokenSpec[] memory specs = _tokenSpecs();
+        uint256 claimAmountMultiplier = 1000; // Base claim: 1000 tokens
+
+        for (uint256 i; i < specs.length; i++) {
+            TokenSpec memory spec = specs[i];
+            
+            // Skip native ETH (no ERC20 to mint)
+            if (spec.isNative) continue;
+            
+            address tokenAddr = tokenById[spec.id];
+            if (tokenAddr == address(0)) continue;
+
+            // Calculate amounts based on decimals
+            uint256 unit = 10 ** uint256(spec.decimals);
+            uint256 faucetFundAmount = 100_000_000 * unit; // 100M tokens
+            uint256 claimAmount = claimAmountMultiplier * unit; // 1000 tokens per claim
+
+            // Mint 100M tokens to faucet
+            MockERC20(tokenAddr).mint(faucetAddress, faucetFundAmount);
+            console2.log("Minted to faucet:", spec.symbol, faucetFundAmount / unit, "tokens");
+
+            // Configure faucet to dispense this token
+            faucet.setToken(tokenAddr, claimAmount, true);
+            console2.log("Faucet configured:", spec.symbol, "claim amount:", claimAmount / unit);
+        }
+
+        // Transfer ownership to timelock for production safety
+        faucet.transferOwnership(timelock);
+        console2.log("Faucet ownership transferred to timelock:", timelock);
+    }
+
     function _deployIndexTokens(bool isGov, uint256 indexCreationFee) internal {
         IndexSpec[] memory specs = _indexSpecs();
         EqualIndexAdminFacetV3 indexRouter = EqualIndexAdminFacetV3(diamondAddress);
@@ -1307,5 +1419,9 @@ contract DeployDiamondScript is Script {
 
     function deployedMailbox() external view returns (address) {
         return mailboxAddress;
+    }
+
+    function deployedFaucet() external view returns (address) {
+        return faucetAddress;
     }
 }
