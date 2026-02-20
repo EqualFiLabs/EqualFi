@@ -499,6 +499,12 @@ contract DeployDiamondScript is Script {
     }
 
     function _resolveIdentityRegistry() internal view returns (address) {
+        // Check env var for testing
+        address configured = vm.envOr("IDENTITY_REGISTRY", address(0));
+        if (configured != address(0)) {
+            return configured;
+        }
+        
         // Always use canonical ERC-8004 testnet address
         // This address has the registry deployed on local anvil chains
         return ERC8004_TESTNET;
