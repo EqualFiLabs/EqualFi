@@ -11,7 +11,15 @@ import {IERC6551Account} from "@agent-wallet-core/interfaces/IERC6551Account.sol
 interface IAmmAuctionFacet {
     function createAuction(DerivativeTypes.CreateAuctionParams calldata params) external returns (uint256 auctionId);
     function cancelAuction(uint256 auctionId) external;
+    function finalizeAuction(uint256 auctionId) external;
+    function addLiquidity(uint256 auctionId, uint256 amountA, uint256 amountB) external;
     function getAuction(uint256 auctionId) external view returns (DerivativeTypes.AmmAuction memory);
+}
+
+interface ICommunityAuctionFacet {
+    function finalizeAuction(uint256 auctionId) external;
+    function joinCommunityAuction(uint256 auctionId, uint256 positionId, uint256 amountA, uint256 amountB) external;
+    function getCommunityAuction(uint256 auctionId) external view returns (DerivativeTypes.CommunityAuction memory);
 }
 
 interface IPositionManagementFacet {
@@ -24,6 +32,9 @@ library LibAmmSkillStorage {
     struct AuctionPolicy {
         bool enabled;
         bool allowCancel;
+        bool allowFinalize;
+        bool allowAddLiquidity;
+        bool allowCommunityJoin;
         bool enforcePoolAllowlist;
         uint64 minDuration;
         uint64 maxDuration;
@@ -64,6 +75,9 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
     error AmmSkill_DiamondNotSet();
     error AmmSkill_PolicyDisabled();
     error AmmSkill_CancelDisabled();
+    error AmmSkill_FinalizeDisabled();
+    error AmmSkill_AddLiquidityDisabled();
+    error AmmSkill_CommunityJoinDisabled();
     error AmmSkill_PoolNotAllowed(uint256 pid);
     error AmmSkill_DurationOutOfBounds(uint64 duration, uint64 min, uint64 max);
     error AmmSkill_FeeOutOfBounds(uint16 feeBps, uint16 minFeeBps, uint16 maxFeeBps);
@@ -72,11 +86,15 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
     error AmmSkill_InvalidPolicyConfig();
     error AmmSkill_PositionIdMismatch(uint256 expectedTokenId, uint256 providedPositionId);
     error AmmSkill_AuctionNotForThisPosition(uint256 auctionId, uint256 expectedTokenId, uint256 makerPositionId);
+    error AmmSkill_InvalidLiquidityAmount(uint256 amount);
 
     event DiamondUpdated(address indexed previous, address indexed current);
     event AuctionPolicyUpdated(
         bool enabled,
         bool allowCancel,
+        bool allowFinalize,
+        bool allowAddLiquidity,
+        bool allowCommunityJoin,
         bool enforcePoolAllowlist,
         uint64 minDuration,
         uint64 maxDuration,
@@ -92,6 +110,8 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
 
     event AgentAuctionCreated(address indexed agent, uint256 indexed auctionId);
     event AgentAuctionCancelled(address indexed agent, uint256 indexed auctionId);
+    event AgentAuctionFinalized(address indexed agent, uint256 indexed auctionId, bool isCommunity);
+    event AgentLiquidityAdded(address indexed agent, uint256 indexed auctionId, uint256 amountA, uint256 amountB, bool isCommunity);
     event AgentYieldRolled(address indexed agent, uint256 indexed tokenId, uint256 pid);
 
     function moduleId() external pure override returns (string memory) {
@@ -108,7 +128,7 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
     function onUninstall(bytes calldata) external override {}
 
     function executionManifest() external pure override returns (ExecutionManifest memory manifest) {
-        manifest.executionFunctions = new ManifestExecutionFunction[](11);
+        manifest.executionFunctions = new ManifestExecutionFunction[](15);
         manifest.executionFunctions[0] = ManifestExecutionFunction({
             executionSelector: PositionAgentAmmSkillModule.createAuction.selector,
             skipRuntimeValidation: false,
@@ -125,41 +145,61 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
             allowGlobalValidation: false
         });
         manifest.executionFunctions[3] = ManifestExecutionFunction({
-            executionSelector: PositionAgentAmmSkillModule.setDiamond.selector,
+            executionSelector: PositionAgentAmmSkillModule.finalizeAuction.selector,
             skipRuntimeValidation: false,
             allowGlobalValidation: false
         });
         manifest.executionFunctions[4] = ManifestExecutionFunction({
-            executionSelector: PositionAgentAmmSkillModule.setAuctionPolicy.selector,
+            executionSelector: PositionAgentAmmSkillModule.addLiquidity.selector,
             skipRuntimeValidation: false,
             allowGlobalValidation: false
         });
         manifest.executionFunctions[5] = ManifestExecutionFunction({
-            executionSelector: PositionAgentAmmSkillModule.setRollPolicy.selector,
+            executionSelector: PositionAgentAmmSkillModule.finalizeCommunityAuction.selector,
             skipRuntimeValidation: false,
             allowGlobalValidation: false
         });
         manifest.executionFunctions[6] = ManifestExecutionFunction({
-            executionSelector: PositionAgentAmmSkillModule.setAllowedPool.selector,
+            executionSelector: PositionAgentAmmSkillModule.joinCommunityAuction.selector,
             skipRuntimeValidation: false,
             allowGlobalValidation: false
         });
         manifest.executionFunctions[7] = ManifestExecutionFunction({
-            executionSelector: PositionAgentAmmSkillModule.getDiamond.selector,
+            executionSelector: PositionAgentAmmSkillModule.setDiamond.selector,
             skipRuntimeValidation: false,
             allowGlobalValidation: false
         });
         manifest.executionFunctions[8] = ManifestExecutionFunction({
-            executionSelector: PositionAgentAmmSkillModule.getAuctionPolicy.selector,
+            executionSelector: PositionAgentAmmSkillModule.setAuctionPolicy.selector,
             skipRuntimeValidation: false,
             allowGlobalValidation: false
         });
         manifest.executionFunctions[9] = ManifestExecutionFunction({
-            executionSelector: PositionAgentAmmSkillModule.getRollPolicy.selector,
+            executionSelector: PositionAgentAmmSkillModule.setRollPolicy.selector,
             skipRuntimeValidation: false,
             allowGlobalValidation: false
         });
         manifest.executionFunctions[10] = ManifestExecutionFunction({
+            executionSelector: PositionAgentAmmSkillModule.setAllowedPool.selector,
+            skipRuntimeValidation: false,
+            allowGlobalValidation: false
+        });
+        manifest.executionFunctions[11] = ManifestExecutionFunction({
+            executionSelector: PositionAgentAmmSkillModule.getDiamond.selector,
+            skipRuntimeValidation: false,
+            allowGlobalValidation: false
+        });
+        manifest.executionFunctions[12] = ManifestExecutionFunction({
+            executionSelector: PositionAgentAmmSkillModule.getAuctionPolicy.selector,
+            skipRuntimeValidation: false,
+            allowGlobalValidation: false
+        });
+        manifest.executionFunctions[13] = ManifestExecutionFunction({
+            executionSelector: PositionAgentAmmSkillModule.getRollPolicy.selector,
+            skipRuntimeValidation: false,
+            allowGlobalValidation: false
+        });
+        manifest.executionFunctions[14] = ManifestExecutionFunction({
             executionSelector: PositionAgentAmmSkillModule.isPoolAllowed.selector,
             skipRuntimeValidation: false,
             allowGlobalValidation: false
@@ -201,6 +241,91 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
         emit AgentAuctionCancelled(address(this), auctionId);
     }
 
+    /// @notice Finalize a solo AMM auction after it has expired
+    /// @param auctionId The auction ID to finalize
+    function finalizeAuction(uint256 auctionId) external {
+        LibAmmSkillStorage.Layout storage ds = LibAmmSkillStorage.layout();
+        if (!ds.auctionPolicy.allowFinalize) {
+            revert AmmSkill_FinalizeDisabled();
+        }
+        address diamond = ds.diamond;
+        if (diamond == address(0)) {
+            revert AmmSkill_DiamondNotSet();
+        }
+        uint256 expectedTokenId = _boundTokenId();
+        DerivativeTypes.AmmAuction memory auction = IAmmAuctionFacet(diamond).getAuction(auctionId);
+        if (auction.makerPositionId != expectedTokenId) {
+            revert AmmSkill_AuctionNotForThisPosition(auctionId, expectedTokenId, auction.makerPositionId);
+        }
+
+        IAmmAuctionFacet(diamond).finalizeAuction(auctionId);
+        emit AgentAuctionFinalized(address(this), auctionId, false);
+    }
+
+    /// @notice Add liquidity to a solo AMM auction
+    /// @param auctionId The auction ID
+    /// @param amountA Amount of token A to add
+    /// @param amountB Amount of token B to add
+    function addLiquidity(uint256 auctionId, uint256 amountA, uint256 amountB) external {
+        if (amountA == 0 || amountB == 0) {
+            revert AmmSkill_InvalidLiquidityAmount(amountA == 0 ? amountA : amountB);
+        }
+        LibAmmSkillStorage.Layout storage ds = LibAmmSkillStorage.layout();
+        if (!ds.auctionPolicy.allowAddLiquidity) {
+            revert AmmSkill_AddLiquidityDisabled();
+        }
+        address diamond = ds.diamond;
+        if (diamond == address(0)) {
+            revert AmmSkill_DiamondNotSet();
+        }
+        uint256 expectedTokenId = _boundTokenId();
+        DerivativeTypes.AmmAuction memory auction = IAmmAuctionFacet(diamond).getAuction(auctionId);
+        if (auction.makerPositionId != expectedTokenId) {
+            revert AmmSkill_AuctionNotForThisPosition(auctionId, expectedTokenId, auction.makerPositionId);
+        }
+
+        IAmmAuctionFacet(diamond).addLiquidity(auctionId, amountA, amountB);
+        emit AgentLiquidityAdded(address(this), auctionId, amountA, amountB, false);
+    }
+
+    /// @notice Finalize a community auction after it has expired
+    /// @param auctionId The auction ID to finalize
+    function finalizeCommunityAuction(uint256 auctionId) external {
+        LibAmmSkillStorage.Layout storage ds = LibAmmSkillStorage.layout();
+        if (!ds.auctionPolicy.allowFinalize) {
+            revert AmmSkill_FinalizeDisabled();
+        }
+        address diamond = ds.diamond;
+        if (diamond == address(0)) {
+            revert AmmSkill_DiamondNotSet();
+        }
+        // Community auctions are permissionless to finalize - no position check needed
+        ICommunityAuctionFacet(diamond).finalizeAuction(auctionId);
+        emit AgentAuctionFinalized(address(this), auctionId, true);
+    }
+
+    /// @notice Join a community auction by providing liquidity
+    /// @param auctionId The auction ID
+    /// @param amountA Amount of token A to add
+    /// @param amountB Amount of token B to add
+    function joinCommunityAuction(uint256 auctionId, uint256 amountA, uint256 amountB) external {
+        if (amountA == 0 || amountB == 0) {
+            revert AmmSkill_InvalidLiquidityAmount(amountA == 0 ? amountA : amountB);
+        }
+        LibAmmSkillStorage.Layout storage ds = LibAmmSkillStorage.layout();
+        if (!ds.auctionPolicy.allowCommunityJoin) {
+            revert AmmSkill_CommunityJoinDisabled();
+        }
+        address diamond = ds.diamond;
+        if (diamond == address(0)) {
+            revert AmmSkill_DiamondNotSet();
+        }
+        uint256 expectedTokenId = _boundTokenId();
+
+        ICommunityAuctionFacet(diamond).joinCommunityAuction(auctionId, expectedTokenId, amountA, amountB);
+        emit AgentLiquidityAdded(address(this), auctionId, amountA, amountB, true);
+    }
+
     function rollYieldToPosition(uint256 tokenId, uint256 pid) external {
         uint256 expectedTokenId = _boundTokenId();
         if (tokenId != expectedTokenId) {
@@ -234,6 +359,9 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
         emit AuctionPolicyUpdated(
             policy.enabled,
             policy.allowCancel,
+            policy.allowFinalize,
+            policy.allowAddLiquidity,
+            policy.allowCommunityJoin,
             policy.enforcePoolAllowlist,
             policy.minDuration,
             policy.maxDuration,

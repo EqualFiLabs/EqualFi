@@ -1,0 +1,3321 @@
+No files changed, compilation skipped
+
+Ran 8 tests for test/root/LibLoanManager.t.sol:LibLoanManagerTest
+[PASS] test_AddDuplicateLoanReverts() (gas: 98774)
+[PASS] test_AddLoansAndIteratePreservesOrder() (gas: 238236)
+[PASS] test_Gas_AddAndRemoveManyLoans() (gas: 2832475)
+[PASS] test_GetLoansByPositionPagination() (gas: 372403)
+[PASS] test_RemoveHeadUpdatesLinks() (gas: 189111)
+[PASS] test_RemoveMiddleUpdatesLinks() (gas: 188544)
+[PASS] test_RemoveMissingLoanReverts() (gas: 11160)
+[PASS] test_RemoveTailUpdatesLinks() (gas: 187261)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 1.61ms (1.20ms CPU time)
+
+Ran 3 tests for test/libraries/LibMamMath.t.sol:LibMamMathTest
+[PASS] testComputePriceBounds() (gas: 421)
+[PASS] testComputePriceLinear() (gas: 604)
+[PASS] testCurveHashChangesWithSalt() (gas: 2777)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 336.65µs (58.50µs CPU time)
+
+Ran 1 test for test/root/PenaltyFacetHarnessDebug.t.sol:PenaltyHarnessDebugTest
+[PASS] test_penalizeFixed_simpleHarness() (gas: 642373)
+Logs:
+  seed: start
+  seed: underlying set
+  seed: indexes set
+  seed: base balances set
+  seed principal stored 50000000000000000000
+  seed: loan set
+  seed: loan arrays set
+  seed: minted funds
+  seed: treasury set
+  before closed false
+  before principal 50000000000000000000
+  after closed true
+  after principal 29000000000000000000
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.68ms (231.13µs CPU time)
+
+Ran 2 tests for test/penalty/PenaltyFeeIndexProperty.t.sol:PenaltyFeeIndexPropertyTest
+[PASS] test_penalty_accruesFeeIndexToRemainingDepositors_fixed() (gas: 948556)
+[PASS] test_penalty_accruesFeeIndexToRemainingDepositors_rolling() (gas: 891474)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 2.22ms (1.15ms CPU time)
+
+Ran 2 tests for test/root/PermissioningErrorSelectors.t.sol:PermissioningErrorSelectorsTest
+[PASS] testIndexPermissionlessWrongFeeRevertsWithSelector() (gas: 70277)
+[PASS] testPoolPermissionlessDisabledRevertsWithSelector() (gas: 217359)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 759.57µs (135.94µs CPU time)
+
+Ran 8 tests for test/root/PoolCountGating.t.sol:PoolCountGatingTest
+[PASS] test_ActionFee_RevertsForUninitializedPool() (gas: 109449)
+[PASS] test_ActionFee_WorksAfterMultiplePools() (gas: 260088)
+[PASS] test_PoolCount_EdgeCaseEqualToCount() (gas: 186525)
+[PASS] test_PoolCount_HandlesNonSequential() (gas: 186441)
+[PASS] test_PoolCount_IncrementsOnInit() (gas: 187590)
+[PASS] test_PoolCount_LargePoolIDs() (gas: 107730)
+[PASS] test_PoolCount_PersistsAcrossOperations() (gas: 182083)
+[PASS] test_PreviewActionFee_WorksWithPoolCount() (gas: 184667)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 2.87ms (2.43ms CPU time)
+
+Ran 1 test for test/root/PoolInitializationProperty.t.sol:PoolInitializationPropertyTest
+[PASS] test_poolInitializationFlagCorrectness() (gas: 265400)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.16ms (90.32µs CPU time)
+
+Ran 1 test for test/maintenance/PoolIsolationMaintenance.t.sol:PoolIsolationMaintenanceTest
+[PASS] test_MaintenanceCanDropTrackedBelowPrincipal() (gas: 102806)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 296.47µs (50.13µs CPU time)
+
+Ran 13 tests for test/root/PoolManagementFacet.t.sol:PoolManagementFacetTest
+[PASS] testGovBypassAllowsDuplicateUnderlying() (gas: 518111)
+[PASS] testInitPoolAllowsNativeUnderlying() (gas: 298175)
+[PASS] testInitPoolAlreadyExists() (gas: 308848)
+[PASS] testInitPoolFixedTermConfigs() (gas: 358070)
+[PASS] testInitPoolInsufficientFee() (gas: 93123)
+[PASS] testInitPoolInvalidAumFees() (gas: 51576)
+[PASS] testInitPoolInvalidLTV() (gas: 51816)
+[PASS] testInitPoolInvalidMaintenanceRate() (gas: 75734)
+[PASS] testInitPoolInvalidThresholds() (gas: 51722)
+[PASS] testInitPoolSuccess() (gas: 312113)
+[PASS] testInitPoolWithFee() (gas: 400764)
+[PASS] testInitPoolZeroLTV() (gas: 52080)
+[PASS] testPermissionlessDuplicateUnderlyingReverts() (gas: 415903)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 5.05ms (4.56ms CPU time)
+
+Ran 1 test for test/root/AccountingErrorHandling.t.sol:AccountingErrorHandlingDirectTest
+[PASS] test_p2p_inconsistentDebt_reverts() (gas: 2556158)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 19.50ms (5.18ms CPU time)
+
+Ran 4 tests for test/root/AccountingErrorHandling.t.sol:AccountingErrorHandlingTest
+[PASS] test_debtMismatch_reverts() (gas: 115970)
+[PASS] test_feeBaseOverflow_reverts() (gas: 115538)
+[PASS] test_invalidAssetComparison_reverts() (gas: 115658)
+[PASS] test_negativeFeeBase_reverts() (gas: 115406)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 2.47ms (1.31ms CPU time)
+
+Ran 13 tests for test/derivatives/MamCurveGas.t.sol:MamCurveGasTest
+[PASS] testGasCancelCurve() (gas: 139229)
+[PASS] testGasCancelCurvesBatch() (gas: 36830)
+[PASS] testGasCancelCurvesBatch10() (gas: 149648)
+[PASS] testGasCancelCurvesBatch5() (gas: 79211)
+[PASS] testGasCreateCurve() (gas: 674843)
+[PASS] testGasCreateCurvesBatch() (gas: 1219598)
+[PASS] testGasCreateCurvesBatch10() (gas: 5523667)
+[PASS] testGasCreateCurvesBatch5() (gas: 2833303)
+[PASS] testGasExecuteCurveSwap() (gas: 216323)
+Logs:
+  MAM swap_only gas: 252967
+
+[PASS] testGasUpdateCurve() (gas: 69602)
+[PASS] testGasUpdateCurvesBatch() (gas: 33441)
+[PASS] testGasUpdateCurvesBatch10() (gas: 135096)
+[PASS] testGasUpdateCurvesBatch5() (gas: 71618)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 24.18ms (23.06ms CPU time)
+
+Ran 18 tests for test/gas/PoolManagementGas.t.sol:PoolManagementGasTest
+[PASS] test_gas_AddToWhitelist() (gas: 33653)
+[PASS] test_gas_InitManagedPool() (gas: 713098)
+[PASS] test_gas_InitPoolWithActionFees() (gas: 292764)
+[PASS] test_gas_RemoveFromWhitelist() (gas: 3884)
+[PASS] test_gas_RenounceManager() (gas: 6575)
+[PASS] test_gas_SetActionFees() (gas: 25150)
+[PASS] test_gas_SetDepositCap() (gas: 9475)
+[PASS] test_gas_SetDepositorLTV() (gas: 10023)
+[PASS] test_gas_SetFlashLoanFee() (gas: 10039)
+[PASS] test_gas_SetIsCapped() (gas: 9847)
+[PASS] test_gas_SetMaintenanceRate() (gas: 10353)
+[PASS] test_gas_SetMaxUserCount() (gas: 9343)
+[PASS] test_gas_SetMinDepositAmount() (gas: 9365)
+[PASS] test_gas_SetMinLoanAmount() (gas: 9387)
+[PASS] test_gas_SetMinTopupAmount() (gas: 9299)
+[PASS] test_gas_SetRollingApy() (gas: 9284)
+[PASS] test_gas_SetWhitelistEnabled() (gas: 11005)
+[PASS] test_gas_TransferManager() (gas: 7259)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 7.83ms (7.19ms CPU time)
+
+Ran 1 test for test/root/PoolMembershipCleanupProperty.t.sol:MembershipCleanupSafetyPropertyTest
+[PASS] testProperty_MembershipCleanupSafety() (gas: 88427)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 259.62µs (69.74µs CPU time)
+
+Ran 1 test for test/root/PoolMembershipCleanupProperty.t.sol:MembershipValidationErrorClarityPropertyTest
+[PASS] testProperty_MembershipValidationErrors() (gas: 96543)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.54ms (88.38µs CPU time)
+
+Ran 3 tests for test/managed-pools/ManagedPoolCreation.t.sol:ManagedPoolCreationErrorTests
+[PASS] testManagedPoolCreationDisabledWhenFeeZero() (gas: 362708)
+[PASS] testManagedPoolCreationFailsWhenTreasuryMissing() (gas: 365825)
+[PASS] testProperty_ManagedPoolCreationInvalidFee() (gas: 389631)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 772.02µs (302.45µs CPU time)
+
+Ran 1 test for test/root/LibNetEquityProperty.t.sol:LibNetEquityPropertyTest
+[PASS] testFuzz_feeBaseSameAsset(uint256,uint256) (runs: 256, μ: 1057, ~: 1041)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 34.60ms (34.34ms CPU time)
+
+Ran 2 tests for test/root/LibNetEquityP2PProperty.t.sol:LibNetEquityP2PPropertyTest
+[PASS] testFuzz_crossAssetP2PFeeBaseAllowance(uint256,uint256) (runs: 256, μ: 3592, ~: 3592)
+[PASS] testFuzz_sameAssetP2PFeeBaseLimit(uint256,uint256,uint256) (runs: 256, μ: 3838, ~: 3874)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 63.44ms (88.34ms CPU time)
+
+Ran 7 tests for test/root/LibPoolMembership.t.sol:LibPoolMembershipTest
+[PASS] test_EnsureAutoJoinsWhenAllowed() (gas: 32005)
+[PASS] test_EnsureReturnsTrueWhenMembershipExists() (gas: 31931)
+[PASS] test_EnsureRevertsWhenMissingAndAutoJoinDisabled() (gas: 13536)
+[PASS] test_JoinPoolRevertsOnDuplicate() (gas: 32983)
+[PASS] test_LeavePoolClearsMembership() (gas: 22869)
+[PASS] test_LeavePoolRevertsWhenNotClearable() (gas: 37392)
+[PASS] test_LeavePoolRevertsWhenNotMember() (gas: 11505)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 475.37µs (197.43µs CPU time)
+
+Ran 2 tests for test/libraries/LibReentrancyGuard.t.sol:LibReentrancyGuardTest
+[PASS] test_nonReentrant_allowsFreshEntryAfterRevert() (gas: 219208)
+[PASS] test_nonReentrant_revertsOnReentry() (gas: 196287)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 241.97µs (72.43µs CPU time)
+
+Ran 2 tests for test/views/LiquidityViewFacet.t.sol:LiquidityViewFacetTest
+[PASS] testSumAccruedYieldEmptyListZero() (gas: 8417)
+[PASS] testSumAccruedYieldTotalsProvidedKeys() (gas: 55640)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 330.50µs (57.11µs CPU time)
+
+Ran 2 tests for test/equallend-direct/ActiveCreditIndexProperty.t.sol:ActiveCreditPrecisionPropertyTest
+[PASS] testProperty_PrecisionConsistency(uint256,uint256,uint256) (runs: 256, μ: 1280, ~: 1320)
+[PASS] test_manualAccrualProducesDelta() (gas: 195)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 47.68ms (36.09ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolCreation.t.sol:ManagedPoolCreationFeePropertyTest
+[PASS] testProperty_FeeCollectionAndRouting(address) (runs: 256, μ: 623817, ~: 623817)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 75.41ms (74.96ms CPU time)
+
+Ran 3 tests for test/equallend-direct/ActiveCreditIntegrityProperty.t.sol:ActiveCreditIntegrityPropertyTest
+[PASS] testProperty_FeeBaseInvariantPreservation() (gas: 291946)
+[PASS] testProperty_FeeDistributionConservation() (gas: 404154)
+[PASS] testProperty_ProportionalDistributionUnderScarcity() (gas: 407960)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 9.24ms (569.46µs CPU time)
+
+Ran 2 tests for test/root/ActiveCreditMaturedBase.t.sol:ActiveCreditMaturedBaseTest
+[PASS] test_ActiveCreditAccrualUsesMaturedBase() (gas: 304665)
+[PASS] test_ActiveCreditPendingRollsIntoMatured() (gas: 220291)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 2.13ms (417.04µs CPU time)
+
+Ran 2 tests for test/equallend-direct/ActiveCreditSettlementProperty.t.sol:ActiveCreditSettlementPropertyTest
+[PASS] testProperty_RepaySettlesAndResetsActiveCredit() (gas: 1972194)
+[PASS] testProperty_SettlementOrderingOnIncrementalBorrow() (gas: 3077132)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 11.32ms (2.97ms CPU time)
+
+Ran 1 test for test/views/ActiveCreditViewFacet.t.sol:ActiveCreditViewFacetTest
+[PASS] test_activeCreditViewsProvideStateAndEligibility() (gas: 225319)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.55ms (1.05ms CPU time)
+
+Ran 3 tests for test/admin/AdminFacet.t.sol:AdminFacetTest
+[PASS] test_setTimelock_allowsZeroAddress() (gas: 36743)
+[PASS] test_setTimelock_onlyOwner() (gas: 16607)
+[PASS] test_setTimelock_updatesStorageAndEmitsEvent() (gas: 49268)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 896.26µs (261.09µs CPU time)
+
+Ran 52 tests for test/root/AdminGovernanceFacet.t.sol:AdminGovernanceFacetTest
+[PASS] testAdminCreationWithFeeSent() (gas: 53056)
+[PASS] testAdminCreationWithZeroFee() (gas: 242678)
+[PASS] testDeprecatedFlagDoesNotAffectInitialization() (gas: 443075)
+[PASS] testDeprecatedFlagEventEmission() (gas: 32236)
+[PASS] testDiamondCutAccessControl() (gas: 16678)
+[PASS] testError_AumFeeOutOfBounds_AboveMax() (gas: 18080)
+[PASS] testError_AumFeeOutOfBounds_BelowMin() (gas: 238246)
+[PASS] testError_CleanRevert() (gas: 25997)
+[PASS] testError_InsufficientPoolCreationFee_AdminSendsValue() (gas: 26499)
+[PASS] testError_InsufficientPoolCreationFee_PermissionlessDisabled() (gas: 64633)
+[PASS] testError_InsufficientPoolCreationFee_WrongAmount() (gas: 92202)
+[PASS] testError_InvalidAPYRate_FixedTerm() (gas: 25422)
+[PASS] testError_InvalidAPYRate_Rolling() (gas: 25209)
+[PASS] testError_InvalidAPYRate_RollingExternal() (gas: 215262)
+[PASS] testError_InvalidAumFeeBounds_MinGreaterThanMax() (gas: 22248)
+[PASS] testError_InvalidCollateralizationRatio() (gas: 215614)
+[PASS] testError_InvalidDepositCap() (gas: 21854)
+[PASS] testError_InvalidFixedTermDuration() (gas: 25321)
+[PASS] testError_InvalidFlashLoanFee() (gas: 25126)
+[PASS] testError_InvalidLTVRatio() (gas: 22071)
+[PASS] testError_InvalidMaintenanceRate() (gas: 48557)
+[PASS] testError_InvalidMinimumThreshold_MinDeposit() (gas: 22688)
+[PASS] testError_InvalidMinimumThreshold_MinLoan() (gas: 21700)
+[PASS] testError_InvalidParameterRange_AumMaxTooHigh() (gas: 21966)
+[PASS] testError_MessageClarity() (gas: 54491)
+[PASS] testError_MultipleErrorsInSequence() (gas: 246284)
+[PASS] testError_PoolAlreadyExists() (gas: 22264)
+[PASS] testError_PoolCreationFeeTransferFailed() (gas: 158095)
+[PASS] testError_StateRecoveryAfterRevert() (gas: 71220)
+[PASS] testError_TreasuryNotSet() (gas: 5617515)
+[PASS] testInitPoolAllowsNativeUnderlying() (gas: 216203)
+[PASS] testInitPoolGovernanceCannotSendValue() (gas: 26653)
+[PASS] testInitPoolValidations() (gas: 283867)
+[PASS] testMaintenanceRateAccessControl() (gas: 49353)
+[PASS] testMinTopupAmountDefaultFallback() (gas: 213738)
+[PASS] testMultipleNonAdminCreationsAccumulateFees() (gas: 582106)
+[PASS] testNonAdminCreationWithCorrectFee() (gas: 342246)
+[PASS] testNonAdminCreationWithExcessFee() (gas: 92070)
+[PASS] testNonAdminCreationWithInsufficientFee() (gas: 91850)
+[PASS] testOperationsWorkWhenDeprecated() (gas: 101860)
+[PASS] testPermissionlessInitPoolPaysTreasury() (gas: 341354)
+[PASS] testPermissionlessInitPoolRequiresConfiguredFee() (gas: 62077)
+[PASS] testPermissionlessInitPoolWrongAmountReverts() (gas: 92840)
+[PASS] testSetActionFeeBoundsAccessControl() (gas: 73083)
+[PASS] testSetActionFeeBoundsAndConfig() (gas: 91928)
+[PASS] testSetActionFeeOutOfBoundsReverts() (gas: 63388)
+[PASS] testSetActionFeeRequiresBounds() (gas: 17445)
+[PASS] testSetMaintenanceRatesAndReceiver() (gas: 44088)
+[PASS] testSetPoolDeprecatedAccessControl() (gas: 21593)
+[PASS] testSetPoolDeprecatedFalse() (gas: 34179)
+[PASS] testSetPoolDeprecatedTrue() (gas: 43752)
+[PASS] testTreasuryReceivesExactFeeAmount() (gas: 343201)
+Suite result: ok. 52 passed; 0 failed; 0 skipped; finished in 10.61ms (8.86ms CPU time)
+
+Ran 3 tests for test/root/LoanPenaltyProperty.t.sol:LoanPenaltyPropertyTest
+[PASS] testProperty_PenaltyApplicationCap(uint256,uint256) (runs: 256, μ: 10093, ~: 9846)
+[PASS] testProperty_PenaltyCalculationFormula(uint256) (runs: 256, μ: 9094, ~: 8974)
+[PASS] testProperty_UtilizationIndependentPenalty(uint256,uint256,uint256) (runs: 256, μ: 12155, ~: 12243)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 81.99ms (81.77ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolBasePoolAutoCreateProperty.t.sol:ManagedPoolBasePoolAutoCreatePropertyTest
+[PASS] testFuzz_basePoolAutoCreated(address) (runs: 256, μ: 672207, ~: 672207)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 134.74ms (134.34ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolIntegration.t.sol:ManagedPoolIntegrationTest
+[PASS] testIntegration_ManagedAndUnmanagedWorkflows() (gas: 1676081)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.85ms (1.16ms CPU time)
+
+Ran 2 tests for test/managed-pools/ManagedPoolManager.t.sol:ManagedPoolManagerPropertyTest
+[PASS] testProperty_ManagerTransferAndRenounce() (gas: 37834)
+[PASS] testTransferManagerZeroAddressForbidden() (gas: 13917)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.65ms (92.89µs CPU time)
+
+Ran 3 tests for test/erc6900-modular-tba/PositionMSCAValidationProperty.t.sol:PositionMSCAValidationPropertyTest
+[PASS] testProperty_ValidationInstallationAuthorization(address,address) (runs: 100, μ: 3187716, ~: 3187716)
+[PASS] testProperty_ValidationInstallationCorrectness(address,bytes4,bytes4,bool,bool,bool) (runs: 100, μ: 3740342, ~: 3751051)
+[PASS] testProperty_ValidationUninstallationCorrectness(address) (runs: 100, μ: 3726281, ~: 3726281)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 166.87ms (317.51ms CPU time)
+
+Ran 18 tests for test/root/PositionManagementFacet.t.sol:PositionManagementFacetUnitTest
+[PASS] test_cleanupMembership_succeedsWhenNoObligations() (gas: 426725)
+[PASS] test_closePoolPosition_skipsMembershipClearWhenDirectCommitmentsExist() (gas: 573511)
+[PASS] test_depositCapEnforcedWithDirectLocks() (gas: 551899)
+[PASS] test_depositToPosition_updatesBalances() (gas: 465911)
+[FAIL] test_deposit_feeOnTransferCreditsReceived() (gas: 1195326)
+Logs:
+  Error: principal credits received amount
+  Error: a == b not satisfied [uint]
+        Left: 10000000000000000001
+       Right: 9500000000000000000
+  Error: totalDeposits aligns
+  Error: a == b not satisfied [uint]
+        Left: 10000000000000000001
+       Right: 9500000000000000000
+  Error: trackedBalance aligns
+  Error: a == b not satisfied [uint]
+        Left: 10000000000000000001
+       Right: 9500000000000000000
+
+[PASS] test_mintPositionWithDeposit_chargesErc20Fee() (gas: 543612)
+[PASS] test_mintPositionWithDeposit_chargesEthFee() (gas: 530293)
+[PASS] test_mintPositionWithDeposit_enforcesMin() (gas: 304528)
+[PASS] test_mintPosition_chargesErc20Fee() (gas: 333440)
+[PASS] test_mintPosition_chargesEthFee() (gas: 309490)
+[PASS] test_mintPosition_mintsAndEmits() (gas: 228692)
+[PASS] test_mintPosition_revertsOnEthFeeIncorrectMsgValue() (gas: 86553)
+[PASS] test_rollYieldToPosition_consumesYieldReserve() (gas: 509892)
+[PASS] test_rollYieldToPosition_movesYieldToPrincipal() (gas: 509389)
+[PASS] test_rollYieldToPosition_revertsWhenYieldExceedsTrackedBalance() (gas: 512811)
+[PASS] test_withdrawFromPosition_respectsSolvencyAndUpdatesState() (gas: 576426)
+[PASS] test_withdrawRespectsDirectLocksAndUserCount() (gas: 675674)
+[PASS] test_withdraw_appliesMaintenanceAccrualAndKeepsTrackedBalanced() (gas: 624321)
+Suite result: FAILED. 17 passed; 1 failed; 0 skipped; finished in 4.07ms (3.26ms CPU time)
+
+Ran 1 test for test/root/LibSolvencyChecksProperty.t.sol:LibSolvencyChecksPropertyTest
+[PASS] testFuzz_poolNativeDebtTracking(uint256,uint256,uint256,uint256,uint256,uint256) (runs: 256, μ: 210783, ~: 210784)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 159.23ms (159.04ms CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentConfigProperty.t.sol:PositionAgentConfigPropertyTest
+[PASS] testProperty_ConfigurationManagement(address,address,address) (runs: 100, μ: 108046, ~: 108046)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 34.92ms (33.16ms CPU time)
+
+Ran 2 tests for test/root/PositionManagementFacet.t.sol:PositionMintFeePropertyTest
+[PASS] testFuzz_mintPosition_chargesErc20Fee(uint96) (runs: 256, μ: 317643, ~: 317557)
+[PASS] testFuzz_mintPosition_chargesEthFee(uint96) (runs: 256, μ: 293621, ~: 293492)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 69.40ms (68.80ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolNativeTrackedInvariantProperty.t.sol:ManagedPoolNativeTrackedInvariantPropertyTest
+[PASS] testFuzz_nativeTrackedTotalInvariant(uint256,uint16) (runs: 256, μ: 1540228, ~: 1571755)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 81.12ms (80.92ms CPU time)
+
+Ran 11 tests for test/derivatives/AmmAuctionFacetProperty.t.sol:AmmAuctionFacetPropertyTest
+[PASS] testProperty_FeeAccrualCorrectness() (gas: 2374405)
+[PASS] testProperty_FlashAccountingIsolation() (gas: 2372956)
+[PASS] testProperty_InvariantPreservation(uint96,uint96,uint96,uint16) (runs: 100, μ: 2355654, ~: 2393582)
+[PASS] testProperty_TimeWindowEnforcement() (gas: 2183603)
+[PASS] test_AddLiquidityUpdatesReservesAndEncumbrance() (gas: 2206641)
+[PASS] test_AmmAuctionCancelAdjustsTotalDeposits() (gas: 1869351)
+[PASS] test_AmmFeeIndexAccrual() (gas: 2161527)
+[PASS] test_AmmSwapKeepsIndexFeeInReserves() (gas: 2392490)
+[PASS] test_AmmSwapUsesActualInForFeeOnTransfer() (gas: 3127080)
+[PASS] test_AuctionDiscoveryIndexes() (gas: 1906306)
+[PASS] test_AuctionGlobalListAndBestQuote() (gas: 2607856)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 139.89ms (137.38ms CPU time)
+
+Ran 4 tests for test/derivatives/AmmAuctionGas.t.sol:AmmAuctionGasTest
+[PASS] testGasCancelAuction() (gas: 64954)
+[PASS] testGasCreateAuction() (gas: 1379807)
+[PASS] testGasFinalizeAuction() (gas: 182870)
+[PASS] testGasSwapExactIn() (gas: 166222)
+Logs:
+  AMM swap_only gas: 200117
+
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 4.02ms (2.06ms CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentEventEmissionProperty.t.sol:PositionAgentEventEmissionPropertyTest
+[PASS] testProperty_EventEmissionCompleteness(uint256,uint256) (runs: 100, μ: 373782, ~: 373919)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 49.28ms (47.49ms CPU time)
+
+Ran 1 test for test/derivatives/AmmAuctionYieldReserveRegression.t.sol:AmmAuctionYieldReserveRegressionTest
+[PASS] test_yieldReserveBackedAfterAuctionCancel() (gas: 2166212)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.65ms (1.86ms CPU time)
+
+Ran 12 tests for test/views/LoanPreviewFacet.t.sol:LoanPreviewFacetTest
+[PASS] testFuzz_calculateRollingLoanPayoff_freshLoanHasZeroInterest(uint256,uint16) (runs: 256, μ: 58415, ~: 58552)
+[PASS] testFuzz_calculateRollingLoanPayoff_isMonotonicInTime(uint256,uint16,uint256,uint256) (runs: 256, μ: 66799, ~: 66880)
+[PASS] test_calculateFixedLoanPayoff_returnsPrincipalOnly_andExpiredFlag() (gas: 85241)
+[PASS] test_calculateFixedLoanPayoff_revertsWhenMissingOrClosed() (gas: 108505)
+[PASS] test_calculateRollingLoanPayoff_accruesInterestFromLastPayment() (gas: 57349)
+[PASS] test_gas_RollingPayoffPreview() (gas: 57125)
+[PASS] test_previewFixedLoanCosts_matchesExpectedInterestMath() (gas: 54667)
+[PASS] test_previewFixedLoanCosts_revertsOnInvalidTerm() (gas: 13363)
+[PASS] test_previewFixedLoanCosts_revertsOnUnconfiguredTerm() (gas: 57732)
+[PASS] test_previewFixedRepaymentImpact_additionalNeeded_matchesImplementation() (gas: 78773)
+[PASS] test_previewFixedRepaymentImpact_capsPrincipalReduction() (gas: 79274)
+[PASS] test_previewRollingLoanCosts_switchesApyByCollateralType() (gas: 15380)
+Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 60.86ms (111.87ms CPU time)
+
+Ran 1 test for test/equallend-direct/ActiveCreditDilutionProperty.t.sol:ActiveCreditDustPrimingPropertyTest
+[PASS] testProperty_DustPrimingDilutesToNearZero(uint256,uint256) (runs: 256, μ: 158272, ~: 158178)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 298.19ms (279.79ms CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentRegistrationProperty.t.sol:PositionAgentRegistrationPropertyTest
+[PASS] testProperty_AgentRegistrationIntegrity(uint256,uint256) (runs: 100, μ: 274310, ~: 274397)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 43.92ms (43.05ms CPU time)
+
+Ran 2 tests for test/managed-pools/ManagedPoolCreation.t.sol:ManagedPoolCreationPropertyTest
+[PASS] testManagedPoolAllowsTokenWithPermissionlessPool() (gas: 734843)
+[PASS] testProperty_ManagedPoolCreationCompleteness(address,uint16,uint16,uint16,uint16,uint16,uint16,uint256,uint256,uint256,uint256,uint256) (runs: 256, μ: 792425, ~: 792379)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 180.06ms (179.45ms CPU time)
+
+Ran 6 tests for test/derivatives/AtomicDeskIntegration.t.sol:AtomicDeskIntegrationTest
+[PASS] testMailboxEnvelopeFlow() (gas: 1760521)
+[PASS] testRefundUnlocksWithoutTransfer() (gas: 1627701)
+[PASS] testReserveLocksAndAuthorizesMailbox() (gas: 1663716)
+[PASS] testSettleUnlocksAndTransfers() (gas: 1594375)
+[PASS] testTakerTrancheTakerFeeAppliedOnSettle() (gas: 1999058)
+[PASS] testTrancheMakerFeeAppliedOnReserve() (gas: 2089056)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 7.53ms (4.18ms CPU time)
+
+Ran 4 tests for test/views/AuctionManagementViewFacet.t.sol:AuctionManagementViewFacetTest
+[PASS] testAmmAuctionSummaryAndStatus() (gas: 298507)
+[PASS] testCommunityAuctionMakersView() (gas: 335653)
+[PASS] testCommunityAuctionViews() (gas: 282691)
+[PASS] testPoolViews() (gas: 205333)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 1.30ms (389.61µs CPU time)
+
+Ran 2 tests for test/managed-pools/ManagedPoolErrors.t.sol:ManagedPoolErrorsTest
+[PASS] testOnlyManagerAllowedAfterRenounce() (gas: 625968)
+[PASS] testPoolNotManagedOnManagedSetter() (gas: 383868)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.84ms (1.25ms CPU time)
+
+Ran 7 tests for test/managed-pools/ManagedPoolParameters.t.sol:ManagedPoolParameterBoundsPropertyTest
+[PASS] testActionFeeBounds() (gas: 44419)
+[PASS] testDepositCapValidation() (gas: 19956)
+[PASS] testFlashLoanFeeBound() (gas: 13984)
+[PASS] testLtvBound() (gas: 19261)
+[PASS] testMaintenanceRateBound() (gas: 16332)
+[PASS] testMinThresholdsBound() (gas: 24045)
+[PASS] testRollingApyBound() (gas: 14170)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 1.38ms (626.42µs CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentRegistrationVerifyProperty.t.sol:PositionAgentRegistrationVerifyPropertyTest
+[PASS] testProperty_AgentRegistrationVerification(uint256,uint256) (runs: 100, μ: 249905, ~: 249971)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 43.34ms (42.64ms CPU time)
+
+Ran 1 test for test/root/PositionManagementFacet.t.sol:PositionManagementFacetPropertyTest
+[PASS] testFuzz_BehavioralEquivalenceWithDirectLocks(uint256,uint256,uint256,uint256,uint256,uint256,bool) (runs: 256, μ: 1225334, ~: 1229090)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 225.88ms (224.96ms CPU time)
+
+Ran 1 test for test/gas/PositionManagementGas.t.sol:PositionManagementGasTest
+[PASS] test_gas_MintPositionWithDeposit() (gas: 431790)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.44ms (326.30µs CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolStorageProperty.t.sol:ManagedPoolStoragePropertyTest
+[PASS] testProperty_StorageIsolationAndBranching(address,address,address,uint16,uint16,uint256,uint256,uint256) (runs: 256, μ: 145932, ~: 146294)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 46.81ms (46.43ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolSystemShareFlashLoan.t.sol:ManagedPoolSystemShareFlashLoanTest
+[PASS] testFlashLoanRoutesSystemShareToBasePoolFeeIndex() (gas: 214470)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 683.44µs (113.03µs CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentTBAAddressProperty.t.sol:PositionAgentTBAAddressPropertyTest
+[PASS] testProperty_TBAAddressDeterminism(uint256) (runs: 100, μ: 31490, ~: 31554)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 36.51ms (34.10ms CPU time)
+
+Ran 3 tests for test/root/ManagedPoolSystemShareGovernanceProperty.t.sol:ManagedPoolSystemShareGovernancePropertyTest
+[PASS] testFuzz_accessControlEnforcement(address) (runs: 256, μ: 14324, ~: 14324)
+[PASS] testFuzz_governanceEventEmission(uint16) (runs: 256, μ: 41109, ~: 41041)
+[PASS] testFuzz_governanceValidationRejectsInvalidBps(uint16) (runs: 256, μ: 15366, ~: 15505)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 84.55ms (84.23ms CPU time)
+
+Ran 11 tests for test/views/PoolUtilizationViewFacet.t.sol:PoolUtilizationViewFacetTest
+[PASS] testFuzz_canDeposit_cappedPool_maxAllowedConsistent(uint256,uint256,uint256) (runs: 256, μ: 91744, ~: 91791)
+[PASS] testFuzz_getPoolUtilization_matchesFormula(uint256,uint256) (runs: 256, μ: 174425, ~: 174545)
+[PASS] testFuzz_utilizationWithinBoundsWhenDepositsPositive(uint256,uint256) (runs: 256, μ: 174393, ~: 174411)
+[PASS] test_canDeposit_cappedPool_reasonsAndMaxAllowed() (gas: 89577)
+[PASS] test_canDeposit_enforcesMaxUserCountForNewUser() (gas: 89070)
+[PASS] test_canDeposit_rejectsZeroAmount() (gas: 17153)
+[PASS] test_gas_UtilizationAndDepositChecks() (gas: 259619)
+[PASS] test_getAvailableLiquidity_respectsReservedDeposits() (gas: 247900)
+[PASS] test_getPoolUtilization_capacityRemaining_isMaxUnlessCapped() (gas: 71236)
+[PASS] test_getPoolUtilization_computesBorrowedAndUtilization() (gas: 170774)
+[PASS] test_getPoolUtilization_whenBalanceExceedsDepositsBorrowedIsZero() (gas: 170634)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 472.93ms (611.76ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolParameters.t.sol:ManagedPoolParameterUpdatePropertyTest
+[PASS] testProperty_ParameterUpdateValidationAndAccess(uint16,uint16,uint16,uint16,uint256,uint256,uint256,uint256,uint256,uint128) (runs: 256, μ: 817304, ~: 817739)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 243.97ms (242.71ms CPU time)
+
+Ran 15 tests for test/root/ImmutablePoolParametersProperty.t.sol:ImmutablePoolParametersPropertyTest
+[PASS] testProperty_AdminFeeExemption(uint256,uint16,uint256,uint256,uint16,uint16,uint256) (runs: 100, μ: 747387, ~: 749359)
+[PASS] testProperty_AdminFunctionRestriction(uint256,uint16,uint256,uint256,uint16,uint16,uint16,bool,uint8) (runs: 100, μ: 402112, ~: 458282)
+[PASS] testProperty_AumFeeBoundsEnforcement(uint16,uint16,uint16) (runs: 100, μ: 222464, ~: 222990)
+[PASS] testProperty_AumFeeEventEmission(uint16,uint16,uint16) (runs: 100, μ: 227097, ~: 227098)
+[PASS] testProperty_DeprecatedFlagIsolation(uint256,uint16,uint16,uint256,uint256,uint16,uint16,bool,bool,uint256,uint8) (runs: 100, μ: 270931, ~: 275308)
+[PASS] testProperty_FeeDistribution(uint256,address,uint16,uint256,uint256,uint16,uint16,uint256) (runs: 100, μ: 795221, ~: 797789)
+[PASS] testProperty_InitializationEventEmission(uint256,(uint16,uint16,uint16,uint16,bool,uint256,uint256,uint256,bool,uint256,uint256,uint16,uint16,(uint40,uint16)[],(uint128,bool),(uint128,bool),(uint128,bool),(uint128,bool),(uint128,bool))) (runs: 100, μ: 327633, ~: 329869)
+[PASS] testProperty_InputValidation(uint256,address,(uint16,uint16,uint16,uint16,bool,uint256,uint256,uint256,bool,uint256,uint256,uint16,uint16,(uint40,uint16)[],(uint128,bool),(uint128,bool),(uint128,bool),(uint128,bool),(uint128,bool))) (runs: 100, μ: 348809, ~: 348990)
+[PASS] testProperty_ModificationRejection(uint256,uint8) (runs: 100, μ: 75380, ~: 85573)
+[PASS] testProperty_NonAdminFeeRequirement(address,uint16,uint256,uint256,uint16,uint256,uint256) (runs: 100, μ: 546413, ~: 547049)
+[PASS] testProperty_ParameterImmutability(uint256,uint256,uint8) (runs: 100, μ: 100239, ~: 107567)
+[PASS] testProperty_PoolInitializationIsolation(uint256,uint256,uint16,uint16,uint256,uint16,uint16,uint16,uint16,uint256,uint16,uint16) (runs: 100, μ: 454997, ~: 457780)
+[PASS] testProperty_PoolInitializationWithParameters(uint256,(uint16,uint16,uint16,uint16,bool,uint256,uint256,uint256,bool,uint256,uint256,uint16,uint16,(uint40,uint16)[],(uint128,bool),(uint128,bool),(uint128,bool),(uint128,bool),(uint128,bool))) (runs: 100, μ: 337502, ~: 339261)
+[PASS] testProperty_PoolIsolation(uint256,uint256,uint16,uint16,uint16,uint16,uint256,uint256,uint16,uint16,uint16,uint16,uint16) (runs: 100, μ: 471881, ~: 473473)
+[PASS] testProperty_UserMultiPoolOperations(uint256,uint256,uint256,uint16,uint16,uint16,uint256,uint256,uint256) (runs: 100, μ: 623476, ~: 623481)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 694.98ms (1.33s CPU time)
+
+Ran 4 tests for test/root/LendingFacetFeeOnTransfer.t.sol:LendingFacetFeeOnTransferTest
+[FAIL: LibCurrency_InsufficientReceived(18000000000000000000 [1.8e19], 20000000000000000000 [2e19])] test_closeRollingRevertsWithFeeOnTransfer() (gas: 473381)
+[FAIL: LibCurrency_InsufficientReceived(18000000000000000000 [1.8e19], 20000000000000000000 [2e19])] test_makePaymentAcceptsSmallNetAmount() (gas: 473498)
+[FAIL: LibCurrency_InsufficientReceived(18000000000000000000 [1.8e19], 20000000000000000000 [2e19])] test_makePaymentCreditsNetReceived() (gas: 473445)
+[FAIL: LibCurrency_InsufficientReceived(18000000000000000000 [1.8e19], 20000000000000000000 [2e19])] test_repayFixedRevertsWithFeeOnTransfer() (gas: 476504)
+Suite result: FAILED. 0 passed; 4 failed; 0 skipped; finished in 3.41ms (1.36ms CPU time)
+
+Ran 2 tests for test/root/LendingLifecycleIntegration.t.sol:LendingLifecycleIntegrationTest
+[PASS] testIntegration_FixedLifecycle_NoInterest() (gas: 808594)
+[PASS] testIntegration_RollingLifecycle_NoInterest() (gas: 705818)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 3.63ms (1.61ms CPU time)
+
+Ran 1 test for test/root/LockedCollateralNonWithdrawableProperty.t.sol:LockedCollateralNonWithdrawablePropertyTest
+[PASS] testFuzz_lockedCollateralBlocksWithdraw(uint256,uint256,uint256) (runs: 256, μ: 5568760, ~: 5568760)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 448.06ms (447.72ms CPU time)
+
+Ran 8 tests for test/root/MaintenanceFacet.t.sol:MaintenanceFacetTest
+[PASS] testMaintenanceRespectsFoundationUpdates() (gas: 322026)
+[PASS] testMultiEpochAccrualHandlesLargeElapsedTime() (gas: 279255)
+[PASS] testPokeMaintenanceAccruesAndPays() (gas: 281210)
+[PASS] testPokeMaintenanceCappedByTrackedBalance() (gas: 260246)
+[PASS] testPokeRevertsWhenReceiverUnset() (gas: 32329)
+[PASS] testSettleMaintenancePaysPartialWhenContractShort() (gas: 267758)
+[PASS] testSettleMaintenancePaysPendingWhenFundsArrive() (gas: 288997)
+[PASS] testZeroTvlSkipsAccrual() (gas: 166076)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 808.92µs (480.95µs CPU time)
+
+Ran 26 tests for test/root/MaintenanceFees.t.sol:MaintenanceFeesTest
+[PASS] testMaintenanceFees_AccumulatesOverMultipleCalls() (gas: 195503)
+[PASS] testMaintenanceFees_DefaultRateUsedWhenPoolRateZero() (gas: 168742)
+[PASS] testMaintenanceFees_EpochLengthConstant() (gas: 5848)
+[PASS] testMaintenanceFees_FallbackTo1PercentWhenBothZero() (gas: 165499)
+[PASS] testMaintenanceFees_ForcePayWithoutAccrual() (gas: 224751)
+[PASS] testMaintenanceFees_HighRateScenario() (gas: 164734)
+[PASS] testMaintenanceFees_IndexApplicationProportional() (gas: 196196)
+[PASS] testMaintenanceFees_IndexApplicationWithSmallAmount() (gas: 184798)
+[PASS] testMaintenanceFees_IndexDeltaCalculation() (gas: 184232)
+[PASS] testMaintenanceFees_InitialEnforceSetTimestamp() (gas: 39363)
+[PASS] testMaintenanceFees_LargeDepositsPrecision() (gas: 184826)
+[PASS] testMaintenanceFees_MaintenanceIndexCalculation() (gas: 183675)
+[PASS] testMaintenanceFees_MaintenanceIndexIncreases() (gas: 184818)
+[PASS] testMaintenanceFees_MultipleEpochsAccrual() (gas: 187638)
+[PASS] testMaintenanceFees_MultipleEpochsIndexAccumulates() (gas: 228004)
+[PASS] testMaintenanceFees_NoAccrualBeforeEpoch() (gas: 113014)
+[PASS] testMaintenanceFees_NoAccrualWhenTotalDepositsZero() (gas: 69776)
+[PASS] testMaintenanceFees_NoPaymentWhenReceiverNotSet() (gas: 84975)
+[PASS] testMaintenanceFees_PartialEpochIgnored() (gas: 186387)
+[PASS] testMaintenanceFees_PartialPaymentWhenInsufficientBalance() (gas: 238152)
+[PASS] testMaintenanceFees_PaymentTransfersTokens() (gas: 238925)
+[PASS] testMaintenanceFees_RemainderCarriesForward() (gas: 188711)
+[PASS] testMaintenanceFees_RemainderPreventsLoss() (gas: 290028)
+[PASS] testMaintenanceFees_RemainderTracking() (gas: 183950)
+[PASS] testMaintenanceFees_SingleEpochAccrual() (gas: 187350)
+[PASS] testMaintenanceFees_ZeroAmountNoIndexChange() (gas: 74713)
+Suite result: ok. 26 passed; 0 failed; 0 skipped; finished in 1.98ms (1.59ms CPU time)
+
+Ran 6 tests for test/views/LoanViewFacet.t.sol:LoanViewFacetTest
+[PASS] testFuzz_getUserFixedLoanIdsPaginated_matchesSlice(uint256,uint256) (runs: 256, μ: 197093, ~: 195891)
+[PASS] test_getRollingLoan_and_getFixedLoan_roundTripSeededState() (gas: 162024)
+[PASS] test_getUserFixedLoanIdsPaginated_offsetPastEndReturnsEmpty() (gas: 121894)
+[PASS] test_getUserFixedLoanIdsPaginated_slicesCorrectly() (gas: 169189)
+[PASS] test_previewBorrowRolling_usesDepositorLtv() (gas: 75337)
+[PASS] test_revertsOnUninitializedPool() (gas: 11167)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 466.63ms (466.52ms CPU time)
+
+Ran 5 tests for test/root/MaintenancePoolIsolation.t.sol:MaintenancePoolIsolationTest
+[PASS] test_MaintenanceIsolation_PartialPaymentWhenInsufficient() (gas: 217475)
+[PASS] test_MaintenanceIsolation_PaymentCappedToPoolBalance() (gas: 350861)
+[PASS] test_MaintenanceIsolation_PaymentRespectsReducedDeposits() (gas: 217621)
+[PASS] test_MaintenanceIsolation_ThreePoolsIndependent() (gas: 501451)
+[PASS] test_MaintenanceIsolation_UnderfundedPoolCappedPayment() (gas: 316031)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 753.30µs (429.19µs CPU time)
+
+Ran 4 tests for test/maintenance/MaintenanceRateDerivation.t.sol:MaintenanceRateDerivationTest
+[PASS] testFallsBackToDefaultWhenPoolRateZero() (gas: 190205)
+[PASS] testFallsBackToMaxWhenPoolAndDefaultZero() (gas: 190315)
+[PASS] testInitializesTimestampOnFirstAccrual() (gas: 147007)
+[PASS] testUsesPoolMaintenanceRateWhenSet() (gas: 210046)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 446.16µs (216.39µs CPU time)
+
+Ran 1 test for test/managed-pools/MaintenanceRoutingVerification.t.sol:MaintenanceRoutingVerificationTest
+[PASS] testMaintenanceDoesNotUseManagedShareRouter() (gas: 142499)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 305.37µs (49.68µs CPU time)
+
+Ran 2 tests for test/managed-pools/ManagedPoolSystemShareInvariantProperty.t.sol:ManagedPoolSystemShareInvariantPropertyTest
+[PASS] testFuzz_backingAdequacyInvariant(uint256,uint16,uint16) (runs: 256, μ: 2054031, ~: 2053057)
+[PASS] testFuzz_noUnderflowOnTreasuryFallback(uint256,uint16) (runs: 256, μ: 1987731, ~: 1997033)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 200.18ms (320.53ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolSystemSharePenalty.t.sol:ManagedPoolSystemSharePenaltyTest
+[PASS] testPenaltyRoutesSystemShareToBasePool() (gas: 605126)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.13ms (1.11ms CPU time)
+
+Ran 2 tests for test/root/ManagedPoolSystemShareProperty.t.sol:ManagedPoolSystemSharePropertyTest
+[PASS] testFuzz_feeSplitConservation(uint256,uint16) (runs: 256, μ: 5122, ~: 4905)
+[PASS] testFuzz_trackedBalanceConservation(uint256,uint16) (runs: 256, μ: 1586571, ~: 1619542)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 64.17ms (121.32ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolSystemShareTreasuryFallback.t.sol:ManagedPoolSystemShareTreasuryFallbackTest
+[PASS] testTreasuryFallbackWhenBasePoolEmpty() (gas: 142060)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 572.80µs (115.90µs CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolViews.t.sol:ManagedPoolViewsTest
+[PASS] testViewFunctionsManagedAndUnmanaged() (gas: 1427712)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.34ms (1.04ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolWhitelist.t.sol:ManagedPoolWhitelistPropertyTest
+[PASS] testProperty_WhitelistManagementAndEvents() (gas: 76399)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.81ms (145.02µs CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolWhitelist.t.sol:ManagedPoolWhitelistRemovalPropertyTest
+[PASS] testProperty_RemovedUserOperationsPreserved() (gas: 848423)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.62ms (256.28µs CPU time)
+
+Ran 1 test for test/root/LendingRollingInvariant.t.sol:LendingRollingInvariantTest
+[PASS] testFuzz_RollingLoanSolvencyWithDirectLocks(uint256,uint256,uint256,uint256,uint256,uint256,uint256) (runs: 256, μ: 764753, ~: 796545)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 160.60ms (158.98ms CPU time)
+
+Ran 2 tests for test/managed-pools/ManagedPoolWhitelistEnforcement.t.sol:ManagedPoolRecoveryAccessibilityPropertyTest
+[PASS] testProperty_RecoveriesBlockedForNonMemberWhenWhitelistEnabled() (gas: 24623)
+[PASS] testProperty_RecoveriesNotBlockedByWhitelistRemoval() (gas: 10550)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.86ms (60.01µs CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolWhitelistEnforcement.t.sol:ManagedPoolWhitelistEnforcementPropertyTest
+[PASS] testProperty_WhitelistEnforcementAcrossOperations() (gas: 211251)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 269.61µs (84.40µs CPU time)
+
+Ran 2 tests for test/mocks/MockERC20.t.sol:MockERC20Test
+[PASS] testMintIncreasesBalanceAndSupply() (gas: 53902)
+[PASS] testTransferAfterMint() (gas: 79283)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 322.89µs (52.48µs CPU time)
+
+Ran 5 tests for test/root/MultiPoolPositionIntegration.t.sol:MultiPoolPositionIntegrationTest
+[PASS] test_closePoolPositionKeepsMembershipWithDirectCommitments() (gas: 573033)
+[PASS] test_closePoolPositionWithdrawsAllAvailablePrincipal() (gas: 428231)
+[PASS] test_closePoolPosition_cleanupSucceedsAfterCommitmentsCleared() (gas: 483517)
+[PASS] test_closePoolPosition_withCommitments_blocksCleanup() (gas: 570009)
+[PASS] test_multiPoolWorkflowIsolatedAndCleansUpMembership() (gas: 877134)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 6.19ms (3.62ms CPU time)
+
+Ran 8 tests for test/root/MultiPoolPositionViewFacet.t.sol:MultiPoolPositionViewFacetTest
+[PASS] test_getMultiPoolPositionState() (gas: 104975)
+[PASS] test_getPositionActivePools() (gas: 40689)
+[PASS] test_getPositionAggregatedSummary() (gas: 96432)
+[PASS] test_getPositionDirectSummary() (gas: 48204)
+[PASS] test_getPositionPoolData() (gas: 39784)
+[PASS] test_getPositionPoolMemberships() (gas: 41783)
+[PASS] test_isPositionMemberOfPool() (gas: 17558)
+[PASS] test_selectors() (gas: 11156)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 857.97µs (420.26µs CPU time)
+
+Ran 1 test for test/root/NativeAvailableBackingProperty.t.sol:NativeAvailableBackingPropertyTest
+[PASS] testFuzz_nativeAvailableBacking(uint256,uint256) (runs: 256, μ: 33021, ~: 32948)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 23.92ms (23.75ms CPU time)
+
+Ran 7 tests for test/root/PositionNFTCoexistenceProperty.t.sol:PositionNFTCoexistencePropertyTest
+[PASS] testProperty_Coexistence_AllKeysUnique(uint8,uint8) (runs: 100, μ: 772562, ~: 698382)
+[PASS] testProperty_Coexistence_ConceptualValidation() (gas: 186957)
+[PASS] testProperty_Coexistence_DifferentKeys(address,uint256) (runs: 100, μ: 18034893, ~: 17838163)
+[PASS] testProperty_Coexistence_IndependentStorage() (gas: 189078)
+[PASS] testProperty_Coexistence_PoolIsolation(uint256,uint256) (runs: 100, μ: 358497, ~: 358990)
+[PASS] testProperty_Coexistence_SameUserBothTypes(uint8) (runs: 100, μ: 1259839, ~: 773697)
+[PASS] testProperty_Coexistence_TransferIndependence(uint256) (runs: 100, μ: 9267387, ~: 10215506)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 504.67ms (503.17ms CPU time)
+
+Ran 1 test for test/root/NativeEncumbranceInvariantProperty.t.sol:NativeEncumbranceInvariantPropertyTest
+[PASS] testFuzz_nativeEncumbranceBlocksWithdrawal(uint256,uint256,uint256) (runs: 256, μ: 5249644, ~: 5249644)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 660.77ms (660.38ms CPU time)
+
+Ran 1 test for test/root/NativeEthFlowIntegration.t.sol:NativeEthFlowIntegrationTest
+[FAIL: UnexpectedMsgValue(0)] testIntegration_NativePoolDepositBorrowRepayWithdraw() (gas: 944019)
+Suite result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 1.55ms (271.77µs CPU time)
+
+Ran 4 tests for test/root/PositionNFTDataStructureReuseProperty.t.sol:PositionNFTDataStructureReusePropertyTest
+[PASS] testProperty_DataStructureReuse_MappingStructure() (gas: 186983)
+[PASS] testProperty_DataStructureReuse_PositionKeyDerivation(uint256,uint256) (runs: 100, μ: 22814221, ~: 24918614)
+[PASS] testProperty_DataStructureReuse_PositionKeyNonZero(uint256) (runs: 100, μ: 42306011, ~: 42309066)
+[PASS] testProperty_DataStructureReuse_PositionKeyUniqueness(uint8) (runs: 100, μ: 2720615, ~: 1773932)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 776.56ms (775.75ms CPU time)
+
+Ran 2 tests for test/root/PositionNFTEnumerable.t.sol:PositionNFTEnumerableTest
+[PASS] test_EnumerableAfterTransfer() (gas: 373617)
+[PASS] test_EnumerableFunctions() (gas: 850462)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 549.83µs (229.74µs CPU time)
+
+Ran 3 tests for test/root/PositionManagementNativeEthProperty.t.sol:PositionManagementNativeEthPropertyTest
+[FAIL: Error != expected error: ERC20InsufficientAllowance(0xF62849F9A0B5Bf2913b396098F7c7019b51A820a, 0, 1) != UnexpectedMsgValue(1); counterexample: calldata=0xf9b035430000000000000000000000000000000000000000000000000000000000000000 args=[0]] testFuzz_strayEthRejectsDeposits(uint96) (runs: 0, μ: 0, ~: 0)
+Logs:
+  Bound Result 1
+
+[PASS] testFuzz_strayEthRejectsWithdraws(uint96) (runs: 256, μ: 235289, ~: 235181)
+[PASS] test_nativeTransferFailureReverts() (gas: 695798)
+Suite result: FAILED. 2 passed; 1 failed; 0 skipped; finished in 1.31s (1.31s CPU time)
+
+Ran 10 tests for test/root/PositionNFTProperty.t.sol:PositionNFTPropertyTest
+[PASS] testProperty_InvalidTokenIdReverts(uint256,uint8) (runs: 100, μ: 1256098, ~: 1171294)
+[PASS] testProperty_MetadataStorage(uint256,uint8) (runs: 100, μ: 1543924, ~: 1206104)
+[PASS] testProperty_MultipleNFTsPerUser(uint256,uint8) (runs: 100, μ: 2844742, ~: 1640850)
+[PASS] testProperty_MultipleTransfersPreserveKey(uint256,uint8) (runs: 100, μ: 357164, ~: 333710)
+[PASS] testProperty_PositionKeyDerivationConsistency(uint256,uint256,uint256) (runs: 100, μ: 113692967, ~: 121213736)
+[PASS] testProperty_PositionKeyDifferentContracts(uint256,uint256) (runs: 100, μ: 18003684, ~: 17474297)
+[PASS] testProperty_PositionKeyUniqueness(uint8) (runs: 100, μ: 1971946, ~: 1523259)
+[PASS] testProperty_TransferAndBackPreservesKey(uint256) (runs: 100, μ: 245408, ~: 245761)
+[PASS] testProperty_TransferPreservation(uint256,address) (runs: 100, μ: 230197, ~: 230645)
+[PASS] testProperty_UniqueTokenIDGeneration(uint8,uint256) (runs: 100, μ: 2921363, ~: 2045261)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 1.94s (1.94s CPU time)
+
+Ran 3 tests for test/root/PositionNFTSharedUtilitiesProperty.t.sol:PositionNFTSharedUtilitiesPropertyTest
+[PASS] testFuzz_DebtAggregationConsistency(uint256,bool,uint256,bool,uint256,bool,uint256,uint256,uint256) (runs: 100, μ: 853021, ~: 865512)
+[PASS] testFuzz_MissedPaymentHelpersStayAligned(uint32,uint40,uint8) (runs: 100, μ: 279923, ~: 279873)
+[PASS] testFuzz_PositionKeyAndOwnershipConsistency(uint256) (runs: 100, μ: 325949, ~: 349781)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 77.35ms (76.47ms CPU time)
+
+Ran 9 tests for test/root/PositionViewFacet.t.sol:PositionViewFacetTest
+[PASS] test_getPositionEncumbranceAggregatesComponents() (gas: 457272)
+[PASS] test_getPositionLoanIdsPaginates() (gas: 809791)
+[PASS] test_getPositionLoanSummaryAggregatesRollingFixedDirectAndDelinquency() (gas: 762740)
+[PASS] test_getPositionSolvencyIsPoolScoped() (gas: 749029)
+[PASS] test_getPositionStateIncludesAccruedYieldAcrossPools() (gas: 789407)
+[PASS] test_getPositionStateReturnsPrincipalAndDebt() (gas: 407577)
+[PASS] test_getPositionStatesBatchesPools() (gas: 599932)
+[PASS] test_isPositionDelinquentFlagsExpiredFixedLoan() (gas: 528556)
+[PASS] test_isPositionDelinquentFlagsRolling() (gas: 412959)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 1.57ms (971.39µs CPU time)
+
+Ran 1 test for test/root/PositionNFTMetadataProperty.t.sol:PositionNFTMetadataProperty
+[PASS] testFuzz_TokenURIReturnsRegisteredAgentURI(uint8) (runs: 256, μ: 721994, ~: 606308)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.07s (2.07s CPU time)
+
+Ran 6 tests for test/root/PositionNFTMetadataUnit.t.sol:PositionNFTMetadataUnit
+[PASS] test_SetDiamondRespectsMinterOnlyAuth() (gas: 14183)
+[PASS] test_SetMinterRespectsMinterOnlyAuth() (gas: 12458)
+[PASS] test_TokenURIReturnsAgentURI() (gas: 216486)
+[PASS] test_TokenURIRevertsForNonExistentToken() (gas: 13244)
+[PASS] test_TokenURIRevertsWhenDiamondCallReverts() (gas: 253679)
+[PASS] test_TokenURIsAreUniqueForDifferentTokens() (gas: 404994)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 524.23µs (236.11µs CPU time)
+
+Ran 5 tests for test/invariants/NativeEthStatefulInvariants.t.sol:NativeEthStatefulInvariantTest
+[PASS] invariant_inactiveLoanHasZeroPrincipal() (runs: 256, calls: 12800, reverts: 3997)
+
+╭--------------------------+----------+-------+---------+----------╮
+| Contract                 | Selector | Calls | Reverts | Discards |
++==================================================================+
+| NativeEthStatefulHandler | borrow   | 2151  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | deposit  | 2170  | 2170    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | failed   | 2128  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | fundPool | 2088  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | repay    | 2134  | 1827    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | withdraw | 2129  | 0       | 0        |
+╰--------------------------+----------+-------+---------+----------╯
+
+Logs:
+  Bound Result 2356236877100820547
+  Bound Result 49000000000000000052
+  Bound Result 49000000000000017130
+  Bound Result 21731562460402932830
+  Bound Result 1000000000000000001
+  Bound Result 49000000000000000009
+  Bound Result 29047239443269807416
+  Bound Result 49000000000000006668
+  Bound Result 49021058437676224892
+  Bound Result 49003976791061065237
+
+[PASS] invariant_nativeTrackedWithinBalance() (runs: 256, calls: 12800, reverts: 4039)
+
+╭--------------------------+----------+-------+---------+----------╮
+| Contract                 | Selector | Calls | Reverts | Discards |
++==================================================================+
+| NativeEthStatefulHandler | borrow   | 2145  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | deposit  | 2177  | 2177    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | failed   | 2096  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | fundPool | 2106  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | repay    | 2155  | 1862    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | withdraw | 2121  | 0       | 0        |
+╰--------------------------+----------+-------+---------+----------╯
+
+Logs:
+  Bound Result 41700524930067873722
+  Bound Result 40515951551865456980
+  Bound Result 44034717034414729560
+  Bound Result 11580
+  Bound Result 47967031812923256492
+  Bound Result 49000000000000008038
+  Bound Result 26468887007873137404
+  Bound Result 49000035803689517343
+  Bound Result 49000000000000005056
+  Bound Result 35764233469512512780
+
+[PASS] invariant_poolConservation() (runs: 256, calls: 12800, reverts: 3993)
+
+╭--------------------------+----------+-------+---------+----------╮
+| Contract                 | Selector | Calls | Reverts | Discards |
++==================================================================+
+| NativeEthStatefulHandler | borrow   | 2138  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | deposit  | 2093  | 2093    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | failed   | 2130  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | fundPool | 2140  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | repay    | 2166  | 1900    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | withdraw | 2133  | 0       | 0        |
+╰--------------------------+----------+-------+---------+----------╯
+
+Logs:
+  Bound Result 49000000000000008348
+  Bound Result 2125757
+  Bound Result 49000000000000000513
+  Bound Result 49000000013577049006
+  Bound Result 49000000000000009258
+  Bound Result 66907509934
+  Bound Result 27695947611922981319
+  Bound Result 49000000000000090001
+  Bound Result 49000000000500000001
+  Bound Result 3483103139023559000
+  Bound Result 49000000000000000209
+  Bound Result 49000000000000000030
+
+[PASS] invariant_principalMatchesDeposits() (runs: 256, calls: 12800, reverts: 3892)
+
+╭--------------------------+----------+-------+---------+----------╮
+| Contract                 | Selector | Calls | Reverts | Discards |
++==================================================================+
+| NativeEthStatefulHandler | borrow   | 2140  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | deposit  | 2117  | 2117    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | failed   | 2089  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | fundPool | 2143  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | repay    | 2127  | 1775    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | withdraw | 2184  | 0       | 0        |
+╰--------------------------+----------+-------+---------+----------╯
+
+Logs:
+  Bound Result 2585404272937880993
+  Bound Result 1282591355468084575
+  Bound Result 35335928869448835917
+  Bound Result 1000000000000000001
+  Bound Result 1000000000000000003
+  Bound Result 34143467781148740310
+  Bound Result 49000000000106990560
+  Bound Result 49000000000000002325
+  Bound Result 49000000000000000846
+  Bound Result 49000000000000000177
+  Bound Result 10507299488389945545
+  Bound Result 49000000001405730806
+  Bound Result 3015524464138553141
+  Bound Result 33353685889567706904
+  Bound Result 21057807890657453063
+  Bound Result 13143139347253205242
+
+[PASS] invariant_trackedMatchesNativeTotal() (runs: 256, calls: 12800, reverts: 3942)
+
+╭--------------------------+----------+-------+---------+----------╮
+| Contract                 | Selector | Calls | Reverts | Discards |
++==================================================================+
+| NativeEthStatefulHandler | borrow   | 2105  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | deposit  | 2140  | 2140    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | failed   | 2141  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | fundPool | 2140  | 0       | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | repay    | 2134  | 1802    | 0        |
+|--------------------------+----------+-------+---------+----------|
+| NativeEthStatefulHandler | withdraw | 2140  | 0       | 0        |
+╰--------------------------+----------+-------+---------+----------╯
+
+Logs:
+  Bound Result 39973065663735044869
+  Bound Result 5547581236045191077
+  Bound Result 17688664927171019807
+  Bound Result 49000000000000008645
+  Bound Result 17475728227381832208
+  Bound Result 10756589584212459796
+  Bound Result 6723975490430409061
+  Bound Result 50000000000000000000
+  Bound Result 49000000000000000381
+  Bound Result 49000000000000000598
+  Bound Result 49000000000000001220
+
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 4.92s (4.92s CPU time)
+
+Ran 5 tests for test/derivatives/OptionsFacetProperty.t.sol:OptionsFacetPropertyTest
+[PASS] testProperty_AmericanStyleTiming() (gas: 2460660)
+[PASS] testProperty_EuropeanStyleWindowEnforcement() (gas: 2579960)
+[PASS] testProperty_FullCollateralizationInvariant(uint96,uint96,bool) (runs: 101, μ: 1598759, ~: 1606117)
+[PASS] testProperty_ReclaimBurnRequirement() (gas: 1372090)
+[PASS] testProperty_TokenSupplyConsistency(uint96,uint96) (runs: 101, μ: 1601324, ~: 1606335)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 111.88ms (110.69ms CPU time)
+
+Ran 2 tests for test/derivatives/OptionsGas.t.sol:OptionsGasTest
+[PASS] testGasCreateOptionSeries() (gas: 786564)
+[PASS] testGasExerciseOptions() (gas: 89994)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.28ms (492.31µs CPU time)
+
+Ran 1 test for test/erc6900-modular-tba/OwnerValidationModuleProperty.t.sol:OwnerValidationModulePropertyTest
+[PASS] testProperty_OwnerValidationModuleCorrectness(uint256,uint256,bytes32,bytes32) (runs: 100, μ: 816968, ~: 816954)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 106.81ms (106.28ms CPU time)
+
+Ran 4 tests for test/facets/OwnershipFacet.t.sol:OwnershipFacetTest
+[PASS] test_owner_reportsDiamondOwner() (gas: 12761)
+[PASS] test_transferOwnership_onlyOwner() (gas: 16497)
+[PASS] test_transferOwnership_revertsOnZeroAddress() (gas: 16602)
+[PASS] test_transferOwnership_updatesOwner() (gas: 23525)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 349.47µs (88.81µs CPU time)
+
+Ran 1 test for test/root/P2PBalanceSheetConsistencyProperty.t.sol:P2PBalanceSheetConsistencyPropertyTest
+[FAIL: NotNFTOwner(0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496, 2)] test_balanceSheetConsistency_acceptAndRepay() (gas: 37895918)
+Suite result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 3.72ms (2.58ms CPU time)
+
+Ran 6 tests for test/root/PenaltyFacet.t.sol:PenaltyFacetPropertyTest
+[PASS] testFuzz_LiquidateFixedClearsState(uint256,uint256) (runs: 256, μ: 753523, ~: 753961)
+[PASS] testFuzz_LiquidateRollingClearsState(uint256,uint256) (runs: 256, μ: 668891, ~: 669259)
+[PASS] testProperty_FixedDefaultNoClawback(uint256,uint256) (runs: 256, μ: 736292, ~: 736889)
+[PASS] testProperty_FixedDefaultTiming(uint256,uint256,uint40) (runs: 256, μ: 747842, ~: 748100)
+[PASS] testProperty_RollingDefaultAccessControl(uint256,uint256,uint8) (runs: 256, μ: 563071, ~: 500957)
+[PASS] test_maintenanceAccrualThenPenaltyKeepsTrackedBalanced(uint256) (runs: 256, μ: 794381, ~: 794928)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 420.57ms (419.92ms CPU time)
+
+Ran 22 tests for test/root/PenaltyFacet.t.sol:PenaltyFacetUnitTest
+[PASS] test_penalizeFixed_clearsActiveCreditDebt() (gas: 761929)
+[PASS] test_penalizeFixed_closesLoanAndClearsMembership() (gas: 808867)
+[PASS] test_penalizeFixed_respectsDirectEncumbrance() (gas: 738086)
+[PASS] test_penalizeFixed_revertsOnBadLoanIndexMapping() (gas: 771598)
+[PASS] test_penalizeFixed_revertsWhenContractBalanceBelowCollateral() (gas: 758348)
+[PASS] test_penalizeFixed_revertsWhenEncumberedExceedsPrincipal() (gas: 708171)
+[PASS] test_penalizeFixed_revertsWhenLoanClosed() (gas: 616152)
+[PASS] test_penalizeFixed_revertsWhenNotBorrower() (gas: 755582)
+[PASS] test_penalizeFixed_revertsWhenNotExpired() (gas: 615553)
+[PASS] test_penalizeFixed_revertsWhenTrackedBalanceBelowCollateral() (gas: 667467)
+[PASS] test_penalizeFixed_revertsWhenTreasuryUnset() (gas: 700102)
+[PASS] test_penalizeRolling_clearsActiveCreditDebt() (gas: 699688)
+[PASS] test_penalizeRolling_distributesCollateral() (gas: 725747)
+[PASS] test_penalizeRolling_respectsDirectEncumbrance() (gas: 688752)
+[PASS] test_penalizeRolling_revertsWhenContractBalanceBelowCollateral() (gas: 640435)
+[PASS] test_penalizeRolling_revertsWhenEncumberedExceedsPrincipal() (gas: 587652)
+[PASS] test_penalizeRolling_revertsWhenNoPrincipalRemaining() (gas: 473074)
+[PASS] test_penalizeRolling_revertsWhenNotActive() (gas: 493565)
+[PASS] test_penalizeRolling_revertsWhenNotDelinquent() (gas: 494632)
+[PASS] test_penalizeRolling_revertsWhenNotDepositBacked() (gas: 538023)
+[PASS] test_penalizeRolling_revertsWhenTrackedBalanceBelowCollateral() (gas: 546800)
+[PASS] test_penalizeRolling_revertsWhenTreasuryUnset() (gas: 619818)
+Suite result: ok. 22 passed; 0 failed; 0 skipped; finished in 4.40ms (3.62ms CPU time)
+
+Ran 1 test for test/managed-pools/ManagedPoolSystemShareTreasuryFallbackProperty.t.sol:ManagedPoolSystemShareTreasuryFallbackPropertyTest
+[PASS] testFuzz_treasuryFallbackPreservesBasePoolState(uint256,uint16) (runs: 256, μ: 1945323, ~: 1956807)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 6.32s (6.31s CPU time)
+
+Ran 3 tests for test/libraries/LibEqualIndexFees.t.sol:LibEqualIndexFeesTest
+[PASS] test_actionFeeUnits_returnsAmountWhenEnabled() (gas: 29161)
+[PASS] test_actionFeeUnits_returnsZeroWhenDisabled() (gas: 29256)
+[PASS] test_actionFeeUnits_revertsWhenEnabledButZeroAmount() (gas: 32314)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 258.28µs (69.52µs CPU time)
+
+Ran 10 tests for test/root/LibFeeIndex.t.sol:LibFeeIndexTest
+[PASS] testAccrueAccumulatesRemainders() (gas: 83931)
+[PASS] testAccrueHandlesHugeDeposits() (gas: 97828)
+[PASS] testAccrueIncreasesIndex() (gas: 76110)
+[PASS] testAccrueNoDepositsNoop() (gas: 59179)
+[PASS] testFuzzAccrueMonotonic(uint256,uint256,uint256) (runs: 256, μ: 100610, ~: 103769)
+[PASS] testFuzzPendingMatchesSettleView(uint256,uint256,uint256) (runs: 256, μ: 122925, ~: 114082)
+[PASS] testFuzzSettleAccruesYieldAndUpdatesCheckpoint(uint256,uint256,uint256,uint256) (runs: 256, μ: 132065, ~: 131906)
+[PASS] testFuzzSettleIdempotent(uint256,uint256,uint256) (runs: 256, μ: 127255, ~: 117448)
+[PASS] testPendingYieldIncludesAccruedAndUnsettled() (gas: 110924)
+[PASS] testSettleAccruesYieldAndCheckpoints() (gas: 123418)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 130.94ms (248.17ms CPU time)
+
+Ran 1 test for test/root/LibFeeIndexMaintenanceProperty.t.sol:LibFeeIndexMaintenancePropertyTest
+[PASS] test_maintenanceAppliedBeforeFeeBase() (gas: 212407)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 220.94µs (36.49µs CPU time)
+
+Ran 3 tests for test/treasury/LibFeeTreasuryIsolation.t.sol:LibFeeTreasuryIsolationTest
+[PASS] test_RevertsWhenContractBalanceInsufficient() (gas: 139279)
+[PASS] test_RevertsWhenTrackedInsufficient() (gas: 139504)
+[PASS] test_SucceedsWhenBalancesSufficient() (gas: 221439)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 444.31µs (143.44µs CPU time)
+
+Ran 3 tests for test/libraries/LibIndexEncumbrance.t.sol:LibIndexEncumbranceTest
+[PASS] test_encumber_updatesTotals() (gas: 90908)
+[PASS] test_unencumber_revertsWhenOverIndexEncumbrance() (gas: 58115)
+[PASS] test_unencumber_updatesTotals() (gas: 87908)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 306.50µs (129.09µs CPU time)
+
+Ran 1 test for test/erc6900-modular-tba/TokenDataLibProperty.t.sol:TokenDataLibPropertyTest
+[PASS] testProperty_TokenDataImmutability(bytes32,uint256,address,uint256) (runs: 100, μ: 89387, ~: 89387)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 18.08ms (17.53ms CPU time)
+
+Ran 3 tests for test/root/TrackedBalanceNativeEthProperty.t.sol:TrackedBalanceNativeEthPropertyTest
+[FAIL: UnexpectedMsgValue(0); counterexample: calldata=0xe04bf5230000000000000000000000000000000000000000000000000000000000000861000000000000000000000000000000000000000000000000000000003e5e3c23 args=[2145, 1046363171 [1.046e9]]] testFuzz_trackedBalanceBorrowRepay(uint96,uint96) (runs: 0, μ: 0, ~: 0)
+Logs:
+  Bound Result 199000000000000002146
+  Bound Result 1046363171
+
+[PASS] testFuzz_trackedBalanceDepositWithdraw(uint96,uint96) (runs: 256, μ: 5237393, ~: 5240194)
+[PASS] testFuzz_trackedBalanceFlashLoan(uint96,uint16) (runs: 256, μ: 1925670, ~: 1926029)
+Suite result: FAILED. 2 passed; 1 failed; 0 skipped; finished in 134.74ms (134.16ms CPU time)
+
+Ran 7 tests for test/root/TypesStorage.t.sol:TypesStorageTest
+[PASS] testFlashAndFixedConfig() (gas: 78964)
+[PASS] testLedgerAndMaintenanceState() (gas: 165247)
+[PASS] testLoansStoreInStruct() (gas: 326896)
+[PASS] testPoolBasicsSetAndGet() (gas: 96111)
+[PASS] testProperty_PrincipalAtOpenImmutable_Fixed(uint256,uint256) (runs: 256, μ: 237715, ~: 237536)
+[PASS] testProperty_PrincipalAtOpenImmutable_Rolling(uint256,uint256) (runs: 256, μ: 104407, ~: 104307)
+[PASS] testProperty_PrincipalAtOpenIndependentFromDeposits(uint256,uint256) (runs: 256, μ: 360547, ~: 360589)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 81.11ms (80.83ms CPU time)
+
+Ran 1 test for test/managed-pools/UnmanagedIsolation.t.sol:UnmanagedPoolIsolationPropertyTest
+[PASS] testProperty_UnmanagedPoolIsolation(uint256,address,address) (runs: 256, μ: 573412, ~: 573484)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 54.11ms (53.60ms CPU time)
+
+Ran 8 tests for test/gas/ViewFacetGas.t.sol:ActiveCreditViewGasTest
+[PASS] test_gas_ActiveCreditSelectors() (gas: 11144)
+[PASS] test_gas_GetActiveCreditIndex() (gas: 17293)
+[PASS] test_gas_GetActiveCreditStates() (gas: 27279)
+[PASS] test_gas_GetActiveCreditStatesByPosition() (gas: 34993)
+[PASS] test_gas_GetActiveCreditStatus() (gas: 23697)
+[PASS] test_gas_GetActiveCreditStatusByPosition() (gas: 32039)
+[PASS] test_gas_PendingActiveCredit() (gas: 22148)
+[PASS] test_gas_PendingActiveCreditByPosition() (gas: 30037)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 557.20µs (182.78µs CPU time)
+
+Ran 20 tests for test/gas/ViewFacetGas.t.sol:ConfigViewGasTest
+[PASS] test_gas_ConfigSelectors() (gas: 16803)
+[PASS] test_gas_GetAumFeeInfo() (gas: 15379)
+[PASS] test_gas_GetFixedTermConfigs() (gas: 14326)
+[PASS] test_gas_GetFlashConfig() (gas: 13048)
+[PASS] test_gas_GetMaintenanceState() (gas: 20460)
+[PASS] test_gas_GetManagedPoolConfig() (gas: 50480)
+[PASS] test_gas_GetMinDepositAmount() (gas: 13333)
+[PASS] test_gas_GetMinLoanAmount() (gas: 13355)
+[PASS] test_gas_GetPoolCaps() (gas: 15645)
+[PASS] test_gas_GetPoolConfig() (gas: 18027)
+[PASS] test_gas_GetPoolConfigFull() (gas: 47922)
+[PASS] test_gas_GetPoolInfo() (gas: 52355)
+[PASS] test_gas_GetPoolList() (gas: 57805)
+[PASS] test_gas_GetPoolManager() (gas: 13105)
+[PASS] test_gas_GetPoolUnderlying() (gas: 11313)
+[PASS] test_gas_GetRollingDelinquencyThresholds() (gas: 11575)
+[PASS] test_gas_IsManagedPool() (gas: 13213)
+[PASS] test_gas_IsPoolDeprecated() (gas: 13197)
+[PASS] test_gas_IsWhitelistEnabled() (gas: 13511)
+[PASS] test_gas_IsWhitelisted() (gas: 29509)
+Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 878.59µs (459.03µs CPU time)
+
+Ran 8 tests for test/gas/ViewFacetGas.t.sol:EnhancedLoanViewGasTest
+[PASS] test_gas_CanOpenFixedLoan() (gas: 48311)
+[PASS] test_gas_EnhancedLoanSelectors() (gas: 11498)
+[PASS] test_gas_GetFixedLoanAccrued() (gas: 19860)
+[PASS] test_gas_GetUserFixedLoansDetailed() (gas: 34131)
+[PASS] test_gas_GetUserFixedLoansPaginated() (gas: 33261)
+[PASS] test_gas_GetUserHealthMetrics() (gas: 48212)
+[PASS] test_gas_PreviewBorrowFixed() (gas: 47895)
+[PASS] test_gas_PreviewRepayFixed() (gas: 17949)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 495.59µs (246.97µs CPU time)
+
+Ran 3 tests for test/gas/ViewFacetGas.t.sol:EqualIndexViewGasTest
+[PASS] test_gas_GetIndexAssetCount() (gas: 12943)
+[PASS] test_gas_GetIndexAssets() (gas: 32641)
+[PASS] test_gas_GetProtocolBalance() (gas: 8381)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 244.45µs (58.59µs CPU time)
+
+Ran 18 tests for test/gas/ViewFacetGas.t.sol:EqualLendDirectViewGasTest
+[PASS] test_gas_FillsRemaining() (gas: 19945)
+[PASS] test_gas_GetBorrowerAgreements() (gas: 27432)
+[PASS] test_gas_GetBorrowerOffer() (gas: 34730)
+[PASS] test_gas_GetBorrowerOffers() (gas: 29929)
+[PASS] test_gas_GetBorrowerRatioTrancheOffer() (gas: 39093)
+[PASS] test_gas_GetLenderOffers() (gas: 29621)
+[PASS] test_gas_GetOffer() (gas: 36959)
+[PASS] test_gas_GetOfferSummary() (gas: 45152)
+[PASS] test_gas_GetOfferTranche() (gas: 22165)
+[PASS] test_gas_GetPoolActiveDirectLent() (gas: 11202)
+[PASS] test_gas_GetPositionDirectState() (gas: 28086)
+[PASS] test_gas_GetRatioBorrowerOffers() (gas: 27008)
+[PASS] test_gas_GetRatioLenderOffers() (gas: 32388)
+[PASS] test_gas_GetRatioTrancheOffer() (gas: 39929)
+[PASS] test_gas_GetRatioTrancheStatus() (gas: 25487)
+[PASS] test_gas_GetTrancheStatus() (gas: 21931)
+[PASS] test_gas_IsTrancheDepleted() (gas: 20724)
+[PASS] test_gas_IsTrancheOffer() (gas: 13364)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 1.11ms (455.35µs CPU time)
+
+Ran 5 tests for test/gas/ViewFacetGas.t.sol:LiquidityViewGasTest
+[PASS] test_gas_GetTotalPoolDeposits() (gas: 12898)
+[PASS] test_gas_GetUserBalances() (gas: 19418)
+[PASS] test_gas_LiquiditySelectors() (gas: 10542)
+[PASS] test_gas_PendingYield() (gas: 23865)
+[PASS] test_gas_TotalAvailableLiquidity() (gas: 16384)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 331.46µs (83.10µs CPU time)
+
+Ran 1 test for test/gas/ViewFacetGas.t.sol:LoanPreviewGasTest
+[PASS] test_gas_LoanPreviewSelectors() (gas: 10645)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 180.02µs (21.81µs CPU time)
+
+Ran 3 tests for test/gas/ViewFacetGas.t.sol:LoanViewGasTest
+[PASS] test_gas_GetRollingLoan() (gas: 20977)
+[PASS] test_gas_LoanViewSelectors() (gas: 10220)
+[PASS] test_gas_PreviewBorrowRolling() (gas: 15136)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 286.58µs (53.23µs CPU time)
+
+Ran 1 test for test/gas/ViewFacetGas.t.sol:MaintenanceSelectorsGasTest
+[PASS] test_gas_MaintenanceSelectors() (gas: 9441)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 173.48µs (17.29µs CPU time)
+
+Ran 14 tests for test/gas/ViewFacetGas.t.sol:MultiPoolPositionViewGasTest
+[PASS] test_gas_GetMultiPoolPositionState() (gas: 111482)
+[PASS] test_gas_GetPositionActivePools() (gas: 48110)
+[PASS] test_gas_GetPositionAggregatedSummary() (gas: 103929)
+[PASS] test_gas_GetPositionDirectAgreementIds() (gas: 33391)
+[PASS] test_gas_GetPositionDirectAgreements() (gas: 100949)
+[PASS] test_gas_GetPositionDirectSummary() (gas: 56393)
+[PASS] test_gas_GetPositionDirectSummaryByAsset() (gas: 95587)
+[PASS] test_gas_GetPositionPoolData() (gas: 47724)
+[PASS] test_gas_GetPositionPoolDataPoolOnly() (gas: 45427)
+[PASS] test_gas_GetPositionPoolMemberships() (gas: 48518)
+[PASS] test_gas_GetPositionPoolStates() (gas: 79392)
+[PASS] test_gas_GetUserPositions() (gas: 25375)
+[PASS] test_gas_IsPositionMemberOfPool() (gas: 21105)
+[PASS] test_gas_MultiPoolSelectors() (gas: 13962)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 1.19ms (694.75µs CPU time)
+
+Ran 3 tests for test/gas/ViewFacetGas.t.sol:PoolUtilizationViewGasTest
+[PASS] test_gas_GetPoolCapacity() (gas: 21409)
+[PASS] test_gas_GetPoolStats() (gas: 23039)
+[PASS] test_gas_PoolUtilizationSelectors() (gas: 10242)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 276.23µs (52.96µs CPU time)
+
+Ran 9 tests for test/gas/ViewFacetGas.t.sol:PositionViewGasTest
+[PASS] test_gas_GetLoansDetails() (gas: 29218)
+[PASS] test_gas_GetPositionEncumbrance() (gas: 28958)
+[PASS] test_gas_GetPositionLoanIds() (gas: 31626)
+[PASS] test_gas_GetPositionLoanSummary() (gas: 41837)
+[PASS] test_gas_GetPositionMetadata() (gas: 25359)
+[PASS] test_gas_GetPositionSolvency() (gas: 32894)
+[PASS] test_gas_GetPositionState() (gas: 64133)
+[PASS] test_gas_IsPositionDelinquent() (gas: 26265)
+[PASS] test_gas_PositionSelectors() (gas: 11719)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 799.93µs (278.64µs CPU time)
+
+Ran 2 tests for test/views/ViewFacetInvariantsProperty.t.sol:EnhancedLoanSummaryInvariantTest
+[PASS] testFuzz_userLoanSummary_equalsSumActiveFixedPlusRolling(uint256[5],bool[5],uint256) (runs: 256, μ: 492257, ~: 503514)
+[PASS] test_gas_UserLoanSummarySnapshot() (gas: 219745)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 43.75ms (43.52ms CPU time)
+
+Ran 1 test for test/views/ViewFacetInvariantsProperty.t.sol:LoanViewPaginationInvariantTest
+[PASS] testFuzz_getUserFixedLoanIdsPaginated_isPureWindow(uint256,uint256,uint256) (runs: 256, μ: 277367, ~: 276163)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 37.39ms (37.17ms CPU time)
+
+Ran 1 test for test/root/WithdrawableEquityConservationProperty.t.sol:WithdrawableEquityConservationPropertyTest
+[PASS] testFuzz_withdrawableEquityConservation(uint256,uint256,uint256,uint256) (runs: 256, μ: 774673, ~: 775606)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 62.83ms (62.61ms CPU time)
+
+Ran 12 tests for test/libraries/LibCurrency.t.sol:LibCurrencyTest
+[PASS] testFuzz_pullFeeOnTransferReturnsDelta(uint256,uint16) (runs: 256, μ: 593151, ~: 595400)
+[PASS] testFuzz_pullNativeAcceptsExactMsgValue(uint256) (runs: 256, μ: 43422, ~: 43215)
+[PASS] testFuzz_pullNativeEnforcesAvailable(uint256,uint256,uint256) (runs: 256, μ: 35322, ~: 35953)
+[PASS] testFuzz_pullNativeRejectsMismatchedMsgValue(uint256) (runs: 256, μ: 20014, ~: 19822)
+[PASS] testFuzz_pullNativeUpdatesTracked(uint256,uint256,uint256) (runs: 256, μ: 37044, ~: 37508)
+[PASS] test_assertZeroMsgValue_reverts() (gas: 15844)
+[PASS] test_balanceOfSelf_nativeAndErc20() (gas: 476967)
+[PASS] test_pull_erc20_returnsReceived() (gas: 514129)
+[PASS] test_pull_native_returnsAmount() (gas: 30870)
+[PASS] test_transfer_erc20() (gas: 503683)
+[PASS] test_transfer_native_revertsOnFail() (gas: 60115)
+[PASS] test_transfer_native_success() (gas: 43463)
+Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 536.25ms (603.35ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectLentExclusion.t.sol:DirectLentExclusionTest
+[PASS] test_directLentPrincipalNotCountedAsDebt() (gas: 612924)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.59ms (130.69µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectLimitOrderRemoval.t.sol:DirectLimitOrderRemovalTest
+[PASS] testLimitOrderSelectorsRemoved() (gas: 20132)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.14ms (41.08µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectNativeEthIntegration.t.sol:DirectNativeEthIntegrationTest
+[PASS] testIntegration_directNativeEthLifecycle() (gas: 1451016)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.67ms (503.04µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectNativeEthProperty.t.sol:DirectNativeEthPropertyTest
+[PASS] test_directNativeEthFlow() (gas: 1474075)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.78ms (581.45µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectOfferConfigProperty.t.sol:DirectOfferConfigPropertyTest
+[PASS] testProperty_OfferConfigurationStorage() (gas: 2218175)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.41ms (348.85µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectOfferIdKindProperty.t.sol:DirectOfferIdKindPropertyTest
+[PASS] test_GlobalOfferIdsAreUniqueAndSummariesAreTypeAware() (gas: 3102806)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.74ms (594.28µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectOfferStateProperty.t.sol:DirectOfferStatePropertyTest
+[PASS] testProperty_OfferStateValidation() (gas: 3010139)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.84ms (677.57µs CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectOfferTransferCancel.t.sol:DirectOfferTransferCancelTest
+[PASS] test_MultipleOffersCancelledOnTransfer() (gas: 1532134)
+[PASS] test_OfferCancelledOnLenderTransfer() (gas: 1194315)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.77ms (759.21µs CPU time)
+
+Ran 3 tests for test/equallend-direct/DirectOwnershipProperty.t.sol:DirectOwnershipPropertyTest
+[PASS] testProperty_OwnershipValidationConsistency() (gas: 2990231)
+[PASS] test_acceptBorrowerOfferRevertsWhenLenderUsesBorrowerPosition() (gas: 1432387)
+[PASS] test_acceptOfferRevertsWhenBorrowerUsesLenderPosition() (gas: 1436372)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 4.59ms (1.02ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectRepayProperty.t.sol:DirectRepayTimingPropertyTest
+[PASS] testProperty_EarlyRepayTimingValidation() (gas: 4411625)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.47ms (1.26ms CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectRollingAgreementProperty.t.sol:DirectRollingAgreementPropertyTest
+[PASS] testProperty_RollingAgreementInitialization_BorrowerOffer() (gas: 2604962)
+[PASS] testProperty_RollingAgreementInitialization_LenderOffer() (gas: 2631718)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 4.36ms (857.79µs CPU time)
+
+Ran 4 tests for test/equallend-direct/DirectRollingEarlyActionsProperty.t.sol:DirectRollingEarlyActionsPropertyTest
+[PASS] testProperty_EarlyExerciseAllowed() (gas: 2027557)
+[PASS] testProperty_EarlyExerciseNotAllowedReverts() (gas: 2296923)
+[PASS] testProperty_EarlyRepayAllowed() (gas: 2052008)
+[PASS] testProperty_EarlyRepayNotAllowedReverts() (gas: 2335153)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 5.30ms (1.85ms CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectRollingOfferProperty.t.sol:DirectRollingOfferPropertyTest
+[PASS] testProperty_RollingOfferCreationAndStorage() (gas: 2256674)
+[PASS] testProperty_RollingOfferEvents() (gas: 1181189)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 4.32ms (863.96µs CPU time)
+
+Ran 3 tests for test/equallend-direct/DirectRollingPaymentProperty.t.sol:DirectRollingPaymentPropertyTest
+[PASS] testProperty_AmortizationDisabledRevertsOnExcess() (gas: 2759101)
+[PASS] testProperty_DustPaymentReverts() (gas: 2584116)
+[PASS] testProperty_PaymentApplicationAndScheduleAdvance() (gas: 2718530)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 4.94ms (1.46ms CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectRollingRecoveryProperty.t.sol:DirectRollingRecoveryPropertyTest
+[PASS] testProperty_RecoveryRespectsGracePeriod() (gas: 2350973)
+[PASS] testProperty_RecoveryTimingAndDistribution() (gas: 2154875)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 4.59ms (1.08ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectRollingValidationProperty.t.sol:DirectRollingValidationPropertyTest
+[PASS] testProperty_RollingParamValidation() (gas: 78849)
+Logs:
+  config ready
+  baseline valid
+  baseline interval: 604801
+  short interval
+  too many interval: 604801
+  cfg min interval: 604800
+  too many max count: 521
+  too many payments
+  bad grace
+  low apy
+  high apy
+  excessive premium
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.60ms (192.35µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectRollingViewProperty.t.sol:DirectRollingViewPropertyTest
+[PASS] testProperty_ViewAccuracy() (gas: 2338584)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.89ms (459.51µs CPU time)
+
+Ran 3 tests for test/equallend-direct/DirectSolvencyFixes.t.sol:DirectSolvencyFixesTest
+[PASS] test_acceptOffer_crossAsset_skipsLtv() (gas: 2112445)
+[PASS] test_acceptOffer_sameAsset_doesNotTreatLockAsDebt() (gas: 2136144)
+[PASS] test_acceptOffer_sameAsset_includesNewDebtAndLenderPoolDebt() (gas: 1732130)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 2.04ms (1.03ms CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectSolvencyGuard.t.sol:DirectSolvencyGuardTest
+[PASS] test_acceptOffer_revertsWhenBorrowerWouldBreachSolvency() (gas: 1779504)
+[PASS] test_postOffer_revertsWhenLenderWouldBreachSolvency() (gas: 926435)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 3.74ms (444.00µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectStateConsistencyProperty.t.sol:DirectStateConsistencyPropertyTest
+[PASS] testProperty_StateConsistencyAcrossAgreements() (gas: 3912747)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.16ms (976.92µs CPU time)
+
+Ran 3 tests for test/equallend-direct/DirectStorageProperty.t.sol:DirectStoragePropertyTest
+[PASS] testProperty_DataIntegrityPreservation(address,address,address,uint256,uint256,uint256,uint256,uint256,uint16,uint64,uint256,uint16,uint16,uint16,uint16,uint16,address,bool,bool,uint8,uint256,uint256,uint256,uint256) (runs: 100, μ: 880273, ~: 889849)
+[PASS] testProperty_TrancheCleanupOnCancel() (gas: 458597)
+[PASS] testProperty_TrancheStorageAccounting() (gas: 260525)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 47.37ms (43.93ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectTerminalStateProperty.t.sol:DirectTerminalStatePropertyTest
+[PASS] testProperty_TerminalStateEnforcement() (gas: 615339)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.44ms (211.41µs CPU time)
+
+Ran 3 tests for test/invariants/AuctionStatefulInvariants.t.sol:AmmAuctionStatefulInvariantTest
+[PASS] invariant_kNonDecreasing() (runs: 256, calls: 12800, reverts: 0)
+
+╭---------------------------+-------------+-------+---------+----------╮
+| Contract                  | Selector    | Calls | Reverts | Discards |
++======================================================================+
+| AmmAuctionStatefulHandler | failed      | 6347  | 0       | 0        |
+|---------------------------+-------------+-------+---------+----------|
+| AmmAuctionStatefulHandler | swapExactIn | 6453  | 0       | 0        |
+╰---------------------------+-------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 2379706671
+  Bound Result 1165681584799685
+  Bound Result 1783
+  Bound Result 29149911541401919141725
+  Bound Result 17713
+  Bound Result 3111
+  Bound Result 17462485769877917246944
+  Bound Result 1266101120264
+  Bound Result 106570332268
+  Bound Result 16740497372520919379845
+  Bound Result 12135
+  Bound Result 37606
+  Bound Result 1860
+  Bound Result 19049
+  Bound Result 18259386805498001848599
+  Bound Result 10000000
+  Bound Result 250000000000000000000
+  Bound Result 997000000000000000000
+  Bound Result 50000000000000000000
+  Bound Result 17381178107052633931036
+
+[PASS] invariant_principalStable() (runs: 256, calls: 12800, reverts: 0)
+
+╭---------------------------+-------------+-------+---------+----------╮
+| Contract                  | Selector    | Calls | Reverts | Discards |
++======================================================================+
+| AmmAuctionStatefulHandler | failed      | 6365  | 0       | 0        |
+|---------------------------+-------------+-------+---------+----------|
+| AmmAuctionStatefulHandler | swapExactIn | 6435  | 0       | 0        |
+╰---------------------------+-------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 8016618339647421775341
+  Bound Result 35405085154920
+  Bound Result 22847
+  Bound Result 173041399872545137716
+  Bound Result 19410
+  Bound Result 8784
+  Bound Result 5571271575728872252822
+  Bound Result 14027079482069394381252
+  Bound Result 21029065719645483324885
+  Bound Result 346192
+  Bound Result 5185211838742866823442
+  Bound Result 1
+  Bound Result 23621722847512460571609
+  Bound Result 19220
+  Bound Result 25073892471385912925408
+  Bound Result 1537
+  Bound Result 13392578463771347645657
+  Bound Result 3268524
+  Bound Result 15774563299238775445890
+  Bound Result 29411829164857970793481
+  Bound Result 1536
+  Bound Result 4056490825492111393
+  Bound Result 32251208821912327022523
+  Bound Result 3405
+  Bound Result 60672920796289350061570
+  Bound Result 3564321724416900695912
+
+[PASS] invariant_reservesNonZero() (runs: 256, calls: 12800, reverts: 0)
+
+╭---------------------------+-------------+-------+---------+----------╮
+| Contract                  | Selector    | Calls | Reverts | Discards |
++======================================================================+
+| AmmAuctionStatefulHandler | failed      | 6344  | 0       | 0        |
+|---------------------------+-------------+-------+---------+----------|
+| AmmAuctionStatefulHandler | swapExactIn | 6456  | 0       | 0        |
+╰---------------------------+-------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 17511418712578442087987
+  Bound Result 3954615583088714038018
+  Bound Result 1301
+  Bound Result 500000000000000000000
+  Bound Result 56506
+  Bound Result 2515
+  Bound Result 24576
+  Bound Result 302
+  Bound Result 16314300060460776354147
+  Bound Result 66004208082103088654
+  Bound Result 3096268767
+  Bound Result 14986915737208228650270
+  Bound Result 250
+  Bound Result 1
+  Bound Result 25203030428262442226940
+  Bound Result 16000000000
+  Bound Result 2
+  Bound Result 9636518428064202790540
+  Bound Result 3437
+  Bound Result 86400
+  Bound Result 99293336508439874827
+  Bound Result 27799721536883801717751
+  Bound Result 14165118226560957740539
+  Bound Result 13184901463544307596747
+  Bound Result 37
+  Bound Result 21
+  Bound Result 7500
+  Bound Result 76103441660937966989
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 7.66s (7.66s CPU time)
+
+Ran 8 tests for test/equallend-direct/DirectTrancheAcceptanceProperty.t.sol:DirectTrancheAcceptancePropertyTest
+[PASS] testProperty_ActiveCreditIntegrationConsistency(address,address,uint256) (runs: 100, μ: 2704480, ~: 2705714)
+[PASS] testProperty_AtomicTrancheAcceptance(address,address,uint256,uint256,uint256,uint256) (runs: 100, μ: 2700322, ~: 2700381)
+[PASS] testProperty_AutoCancellationDeterminism(address,address,uint256) (runs: 100, μ: 1663590, ~: 1663660)
+[PASS] testProperty_ConcurrentAcceptanceAtomicity(address,address,address,uint256,uint256) (runs: 100, μ: 2809633, ~: 2812523)
+[PASS] testProperty_EscrowToLentConsistency(address,address,uint256,uint256,uint256,uint256) (runs: 100, μ: 2657021, ~: 2660500)
+[PASS] testProperty_MultiFillIndependence(address,address,uint256) (runs: 100, μ: 3253590, ~: 3254599)
+[PASS] testProperty_TrancheDepletionHandling(address,address,uint256) (runs: 100, μ: 2545449, ~: 2546867)
+[PASS] test_AutoCancelPreservesUnrelatedEscrowInSamePool() (gas: 3047747)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 448.86ms (445.14ms CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectTrancheCancellationProperty.t.sol:DirectTrancheCancellationPropertyTest
+[PASS] testProperty_CancelAccessControl(address,address) (runs: 100, μ: 1464993, ~: 1464993)
+[PASS] testProperty_TrancheCancellationCompleteness(address,uint256,uint256) (runs: 100, μ: 1286628, ~: 1286668)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 81.23ms (77.57ms CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectTrancheEventsProperty.t.sol:DirectTrancheEventsPropertyTest
+[PASS] testProperty_EventEmissionCompleteness() (gas: 2537106)
+[PASS] testProperty_EventEmissionCompleteness_AutoCancel() (gas: 1639902)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 4.40ms (1.11ms CPU time)
+
+Ran 3 tests for test/equallend-direct/DirectTrancheIntegration.t.sol:DirectTrancheIntegrationTest
+[PASS] testIntegration_PositionTransferCancelsTranche() (gas: 1379357)
+[PASS] testIntegration_TrancheAndStandardFlow() (gas: 3892345)
+[PASS] testIntegration_TrancheIsolatedFromRollingOffers() (gas: 3173508)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 4.88ms (1.63ms CPU time)
+
+Ran 3 tests for test/equallend-direct/DirectTrancheOfferPostingProperty.t.sol:DirectTrancheOfferPostingPropertyTest
+[PASS] testProperty_EncumbranceAccountingInvariant(address,uint256,uint256,uint256) (runs: 100, μ: 1895967, ~: 1896081)
+[PASS] testProperty_EncumbranceCleanup(address,uint256,uint256,uint256) (runs: 100, μ: 1850638, ~: 1850712)
+[PASS] testProperty_TrancheOfferInitializationCorrectness(address,uint256,uint256,uint256,bool) (runs: 100, μ: 1184066, ~: 1485978)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 138.37ms (134.74ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectTrancheViewProperty.t.sol:DirectTrancheViewPropertyTest
+[PASS] testProperty_ViewFunctionAccuracy(address,address,uint256,uint256,uint256,uint256) (runs: 100, μ: 2691534, ~: 2691609)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 69.30ms (65.65ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectTypesTrancheProperty.t.sol:DirectTypesTranchePropertyTest
+[PASS] testProperty_TrancheOfferInitializationCorrectness(address,uint256,uint256,uint256,address,address,uint256,uint16,uint64,uint256,uint256,bool) (runs: 100, μ: 590198, ~: 582121)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 35.10ms (31.56ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectViewFunctions.t.sol:DirectViewFunctionsTest
+[PASS] testViewFunctionsReturnStoredData() (gas: 2637970)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.77ms (480.97µs CPU time)
+
+Ran 1 test for test/root/EncumberedYieldAccrualProperty.t.sol:EncumberedYieldAccrualPropertyTest
+[PASS] testFuzz_encumberedPrincipalEarnsYield(uint256,uint256,uint256) (runs: 256, μ: 1827559, ~: 1833057)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 52.12ms (51.92ms CPU time)
+
+Ran 9 tests for test/views/EnhancedLoanViewFacet.t.sol:EnhancedLoanViewFacetTest
+[PASS] testFuzz_getUserFixedLoansPaginated_isWindow(uint256,uint256) (runs: 256, μ: 934249, ~: 924326)
+[PASS] test_canOpenFixedLoan_validatesInputsAndLimits() (gas: 116840)
+[PASS] test_getFixedLoanAccrued_and_previewRepayFixed_matchUpfrontModel() (gas: 108786)
+[PASS] test_getUserFixedLoansDetailed_returnsActiveOnly_andTotalsMatch() (gas: 272145)
+[PASS] test_getUserFixedLoansPaginated_returnsRawLoansAndTotalCount() (gas: 392790)
+[PASS] test_getUserHealthMetrics_availableToBorrow_matchesApyZeroCase() (gas: 143324)
+[PASS] test_getUserHealthMetrics_handlesZeroCollateralAndDebtCorrectly() (gas: 82623)
+[PASS] test_getUserLoanSummary_countsOnlyActiveFixed_andAddsRolling() (gas: 424760)
+[PASS] test_previewBorrowFixed_returnsZeroWhenNoFixedConfigs() (gas: 161527)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 45.41ms (45.09ms CPU time)
+
+Ran 9 tests for test/root/EqualIndexActionsFacetV3.t.sol:EqualIndexActionsFacetV3Test
+[PASS] testBurn() (gas: 663627)
+[PASS] testFlashLoan() (gas: 901566)
+[PASS] testFlashLoanReceiverRevert() (gas: 857139)
+[PASS] testFlashLoanUnderpaid() (gas: 887126)
+[PASS] testMint() (gas: 574361)
+[PASS] testMintBurn_MixedDecimalsBundle() (gas: 4589131)
+[PASS] testMintInvalidUnits() (gas: 50293)
+[PASS] testMintPaused() (gas: 56671)
+[PASS] testMintUsesExtraBackingWhenPoolShort() (gas: 557891)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 3.26ms (2.45ms CPU time)
+
+Ran 1 test for test/root/DirectPrincipalConservationProperty.t.sol:DirectPrincipalConservationPropertyTest
+[PASS] testFuzz_encumbrancePrincipalConservation(uint256,uint256,uint256,uint256) (runs: 256, μ: 37775619, ~: 37775904)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.59s (1.59s CPU time)
+
+Ran 7 tests for test/equallend-direct/DirectRatioTrancheNoAutoExerciseProperty.t.sol:DirectRatioTrancheNoAutoExercisePropertyTest
+[PASS] testProperty_BorrowerRatioTrancheAutoExerciseRemoved(address,address,uint256,uint256,uint256) (runs: 100, μ: 2495978, ~: 2501456)
+[PASS] testProperty_RatioTrancheAutoExerciseRemoved(address,address,uint256,uint256,uint256,uint256) (runs: 100, μ: 2521566, ~: 2526151)
+[PASS] test_BorrowerRatioAcceptance_RevertsWhenEscrowCommitsCapacity() (gas: 2262666)
+[PASS] test_BorrowerRatioAcceptance_SucceedsAtUnencumberedCapacity() (gas: 2900609)
+[PASS] test_BorrowerRatioDifferentAsset_AllowsFillWithoutSameAssetSolvencyGate() (gas: 2480968)
+[PASS] test_BorrowerRatioSameAsset_RevertsWhenFillBreachesBorrowerLtv() (gas: 1785077)
+[PASS] test_BorrowerRatioSameAsset_SucceedsWhenWithinBorrowerLtv() (gas: 2538578)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 98.15ms (149.06ms CPU time)
+
+Ran 4 tests for test/equallend-direct/DirectRatioTrancheOfferProperty.t.sol:DirectRatioTrancheOfferPropertyTest
+[PASS] test_acceptRatioTranche_partialFillUpdatesRemainingAndLocksCollateral() (gas: 2732505)
+[PASS] test_acceptRatioTranche_revertsBelowMinFill() (gas: 1794797)
+[PASS] test_cancelRatioTrancheReleasesEscrow() (gas: 1391175)
+[PASS] test_postRatioTrancheInvalidPrice() (gas: 261146)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 4.39ms (1.04ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectRecoveryProperty.t.sol:DirectRecoveryPropertyTest
+[PASS] testProperty_RecoveryTimingAndPermissions() (gas: 2399508)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.86ms (722.54µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectRepayProperty.t.sol:DirectRepayFunctionalityPropertyTest
+[PASS] testProperty_RepayFunctionality() (gas: 2217809)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.65ms (571.49µs CPU time)
+
+Ran 1 test for test/gas/EqualIndexAdminGas.t.sol:EqualIndexAdminGasTest
+[PASS] test_gas_SetIndexFees() (gas: 54434)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 723.86µs (35.53µs CPU time)
+
+Ran 1 test for test/compete/EqualIndexAmmArbitrageIntegration.t.sol:EqualIndexAmmArbitrageIntegrationTest
+[PASS] test_IndexNavArbitrageAgainstAmmAuction() (gas: 1623835)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.46ms (403.97µs CPU time)
+
+Ran 1 test for test/root/EqualIndexFlashLoanFeeSplit.t.sol:EqualIndexFlashLoanFeeSplitTest
+[PASS] test_flashLoanFeeSplit_routesToPoolFeeIndexAndPot() (gas: 3803655)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 529.32µs (274.30µs CPU time)
+
+Ran 1 test for test/compete/EqualIndexLeverageLoopIntegration.t.sol:EqualIndexLeverageLoopIntegrationTest
+[PASS] test_leverageLoopThroughIndexes() (gas: 3742232)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 5.50ms (1.96ms CPU time)
+
+Ran 8 tests for test/root/EqualIndexMintBurnFeeSplit.t.sol:EqualIndexMintBurnFeeSplitTest
+[PASS] test_burnFeeSplit_twoWay() (gas: 402699)
+[PASS] test_defaultMintBurnFeeIndexShareBps() (gas: 8284)
+[PASS] test_mintBurnAndFlashUseDifferentConfigs() (gas: 20149)
+[PASS] test_mintFeeSplit_routesPoolShareWhenPoolMapped() (gas: 3636620)
+[PASS] test_mintFeeSplit_twoWay() (gas: 357466)
+[PASS] test_setMintBurnFeeIndexShareBps() (gas: 357359)
+[PASS] test_setMintBurnFeeIndexShareBps_maxValidation() (gas: 11489)
+[PASS] test_setMintBurnFeeIndexShareBps_onlyTimelock() (gas: 11553)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 1.99ms (1.04ms CPU time)
+
+Ran 1 test for test/root/EqualIndexNativeEthIntegration.t.sol:EqualIndexNativeEthIntegrationTest
+[PASS] testIntegration_equalIndexNativeMintBurn() (gas: 3501501)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.21ms (524.53µs CPU time)
+
+Ran 2 tests for test/root/EqualIndexNativeEthProperty.t.sol:EqualIndexNativeEthPropertyTest
+[PASS] test_nativeFlashLoanFeeAccounting() (gas: 372898)
+[PASS] test_nativeMintBurnAndMsgValueGuard() (gas: 351955)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.01ms (462.38µs CPU time)
+
+Ran 6 tests for test/root/EqualIndexPagination.t.sol:EqualIndexPaginationTest
+[PASS] test_GetIndexAssetCountAndPagination() (gas: 80395)
+[PASS] test_GetIndexAssets_InvalidIndexReverts() (gas: 14803)
+[PASS] test_GetIndexAssets_LimitZeroReturnsRemainder() (gas: 39989)
+[PASS] test_IndexTokenPaginationHelpers() (gas: 98014)
+[PASS] test_IndexTokenPreviewMintAndFlashLoanPaginated() (gas: 136536)
+[PASS] test_IndexTokenPreviewRedeemPaginated_NoSupply() (gas: 124040)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 1.77ms (863.86µs CPU time)
+
+Ran 2 tests for test/root/EqualIndexPoolCreationProperty.t.sol:EqualIndexPoolCreationPropertyTest
+[PASS] testFuzz_indexPoolAutoCreation(address,address) (runs: 256, μ: 2895463, ~: 2895463)
+[PASS] testFuzz_poolExistenceInvariant(address,address) (runs: 256, μ: 68813, ~: 68813)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 95.72ms (95.28ms CPU time)
+
+Ran 5 tests for test/invariants/MaintenanceStatefulInvariants.t.sol:MaintenanceStatefulInvariantTest
+[PASS] invariant_activeCreditIndexMonotonic() (runs: 256, calls: 12800, reverts: 1671)
+
+╭----------------------------+--------------------+-------+---------+----------╮
+| Contract                   | Selector           | Calls | Reverts | Discards |
++==============================================================================+
+| MaintenanceStatefulHandler | accrueActiveCredit | 995   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | accrueFee          | 1003  | 1003    | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | advanceTime        | 966   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | bumpPrincipal      | 995   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | closeRolling       | 940   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | expandRolling      | 957   | 140     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | failed             | 964   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | makePayment        | 998   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openFixed          | 956   | 336     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openRolling        | 1018  | 192     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | pokeMaintenance    | 1001  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | repayFixed         | 1000  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | settleMaintenance  | 1007  | 0       | 0        |
+╰----------------------------+--------------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 671225
+  Bound Result 869450
+  Bound Result 814
+  Bound Result 28392833912591991623
+  Bound Result 3379206125157512
+  Bound Result 19552242484823964307
+  Bound Result 1860
+  Bound Result 871869
+  Bound Result 19574
+  Bound Result 303802809355656900759
+  Bound Result 77
+  Bound Result 1431415151919616
+  Bound Result 47
+  Bound Result 1012250
+  Bound Result 99999999999999999999
+  Bound Result 10055
+  Bound Result 1511095105
+  Bound Result 100000000000000000000
+  Bound Result 29467150017024220297
+  Bound Result 775164
+  Bound Result 330
+  Bound Result 15572
+
+[PASS] invariant_activeCreditMatchesLoans() (runs: 256, calls: 12800, reverts: 1568)
+
+╭----------------------------+--------------------+-------+---------+----------╮
+| Contract                   | Selector           | Calls | Reverts | Discards |
++==============================================================================+
+| MaintenanceStatefulHandler | accrueActiveCredit | 946   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | accrueFee          | 996   | 996     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | advanceTime        | 1021  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | bumpPrincipal      | 949   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | closeRolling       | 1018  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | expandRolling      | 967   | 128     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | failed             | 1005  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | makePayment        | 1008  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openFixed          | 970   | 286     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openRolling        | 947   | 158     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | pokeMaintenance    | 973   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | repayFixed         | 963   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | settleMaintenance  | 1037  | 0       | 0        |
+╰----------------------------+--------------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 14047618442658447305
+  Bound Result 712426
+  Bound Result 2779
+  Bound Result 459252879
+  Bound Result 66221181308518203633
+  Bound Result 99000000000000000000
+  Bound Result 512067484488246335799
+  Bound Result 1
+  Bound Result 456
+  Bound Result 3374
+  Bound Result 2097
+  Bound Result 2
+  Bound Result 50000000000000000000
+  Bound Result 338338211583771495813
+  Bound Result 19717
+
+[PASS] invariant_backingCoversReserved() (runs: 256, calls: 12800, reverts: 1596)
+
+╭----------------------------+--------------------+-------+---------+----------╮
+| Contract                   | Selector           | Calls | Reverts | Discards |
++==============================================================================+
+| MaintenanceStatefulHandler | accrueActiveCredit | 1003  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | accrueFee          | 940   | 940     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | advanceTime        | 986   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | bumpPrincipal      | 990   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | closeRolling       | 990   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | expandRolling      | 1008  | 127     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | failed             | 976   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | makePayment        | 983   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openFixed          | 979   | 325     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openRolling        | 987   | 204     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | pokeMaintenance    | 983   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | repayFixed         | 1010  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | settleMaintenance  | 965   | 0       | 0        |
+╰----------------------------+--------------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 195270
+  Bound Result 49344
+  Bound Result 19100000000000000000
+  Bound Result 524119857563231190386
+  Bound Result 6150
+  Bound Result 175
+  Bound Result 557036
+  Bound Result 6098476271128490207
+  Bound Result 377172968868950583240
+  Bound Result 450
+  Bound Result 249
+  Bound Result 49999999999999999997
+  Bound Result 35715192226381329747
+  Bound Result 350798178
+  Bound Result 21844
+  Bound Result 38579162837412529466
+  Bound Result 396045831143854992973
+  Bound Result 21696456970488407571
+  Bound Result 718974
+
+[PASS] invariant_feeIndexMonotonic() (runs: 256, calls: 12800, reverts: 1559)
+
+╭----------------------------+--------------------+-------+---------+----------╮
+| Contract                   | Selector           | Calls | Reverts | Discards |
++==============================================================================+
+| MaintenanceStatefulHandler | accrueActiveCredit | 987   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | accrueFee          | 941   | 941     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | advanceTime        | 1024  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | bumpPrincipal      | 988   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | closeRolling       | 992   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | expandRolling      | 964   | 128     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | failed             | 966   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | makePayment        | 1004  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openFixed          | 972   | 305     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openRolling        | 984   | 185     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | pokeMaintenance    | 970   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | repayFixed         | 1014  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | settleMaintenance  | 994   | 0       | 0        |
+╰----------------------------+--------------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 45505302314294202294
+  Bound Result 420367824719000245811
+  Bound Result 27404990964130758907
+  Bound Result 10000000000000000
+  Bound Result 10988963623067888863
+  Bound Result 700
+  Bound Result 1077037
+  Bound Result 972872853392965
+  Bound Result 5561726521009079974
+  Bound Result 601
+  Bound Result 55470
+  Bound Result 887295
+  Bound Result 8343
+  Bound Result 7847
+  Bound Result 8275337335550921328
+  Bound Result 6551
+  Bound Result 1209597
+  Bound Result 700000000000000000
+  Bound Result 1044698
+  Bound Result 7
+
+[PASS] invariant_maintenanceIndexMonotonic() (runs: 256, calls: 12800, reverts: 1767)
+
+╭----------------------------+--------------------+-------+---------+----------╮
+| Contract                   | Selector           | Calls | Reverts | Discards |
++==============================================================================+
+| MaintenanceStatefulHandler | accrueActiveCredit | 980   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | accrueFee          | 1035  | 1035    | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | advanceTime        | 940   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | bumpPrincipal      | 940   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | closeRolling       | 974   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | expandRolling      | 987   | 150     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | failed             | 968   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | makePayment        | 965   | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openFixed          | 1003  | 377     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | openRolling        | 1034  | 205     | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | pokeMaintenance    | 1014  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | repayFixed         | 1003  | 0       | 0        |
+|----------------------------+--------------------+-------+---------+----------|
+| MaintenanceStatefulHandler | settleMaintenance  | 957   | 0       | 0        |
+╰----------------------------+--------------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 23254
+  Bound Result 141373059819470754592
+  Bound Result 1304821
+  Bound Result 483623283097821520513
+  Bound Result 853960
+  Bound Result 697600
+  Bound Result 51200
+  Bound Result 659918
+  Bound Result 16834
+  Bound Result 34666803845542203522
+  Bound Result 76907684864698149006
+  Bound Result 32
+  Bound Result 13922934225406885084
+  Bound Result 365
+  Bound Result 8725
+  Bound Result 54759869182020487628
+
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 9.26s (14.93s CPU time)
+
+Ran 5 tests for test/root/RemainderIsolation.t.sol:RemainderIsolationTest
+[PASS] test_FeeIndexRemainder_PoolIsolation() (gas: 257011)
+[PASS] test_MaintenanceRemainder_PoolIsolation() (gas: 354961)
+[PASS] test_MultiplePoolsIndependentRemainders() (gas: 413205)
+[PASS] test_RemainderAccumulationPerPool() (gas: 309516)
+[PASS] test_RemainderDoesNotBoostOtherPool() (gas: 261689)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 812.46µs (515.49µs CPU time)
+
+Ran 1 test for test/ReproduceLiquidityFailure.t.sol:ReproduceLiquidityFailure
+[PASS] test_ReproduceInvariantFailure() (gas: 438507)
+Logs:
+  === Initial State ===
+  Tracked:   1000000000000000000000000
+  Reserve:   0
+  Remainder: 0
+  Internal:  1000000000000000000000000
+  Actual:    1000000000000000000000000
+  Diff:     
+  0
+  >>> Action: Deposit 1346746830706240228723223072239472304
+  Tracked:   1346746830707240228723223072239472304
+  Reserve:   0
+  Remainder: 0
+  Internal:  1346746830707240228723223072239472304
+  Actual:    1346746830707240228723223072239472304
+  Diff:     
+  0
+  >>> Action: Borrow 256
+  Tracked:   1346746830707240228723223072239472048
+  Reserve:   0
+  Remainder: 0
+  Internal:  1346746830707240228723223072239472048
+  Actual:    1346746830707240228723223072239472048
+  Diff:     
+  0
+  Invariant passed? true
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 699.46µs (223.47µs CPU time)
+
+Ran 2 tests for test/root/EqualIndexPositionBurnProperty.t.sol:EqualIndexPositionBurnPropertyTest
+[PASS] testFuzz_burnAutoJoinsUnderlyingPools(uint256) (runs: 256, μ: 9315782, ~: 9315785)
+[PASS] testFuzz_noExternalTransfersOnBurn(uint256) (runs: 256, μ: 9317717, ~: 9317720)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 415.79ms (415.32ms CPU time)
+
+Ran 2 tests for test/root/EqualIndexPositionIntegration.t.sol:EqualIndexPositionIntegrationTest
+[PASS] test_fullLifecycle_integration() (gas: 13470449)
+[PASS] test_multiPositionProportionalBurn() (gas: 13220847)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 2.53ms (1.95ms CPU time)
+
+Ran 2 tests for test/root/EqualIndexPositionMintProperty.t.sol:EqualIndexPositionMintPropertyTest
+[PASS] testFuzz_encumbranceConservationOnMint(uint256) (runs: 256, μ: 9332326, ~: 9332323)
+[PASS] testFuzz_noExternalTransfersOnMint(uint256) (runs: 256, μ: 9326503, ~: 9326500)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 328.99ms (328.54ms CPU time)
+
+Ran 1 test for test/root/EqualIndexRoundTripConservationProperty.t.sol:EqualIndexRoundTripConservationPropertyTest
+[PASS] testFuzz_roundTripConservation(uint256) (runs: 256, μ: 7937817, ~: 7937826)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 142.74ms (142.20ms CPU time)
+
+Ran 18 tests for test/root/EventEmission.t.sol:EventEmissionTest
+[PASS] testEvent_AumFeeUpdated_BasicUpdate() (gas: 258597)
+[PASS] testEvent_AumFeeUpdated_CorrectValues() (gas: 260950)
+[PASS] testEvent_AumFeeUpdated_Indexing() (gas: 259776)
+[PASS] testEvent_AumFeeUpdated_MultiplePools() (gas: 482309)
+[PASS] testEvent_AumFeeUpdated_MultipleUpdates() (gas: 272695)
+[PASS] testEvent_EmissionOrder() (gas: 269728)
+[PASS] testEvent_PoolDeprecated_CorrectParameters() (gas: 260129)
+[PASS] testEvent_PoolDeprecated_Indexing() (gas: 259205)
+[PASS] testEvent_PoolDeprecated_MultiplePools() (gas: 480191)
+[PASS] testEvent_PoolDeprecated_SetFalse() (gas: 241896)
+[PASS] testEvent_PoolDeprecated_SetTrue() (gas: 258309)
+[PASS] testEvent_PoolDeprecated_Toggle() (gas: 270191)
+[PASS] testEvent_PoolInitialized_BasicConfig() (gas: 241638)
+[PASS] testEvent_PoolInitialized_ContainsAllParameters() (gas: 414984)
+[PASS] testEvent_PoolInitialized_FullConfig() (gas: 414028)
+[PASS] testEvent_PoolInitialized_Indexing() (gas: 235517)
+[PASS] testEvent_PoolInitialized_PermissionlessCreation() (gas: 786968)
+[PASS] testEvent_Queryability_ByPoolId() (gas: 684427)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 2.53ms (1.87ms CPU time)
+
+Ran 1 test for test/root/FeeBaseInvariantProperty.t.sol:FeeBaseInvariantPropertyTest
+[PASS] testFuzz_feeBaseInvariant(uint256,uint256) (runs: 256, μ: 862, ~: 840)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 12.13ms (11.98ms CPU time)
+
+Ran 6 tests for test/gas/FeeFacetGas.t.sol:FeeFacetViewGasTest
+[PASS] test_gas_GetIndexActionFee() (gas: 13533)
+[PASS] test_gas_GetPoolActionFee() (gas: 13514)
+[PASS] test_gas_GetPoolActionFees() (gas: 35086)
+[PASS] test_gas_PreviewActionFee() (gas: 13101)
+[PASS] test_gas_PreviewActionFees() (gas: 33056)
+[PASS] test_gas_PreviewIndexActionFee() (gas: 13117)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 445.53µs (151.14µs CPU time)
+
+Ran 11 tests for test/erc6900-modular-tba/SessionKeyValidationModuleProperty.t.sol:SessionKeyValidationModulePropertyTest
+[PASS] testIntegration_PositionMSCAWithSessionValidation(uint256,uint256) (runs: 100, μ: 4936051, ~: 4936032)
+[PASS] testProperty_SessionKeyCumulativeBudgetEnforced(uint256,uint256,address) (runs: 100, μ: 1940378, ~: 1940344)
+[PASS] testProperty_SessionKeyPerTargetSelectorConstraints(uint256,uint256,address,address) (runs: 100, μ: 2002403, ~: 2002367)
+[PASS] testProperty_SessionKeyPolicyOwnerControls(uint256,uint256,address) (runs: 100, μ: 1848052, ~: 1848026)
+[PASS] testProperty_SessionKeyPolicyWithDurationExpires(uint256,uint256,address) (runs: 100, μ: 1918280, ~: 1918269)
+[PASS] testProperty_SessionKeyRuntimeAndERC1271Validation(uint256,uint256,address) (runs: 100, μ: 1964776, ~: 1964764)
+[PASS] testProperty_SessionKeyUserOpValidationRejectsInvalidPolicy(uint256,uint256,uint256,address,address) (runs: 100, μ: 1906212, ~: 1906172)
+[PASS] testProperty_SessionKeyUserOpValidationSuccess(uint256,uint256,address,uint96) (runs: 100, μ: 1909837, ~: 1910342)
+[PASS] test_SessionKeyPolicyRejectsEmptySelectors() (gas: 1693468)
+[PASS] test_SessionKeyPolicyRejectsExecutionSelectorWithoutTargets() (gas: 1694395)
+[PASS] test_SessionKeyRevokeAllInvalidatesExistingPolicies() (gas: 2158778)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 605.50ms (604.69ms CPU time)
+
+Ran 11 tests for test/derivatives/MamCurveFacet.t.sol:MamCurveFacetTest
+[PASS] testCancelCurveUnlocksRemaining() (gas: 1348703)
+[PASS] testCancelCurvesBatchUnlocksAll() (gas: 1818210)
+[PASS] testCreateCurveAllowsRecentPastStart() (gas: 1655264)
+[PASS] testCreateCurveLocksBase() (gas: 1661716)
+[PASS] testCreateCurveRejectsStalePastStart() (gas: 777434)
+[PASS] testCurveDiscoveryAndQuotes() (gas: 1681144)
+[PASS] testExpireCurveClearsIndexes() (gas: 1411877)
+[PASS] testFillCurveUpdatesBalancesAndFees() (gas: 1825315)
+[PASS] testFuzz_CreateCurveStartWindow(bool,uint256) (runs: 256, μ: 1357129, ~: 1658682)
+[PASS] testUpdateCurveBumpsGeneration() (gas: 1668796)
+[PASS] testUpdateCurvesBatchBumpsGeneration() (gas: 2235850)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 654.75ms (654.53ms CPU time)
+
+Ran 5 tests for test/root/FeeIndexCrossSystem.t.sol:FeeIndexCrossSystemTest
+[PASS] testExtremeLongPeriod() (gas: 324351)
+[PASS] testFeeIndexMonotonicDespiteMaintenance() (gas: 356856)
+[PASS] testMaintenanceDoesNotAffectFeeIndex() (gas: 267938)
+[PASS] testMultipleUsersStaggeredJoins() (gas: 402385)
+[PASS] testPositiveYieldAndNegativeMaintenance() (gas: 325412)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 1.15ms (701.37µs CPU time)
+
+Ran 14 tests for test/root/FeeIndexPrecision.t.sol:FeeIndexPrecisionTest
+[PASS] testExtremeRatioHugeDepositsTinyFee() (gas: 197487)
+[PASS] testExtremeRatioTinyDepositsHugeFee() (gas: 213817)
+[PASS] testFuzz_PrecisionMaintained(uint256,uint256) (runs: 256, μ: 225967, ~: 238081)
+[PASS] testIndexDeltaNoOverflow() (gas: 178811)
+[PASS] testIndexMonotonicDespitePrecisionLoss() (gas: 4258861)
+[PASS] testMaximumSafeValues() (gas: 233881)
+[PASS] testPrecisionLossWithManyUsers() (gas: 8506914)
+[PASS] testPrecisionWithUnevenDistribution() (gas: 297117)
+[PASS] testPrimeNumberDeposits() (gas: 809497)
+[PASS] testRemainderAccumulationOverManyOperations() (gas: 5302594)
+[PASS] testRemainderBounds() (gas: 779120)
+[PASS] testVeryLargeFeeOverSmallDeposits() (gas: 213948)
+[PASS] testVerySmallDeposits() (gas: 213573)
+[PASS] testVerySmallFeeOverLargeDeposits() (gas: 204241)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 53.16ms (52.85ms CPU time)
+
+Ran 1 test for test/integration/PositionAgentAerodromeSlipstreamFork.t.sol:PositionAgentAerodromeSlipstreamForkTest
+[PASS] testFork_PositionAgentBorrowAndSlipstream() (gas: 1991807)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 10.35s (8.52s CPU time)
+
+Ran 6 tests for test/erc6900/PositionAgentAmmSkillModule.t.sol:PositionAgentAmmSkillModuleTest
+[PASS] test_cancelAuction_forwardsWhenAuctionMakerPositionIdMatchesBoundTokenId() (gas: 151527)
+[PASS] test_cancelAuction_revertsWhenAuctionMakerPositionIdDoesNotMatchBoundTokenId() (gas: 126525)
+[PASS] test_createAuction_forwardsWhenPositionIdMatchesBoundTokenId() (gas: 250908)
+[PASS] test_createAuction_revertsWhenPositionIdDoesNotMatchBoundTokenId() (gas: 16233)
+[PASS] test_rollYield_forwardsWhenTokenIdMatchesBoundTokenId() (gas: 68899)
+[PASS] test_rollYield_revertsWhenTokenIdDoesNotMatchBoundTokenId() (gas: 15282)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 695.03µs (268.99µs CPU time)
+
+Ran 11 tests for test/root/FeeFacetProperty.t.sol:FeeFacetPropertyTest
+[PASS] testProperty_ConfigurationChangeEventEmission_Index(uint8,uint8,uint128,uint128,bool,bool) (runs: 256, μ: 49814, ~: 49927)
+[PASS] testProperty_ConfigurationChangeEventEmission_Pool(uint8,uint8,uint128,uint128,bool,bool) (runs: 256, μ: 50004, ~: 50123)
+[PASS] testProperty_FeeBoundsEnforcement_Index(uint8,uint8,uint128,uint128,uint128) (runs: 256, μ: 70040, ~: 62282)
+[PASS] testProperty_FeeBoundsEnforcement_Pool(uint8,uint8,uint128,uint128,uint128) (runs: 256, μ: 73456, ~: 64739)
+[PASS] testProperty_FeeConfigurationRoundTrip_Index(uint8,uint8,uint128,bool) (runs: 256, μ: 44688, ~: 45000)
+[PASS] testProperty_FeeConfigurationRoundTrip_Pool(uint8,uint8,uint128,bool) (runs: 256, μ: 45569, ~: 45732)
+[PASS] testProperty_PreviewAccuracyWithoutSideEffects_Index(uint8,uint8,uint128,bool) (runs: 256, μ: 45100, ~: 45413)
+[PASS] testProperty_PreviewAccuracyWithoutSideEffects_Pool(uint8,uint8,uint128,bool) (runs: 256, μ: 45598, ~: 45681)
+[PASS] testProperty_TreasurySplitCalculationCorrectness(uint8,uint8,uint128,uint16,uint256) (runs: 256, μ: 272591, ~: 284535)
+[PASS] testProperty_UniversalFeeDistributionInvariant(uint8,uint8,uint128,uint16,uint256) (runs: 256, μ: 273343, ~: 266486)
+[PASS] testProperty_ZeroTreasuryAllocationWhenUnconfigured(uint8,uint8,uint128,uint256) (runs: 256, μ: 254319, ~: 264637)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 310.90ms (309.96ms CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentTBADeploymentProperty.t.sol:PositionAgentTBADeploymentPropertyTest
+[PASS] testProperty_TBADeploymentIdempotence(uint256) (runs: 100, μ: 316520, ~: 316612)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 51.43ms (50.83ms CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentTBAInterfaceComplianceProperty.t.sol:PositionAgentTBAInterfaceCompliancePropertyTest
+[PASS] testProperty_TBAInterfaceCompliance(uint256) (runs: 100, μ: 120593, ~: 120690)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 40.29ms (38.58ms CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentTransferBehavior.t.sol:PositionAgentTransferIntegrationTest
+[PASS] testIntegration_PositionTransferPreservesAgentIdentity() (gas: 443693)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 480.47µs (122.13µs CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentTransferBehavior.t.sol:PositionAgentTransferPropertyTest
+[FAIL: unknown cheatcode with selector 0x150b7a02; you may have a mismatch between the `Vm` interface (likely in `forge-std`) and the `forge` version; counterexample: calldata=0x904bbe3d0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d000000000000000000000000000000000000000000000000000000000000163700000000000000000000000000000000000000000000000000000000000013a00000000000000000000000000000000000000000000000000000000000000cda args=[0x7109709ECfa91a80626fF3989D68f67F5b1DD12D, 0x0000000000000000000000000000000000001637, 5024, 3290]] testProperty_TransferPreservesAgentIdentity(address,address,uint256,uint256) (runs: 0, μ: 0, ~: 0)
+Logs:
+  Bound Result 5024
+  Bound Result 3290
+
+Suite result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 1.81ms (1.18ms CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentViewFunctionProperty.t.sol:PositionAgentViewFunctionPropertyTest
+[PASS] testProperty_ViewFunctionConsistency(uint256,uint256) (runs: 100, μ: 138048, ~: 138210)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 30.70ms (29.63ms CPU time)
+
+Ran 1 test for test/integration/PositionLifeCycle.t.sol:PositionLifeCycleTest
+[PASS] testLifeCycle() (gas: 2855699)
+Logs:
+  EntryPoint 0x0000000000000000000000000000000000000000
+  MSCAImplementation 0x83898D1F3C03189fF03B471dd3456908FCA4423d
+  Beacon 0x6AFc743aa4E9D98D0F53Ff111996E9817d79D301
+  BeaconProxy 0x3450a15Dc9cbDD5C0e28cC22474D88AD7e2695A3
+  Using ERC6551 implementation: 0x3450a15Dc9cbDD5C0e28cC22474D88AD7e2695A3
+  Identity registry unknown; skipping identity config
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 12.97ms (1.15ms CPU time)
+
+Ran 1 test for test/root/EqualIndexFeeSplitAccuracyProperty.t.sol:EqualIndexFeeSplitAccuracyPropertyTest
+[PASS] testFuzz_feeSplitAccuracyOnMintAndBurn(uint256) (runs: 256, μ: 8356307, ~: 8356314)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.49s (1.49s CPU time)
+
+Ran 8 tests for test/root/EqualIndexFees.t.sol:EqualIndexFeesTest
+[PASS] test_FlashLoanFeeSplits_WithAndWithoutTreasury() (gas: 720675)
+[PASS] test_FlashLoanUnderpayReverts() (gas: 637828)
+[PASS] test_MintAndBurnFeeSplits_TreasurySet() (gas: 430190)
+[PASS] test_MintFee_AllToPot_WhenTreasuryUnset() (gas: 340241)
+[PASS] test_PausedIndexBlocksOperations() (gas: 111741)
+[PASS] test_PreviewHelpersMatchCoreScaling() (gas: 73401)
+[PASS] test_gas_IndexFlashLoanFlow() (gas: 671697)
+[PASS] test_gas_IndexMintBurnFlow() (gas: 417600)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 2.95ms (1.97ms CPU time)
+
+Ran 2 tests for test/erc6900-modular-tba/PositionMSCAEntryPointProperty.t.sol:PositionMSCAEntryPointPropertyTest
+[PASS] testProperty_EntryPointCallerVerification(address) (runs: 100, μ: 1435336, ~: 1435336)
+[PASS] testProperty_EntryPointPayment(uint256,bytes32) (runs: 100, μ: 2297739, ~: 2297953)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 104.01ms (103.20ms CPU time)
+
+Ran 3 tests for test/erc6900-modular-tba/PositionMSCAExecutionFlowProperty.t.sol:PositionMSCAExecutionFlowPropertyTest
+[PASS] testProperty_ExecutionFlowCorrectness(address,uint256) (runs: 100, μ: 3308529, ~: 3308529)
+[PASS] testProperty_HookOrdering(address,uint256) (runs: 100, μ: 3311033, ~: 3311033)
+[PASS] testProperty_HookProtection(address) (runs: 100, μ: 3081196, ~: 3081196)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 192.36ms (191.09ms CPU time)
+
+Ran 1 test for test/root/FixedTermPenaltyIntegration.t.sol:FixedTermPenaltyIntegrationTest
+[PASS] testFixedTermDefaultAfterExpiryAppliesPenalty() (gas: 999514)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.71ms (400.72µs CPU time)
+
+Ran 6 tests for test/root/FlashLoanFacet.t.sol:FlashLoanFacetTest
+[PASS] testAntiSplitAllowsNextBlock() (gas: 292185)
+[PASS] testAntiSplitBlocksSameBlockMultiple() (gas: 265174)
+[PASS] testAntiSplitDisabledAllowsSameBlock() (gas: 326082)
+[PASS] testDocExampleFlashLoanScenario() (gas: 374629)
+[PASS] testFlashLoanChargesFeeAndRepays() (gas: 289465)
+[PASS] testFlashLoanRejectsUnderpayment() (gas: 188808)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 1.20ms (801.54µs CPU time)
+
+Ran 3 tests for test/erc6900-modular-tba/PositionMSCAExecutionModuleProperty.t.sol:PositionMSCAExecutionModulePropertyTest
+[PASS] testProperty_ExecutionInstallationCorrectness(address,bytes4,bytes4,bytes4) (runs: 100, μ: 3067142, ~: 3067142)
+[PASS] testProperty_ExecutionSelectorCollisionPrevention(address,bytes4) (runs: 100, μ: 3128601, ~: 3128601)
+[PASS] testProperty_ExecutionUninstallationCorrectness(address,bytes4,bytes4,bytes4) (runs: 100, μ: 2964798, ~: 2964798)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 183.21ms (182.27ms CPU time)
+
+Ran 9 tests for test/root/FlashLoanFacetAdvancedEdgeCases.t.sol:FlashLoanFacetAdvancedEdgeCasesTest
+[PASS] testFlashLoanEmitsCorrectEvent() (gas: 453010)
+[PASS] testFlashLoanStateManipulationSucceedsIfFundsAvailable() (gas: 624011)
+[PASS] testFlashLoanStateManipulationWithSufficientFunds() (gas: 620441)
+[PASS] testFlashLoanWithDeflationaryToken() (gas: 716753)
+[PASS] testFlashLoanWithDeflationaryTokenStillFails() (gas: 782699)
+[PASS] testFlashLoanWithHighGasUsage() (gas: 1330554)
+[PASS] testFlashLoanWithModerateGasUsage() (gas: 601519)
+[PASS] testFuzzFlashLoanAmount(uint256) (runs: 256, μ: 450873, ~: 474334)
+[PASS] testFuzzFlashLoanFeeBps(uint16) (runs: 256, μ: 493562, ~: 493559)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 97.48ms (97.09ms CPU time)
+
+Ran 23 tests for test/root/FlashLoanFacetEdgeCases.t.sol:FlashLoanFacetEdgeCasesTest
+[PASS] testAntiSplitDifferentReceiversSamePool() (gas: 612901)
+[PASS] testAntiSplitDisabled() (gas: 287254)
+[PASS] testAntiSplitNextBlock() (gas: 244664)
+[PASS] testAntiSplitSameReceiverDifferentPools() (gas: 1285563)
+[PASS] testFlashLoanAccumulatesFees() (gas: 319951)
+[FAIL: next call did not revert as expected] testFlashLoanCallbackReturnsWrongHash() (gas: 23840)
+[PASS] testFlashLoanExactRepayment() (gas: 215003)
+[FAIL: next call did not revert as expected] testFlashLoanExceedsBalance() (gas: 23002)
+[PASS] testFlashLoanFeeRoundsDown() (gas: 168221)
+[PASS] testFlashLoanMaximumAmount() (gas: 214332)
+[PASS] testFlashLoanMinimumAmount() (gas: 110834)
+[FAIL: Flash: pool not initialized] testFlashLoanNonExistentPoolReverts() (gas: 38630)
+[PASS] testFlashLoanOverpayment() (gas: 214457)
+[PASS] testFlashLoanReceiverIsEOA() (gas: 120484)
+[FAIL: next call did not revert as expected] testFlashLoanReceiverReverts() (gas: 23589)
+[FAIL: next call did not revert as expected] testFlashLoanReentrancyBlocked() (gas: 357874)
+[PASS] testFlashLoanTreasuryNotSet() (gas: 191824)
+[PASS] testFlashLoanTreasuryShare100Percent() (gas: 157184)
+[PASS] testFlashLoanTreasuryShareZeroPercent() (gas: 193640)
+[PASS] testFlashLoanWithMaxFeeBps() (gas: 260300)
+[FAIL: next call did not revert as expected] testFlashLoanWithZeroFeeReverts() (gas: 99851)
+[FAIL: next call did not revert as expected] testFlashLoanZeroAmountReverts() (gas: 15543)
+[PASS] testMultipleFlashLoansSequential() (gas: 379570)
+Suite result: FAILED. 16 passed; 7 failed; 0 skipped; finished in 2.81ms (2.36ms CPU time)
+
+Ran 3 tests for test/root/FlashLoanFacetNativeEth.t.sol:FlashLoanFacetNativeEthTest
+[FAIL: next call did not revert as expected] testFlashLoanNativeRejectsMsgValue() (gas: 124412)
+[PASS] testFlashLoanNativeRoundTrip() (gas: 354960)
+[FAIL: next call did not revert as expected] testFlashLoanNativeUnderfundedReverts() (gas: 150811)
+Suite result: FAILED. 1 passed; 2 failed; 0 skipped; finished in 450.02µs (169.40µs CPU time)
+
+Ran 1 test for test/gas/FlashLoanGas.t.sol:FlashLoanGasTest
+[PASS] test_gas_FlashLoan() (gas: 161088)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 397.03µs (102.88µs CPU time)
+
+Ran 2 tests for test/derivatives/FuturesFacetProperty.t.sol:FuturesFacetPropertyTest
+[PASS] testProperty_GracePeriodEnforcement() (gas: 1352477)
+[PASS] testProperty_PrincipalConservationOnSettlement() (gas: 1601067)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.35ms (684.60µs CPU time)
+
+Ran 2 tests for test/derivatives/FuturesGas.t.sol:FuturesGasTest
+[PASS] testGasCreateFuturesSeries() (gas: 787113)
+[PASS] testGasSettleFutures() (gas: 89514)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.13ms (428.75µs CPU time)
+
+Ran 23 tests for test/root/GasScenarioReport.t.sol:GasScenarioReportTest
+[PASS] test_gas_BorrowFixedOnly() (gas: 521093)
+[PASS] test_gas_BorrowRollingOnly() (gas: 288957)
+[PASS] test_gas_DirectAcceptBorrowerOfferOnly() (gas: 854947)
+[PASS] test_gas_DirectAcceptOfferOnly() (gas: 838154)
+[FAIL: NotNFTOwner(0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496, 2)] test_gas_DirectOfferRepayFlow() (gas: 38056622)
+[PASS] test_gas_DirectPostBorrowerOfferOnly() (gas: 570093)
+[PASS] test_gas_DirectPostOfferOnly() (gas: 595350)
+[PASS] test_gas_FixedLifecycle() (gas: 6768175)
+[PASS] test_gas_IndexBurnOnly() (gas: 66532)
+[PASS] test_gas_IndexCreateWithFee() (gas: 2859105)
+[PASS] test_gas_IndexFlashLoanFeeSplit() (gas: 44498)
+[PASS] test_gas_IndexMintBurnFlow() (gas: 10562036)
+[PASS] test_gas_IndexMintOnly() (gas: 257667)
+[PASS] test_gas_PenaltyFixed() (gas: 5053755)
+[PASS] test_gas_PenaltyRolling() (gas: 4995000)
+[PASS] test_gas_PoolInitMinimal() (gas: 686556)
+[PASS] test_gas_PositionClosePoolPosition() (gas: 67860)
+[PASS] test_gas_PositionDepositOnly() (gas: 202823)
+[PASS] test_gas_PositionDepositWithdrawCloseCleanup() (gas: 5750460)
+[PASS] test_gas_PositionMintAndDeposit() (gas: 399280)
+[PASS] test_gas_PositionWithdrawOnly() (gas: 64111)
+[PASS] test_gas_RollYieldToPosition() (gas: 40946)
+[PASS] test_gas_RollingLifecycle() (gas: 6614418)
+Suite result: FAILED. 22 passed; 1 failed; 0 skipped; finished in 22.42ms (20.37ms CPU time)
+
+Ran 9 tests for test/root/ImmutablePoolParametersGasBenchmark.t.sol:ImmutablePoolParametersGasBenchmarkTest
+[PASS] test_GasBenchmark_CompareQueryStrategies() (gas: 456314)
+Logs:
+  Gas used for 5 individual queries: 7030
+  Gas used for 1 comprehensive query: 14789
+  Gas savings: 0
+
+[PASS] test_GasBenchmark_GetAumFeeInfo() (gas: 336672)
+Logs:
+  Gas used for getAumFeeInfo(): 1701
+
+[PASS] test_GasBenchmark_GetImmutableConfig() (gas: 445386)
+Logs:
+  Gas used for getPoolConfig(): 12405
+
+[PASS] test_GasBenchmark_GetPoolInfo() (gas: 447994)
+Logs:
+  Gas used for getPoolInfo(): 14863
+
+[PASS] test_GasBenchmark_IndividualParameterQueries() (gas: 343338)
+Logs:
+  Gas used for getMinDepositAmount(): 1194
+  Gas used for getMinLoanAmount(): 1056
+  Gas used for getPoolCaps(): 2087
+  Gas used for getFlashConfig(): 1703
+
+[PASS] test_GasBenchmark_PoolInitialization_Minimal() (gas: 336145)
+Logs:
+  Gas used for pool initialization (minimal config): 329017
+
+[PASS] test_GasBenchmark_PoolInitialization_With3FixedTerms() (gas: 439255)
+Logs:
+  Gas used for pool initialization (3 fixed terms): 423567
+
+[PASS] test_GasBenchmark_PoolInitialization_With5FixedTerms() (gas: 491519)
+Logs:
+  Gas used for pool initialization (5 fixed terms): 471993
+
+[PASS] test_GasBenchmark_SetAumFee() (gas: 341011)
+Logs:
+  Gas used for setAumFee(): 4713
+
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 1.60ms (1.05ms CPU time)
+
+Ran 2 tests for test/erc6900-modular-tba/PositionMSCAExecutionProperty.t.sol:PositionMSCAExecutionPropertyTest
+[PASS] testProperty_BatchModuleProtection(address,address) (runs: 100, μ: 2107014, ~: 2107014)
+[PASS] testProperty_ExecutionCorrectness(address,uint256,uint256) (runs: 100, μ: 2244954, ~: 2244954)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 88.35ms (87.74ms CPU time)
+
+Ran 1 test for test/erc6900-modular-tba/PositionMSCAForkIntegration.t.sol:PositionMSCAForkIntegrationTest
+[PASS] testFork_EndToEndRegistryFlow() (gas: 3821)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 482.18µs (30.23µs CPU time)
+
+Ran 3 tests for test/erc6900-modular-tba/PositionMSCAIntegration.t.sol:PositionMSCAIntegrationTest
+[PASS] testIntegration_ERC6551RegistryDeployment() (gas: 3671711)
+[PASS] testIntegration_EntryPointUserOp() (gas: 4783264)
+[PASS] testIntegration_MultiModuleRoutingAndHooks() (gas: 5915117)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 2.81ms (2.24ms CPU time)
+
+Ran 1 test for test/erc6900-modular-tba/PositionMSCAOwnershipProperty.t.sol:PositionMSCAOwnershipPropertyTest
+[PASS] testProperty_OwnershipFollowsNFT(address,address) (runs: 100, μ: 1945665, ~: 1945665)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 26.74ms (26.20ms CPU time)
+
+Ran 1 test for test/erc6900-modular-tba/PositionMSCAReceiverProperty.t.sol:PositionMSCAReceiverPropertyTest
+[PASS] testProperty_ERC721ReceiverAcceptance(address,address,uint256,bytes) (runs: 100, μ: 1027397, ~: 1027396)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 17.76ms (17.23ms CPU time)
+
+Ran 1 test for test/erc6900-modular-tba/PositionMSCAInterfaceSupportProperty.t.sol:PositionMSCAInterfaceSupportPropertyTest
+[PASS] testProperty_InterfaceSupportConsistency(address,bytes4) (runs: 100, μ: 3600800, ~: 3600800)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 75.87ms (75.24ms CPU time)
+
+Ran 1 test for test/erc6900-modular-tba/PositionMSCASignatureProperty.t.sol:PositionMSCASignaturePropertyTest
+[PASS] testProperty_SignatureValidationCorrectness(uint256,uint256,bytes32) (runs: 100, μ: 2133526, ~: 2133506)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 61.22ms (60.64ms CPU time)
+
+Ran 2 tests for test/erc6900-modular-tba/PositionMSCAModuleAuthProperty.t.sol:PositionMSCAModuleAuthPropertyTest
+[PASS] testProperty_ModuleManagementAuthorization(address,address) (runs: 100, μ: 3883647, ~: 3883647)
+[PASS] testProperty_ModuleSelfModificationReverts() (gas: 3295563)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 71.87ms (71.08ms CPU time)
+
+Ran 1 test for test/erc6900-modular-tba/PositionMSCAStateProperty.t.sol:PositionMSCAStatePropertyTest
+[PASS] testProperty_StateIncrementOnMutation(address,uint256,uint256) (runs: 100, μ: 3765151, ~: 3765748)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 65.43ms (64.79ms CPU time)
+
+Ran 3 tests for test/erc6900-modular-tba/PositionMSCAValidationFlowProperty.t.sol:PositionMSCAValidationFlowPropertyTest
+[PASS] testProperty_ValidationFlowCorrectness(address,uint48,uint48,uint48,uint48) (runs: 100, μ: 3895606, ~: 3895604)
+[PASS] testProperty_ValidationFlowSelectorCheck(address) (runs: 100, μ: 3769693, ~: 3769693)
+[PASS] testProperty_ValidationFlowSignatureFailure(address) (runs: 100, μ: 3873217, ~: 3873217)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 110.27ms (109.63ms CPU time)
+
+Ran 2 tests for test/root/FeeRoutingNativeEthProperty.t.sol:FeeRoutingNativeEthPropertyTest
+[PASS] test_nativeActionFeeRouting() (gas: 287303)
+[PASS] test_nativePoolFeeRouting() (gas: 206984)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 458.53µs (152.52µs CPU time)
+
+Ran 10 tests for test/root/FeeIndexStressTest.t.sol:FeeIndexStressTest
+[PASS] test100UsersEqualPrincipals() (gas: 8574516)
+[PASS] testConcurrentSettlements() (gas: 940686)
+[PASS] testExtremeUserCount() (gas: 17080951)
+[PASS] testFeeIndexMonotonicityWithManyOps() (gas: 6832539)
+[PASS] testFuzz_RandomUserOperations(uint256) (runs: 256, μ: 955482, ~: 955482)
+[PASS] testManySmallFeesOverManyUsers() (gas: 4903876)
+[PASS] testPrecisionWithUnevenPrincipals() (gas: 961535)
+[PASS] testRepeatedAccrualsAndSettlements() (gas: 1569386)
+[PASS] testUsersJoiningAndLeaving() (gas: 1763704)
+[PASS] testWhaleVsMinnows() (gas: 8504702)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 154.69ms (154.38ms CPU time)
+
+Ran 1 test for test/root/FeeSystemsPreservedProperty.t.sol:FeeSystemsPreservedPropertyTest
+[PASS] testProperty_FeeSystemsPreserved(uint256,uint16,uint16,uint256,uint16,uint16) (runs: 256, μ: 3840919, ~: 3844862)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 99.34ms (99.05ms CPU time)
+
+Ran 1 test for test/root/FeeTreasury.t.sol:FeeTreasuryTest
+[PASS] testSplitThreeWays() (gas: 134769)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 371.11µs (66.72µs CPU time)
+
+Ran 1 test for test/derivatives/DerivativeTokenControlProperty.t.sol:DerivativeTokenControlPropertyTest
+[PASS] testProperty_DiamondOnlyTokenControl(address,uint256,uint256) (runs: 100, μ: 45738, ~: 45800)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 22.21ms (21.56ms CPU time)
+
+Ran 2 tests for test/derivatives/DerivativeTokenTransfer.t.sol:DerivativeTokenTransferTest
+[PASS] testFuturesTokenTransferFreedom() (gas: 54255)
+[PASS] testOptionTokenTransferFreedom() (gas: 54474)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 416.12µs (109.10µs CPU time)
+
+Ran 2 tests for test/derivatives/DerivativeTokenUri.t.sol:DerivativeTokenUriTest
+[PASS] testFuturesTokenSeriesUriFallback() (gas: 46741)
+[PASS] testOptionTokenSeriesUriFallback() (gas: 46530)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 387.01µs (124.61µs CPU time)
+
+Ran 1 test for test/root/DeterministicFeeBaseProperty.t.sol:DeterministicFeeBasePropertyTest
+[PASS] testFuzz_feeBaseDeterministic(uint256,uint256,uint256) (runs: 256, μ: 4320, ~: 4334)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 16.57ms (16.42ms CPU time)
+
+Ran 3 tests for test/root/DiamondScaffold.t.sol:DiamondScaffoldTest
+[PASS] testLoupeSelectorsRegistered() (gas: 77240)
+[PASS] testOwnerSet() (gas: 12716)
+[PASS] testTimelockInitialized() (gas: 12685)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 663.39µs (185.04µs CPU time)
+
+Ran 2 tests for test/root/DiamondUpgradeInvariants.t.sol:DiamondUpgradeInvariantsTest
+[PASS] test_diamondCut_preventsSelectorCollisionsOnAdd() (gas: 67437)
+[PASS] test_facetAddress_matchesExpectedFacetAcrossAddAndReplace() (gas: 84199)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 500.31µs (175.19µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectAccessControlProperty.t.sol:DirectAccessControlPropertyTest
+[PASS] testProperty_AccessControlEnforcement() (gas: 4610293)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.54ms (1.38ms CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectActiveCreditIntegration.t.sol:DirectActiveCreditIntegrationTest
+[PASS] testActiveCreditCrossPoolNoAccrualThenConfigChange() (gas: 3705873)
+[PASS] testActiveCreditSameAssetRepayAccruesShare() (gas: 2301168)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 5.00ms (1.86ms CPU time)
+
+Ran 4 tests for test/equallend-direct/DirectAgreementErrorFlows.t.sol:DirectAgreementErrorFlowsTest
+[PASS] testCannotAcceptCancelledOffer() (gas: 1565124)
+[PASS] testEarlyExercisePathBlockedWhenDisallowed() (gas: 2519653)
+[PASS] testEarlyRepayPathBlockedWhenDisallowed() (gas: 2528981)
+[PASS] testRecoverRespectsGraceWindow() (gas: 2265900)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 4.77ms (1.64ms CPU time)
+
+Ran 4 tests for test/equallend-direct/DirectAgreementLifecycleProperty.t.sol:DirectAgreementLifecyclePropertyTest
+[PASS] testProperty_AgreementLifecycleIntegrity() (gas: 3535400)
+[PASS] test_crossAssetDefaultKeepsLenderPrincipalAndCreditsCollateralPool() (gas: 2406802)
+[PASS] test_crossAssetDefaultShortfallWritesDownLenderPrincipal() (gas: 2363909)
+[PASS] test_crossAssetPlatformFeeAccruesToBorrowPool() (gas: 2562786)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 6.10ms (2.81ms CPU time)
+
+Ran 1 test for test/compete/DirectAmmRatioLoopIntegration.t.sol:DirectAmmRatioLoopIntegrationTest
+[PASS] test_LoopRatioTrancheSwapAndDeposit() (gas: 3771896)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.98ms (1.01ms CPU time)
+
+Ran 1 test for test/managed-pools/FeeIsolation.t.sol:FeeIsolationPropertyTest
+[PASS] testProperty_FeeTypeIsolation(address,address) (runs: 256, μ: 1724890, ~: 1724890)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 146.51ms (145.78ms CPU time)
+
+Ran 1 test for test/compete/DirectAmmRollingLoopIntegration.t.sol:DirectAmmRollingLoopIntegrationTest
+[PASS] test_LoopRollingOfferSwapAndDeposit() (gas: 4723132)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 5.30ms (1.30ms CPU time)
+
+Ran 1 test for test/compete/DirectAmmTrancheLoopIntegration.t.sol:DirectAmmTrancheLoopIntegrationTest
+[PASS] test_LoopTrancheOfferSwapAndDeposit() (gas: 3675345)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 5.06ms (1.03ms CPU time)
+
+Ran 1 test for test/erc6551-agents/PositionAgentAuthorizationProperty.t.sol:PositionAgentAuthorizationPropertyTest
+[PASS] testProperty_AuthorizationEnforcement(uint256,uint256) (runs: 100, μ: 245104, ~: 245219)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.17s (1.17s CPU time)
+
+Ran 2 tests for test/derivatives/CommunityAuctionGasSnapshot.t.sol:CommunityAuctionGasSnapshot
+[PASS] testGasSwapNoFee() (gas: 2139919)
+[PASS] testGasSwapWithFee() (gas: 2335521)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 2.01ms (1.01ms CPU time)
+
+Ran 3 tests for test/derivatives/CommunityAuctionIndexFeeRegression.t.sol:CommunityAuctionIndexFeeRegressionTest
+[PASS] test_indexFeeTracking() (gas: 2392559)
+[PASS] test_multiMakerIndexFeeBacking() (gas: 2842576)
+[PASS] test_yieldReserveBackedAfterMakersLeave() (gas: 2075136)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 3.16ms (2.13ms CPU time)
+
+Ran 1 test for test/derivatives/CommunityAuctionLifecycleRegression.t.sol:CommunityAuctionLifecycleRegressionTest
+[PASS] testLifecycleBackedAfterMakersLeave() (gas: 3066056)
+Logs:
+  after seed
+  A_totalDeposits: 42000000000000000000
+  A_tracked: 42000000000000000000
+  A_yieldReserve: 0
+  A_actual: 42000000000000000000
+  B_totalDeposits: 802000000000000000000
+  B_tracked: 802000000000000000000
+  B_yieldReserve: 0
+  B_actual: 0
+  after join maker2
+  A_totalDeposits: 42000000000000000000
+  A_tracked: 42000000000000000000
+  A_yieldReserve: 0
+  A_actual: 84000000000000000000
+  B_totalDeposits: 802000000000000000000
+  B_tracked: 802000000000000000000
+  B_yieldReserve: 0
+  B_actual: 802000000000000000000
+  after swaps
+  A_totalDeposits: 42000000000000000000
+  A_tracked: 42000000000000000000
+  A_yieldReserve: 0
+  A_actual: 84000000000000000000
+  B_totalDeposits: 802000000000000000000
+  B_tracked: 802000000000000000000
+  B_yieldReserve: 0
+  B_actual: 802000000000000000000
+  after leaves
+  A_totalDeposits: 41975701534910289386
+  A_tracked: 41978401534910289386
+  A_yieldReserve: 2700000000000000
+  A_actual: 83978401534910289386
+  B_totalDeposits: 802484917920823474889
+  B_tracked: 802538917920823474889
+  B_yieldReserve: 54000000000000000
+  B_actual: 802538917920823474889
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.39ms (1.11ms CPU time)
+
+Ran 1 test for test/derivatives/CommunityAuctionStorage.t.sol:CommunityAuctionStorageTest
+[PASS] testCommunityAuctionLists() (gas: 654340)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 447.18µs (108.64µs CPU time)
+
+Ran 10 tests for test/root/ConfigViewFacet.t.sol:ConfigViewFacetTest
+[PASS] testGetAumFeeInfoReturnsCurrentFeeAndBounds() (gas: 204305)
+[PASS] testGetFixedTermConfigsReturnsRates() (gas: 127419)
+[PASS] testGetImmutableConfigReturnsCorrectValues() (gas: 351072)
+[PASS] testGetPoolIdForAssetReturnsPool() (gas: 30218)
+[PASS] testGetPoolIdForAssetRevertsWhenMissing() (gas: 11933)
+[PASS] testGetPoolInfoReturnsCompletePoolData() (gas: 350428)
+[PASS] testIsPoolDeprecatedReturnsCorrectFlag() (gas: 86264)
+[PASS] testMaintenanceStateExposure() (gas: 127029)
+[PASS] testPoolCapsExposeValues() (gas: 119064)
+[PASS] testPoolConfigSummaryMatchesFullConfig() (gas: 283341)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 1.22ms (855.37µs CPU time)
+
+Ran 4 tests for test/derivatives/DerivativeAccessControlProperty.t.sol:DerivativeAccessControlPropertyTest
+[PASS] testProperty_CreationAuthorization() (gas: 4926952)
+[PASS] testProperty_ExerciseAuthorization() (gas: 2792917)
+[PASS] testProperty_PauseScope() (gas: 4427776)
+[PASS] testProperty_ReclaimAuthorization() (gas: 2920086)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 11.03ms (8.00ms CPU time)
+
+Ran 2 tests for test/derivatives/DerivativeCollateralLockProperty.t.sol:DerivativeCollateralLockPropertyTest
+[PASS] testProperty_AmmReserveLockOnCreation(uint256,uint256,uint256,uint256) (runs: 100, μ: 164058, ~: 148374)
+[PASS] testProperty_CollateralLockOnCreation(uint256,uint256,uint256,uint256) (runs: 100, μ: 162010, ~: 147969)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 75.61ms (73.80ms CPU time)
+
+Ran 1 test for test/derivatives/DerivativeCollateralUnlockProperty.t.sol:DerivativeCollateralUnlockPropertyTest
+[PASS] testProperty_CollateralUnlockOnFinalization() (gas: 4600100)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.38ms (2.02ms CPU time)
+
+Ran 11 tests for test/derivatives/DerivativeIntegration.t.sol:DerivativeIntegrationTest
+[PASS] testIntegration_AmmLifecycle() (gas: 2314365)
+[PASS] testIntegration_CommunityCreatorLeavesOthersRemain() (gas: 2705366)
+[PASS] testIntegration_CommunityFeeAccumulationManySwaps() (gas: 3077896)
+[PASS] testIntegration_CommunityMultiMakerPartialExit() (gas: 3894972)
+[PASS] testIntegration_FuturesLifecycleAmerican() (gas: 1479127)
+[PASS] testIntegration_FuturesLifecycleEuropean() (gas: 1541977)
+[PASS] testIntegration_MamCurveLifecycle() (gas: 1852335)
+[PASS] testIntegration_MultiProductIsolation() (gas: 3227481)
+[PASS] testIntegration_OptionsLifecycleCall() (gas: 1472904)
+[PASS] testIntegration_OptionsLifecyclePut() (gas: 1475128)
+[PASS] testIntegration_PositionNftTransfer() (gas: 1397988)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 14.72ms (10.42ms CPU time)
+
+Ran 1 test for test/root/CrossFacetInvariant.t.sol:CrossFacetInvariantTest
+[PASS] testFuzz_CrossFacetDebtSolvencyConsistency(uint256,uint256,uint256,uint256,uint256,uint256,uint256) (runs: 256, μ: 764218, ~: 770123)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 162.57ms (161.76ms CPU time)
+
+Ran 11 tests for test/root/AumFeeManagement.t.sol:AumFeeManagementTest
+[PASS] test_AumFeeBounds_AreImmutable() (gas: 77022)
+[PASS] test_SetAumFee_AboveMaximum_Reverts() (gas: 17125)
+[PASS] test_SetAumFee_AtMaximumBound() (gas: 24204)
+[PASS] test_SetAumFee_AtMinimumBound() (gas: 21271)
+[PASS] test_SetAumFee_BelowMinimum_Reverts() (gas: 17036)
+[PASS] test_SetAumFee_EmitsEvent() (gas: 26089)
+[PASS] test_SetAumFee_MaximumBounds() (gas: 224360)
+[PASS] test_SetAumFee_MultipleTimes() (gas: 35085)
+[PASS] test_SetAumFee_NonAdmin_Reverts() (gas: 16289)
+[PASS] test_SetAumFee_NonExistentPool_Reverts() (gas: 14280)
+[PASS] test_SetAumFee_ZeroBounds() (gas: 188185)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 1.33ms (478.25µs CPU time)
+
+Ran 2 tests for test/equallend-direct/BorrowerActiveCreditDebtProperty.t.sol:BorrowerActiveCreditDebtPropertyTest
+[PASS] testProperty_CrossAssetDebtExcludedFromActiveCredit() (gas: 2285649)
+[PASS] testProperty_SameAssetDebtEarnsActiveCredit() (gas: 2241888)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 5.08ms (1.03ms CPU time)
+
+Ran 2 tests for test/invariants/FeeIndexStatefulInvariants.t.sol:FeeIndexStatefulInvariantTest
+[PASS] invariant_feeIndexMonotonic() (runs: 256, calls: 12800, reverts: 0)
+
+╭-------------------------+------------+-------+---------+----------╮
+| Contract                | Selector   | Calls | Reverts | Discards |
++===================================================================+
+| FeeIndexStatefulHandler | accrueFee  | 4321  | 0       | 0        |
+|-------------------------+------------+-------+---------+----------|
+| FeeIndexStatefulHandler | failed     | 4330  | 0       | 0        |
+|-------------------------+------------+-------+---------+----------|
+| FeeIndexStatefulHandler | settleUser | 4149  | 0       | 0        |
+╰-------------------------+------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 60098370112481394532
+  Bound Result 1285
+  Bound Result 99999999999999999998
+  Bound Result 26650446146669804320
+  Bound Result 1
+  Bound Result 8464070538464845824
+  Bound Result 2455
+  Bound Result 67710999887828016452
+  Bound Result 24509062281962689475
+  Bound Result 38347939001614283657
+  Bound Result 26015839583768575932
+  Bound Result 1306
+  Bound Result 79958030972976753615
+  Bound Result 34360214772228
+  Bound Result 233242992
+  Bound Result 285
+  Bound Result 404098525
+  Bound Result 59201708961348578354
+  Bound Result 172390164397059286
+  Bound Result 296734046451400724
+
+[PASS] invariant_noYieldFabrication() (runs: 256, calls: 12800, reverts: 0)
+
+╭-------------------------+------------+-------+---------+----------╮
+| Contract                | Selector   | Calls | Reverts | Discards |
++===================================================================+
+| FeeIndexStatefulHandler | accrueFee  | 4337  | 0       | 0        |
+|-------------------------+------------+-------+---------+----------|
+| FeeIndexStatefulHandler | failed     | 4194  | 0       | 0        |
+|-------------------------+------------+-------+---------+----------|
+| FeeIndexStatefulHandler | settleUser | 4269  | 0       | 0        |
+╰-------------------------+------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 58155304546266662743
+  Bound Result 31580303770881270262
+  Bound Result 62193698647331762521
+  Bound Result 63821438545765844033
+  Bound Result 4415922811966
+  Bound Result 60
+  Bound Result 38152164864140502073
+  Bound Result 977235500863145
+  Bound Result 100000000000000000000
+  Bound Result 3849
+  Bound Result 6498078248825676790
+
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.73s (1.73s CPU time)
+
+Ran 10 tests for test/root/FeeIndexInvariants.t.sol:FeeIndexInvariantsTest
+[PASS] testFuzz_ConservationOfValue(uint256) (runs: 256, μ: 293999, ~: 293861)
+[PASS] testInvariant_ExtremePrecisionScenarios() (gas: 206568)
+[PASS] testInvariant_MonotonicFeeIndex() (gas: 242473)
+[PASS] testInvariant_NoRetroactiveYield() (gas: 271783)
+[PASS] testInvariant_NoYieldFabrication() (gas: 408717)
+[PASS] testInvariant_NoYieldLossOverManyOperations() (gas: 797384)
+[PASS] testInvariant_PendingYieldMatchesSettlement() (gas: 219244)
+[PASS] testInvariant_ProportionalYield() (gas: 299890)
+[PASS] testInvariant_SettlementIdempotent() (gas: 222141)
+[PASS] testInvariant_ZeroFeesNoOp() (gas: 149413)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 1.84s (1.84s CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectDebtIntegration.t.sol:DirectDebtIntegrationPropertyTest
+[PASS] testFuzz_DirectDebtRestrictsWithdrawals(uint256,uint256,uint256,uint256) (runs: 256, μ: 699994, ~: 703275)
+[PASS] test_DirectBorrowedCountsAsDebt() (gas: 652602)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 78.75ms (75.31ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectDebtIntegration.t.sol:DirectGlobalLockIntegrationTest
+[PASS] test_GlobalDirectLockDoesNotBlockOtherPoolWithdraw() (gas: 1185899)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.70ms (305.55µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectDefaultFeeIntegrationProperty.t.sol:DirectDefaultFeeIntegrationPropertyTest
+[PASS] testProperty_DefaultFeeIntegration() (gas: 1489713)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.41ms (356.65µs CPU time)
+
+Ran 3 tests for test/equallend-direct/DirectDiamondSmokeTest.t.sol:DirectDiamondSmokeTest
+[PASS] test_DiamondSetupWorks() (gas: 49488)
+[PASS] test_PostAndAcceptBorrowerOffer() (gas: 1572939)
+[PASS] test_PostAndAcceptLenderOffer() (gas: 1582048)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 3.75ms (638.60µs CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectDocsScenario.t.sol:DirectDocsScenarioTest
+[PASS] testDocs_BorrowerOfferExerciseFlow() (gas: 2440202)
+[PASS] testDocs_LenderOfferWithPrepayFlow() (gas: 2332142)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 5.21ms (2.07ms CPU time)
+
+Ran 5 tests for test/equallend-direct/DirectEdgeCaseTests.t.sol:DirectEdgeCaseTests
+[PASS] testEdge_AccessControlOperatorRepay() (gas: 2239371)
+[PASS] testEdge_AccessControlUnauthorizedExercise() (gas: 2525188)
+[PASS] testEdge_ExerciseTimingAndFlags() (gas: 5793802)
+[PASS] testEdge_GracePeriodRepayAndRecover() (gas: 5479966)
+[PASS] testEdge_TimingBoundariesRepay() (gas: 2299792)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 7.34ms (4.25ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectExerciseProperty.t.sol:DirectExercisePropertyTest
+[PASS] testProperty_EarlyExerciseFunctionality() (gas: 4900822)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.23ms (1.17ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectFeeConsistencyProperty.t.sol:DirectFeeConsistencyPropertyTest
+[PASS] testProperty_FeeConsistencyAcrossSettlementPaths() (gas: 4578415)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.27ms (1.16ms CPU time)
+
+Ran 3 tests for test/equallend-direct/DirectFeeDistributionProperty.t.sol:DirectFeeDistributionPropertyTest
+[PASS] testProperty_FeeDistributionAccuracy() (gas: 2648531)
+[PASS] test_acceptBorrowerOffer_doesNotRequireBorrowerAllowance() (gas: 2518151)
+[PASS] test_acceptOffer_doesNotRequireBorrowerAllowance() (gas: 2526084)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 4.35ms (1.27ms CPU time)
+
+Ran 4 tests for test/gas/DirectGas.t.sol:DiamondLoupeGasTest
+[PASS] test_gas_LoupeFacetAddress() (gas: 15717)
+[PASS] test_gas_LoupeFacetAddresses() (gas: 627382)
+[PASS] test_gas_LoupeFacetFunctionSelectors() (gas: 453432)
+[PASS] test_gas_LoupeSupportsInterface() (gas: 15740)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 4.97ms (1.19ms CPU time)
+
+Ran 2 tests for test/gas/DirectGas.t.sol:DirectLifecycleGasTest
+[PASS] test_gas_DirectCall() (gas: 39597)
+[PASS] test_gas_DirectExercise() (gas: 116825)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 3.54ms (537.00µs CPU time)
+
+Ran 7 tests for test/gas/DirectGas.t.sol:DirectOfferGasTest
+[PASS] test_gas_CancelBorrowerOffer() (gas: 53583)
+[PASS] test_gas_CancelBorrowerRatioTrancheOffer() (gas: 20436)
+[PASS] test_gas_CancelOffer() (gas: 37713)
+[PASS] test_gas_CancelOffersForPositionById() (gas: 41218)
+[PASS] test_gas_CancelOffersForPositionByKey() (gas: 40780)
+[PASS] test_gas_CancelRatioTrancheOffer() (gas: 20636)
+[PASS] test_gas_HasOpenOffers() (gas: 17950)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 4.90ms (1.87ms CPU time)
+
+Ran 14 tests for test/gas/DirectGas.t.sol:DirectRollingGasTest
+[PASS] test_gas_AcceptRollingOffer() (gas: 935235)
+[PASS] test_gas_AggregateRollingExposure() (gas: 15537)
+[PASS] test_gas_CalculateRollingPayment() (gas: 11922)
+[PASS] test_gas_CancelRollingOffer() (gas: 19880)
+[PASS] test_gas_ExerciseRolling() (gas: 55989)
+[PASS] test_gas_GetRollingAgreement() (gas: 12752)
+[PASS] test_gas_GetRollingBorrowerOffer() (gas: 11541)
+[PASS] test_gas_GetRollingOffer() (gas: 11518)
+[PASS] test_gas_GetRollingStatus() (gas: 12033)
+[PASS] test_gas_MakeRollingPayment() (gas: 64692)
+[PASS] test_gas_PostBorrowerRollingOffer() (gas: 624182)
+[PASS] test_gas_PostRollingOffer() (gas: 622876)
+[PASS] test_gas_RecoverRolling() (gas: 115776)
+[PASS] test_gas_RepayRollingInFull() (gas: 79152)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 8.68ms (5.48ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectGracePeriodProperty.t.sol:DirectGracePeriodPropertyTest
+[PASS] testProperty_GracePeriodEnforcement() (gas: 2375422)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.72ms (586.61µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectInputValidationProperty.t.sol:DirectInputValidationPropertyTest
+[PASS] testProperty_InputValidationRevertsOnInvalidParams() (gas: 598717)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.53ms (149.13µs CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectIntegrationWorkflow.t.sol:DirectIntegrationWorkflowTest
+[PASS] testIntegration_EndToEndRepayAndRecover() (gas: 3576343)
+[PASS] test_gas_DirectOfferRepayFlow() (gas: 2255965)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 4.75ms (1.65ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectInternalSettlementProperty.t.sol:DirectDefaultDistributionHierarchyTest
+[PASS] testProperty_DefaultDistributionHierarchy() (gas: 1782625)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.48ms (515.79µs CPU time)
+
+Ran 1 test for test/equallend-direct/DirectInternalSettlementProperty.t.sol:DirectInternalSettlementPropertyTest
+[PASS] testProperty_DirectAgreementSolvencyPreserved() (gas: 1677807)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.75ms (521.54µs CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectBorrowerIndex.t.sol:DirectBorrowerIndexTest
+[PASS] test_BorrowerIndexTracksLifecycle() (gas: 1761180)
+[PASS] test_Pagination() (gas: 3641223)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 2.45ms (1.42ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectCapacityProperty.t.sol:DirectCapacityPropertyTest
+[PASS] testProperty_CapacityManagementInvariant() (gas: 1179077)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.54ms (400.33µs CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectComprehensiveIntegration.t.sol:DirectComprehensiveIntegrationTest
+[PASS] testIntegration_PositionNftOperatorAccess() (gas: 2140687)
+[PASS] testIntegration_SettlementPathsAndFees() (gas: 4083172)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 4.92ms (1.76ms CPU time)
+
+Ran 5 tests for test/equallend-direct/DirectConfigEdge.t.sol:DirectConfigEdgeTest
+[PASS] test_acceptOfferBlocksReentrancyFromTokenCallback() (gas: 2528107)
+[PASS] test_acceptOfferRevertsWhenProtocolTreasuryUnsetWithPlatformFee() (gas: 2365584)
+[PASS] test_acceptOfferSucceedsWithZeroPlatformFeeAndSplits() (gas: 2343341)
+[PASS] test_recoverBlocksReentrancyFromTokenCallback() (gas: 3530115)
+[PASS] test_repayBlocksReentrancyFromTokenCallback() (gas: 2448457)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 5.64ms (2.47ms CPU time)
+
+Ran 1 test for test/equallend-direct/DirectConfigValidationProperty.t.sol:DirectConfigValidationPropertyTest
+[PASS] testProperty_ConfigValidation() (gas: 61854)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.12ms (78.84µs CPU time)
+
+Ran 2 tests for test/derivatives/CommunityAuctionFeeIndexProperty.t.sol:CommunityAuctionFeeIndexPropertyTest
+[PASS] testFuzz_CommunityFeeIndexAccrualA(uint256,uint256,uint256,uint256,uint256,uint256) (runs: 256, μ: 118784, ~: 119489)
+[PASS] testFuzz_CommunityFeeIndexAccrualB(uint256,uint256,uint256,uint256,uint256,uint256) (runs: 256, μ: 118912, ~: 119612)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 50.68ms (50.50ms CPU time)
+
+Ran 6 tests for test/derivatives/CommunityAuctionGas.t.sol:CommunityAuctionGasTest
+[PASS] testGasClaimFeesCommunityAuction() (gas: 15201)
+[PASS] testGasCreateCommunityAuction() (gas: 1362225)
+[PASS] testGasFinalizeCommunityAuction() (gas: 19825)
+[PASS] testGasJoinCommunityAuction() (gas: 538692)
+[PASS] testGasLeaveCommunityAuction() (gas: 39212)
+[PASS] testGasSwapExactInCommunityAuction() (gas: 163100)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 2.89ms (2.16ms CPU time)
+
+Ran 2 tests for test/equallend-direct/DirectBorrowerAgreementIndexProperty.t.sol:DirectBorrowerAgreementIndexPropertyTest
+[PASS] testProperty_BorrowerAgreementIndexConsistency(uint256[],uint256[],uint256,uint256) (runs: 100, μ: 5802444, ~: 6378103)
+[PASS] testProperty_BorrowerAgreementProcessingDeterminism(uint256[],uint256[],uint256,uint256) (runs: 100, μ: 72459281, ~: 72444595)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.87s (2.43s CPU time)
+
+Ran 1 test for test/invariants/DirectLendingStatefulInvariants.t.sol:DirectLendingStatefulInvariantTest
+[PASS] invariant_directBalancesMatchStatus() (runs: 256, calls: 12800, reverts: 963)
+
+╭------------------------------+-------------+-------+---------+----------╮
+| Contract                     | Selector    | Calls | Reverts | Discards |
++=========================================================================+
+| DirectLendingStatefulHandler | acceptOffer | 2197  | 0       | 0        |
+|------------------------------+-------------+-------+---------+----------|
+| DirectLendingStatefulHandler | advanceTime | 2170  | 0       | 0        |
+|------------------------------+-------------+-------+---------+----------|
+| DirectLendingStatefulHandler | failed      | 2118  | 0       | 0        |
+|------------------------------+-------------+-------+---------+----------|
+| DirectLendingStatefulHandler | postOffer   | 2105  | 0       | 0        |
+|------------------------------+-------------+-------+---------+----------|
+| DirectLendingStatefulHandler | recover     | 2123  | 0       | 0        |
+|------------------------------+-------------+-------+---------+----------|
+| DirectLendingStatefulHandler | repay       | 2087  | 963     | 0        |
+╰------------------------------+-------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 859602
+  Bound Result 124873903329685476444
+  Bound Result 7034237641984466344
+  Bound Result 245465
+  Bound Result 777617
+  Bound Result 863998
+  Bound Result 66912563184846956710
+  Bound Result 113497060313834567018
+  Bound Result 336446
+  Bound Result 786095
+  Bound Result 139603
+  Bound Result 15304150723327208779
+  Bound Result 63574961635344773307
+  Bound Result 264399
+  Bound Result 140266
+  Bound Result 446555
+  Bound Result 581232
+  Bound Result 784930
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.68s (1.68s CPU time)
+
+Ran 6 tests for test/invariants/LendingStatefulInvariants.t.sol:LendingStatefulInvariantTest
+[PASS] invariant_activeCreditMatchesRolling() (runs: 256, calls: 12800, reverts: 1446)
+
+╭------------------------+---------------+-------+---------+----------╮
+| Contract               | Selector      | Calls | Reverts | Discards |
++=====================================================================+
+| LendingStatefulHandler | closeRolling  | 1843  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | expandRolling | 1794  | 245     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | failed        | 1852  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | makePayment   | 1828  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openFixed     | 1804  | 713     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openRolling   | 1788  | 488     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | repayFixed    | 1891  | 0       | 0        |
+╰------------------------+---------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 482
+  Bound Result 2273
+  Bound Result 458
+  Bound Result 22
+  Bound Result 8264
+  Bound Result 24919645386
+  Bound Result 16
+  Bound Result 6432
+  Bound Result 759
+  Bound Result 603
+  Bound Result 1
+  Bound Result 21484
+  Bound Result 41233
+  Bound Result 35446
+  Bound Result 356876002147555350691
+  Bound Result 10233
+  Bound Result 517053874855337879995
+  Bound Result 1
+  Bound Result 3827
+  Bound Result 9024
+  Bound Result 1
+  Bound Result 12
+
+[PASS] invariant_activeFixedCountMatchesIds() (runs: 256, calls: 12800, reverts: 1459)
+
+╭------------------------+---------------+-------+---------+----------╮
+| Contract               | Selector      | Calls | Reverts | Discards |
++=====================================================================+
+| LendingStatefulHandler | closeRolling  | 1780  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | expandRolling | 1862  | 291     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | failed        | 1839  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | makePayment   | 1788  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openFixed     | 1806  | 704     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openRolling   | 1870  | 464     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | repayFixed    | 1855  | 0       | 0        |
+╰------------------------+---------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 3
+  Bound Result 1
+  Bound Result 215796610244232871083
+  Bound Result 554182395189540963141
+  Bound Result 423152448946866198456
+  Bound Result 52
+  Bound Result 8157
+  Bound Result 7927
+  Bound Result 150000
+  Bound Result 4000000000000000000
+  Bound Result 4078
+  Bound Result 110000
+  Bound Result 3364
+  Bound Result 117452216726997450700
+  Bound Result 23647
+  Bound Result 531372300585188592607
+  Bound Result 5388
+  Bound Result 66285
+
+[PASS] invariant_fixedLoanExpiryMatchesConfig() (runs: 256, calls: 12800, reverts: 1490)
+
+╭------------------------+---------------+-------+---------+----------╮
+| Contract               | Selector      | Calls | Reverts | Discards |
++=====================================================================+
+| LendingStatefulHandler | closeRolling  | 1840  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | expandRolling | 1824  | 199     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | failed        | 1841  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | makePayment   | 1882  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openFixed     | 1835  | 790     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openRolling   | 1794  | 501     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | repayFixed    | 1784  | 0       | 0        |
+╰------------------------+---------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 95198227416821519
+  Bound Result 1
+  Bound Result 65253
+  Bound Result 8338
+  Bound Result 688324109459682522207
+  Bound Result 19376
+  Bound Result 197128618864386334769
+  Bound Result 419274831483701628934
+  Bound Result 548661874609546378168
+  Bound Result 2
+  Bound Result 66303331472083981920
+  Bound Result 50000
+
+[PASS] invariant_fixedLoanIndexIntegrity() (runs: 256, calls: 12800, reverts: 1420)
+
+╭------------------------+---------------+-------+---------+----------╮
+| Contract               | Selector      | Calls | Reverts | Discards |
++=====================================================================+
+| LendingStatefulHandler | closeRolling  | 1836  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | expandRolling | 1793  | 229     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | failed        | 1868  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | makePayment   | 1842  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openFixed     | 1841  | 700     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openRolling   | 1805  | 491     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | repayFixed    | 1815  | 0       | 0        |
+╰------------------------+---------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 99
+  Bound Result 2863311530
+  Bound Result 85
+  Bound Result 1
+  Bound Result 623264990876140198954
+  Bound Result 691295030
+  Bound Result 128618954
+  Bound Result 10
+  Bound Result 870559174
+  Bound Result 4
+
+[PASS] invariant_inactiveLoanHasZeroPrincipal() (runs: 256, calls: 12800, reverts: 1538)
+
+╭------------------------+---------------+-------+---------+----------╮
+| Contract               | Selector      | Calls | Reverts | Discards |
++=====================================================================+
+| LendingStatefulHandler | closeRolling  | 1819  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | expandRolling | 1889  | 275     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | failed        | 1785  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | makePayment   | 1771  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openFixed     | 1876  | 765     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openRolling   | 1819  | 498     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | repayFixed    | 1841  | 0       | 0        |
+╰------------------------+---------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 114269688703957854614
+  Bound Result 305419896
+  Bound Result 1751
+  Bound Result 251686054
+  Bound Result 56799735811905
+  Bound Result 33543605619539
+  Bound Result 27
+  Bound Result 16955
+  Bound Result 92000
+  Bound Result 41744366
+  Bound Result 648618458300
+  Bound Result 18000000000000000000
+  Bound Result 534631490771663976552
+  Bound Result 10436282
+  Bound Result 1
+  Bound Result 916519
+  Bound Result 6446811628308169926
+  Bound Result 33545123159781601
+  Bound Result 5944
+
+[PASS] invariant_poolConservation() (runs: 256, calls: 12800, reverts: 1471)
+
+╭------------------------+---------------+-------+---------+----------╮
+| Contract               | Selector      | Calls | Reverts | Discards |
++=====================================================================+
+| LendingStatefulHandler | closeRolling  | 1821  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | expandRolling | 1857  | 244     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | failed        | 1828  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | makePayment   | 1839  | 0       | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openFixed     | 1829  | 718     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | openRolling   | 1823  | 509     | 0        |
+|------------------------+---------------+-------+---------+----------|
+| LendingStatefulHandler | repayFixed    | 1803  | 0       | 0        |
+╰------------------------+---------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 13873783
+  Bound Result 7995356
+  Bound Result 1466560908
+  Bound Result 1021310176
+  Bound Result 700
+  Bound Result 1063796122089239157
+  Bound Result 190912322
+  Bound Result 80727306
+  Bound Result 56299101
+  Bound Result 453271555450576314636
+  Bound Result 57128851
+  Bound Result 513
+  Bound Result 342
+  Bound Result 172359804354056061
+  Bound Result 259
+  Bound Result 9933
+  Bound Result 51687213
+  Bound Result 111968092
+
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 14.99s (18.02s CPU time)
+
+Ran 1 test for test/root/IndexEncumbranceBlocksWithdrawalProperty.t.sol:IndexEncumbranceBlocksWithdrawalPropertyTest
+[PASS] testFuzz_indexEncumbranceBlocksWithdraw(uint256,uint256,uint256) (runs: 256, μ: 5607430, ~: 5607430)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 15.64s (15.64s CPU time)
+
+Ran 12 tests for test/gas/IndexTokenGas.t.sol:IndexTokenGasTest
+[PASS] test_gas_AssetsPaginated() (gas: 22072)
+[PASS] test_gas_BundleAmountsPaginated() (gas: 21970)
+[PASS] test_gas_BurnIndexUnits() (gas: 19299)
+[PASS] test_gas_IsSolvent() (gas: 33258)
+[PASS] test_gas_MintIndexUnits() (gas: 26414)
+[PASS] test_gas_PreviewFlashLoanPaginated() (gas: 32203)
+[PASS] test_gas_PreviewMintPaginated() (gas: 68346)
+[PASS] test_gas_PreviewRedeem() (gas: 73450)
+[PASS] test_gas_PreviewRedeemPaginated() (gas: 77296)
+[PASS] test_gas_RecordBurnDetails() (gas: 53976)
+[PASS] test_gas_RecordMintDetails() (gas: 53294)
+[PASS] test_gas_SetFlashFeeBps() (gas: 16769)
+Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 904.36µs (740.96µs CPU time)
+
+Ran 3 tests for test/invariants/AuctionStatefulInvariants.t.sol:CommunityAuctionStatefulInvariantTest
+[PASS] invariant_auctionActive() (runs: 256, calls: 12800, reverts: 0)
+
+╭---------------------------------+-------------+-------+---------+----------╮
+| Contract                        | Selector    | Calls | Reverts | Discards |
++============================================================================+
+| CommunityAuctionStatefulHandler | failed      | 6465  | 0       | 0        |
+|---------------------------------+-------------+-------+---------+----------|
+| CommunityAuctionStatefulHandler | swapExactIn | 6335  | 0       | 0        |
+╰---------------------------------+-------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 5000000
+  Bound Result 7095255052314380704076
+  Bound Result 1289
+  Bound Result 4607432141517419875531
+  Bound Result 12168771373190548747779
+  Bound Result 14661005264748139497544
+  Bound Result 13319677552886323411829
+  Bound Result 390
+  Bound Result 22
+  Bound Result 4215
+  Bound Result 130000000000000000000
+  Bound Result 3222
+  Bound Result 1216303251583647225
+  Bound Result 18666189823844529602768
+  Bound Result 14014282324878253833502
+  Bound Result 2634
+  Bound Result 7
+  Bound Result 22046555096803598411603
+  Bound Result 18090489333686450330428
+  Bound Result 16281349095065109385429
+  Bound Result 10000000000000000000000
+  Bound Result 1
+
+[PASS] invariant_makerShareMatchesTotal() (runs: 256, calls: 12800, reverts: 0)
+
+╭---------------------------------+-------------+-------+---------+----------╮
+| Contract                        | Selector    | Calls | Reverts | Discards |
++============================================================================+
+| CommunityAuctionStatefulHandler | failed      | 6448  | 0       | 0        |
+|---------------------------------+-------------+-------+---------+----------|
+| CommunityAuctionStatefulHandler | swapExactIn | 6352  | 0       | 0        |
+╰---------------------------------+-------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 225467495367361781
+  Bound Result 183
+  Bound Result 4442671701317812948551
+  Bound Result 256
+  Bound Result 18579853796512285383672
+  Bound Result 11106310035054547067871
+  Bound Result 5041891472842
+  Bound Result 1750684581368
+  Bound Result 39321
+  Bound Result 342
+  Bound Result 3947
+  Bound Result 15517113218416234367915
+  Bound Result 2635
+  Bound Result 30053477185225924086785
+  Bound Result 38125941264492265838001
+  Bound Result 15260856089796563835360
+  Bound Result 38870566567777415665390
+  Bound Result 1269620315604372460299
+  Bound Result 46385967261026894276471
+  Bound Result 21180004291999287861862
+  Bound Result 7814675312035933114436
+  Bound Result 6628457872853725703074
+  Bound Result 899693330
+  Bound Result 9402965498885293400026
+  Bound Result 12648430
+  Bound Result 21200
+
+[PASS] invariant_principalStable() (runs: 256, calls: 12800, reverts: 0)
+
+╭---------------------------------+-------------+-------+---------+----------╮
+| Contract                        | Selector    | Calls | Reverts | Discards |
++============================================================================+
+| CommunityAuctionStatefulHandler | failed      | 6360  | 0       | 0        |
+|---------------------------------+-------------+-------+---------+----------|
+| CommunityAuctionStatefulHandler | swapExactIn | 6440  | 0       | 0        |
+╰---------------------------------+-------------+-------+---------+----------╯
+
+Logs:
+  Bound Result 990000000000000000000
+  Bound Result 14705314921574820210357
+  Bound Result 18388
+  Bound Result 32787690870649418080188
+  Bound Result 130000
+  Bound Result 745
+  Bound Result 4522821741699352918338
+  Bound Result 11378142238412429463874
+  Bound Result 6838
+  Bound Result 11866
+  Bound Result 2704
+  Bound Result 8198986363934576978699
+  Bound Result 20
+  Bound Result 13161701642566395862698
+  Bound Result 9303139132904207676123
+  Bound Result 10000000
+  Bound Result 10000000000000000000
+  Bound Result 28118014409899119246787
+  Bound Result 261376484982
+  Bound Result 40302785728018318958092
+  Bound Result 6788662152512223719486
+  Bound Result 27014
+  Bound Result 4320000
+  Bound Result 13432
+  Bound Result 36364595540945913288257
+  Bound Result 68292987220
+  Bound Result 15705087609
+  Bound Result 6308682693261281326051
+  Bound Result 1098630286133121890670
+  Bound Result 201
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 9.19s (8.66s CPU time)
+
+Ran 2 tests for test/invariants/IndexTokenStatefulInvariants.t.sol:IndexTokenStatefulInvariantTest
+[PASS] invariant_totalSupplyMatchesUnits() (runs: 256, calls: 12800, reverts: 4218)
+
+╭---------------------------+----------+-------+---------+----------╮
+| Contract                  | Selector | Calls | Reverts | Discards |
++===================================================================+
+| IndexTokenStatefulHandler | burn     | 4320  | 0       | 0        |
+|---------------------------+----------+-------+---------+----------|
+| IndexTokenStatefulHandler | failed   | 4262  | 0       | 0        |
+|---------------------------+----------+-------+---------+----------|
+| IndexTokenStatefulHandler | mint     | 4218  | 4218    | 0        |
+╰---------------------------+----------+-------+---------+----------╯
+
+[PASS] invariant_vaultBalancesMatchSupply() (runs: 256, calls: 12800, reverts: 4196)
+
+╭---------------------------+----------+-------+---------+----------╮
+| Contract                  | Selector | Calls | Reverts | Discards |
++===================================================================+
+| IndexTokenStatefulHandler | burn     | 4296  | 0       | 0        |
+|---------------------------+----------+-------+---------+----------|
+| IndexTokenStatefulHandler | failed   | 4308  | 0       | 0        |
+|---------------------------+----------+-------+---------+----------|
+| IndexTokenStatefulHandler | mint     | 4196  | 4196    | 0        |
+╰---------------------------+----------+-------+---------+----------╯
+
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 846.88ms (1.61s CPU time)
+
+Ran 1 test for test/root/LeanDeploy.t.sol:LeanDeployTest
+[PASS] testLeanDeployCreatesIndexesAndFacets() (gas: 145064253)
+Logs:
+  EntryPoint 0x0000000000000000000000000000000000000000
+  MSCAImplementation 0x83898D1F3C03189fF03B471dd3456908FCA4423d
+  Beacon 0x6AFc743aa4E9D98D0F53Ff111996E9817d79D301
+  BeaconProxy 0x3450a15Dc9cbDD5C0e28cC22474D88AD7e2695A3
+  Using ERC6551 implementation: 0x3450a15Dc9cbDD5C0e28cC22474D88AD7e2695A3
+  Identity registry unknown; skipping identity config
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 10.57ms (7.58ms CPU time)
+
+Ran 1 test for test/LeanDeploySelectors.t.sol:LeanDeploySelectorsTest
+[PASS] testLeanDeployCutsPositionViewSelectors() (gas: 145024308)
+Logs:
+  EntryPoint 0x0000000000000000000000000000000000000000
+  MSCAImplementation 0x83898D1F3C03189fF03B471dd3456908FCA4423d
+  Beacon 0x6AFc743aa4E9D98D0F53Ff111996E9817d79D301
+  BeaconProxy 0x3450a15Dc9cbDD5C0e28cC22474D88AD7e2695A3
+  Using ERC6551 implementation: 0x3450a15Dc9cbDD5C0e28cC22474D88AD7e2695A3
+  Identity registry unknown; skipping identity config
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 8.62ms (6.52ms CPU time)
+
+Ran 3 tests for test/root/LendingAccountingIntegration.t.sol:LendingAccountingIntegrationTest
+[PASS] test_depositWithdraw_feeBaseUsesNetEquity() (gas: 3859897)
+[PASS] test_penalty_feeIndexAccruesOnNetEquity() (gas: 3659024)
+[PASS] test_rollingFixedDebt_usesSameAssetDebtAggregation() (gas: 5381457)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.54ms (1.40ms CPU time)
+
+Ran 1 test for test/root/LendingFacet.t.sol:LendingFacetPropertyTest
+[PASS] testFuzz_BehavioralEquivalenceRollingAndFixed(uint256,uint256,uint256,uint256,uint256,uint256,bool) (runs: 256, μ: 2214040, ~: 2334944)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 273.78ms (272.92ms CPU time)
+
+Ran 1 test for test/aave/RealAaveIntegration.t.sol:AaveOriginForkTest
+[PASS] testDepositEqualFiBorrow95LTVDepositAave() (gas: 963351)
+Logs:
+  EntryPoint 0x0000000000000000000000000000000000000000
+  MSCAImplementation 0x83898D1F3C03189fF03B471dd3456908FCA4423d
+  Beacon 0x6AFc743aa4E9D98D0F53Ff111996E9817d79D301
+  BeaconProxy 0x3450a15Dc9cbDD5C0e28cC22474D88AD7e2695A3
+  Using ERC6551 implementation: 0x3450a15Dc9cbDD5C0e28cC22474D88AD7e2695A3
+  Identity registry unknown; skipping identity config
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 13.91s (4.95s CPU time)
+
+Ran 1 test for test/root/RecursiveLoopPreventionProperty.t.sol:RecursiveLoopPreventionPropertyTest
+[PASS] testFuzz_recursiveBorrowDepositDoesNotInflateFeeBase(uint256,uint256) (runs: 256, μ: 3638, ~: 3639)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 20.90ms (20.71ms CPU time)
+
+Ran 26 tests for test/root/LendingFacet.t.sol:LendingFacetUnitTest
+[PASS] testProperty_FixedLoanNoPrincipalDeduction(uint16,uint256,uint256) (runs: 256, μ: 1108217, ~: 1108267)
+[PASS] testProperty_FixedLoanZeroInterest(uint16) (runs: 256, μ: 1094487, ~: 1094487)
+[PASS] testProperty_PaymentPrincipalApplication(uint256,uint256) (runs: 256, μ: 636658, ~: 618984)
+[PASS] testProperty_PrincipalAtOpenRecorded_Fixed(uint256,uint256) (runs: 256, μ: 909352, ~: 909423)
+[PASS] testProperty_PrincipalAtOpenRecorded_Rolling(uint256,uint256) (runs: 256, μ: 679760, ~: 679830)
+[PASS] testProperty_RollingLoanZeroApy(uint16) (runs: 256, μ: 823113, ~: 823113)
+[PASS] testProperty_SeparatePenaltyBasesPerLoan(uint256,uint256) (runs: 256, μ: 1378256, ~: 1378317)
+[PASS] test_closeRolling_clearsActiveCreditDebt() (gas: 620999)
+[PASS] test_closeRolling_clearsLoan() (gas: 626800)
+[PASS] test_expandRolling_increasesActiveCreditDebt() (gas: 710345)
+[PASS] test_expandRolling_increasesPrincipal() (gas: 717210)
+[PASS] test_gasFixedLifecycle() (gas: 937909)
+[PASS] test_gasRollingLifecycle() (gas: 756450)
+[PASS] test_makePayment_reducesActiveCreditDebt() (gas: 760242)
+[PASS] test_makePayment_reducesPrincipalOnly() (gas: 766360)
+[PASS] test_makePayment_revertsWhenBelowMinimumBps() (gas: 696432)
+[PASS] test_openFixed_createsLoanAndKeepsPrincipalIntact() (gas: 913997)
+[PASS] test_openFixed_enforcesMinLoanAmount() (gas: 442918)
+[PASS] test_openFixed_setsActiveCreditDebt() (gas: 904969)
+[PASS] test_openFixed_zeroInterestLeavesPrincipalIntact() (gas: 1106580)
+[PASS] test_openRolling_autoRollsAccruedYield() (gas: 686950)
+[PASS] test_openRolling_setsActiveCreditDebt() (gas: 668829)
+[PASS] test_openRolling_setsLoanStateAndTransfers() (gas: 675482)
+[PASS] test_repayFixed_reducesActiveCreditDebt() (gas: 937659)
+[PASS] test_repayFixed_reducesPrincipalRemaining() (gas: 950027)
+[PASS] test_repayFixed_supportsMultiplePartialRepaymentsAndCloses() (gas: 803699)
+Suite result: ok. 26 passed; 0 failed; 0 skipped; finished in 310.76ms (712.35ms CPU time)
+
+Ran 17 tests for test/derivatives/CommunityAuctionFacetProperty.t.sol:CommunityAuctionFacetPropertyTest
+[PASS] testJoinIndexesMakers() (gas: 2662409)
+[PASS] testProperty_CancelAuthorizationEnforcement(uint96,uint96) (runs: 100, μ: 2102707, ~: 2102722)
+[PASS] testProperty_CancelTimeRestriction(uint96,uint96) (runs: 100, μ: 2092590, ~: 2092387)
+[PASS] testProperty_CreateCommunityAuctionInitializesState(uint96,uint96) (runs: 100, μ: 2127026, ~: 2126985)
+[PASS] testProperty_FinalizationDistributesAllReserves(uint96,uint96,uint96) (runs: 100, μ: 2633205, ~: 2630508)
+[PASS] testProperty_JoinAccountingInvariant(uint96,uint96,uint96) (runs: 100, μ: 3029020, ~: 3029205)
+[PASS] testProperty_JoinLeaveRoundTripNoSwaps(uint96,uint96,uint96) (runs: 100, μ: 2669943, ~: 2669198)
+[PASS] testProperty_LeaveReturnsProportionalReservesPlusFees(uint96,uint96,uint96,uint96,uint96) (runs: 100, μ: 2803302, ~: 2751112)
+[PASS] testProperty_ProRataFeeDistribution(uint96,uint96,uint96,uint96) (runs: 100, μ: 3305413, ~: 3315894)
+[PASS] testProperty_ReserveInvariant(uint96,uint96,uint96) (runs: 100, μ: 3018702, ~: 3018870)
+[PASS] testProperty_ReserveRatioEnforcement(uint96,uint96,uint96) (runs: 100, μ: 2462245, ~: 2462166)
+[PASS] testProperty_ShareInvariant(uint96,uint96,uint96) (runs: 100, μ: 3017537, ~: 3017607)
+[PASS] testProperty_SwapTrackedBalanceIsolation() (gas: 2369937)
+[PASS] testProperty_ViewFunctions(uint96,uint96,uint96,uint96) (runs: 100, μ: 3061219, ~: 3054835)
+[PASS] test_CommunityJoinAllowsTopUp() (gas: 2182182)
+[PASS] test_CommunitySwapKeepsIndexFeeInReserves() (gas: 2406295)
+[PASS] test_MakerFeesBackedOnLeave() (gas: 1824789)
+Suite result: ok. 17 passed; 0 failed; 0 skipped; finished in 7.65s (8.37s CPU time)
+
+Ran 1 test for test/equallend-direct/ActiveCreditDilutionProperty.t.sol:ActiveCreditLegitTopupPropertyTest
+[PASS] testProperty_LegitTopupPreservesTimeCredit(uint256,uint256) (runs: 256, μ: 155614, ~: 155263)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 19.56s (19.56s CPU time)
+
+Ran 2 tests for test/equallend-direct/ActiveCreditDilutionProperty.t.sol:ActiveCreditTimeGatePropertyTest
+[PASS] testProperty_TimeGateFullWeightAfterMature(uint256) (runs: 256, μ: 140826, ~: 140654)
+[PASS] testProperty_TimeGateZeroWeightUntilMature(uint256,uint256) (runs: 256, μ: 142749, ~: 142782)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 36.17ms (63.39ms CPU time)
+
+Ran 1 test for test/equallend-direct/ActiveCreditDilutionProperty.t.sol:ActiveCreditWeightedDilutionPropertyTest
+[PASS] testProperty_WeightedDilutionFormula(uint256,uint256,uint256) (runs: 256, μ: 161349, ~: 161598)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 52.39ms (48.43ms CPU time)
+
+Ran 5 tests for test/root/ActiveCreditIndexInvariant.t.sol:ActiveCreditIndexInvariantTest
+[PASS] testFuzz_TimeCreditCapped(uint96,uint64) (runs: 256, μ: 136465, ~: 136302)
+[PASS] test_BucketTotalsMatchPrincipal() (gas: 283876)
+[PASS] test_RemainderWithinBase() (gas: 228350)
+[PASS] test_SettleClearsPendingYield() (gas: 298264)
+[PASS] test_TimeGateWeighting() (gas: 139195)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 28.48ms (29.15ms CPU time)
+
+Ran 1 test for test/equallend-direct/ActiveCreditIndexProperty.t.sol:ActiveCreditAccrualFormulaPropertyTest
+[PASS] testProperty_ActiveCreditAccrualMatchesFormula(uint256,uint256,uint256) (runs: 256, μ: 303632, ~: 307038)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 44.11ms (40.98ms CPU time)
+
+Ran 1 test for test/equallend-direct/ActiveCreditIndexProperty.t.sol:ActiveCreditEventsPropertyTest
+[PASS] testProperty_EventEmissionConsistency(uint256,uint256,uint256) (runs: 256, μ: 307072, ~: 306897)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 55.86ms (52.47ms CPU time)
+
+Ran 304 test suites in 20.10s (152.74s CPU time): 1182 tests passed, 20 failed, 0 skipped (1202 total tests)
+
+Failing tests:
+Encountered 1 failing test in test/erc6551-agents/PositionAgentTransferBehavior.t.sol:PositionAgentTransferPropertyTest
+[FAIL: unknown cheatcode with selector 0x150b7a02; you may have a mismatch between the `Vm` interface (likely in `forge-std`) and the `forge` version; counterexample: calldata=0x904bbe3d0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d000000000000000000000000000000000000000000000000000000000000163700000000000000000000000000000000000000000000000000000000000013a00000000000000000000000000000000000000000000000000000000000000cda args=[0x7109709ECfa91a80626fF3989D68f67F5b1DD12D, 0x0000000000000000000000000000000000001637, 5024, 3290]] testProperty_TransferPreservesAgentIdentity(address,address,uint256,uint256) (runs: 0, μ: 0, ~: 0)
+
+Encountered 7 failing tests in test/root/FlashLoanFacetEdgeCases.t.sol:FlashLoanFacetEdgeCasesTest
+[FAIL: next call did not revert as expected] testFlashLoanCallbackReturnsWrongHash() (gas: 23840)
+[FAIL: next call did not revert as expected] testFlashLoanExceedsBalance() (gas: 23002)
+[FAIL: Flash: pool not initialized] testFlashLoanNonExistentPoolReverts() (gas: 38630)
+[FAIL: next call did not revert as expected] testFlashLoanReceiverReverts() (gas: 23589)
+[FAIL: next call did not revert as expected] testFlashLoanReentrancyBlocked() (gas: 357874)
+[FAIL: next call did not revert as expected] testFlashLoanWithZeroFeeReverts() (gas: 99851)
+[FAIL: next call did not revert as expected] testFlashLoanZeroAmountReverts() (gas: 15543)
+
+Encountered 2 failing tests in test/root/FlashLoanFacetNativeEth.t.sol:FlashLoanFacetNativeEthTest
+[FAIL: next call did not revert as expected] testFlashLoanNativeRejectsMsgValue() (gas: 124412)
+[FAIL: next call did not revert as expected] testFlashLoanNativeUnderfundedReverts() (gas: 150811)
+
+Encountered 1 failing test in test/root/GasScenarioReport.t.sol:GasScenarioReportTest
+[FAIL: NotNFTOwner(0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496, 2)] test_gas_DirectOfferRepayFlow() (gas: 38056622)
+
+Encountered 4 failing tests in test/root/LendingFacetFeeOnTransfer.t.sol:LendingFacetFeeOnTransferTest
+[FAIL: LibCurrency_InsufficientReceived(18000000000000000000 [1.8e19], 20000000000000000000 [2e19])] test_closeRollingRevertsWithFeeOnTransfer() (gas: 473381)
+[FAIL: LibCurrency_InsufficientReceived(18000000000000000000 [1.8e19], 20000000000000000000 [2e19])] test_makePaymentAcceptsSmallNetAmount() (gas: 473498)
+[FAIL: LibCurrency_InsufficientReceived(18000000000000000000 [1.8e19], 20000000000000000000 [2e19])] test_makePaymentCreditsNetReceived() (gas: 473445)
+[FAIL: LibCurrency_InsufficientReceived(18000000000000000000 [1.8e19], 20000000000000000000 [2e19])] test_repayFixedRevertsWithFeeOnTransfer() (gas: 476504)
+
+Encountered 1 failing test in test/root/NativeEthFlowIntegration.t.sol:NativeEthFlowIntegrationTest
+[FAIL: UnexpectedMsgValue(0)] testIntegration_NativePoolDepositBorrowRepayWithdraw() (gas: 944019)
+
+Encountered 1 failing test in test/root/P2PBalanceSheetConsistencyProperty.t.sol:P2PBalanceSheetConsistencyPropertyTest
+[FAIL: NotNFTOwner(0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496, 2)] test_balanceSheetConsistency_acceptAndRepay() (gas: 37895918)
+
+Encountered 1 failing test in test/root/PositionManagementFacet.t.sol:PositionManagementFacetUnitTest
+[FAIL] test_deposit_feeOnTransferCreditsReceived() (gas: 1195326)
+
+Encountered 1 failing test in test/root/PositionManagementNativeEthProperty.t.sol:PositionManagementNativeEthPropertyTest
+[FAIL: Error != expected error: ERC20InsufficientAllowance(0xF62849F9A0B5Bf2913b396098F7c7019b51A820a, 0, 1) != UnexpectedMsgValue(1); counterexample: calldata=0xf9b035430000000000000000000000000000000000000000000000000000000000000000 args=[0]] testFuzz_strayEthRejectsDeposits(uint96) (runs: 0, μ: 0, ~: 0)
+
+Encountered 1 failing test in test/root/TrackedBalanceNativeEthProperty.t.sol:TrackedBalanceNativeEthPropertyTest
+[FAIL: UnexpectedMsgValue(0); counterexample: calldata=0xe04bf5230000000000000000000000000000000000000000000000000000000000000861000000000000000000000000000000000000000000000000000000003e5e3c23 args=[2145, 1046363171 [1.046e9]]] testFuzz_trackedBalanceBorrowRepay(uint96,uint96) (runs: 0, μ: 0, ~: 0)
+
+Encountered a total of 20 failing tests, 1182 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 20 failed tests
