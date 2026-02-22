@@ -59,18 +59,12 @@ contract UpgradeAmmSkillModule is Script {
         ExecutionManifest memory manifest = PositionAgentAmmSkillModule(newModule).executionManifest();
         
         // Install new execution module
-        bytes memory installData = ""; // Module's onInstall accepts empty bytes
+        IERC6900Account(tba).installExecution(newModule, manifest, "");
+        console2.log("Installed new execution module");
         
-        IERC6900Account(tba).installExecution(newModule, manifest, installData);
-        console2.log("Installed new execution module on TBA");
-        
-        // Configure via TBA.execute() calls
-        // These go through the TBA which calls the module functions
-        
-        // Set diamond address
-        bytes memory setDiamondData = abi.encodeCall(PositionAgentAmmSkillModule.setDiamond, (DIAMOND));
-        IERC6900Account(tba).execute(newModule, 0, setDiamondData);
-        console2.log("Set diamond address via TBA");
+        // Configure module (call directly on TBA, which delegatecalls to module storage)
+        PositionAgentAmmSkillModule(tba).setDiamond(DIAMOND);
+        console2.log("Set diamond address");
         
         // Configure auction policy
         LibAmmSkillStorage.AuctionPolicy memory policy = LibAmmSkillStorage.AuctionPolicy({
@@ -85,14 +79,13 @@ contract UpgradeAmmSkillModule is Script {
             minFeeBps: 0,
             maxFeeBps: 10000,
             minReserveA: 0,
-            maxReserveA: 0,
+            maxReserveA: 0,  // 0 = unlimited
             minReserveB: 0,
-            maxReserveB: 0
+            maxReserveB: 0   // 0 = unlimited
         });
         
-        bytes memory setPolicyData = abi.encodeCall(PositionAgentAmmSkillModule.setAuctionPolicy, (policy));
-        IERC6900Account(tba).execute(newModule, 0, setPolicyData);
-        console2.log("Configured auction policy via TBA");
+        PositionAgentAmmSkillModule(tba).setAuctionPolicy(policy);
+        console2.log("Configured auction policy");
         
         // Configure roll policy
         LibAmmSkillStorage.RollPolicy memory rollPolicy = LibAmmSkillStorage.RollPolicy({
@@ -100,9 +93,8 @@ contract UpgradeAmmSkillModule is Script {
             enforcePoolAllowlist: false
         });
         
-        bytes memory setRollData = abi.encodeCall(PositionAgentAmmSkillModule.setRollPolicy, (rollPolicy));
-        IERC6900Account(tba).execute(newModule, 0, setRollData);
-        console2.log("Configured roll policy via TBA");
+        PositionAgentAmmSkillModule(tba).setRollPolicy(rollPolicy);
+        console2.log("Configured roll policy");
         
         console2.log("TBA upgrade complete!");
     }
