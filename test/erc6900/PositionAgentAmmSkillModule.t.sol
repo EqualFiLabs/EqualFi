@@ -36,6 +36,9 @@ contract PositionAgentAmmSkillModuleTest is Test {
         LibAmmSkillStorage.AuctionPolicy memory auctionPolicy = LibAmmSkillStorage.AuctionPolicy({
             enabled: true,
             allowCancel: true,
+            allowFinalize: true,
+            allowAddLiquidity: true,
+            allowCommunityJoin: true,
             enforcePoolAllowlist: false,
             minDuration: 0,
             maxDuration: 0,
@@ -196,6 +199,9 @@ contract PositionAgentAmmSkillModuleTest is Test {
         policy = LibAmmSkillStorage.AuctionPolicy({
             enabled: true,
             allowCancel: true,
+            allowFinalize: true,
+            allowAddLiquidity: true,
+            allowCommunityJoin: true,
             enforcePoolAllowlist: false,
             minDuration: 0,
             maxDuration: 0,

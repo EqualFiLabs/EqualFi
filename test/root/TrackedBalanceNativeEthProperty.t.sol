@@ -45,6 +45,8 @@ contract TrackedBalancePositionHarness is PositionManagementFacet {
     function nativeTrackedTotal() external view returns (uint256) {
         return LibAppStorage.s().nativeTrackedTotal;
     }
+
+    receive() external payable {}
 }
 
 contract TrackedBalanceLendingHarness is LendingFacet {
@@ -109,9 +111,10 @@ contract TrackedBalanceFlashReceiver is IFlashLoanReceiver {
 
 contract ForceSend {
     constructor() payable {}
-
+    
     function send(address payable to) external {
-        selfdestruct(to);
+        (bool success,) = to.call{value: address(this).balance}("");
+        require(success, "Transfer failed");
     }
 }
 

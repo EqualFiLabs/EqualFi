@@ -123,6 +123,9 @@ contract PositionAgentAmmSkillModuleRuntimeValidationIntegrationTest is Test {
         LibAmmSkillStorage.AuctionPolicy memory policy = LibAmmSkillStorage.AuctionPolicy({
             enabled: true,
             allowCancel: true,
+            allowFinalize: true,
+            allowAddLiquidity: true,
+            allowCommunityJoin: true,
             enforcePoolAllowlist: false,
             minDuration: 0,
             maxDuration: 0,
