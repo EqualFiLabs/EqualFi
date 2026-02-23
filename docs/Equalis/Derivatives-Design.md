@@ -459,18 +459,21 @@ struct Encumbrance {
     uint256 directLent;         // Principal lent out (AMM reserves, direct lending)
     uint256 directOfferEscrow;  // Principal escrowed for open offers
     uint256 indexEncumbered;    // Principal encumbered for index tokens
+    uint256 moduleEncumbered;   // Principal reserved by module encumbrance
 }
 
 struct EncumbranceStorage {
     // positionKey => poolId => all encumbrance components
     mapping(bytes32 => mapping(uint256 => Encumbrance)) encumbrance;
+    mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByIndex;
+    mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByModule;
 }
 ```
 
 ### Available Principal Calculation
 
 ```
-totalEncumbered = directLocked + directLent + directOfferEscrow + indexEncumbered
+totalEncumbered = directLocked + directLent + directOfferEscrow + indexEncumbered + moduleEncumbered
 available = userPrincipal - totalEncumbered
 ```
 
@@ -956,7 +959,7 @@ event Reclaimed(
 
 3. **Reentrancy Protection**: All state-changing functions use `nonReentrant` modifier.
 
-4. **Access Control**: Only Position NFT owners can create series and reclaim collateral.
+4. **Access Control**: Series creation and maker-side reclaim require Position NFT owner authority (owner or approved operator).
 
 5. **Token Approval**: Exercise/settlement requires explicit token approval from the holder.
 
@@ -969,6 +972,7 @@ event Reclaimed(
    - `directLent`: Principal lent out (AMM reserves)
    - `directOfferEscrow`: Principal escrowed for open offers
    - `indexEncumbered`: Principal encumbered for index tokens
+   - `moduleEncumbered`: Principal reserved by module integrations
    
    This centralized design ensures accurate available principal calculations across all protocol features.
 

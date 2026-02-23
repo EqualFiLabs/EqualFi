@@ -220,8 +220,10 @@ src/equallend-direct/
 ├── EqualLendDirectOfferFacet.sol      # Post and cancel offers
 ├── EqualLendDirectAgreementFacet.sol  # Accept offers, create agreements
 ├── EqualLendDirectLifecycleFacet.sol  # Repay, exercise, recover
-├── LibDirectExercise.sol              # Shared exercise/default logic
-└── IDirectOfferEvents.sol             # Event definitions
+└── LibDirectExercise.sol              # Shared exercise/default logic
+
+src/interfaces/
+└── IDirectOfferEvents.sol             # Shared direct-offer event interface
 
 src/libraries/
 ├── DirectTypes.sol                    # Data structures
@@ -472,7 +474,7 @@ uint256 offerId = directOfferFacet.postOffer(params);
 
 ```solidity
 // Borrower accepts the call offer
-uint256 agreementId = directAgreementFacet.acceptOffer(offerId, borrowerPositionId);
+uint256 agreementId = directAgreementFacet.acceptOffer(offerId, borrowerPositionId, minReceived);
 
 // Borrower now has:
 // - Received ~0.99 ETH (1 ETH minus premium)
@@ -723,7 +725,7 @@ event BorrowerOfferCancelled(uint256 indexed offerId, ...);
 // Agreement lifecycle
 event DirectOfferAccepted(uint256 indexed offerId, uint256 indexed agreementId, ...);
 event BorrowerOfferAccepted(uint256 indexed offerId, uint256 indexed agreementId, ...);
-event DirectAgreementRepaid(uint256 indexed agreementId, address indexed borrower, uint256 principalRepaid);
+event DirectAgreementRepaid(uint256 indexed agreementId, address indexed borrower, uint256 paymentReceived);
 event DirectAgreementExercised(uint256 indexed agreementId, address indexed borrower);
 event DirectAgreementRecovered(uint256 indexed agreementId, address indexed executor, ...);
 event DirectAgreementCalled(uint256 indexed agreementId, uint256 indexed lenderPositionId, uint64 newDueTimestamp);
@@ -744,12 +746,13 @@ event DirectAgreementCalled(uint256 indexed agreementId, uint256 indexed lenderP
    - `directLent`: Principal lent by lenders
    - `directOfferEscrow`: Principal escrowed for open offers
    - `indexEncumbered`: Principal encumbered for index tokens
+   - `moduleEncumbered`: Principal reserved by module integrations
    
    This centralized design ensures accurate available principal calculations across all protocol features.
 
 5. **Reentrancy Protection**: All lifecycle functions use `nonReentrant` modifier.
 
-6. **Position NFT Ownership**: Only the Position NFT owner can repay or exercise.
+6. **Position NFT Authorization**: Repay and exercise require borrower authority (Position NFT owner or approved operator).
 
 7. **Solvency Checks**: Both lender and borrower positions are checked for solvency before agreement creation.
 
