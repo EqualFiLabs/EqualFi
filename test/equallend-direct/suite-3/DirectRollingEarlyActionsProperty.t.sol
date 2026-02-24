@@ -5,6 +5,7 @@ import {DirectDiamondTestBase} from "../DirectDiamondTestBase.sol";
 import {DirectTypes} from "../../../src/libraries/DirectTypes.sol";
 import {MockERC20} from "../../../src/mocks/MockERC20.sol";
 import {DirectError_EarlyExerciseNotAllowed, DirectError_EarlyRepayNotAllowed} from "../../../src/libraries/Errors.sol";
+import {UnexpectedMsgValue} from "../../../src/libraries/Errors.sol";
 
 /// @notice Feature: p2p-rolling-loans, Property 8: Early Action Conditions
 /// @notice Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5
@@ -13,6 +14,7 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
     MockERC20 internal asset;
     address internal lenderOwner = address(0xA11CE);
     address internal borrowerOwner = address(0xB0B);
+    address internal newLenderOwner = address(0xC0FFEE);
 
     function setUp() public {
         setUpDiamond();
@@ -41,9 +43,9 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
 
     function _setupAgreement(bool allowEarlyExercise, bool allowEarlyRepay)
         internal
-        returns (uint256 agreementId, bytes32 lenderKey, bytes32 borrowerKey)
+        returns (uint256 agreementId, uint256 lenderPositionId, bytes32 lenderKey, bytes32 borrowerKey)
     {
-        uint256 lenderPositionId = nft.mint(lenderOwner, 1);
+        lenderPositionId = nft.mint(lenderOwner, 1);
         uint256 borrowerPositionId = nft.mint(borrowerOwner, 2);
         finalizePositionNFT();
         lenderKey = nft.getPositionKey(lenderPositionId);
@@ -76,7 +78,7 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
     }
 
     function testProperty_EarlyExerciseAllowed() public {
-        (uint256 agreementId, bytes32 lenderKey, bytes32 borrowerKey) = _setupAgreement(true, false);
+        (uint256 agreementId,, bytes32 lenderKey, bytes32 borrowerKey) = _setupAgreement(true, false);
         harness.setArrears(agreementId, 20 ether);
 
         uint256 borrowerPrincipalBefore = views.getUserPrincipal(1, borrowerKey);
@@ -105,14 +107,14 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
     }
 
     function testProperty_EarlyExerciseNotAllowedReverts() public {
-        (uint256 agreementId,,) = _setupAgreement(false, false);
+        (uint256 agreementId,,,) = _setupAgreement(false, false);
         vm.prank(borrowerOwner);
         vm.expectRevert(DirectError_EarlyExerciseNotAllowed.selector);
         rollingLifecycle.exerciseRolling(agreementId);
     }
 
     function testProperty_EarlyRepayAllowed() public {
-        (uint256 agreementId, bytes32 lenderKey, bytes32 borrowerKey) = _setupAgreement(true, true);
+        (uint256 agreementId,,, bytes32 borrowerKey) = _setupAgreement(true, true);
         harness.setArrears(agreementId, 10 ether);
         asset.mint(borrowerOwner, 200 ether);
 
@@ -134,7 +136,7 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
     }
 
     function testProperty_EarlyRepayNotAllowedReverts() public {
-        (uint256 agreementId,,) = _setupAgreement(false, false);
+        (uint256 agreementId,,,) = _setupAgreement(false, false);
         asset.mint(borrowerOwner, 200 ether);
         uint256 maxPayment = _rollingMaxPayment(agreementId);
         vm.startPrank(borrowerOwner);
@@ -142,5 +144,56 @@ contract DirectRollingEarlyActionsPropertyTest is DirectDiamondTestBase {
         vm.expectRevert(DirectError_EarlyRepayNotAllowed.selector);
         rollingLifecycle.repayRollingInFull(agreementId, maxPayment, 0);
         vm.stopPrank();
+    }
+
+    function test_repayRollingInFull_routesToCurrentLenderPositionOwner() public {
+        (uint256 agreementId, uint256 lenderPositionId,,) = _setupAgreement(true, true);
+        harness.setArrears(agreementId, 10 ether);
+        asset.mint(borrowerOwner, 200 ether);
+
+        vm.prank(lenderOwner);
+        nft.transferFrom(lenderOwner, newLenderOwner, lenderPositionId);
+
+        uint256 oldLenderBalanceBefore = asset.balanceOf(lenderOwner);
+        uint256 newLenderBalanceBefore = asset.balanceOf(newLenderOwner);
+
+        vm.startPrank(borrowerOwner);
+        asset.approve(address(diamond), type(uint256).max);
+        rollingLifecycle.repayRollingInFull(agreementId, _rollingMaxPayment(agreementId), 0);
+        vm.stopPrank();
+
+        assertEq(asset.balanceOf(lenderOwner), oldLenderBalanceBefore, "old lender receives nothing");
+        assertEq(asset.balanceOf(newLenderOwner), newLenderBalanceBefore + 110 ether, "current owner receives full repay");
+    }
+
+    function test_repayRollingInFull_revertsOnStrayEthForErc20() public {
+        (uint256 agreementId,,,) = _setupAgreement(true, true);
+        vm.deal(borrowerOwner, 1 ether);
+        uint256 maxPayment = _rollingMaxPayment(agreementId);
+        vm.prank(borrowerOwner);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        rollingLifecycle.repayRollingInFull{value: 1}(agreementId, maxPayment, 0);
+    }
+
+    function test_repayRollingInFull_acceptsOversizedMaxPaymentForErc20() public {
+        (uint256 agreementId,,,) = _setupAgreement(true, true);
+        harness.setArrears(agreementId, 10 ether);
+        asset.mint(borrowerOwner, 200 ether);
+
+        uint256 required = _rollingMaxPayment(agreementId);
+        uint256 oversizedMax = required + 5 ether;
+        uint256 lenderBalanceBefore = asset.balanceOf(lenderOwner);
+
+        vm.startPrank(borrowerOwner);
+        asset.approve(address(diamond), type(uint256).max);
+        rollingLifecycle.repayRollingInFull(agreementId, oversizedMax, 0);
+        vm.stopPrank();
+
+        assertEq(asset.balanceOf(lenderOwner) - lenderBalanceBefore, oversizedMax, "lender receives pulled max");
+        assertEq(
+            uint8(rollingAgreements.getRollingAgreement(agreementId).status),
+            uint8(DirectTypes.DirectStatus.Repaid),
+            "agreement repaid"
+        );
     }
 }

@@ -10,6 +10,7 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
 import {LibIndexEncumbrance} from "../../src/libraries/LibIndexEncumbrance.sol";
+import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 
@@ -65,6 +66,20 @@ contract PositionViewFacetHarness is PositionViewFacet {
         loan.paymentIntervalSecs = 30 days;
         loan.depositBacked = true;
         loan.active = true;
+    }
+
+    function setRollingSchedule(uint256 pid, bytes32 positionKey, uint40 lastPaymentTimestamp, uint32 paymentIntervalSecs)
+        external
+    {
+        Types.RollingCreditLoan storage loan = s().pools[pid].rollingLoans[positionKey];
+        loan.lastPaymentTimestamp = lastPaymentTimestamp;
+        loan.paymentIntervalSecs = paymentIntervalSecs;
+    }
+
+    function setRollingDelinquencyThresholds(uint8 delinquentEpochs, uint8 penaltyEpochs) external {
+        LibAppStorage.AppStorage storage store = s();
+        store.rollingDelinquencyEpochs = delinquentEpochs;
+        store.rollingPenaltyEpochs = penaltyEpochs;
     }
 
     function setDirectBorrowed(bytes32 key, uint256 pid, uint256 amount) external {
@@ -203,6 +218,18 @@ contract PositionViewFacetTest is Test {
         viewFacet.seedRolling(PID, key, 20 ether, 4);
 
         assertTrue(viewFacet.isPositionDelinquent(tokenId, PID), "should be delinquent");
+    }
+
+    function test_isPositionDelinquent_respectsThresholdsAboveLegacyCap() public {
+        vm.warp(200 days);
+        uint256 tokenId = nft.mint(user, PID);
+        bytes32 key = nft.getPositionKey(tokenId);
+        viewFacet.seedPosition(PID, key, 50 ether);
+        viewFacet.seedRolling(PID, key, 20 ether, 0);
+        viewFacet.setRollingDelinquencyThresholds(4, 5);
+        viewFacet.setRollingSchedule(PID, key, uint40(block.timestamp - 120 days), uint32(30 days));
+
+        assertTrue(viewFacet.isPositionDelinquent(tokenId, PID), "4 missed epochs should be delinquent");
     }
 
     function test_getPositionStateIncludesAccruedYieldAcrossPools() public {

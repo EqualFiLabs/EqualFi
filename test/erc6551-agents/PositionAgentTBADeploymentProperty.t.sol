@@ -7,6 +7,10 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
 import {PositionAgentTBAFacet} from "../../src/agent-wallet/erc6551/PositionAgentTBAFacet.sol";
+import {
+    PositionAgent_CreateAccountAddressMismatch,
+    PositionAgent_TBANotDeployed
+} from "../../src/libraries/PositionAgentErrors.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {MockBeacon} from "../helpers/MockBeacon.sol";
 
@@ -79,6 +83,24 @@ contract MockERC6551Account {
     receive() external payable {}
 }
 
+contract MockERC6551RegistryPostconditionBypass {
+    address private immutable _expected;
+    address private immutable _returned;
+
+    constructor(address expected_, address returned_) {
+        _expected = expected_;
+        _returned = returned_;
+    }
+
+    function createAccount(address, bytes32, uint256, address, uint256) external view returns (address account) {
+        return _returned;
+    }
+
+    function account(address, bytes32, uint256, address, uint256) external view returns (address account) {
+        return _expected;
+    }
+}
+
 contract PositionAgentTBAFacetHarness is PositionAgentTBAFacet {
     function setConfig(address registry, address implementation, address identityRegistry, bytes32 salt) external {
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
@@ -91,6 +113,10 @@ contract PositionAgentTBAFacetHarness is PositionAgentTBAFacet {
     function setPositionNFT(address nft) external {
         LibPositionNFT.s().positionNFTContract = nft;
         LibPositionNFT.s().nftModeEnabled = true;
+    }
+
+    function isMarkedDeployed(uint256 positionTokenId) external view returns (bool) {
+        return LibPositionAgentStorage.s().tbaDeployed[positionTokenId];
     }
 }
 
@@ -148,5 +174,57 @@ contract PositionAgentTBADeploymentPropertyTest is Test {
         }
 
         assertEq(deployedEvents, 1, "TBADeployed should emit once");
+    }
+
+    function test_deployTBA_revertsWhenCreateAccountReturnsUnexpectedAddress() public {
+        uint256 tokenId = nft.mint(owner, 1);
+        address expected = address(0x1111111111111111111111111111111111111111);
+        address returned = address(0x2222222222222222222222222222222222222222);
+        MockERC6551RegistryPostconditionBypass badRegistry =
+            new MockERC6551RegistryPostconditionBypass(expected, returned);
+        facet.setConfig(address(badRegistry), address(beaconProxy), address(0), bytes32(0));
+
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(PositionAgent_CreateAccountAddressMismatch.selector, expected, returned)
+        );
+        facet.deployTBA(tokenId);
+
+        assertEq(facet.computeTBAAddress(tokenId), expected, "computed address should follow registry.account()");
+        assertFalse(facet.isMarkedDeployed(tokenId), "failed deploy must not set deployed marker");
+    }
+
+    function test_deployTBA_revertsWhenCreateAccountReturnsAddressWithoutCode() public {
+        uint256 tokenId = nft.mint(owner, 1);
+        address noCodeTba = address(0x3333333333333333333333333333333333333333);
+        MockERC6551RegistryPostconditionBypass badRegistry =
+            new MockERC6551RegistryPostconditionBypass(noCodeTba, noCodeTba);
+        facet.setConfig(address(badRegistry), address(beaconProxy), address(0), bytes32(0));
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(PositionAgent_TBANotDeployed.selector, noCodeTba));
+        facet.deployTBA(tokenId);
+
+        assertFalse(facet.isMarkedDeployed(tokenId), "failed deploy must not set deployed marker");
+    }
+
+    function test_mutableCanonicalConfig_desyncsComputedAddressFromDeployedState() public {
+        uint256 tokenId = nft.mint(owner, 1);
+
+        vm.prank(owner);
+        address deployedUnderConfigA = facet.deployTBA(tokenId);
+        assertGt(deployedUnderConfigA.code.length, 0, "config A deployment should exist");
+
+        bytes32 saltB = bytes32(uint256(1));
+        facet.setConfig(address(registry), address(beaconProxy), address(0), saltB);
+        address computedUnderConfigB = facet.computeTBAAddress(tokenId);
+        assertNotEq(computedUnderConfigB, deployedUnderConfigA, "config mutation should alter computed TBA");
+        assertEq(computedUnderConfigB.code.length, 0, "new computed TBA should not already be deployed");
+
+        vm.prank(owner);
+        address returned = facet.deployTBA(tokenId);
+        assertEq(returned, computedUnderConfigB, "deploy should now return config-B computed address");
+        assertEq(returned.code.length, 0, "tbaDeployed sentinel can block actual deploy under new config");
+        assertGt(deployedUnderConfigA.code.length, 0, "old deployed account remains onchain");
     }
 }

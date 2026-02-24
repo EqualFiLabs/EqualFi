@@ -222,7 +222,7 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
         if (desc.feeAsset != MamTypes.FeeAsset.TokenIn) revert MamCurve_InvalidDescriptor();
         if (desc.generation != 1) revert MamCurve_InvalidDescriptor();
         if (desc.poolIdA == desc.poolIdB) revert MamCurve_InvalidPool(desc.poolIdA);
-        if (desc.tokenA == address(0) || desc.tokenB == address(0)) revert MamCurve_InvalidDescriptor();
+        if (desc.tokenA == address(0) && desc.tokenB == address(0)) revert MamCurve_InvalidDescriptor();
         if (desc.tokenA == desc.tokenB) revert MamCurve_InvalidDescriptor();
 
         Types.PoolData storage poolA = LibDirectHelpers._pool(desc.poolIdA);

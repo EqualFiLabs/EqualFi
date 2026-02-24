@@ -12,7 +12,7 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
-import {LoanBelowMinimum, RollingError_MinPayment} from "../../src/libraries/Errors.sol";
+import {LoanBelowMinimum, RollingError_MinPayment, UnexpectedMsgValue} from "../../src/libraries/Errors.sol";
 
 struct LendingSnapshot {
     Types.RollingCreditLoan rollingLoan;
@@ -32,6 +32,12 @@ contract LendingFacetHarness is LendingFacet {
 
     function setRollingMinPaymentBps(uint16 minPaymentBps) external {
         LibAppStorage.s().rollingMinPaymentBps = minPaymentBps;
+    }
+
+    function setRollingDelinquencyThresholds(uint8 delinquentEpochs, uint8 penaltyEpochs) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.rollingDelinquencyEpochs = delinquentEpochs;
+        store.rollingPenaltyEpochs = penaltyEpochs;
     }
 
     function initPool(
@@ -259,6 +265,35 @@ contract LendingFacetUnitTest is Test {
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 15 ether, "active credit total reduced");
     }
 
+    function test_makePayment_overpullAcceptsMaxPaymentAndDonatesExcessAtPrincipalCap() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
+
+        vm.startPrank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+        vm.warp(block.timestamp + 30 days);
+
+        uint256 intendedAmount = 20 ether;
+        uint256 maxPayment = 25 ether;
+        facet.makePaymentFromPosition(tokenId, PID, intendedAmount, maxPayment);
+        vm.stopPrank();
+
+        LendingSnapshot memory snap = facet.snapshot(PID, key);
+        assertEq(snap.rollingLoan.principalRemaining, 0, "principal capped at zero");
+        assertEq(snap.trackedBalance, 100 ether - 20 ether + maxPayment, "tracked increases by maxPayment");
+    }
+
+    function test_makePayment_revertsOnStrayEthForERC20Pool() public {
+        (uint256 tokenId,) = _seedPosition(100 ether);
+        vm.deal(user, 1 ether);
+
+        vm.prank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        facet.makePaymentFromPosition{value: 1}(tokenId, PID, 5 ether, 5 ether);
+    }
+
     function test_makePayment_revertsWhenBelowMinimumBps() public {
         (uint256 tokenId,) = _seedPosition(100 ether);
         facet.setRollingMinPaymentBps(500);
@@ -314,6 +349,20 @@ contract LendingFacetUnitTest is Test {
         facet.expandRollingFromPosition(tokenId, PID, 1 ether, 1 ether);
     }
 
+    function test_expandRolling_revertsWhenThresholdExceedsLegacyCap() public {
+        (uint256 tokenId,) = _seedPosition(200 ether);
+        facet.setRollingDelinquencyThresholds(4, 5);
+
+        vm.prank(user);
+        facet.openRollingFromPosition(tokenId, PID, 40 ether, 40 ether);
+
+        vm.warp(block.timestamp + 120 days);
+
+        vm.prank(user);
+        vm.expectRevert(bytes("PositionNFT: loan delinquent"));
+        facet.expandRollingFromPosition(tokenId, PID, 10 ether, 10 ether);
+    }
+
     function test_closeRolling_clearsLoan() public {
         (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
 
@@ -340,6 +389,35 @@ contract LendingFacetUnitTest is Test {
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
         assertEq(debtState.principal, 0, "active credit principal cleared");
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 0, "active credit total cleared");
+    }
+
+    function test_closeRolling_revertsOnStrayEthForERC20Pool() public {
+        (uint256 tokenId,) = _seedPosition(100 ether);
+        vm.deal(user, 1 ether);
+
+        vm.prank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        facet.closeRollingCreditFromPosition{value: 1}(tokenId, PID, 20 ether);
+    }
+
+    function test_closeRolling_overpullAcceptsMaxPaymentAndCreditsExcessToPool() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(100 ether);
+
+        vm.startPrank(user);
+        facet.openRollingFromPosition(tokenId, PID, 20 ether, 20 ether);
+        vm.warp(block.timestamp + 15 days);
+
+        uint256 maxPayment = 25 ether;
+        facet.closeRollingCreditFromPosition(tokenId, PID, maxPayment);
+        vm.stopPrank();
+
+        LendingSnapshot memory snap = facet.snapshot(PID, key);
+        assertEq(snap.rollingLoan.principalRemaining, 0, "principal cleared");
+        assertFalse(snap.rollingLoan.active, "loan inactive");
+        assertEq(snap.trackedBalance, 100 ether - 20 ether + maxPayment, "tracked increases by maxPayment");
     }
 
     function test_openFixed_createsLoanAndKeepsPrincipalIntact() public {
@@ -400,6 +478,32 @@ contract LendingFacetUnitTest is Test {
         Types.ActiveCreditState memory debtState = facet.getActiveCreditDebtState(PID, key);
         assertEq(debtState.principal, 30 ether, "active credit principal reduced");
         assertEq(facet.getActiveCreditPrincipalTotal(PID), 30 ether, "active credit total reduced");
+    }
+
+    function test_repayFixed_revertsOnStrayEthForERC20Pool() public {
+        (uint256 tokenId,) = _seedPosition(200 ether);
+        vm.deal(user, 1 ether);
+
+        vm.prank(user);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0, 50 ether);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        facet.repayFixedFromPosition{value: 1}(tokenId, PID, loanId, 20 ether, 20 ether);
+    }
+
+    function test_repayFixed_overpullAcceptsMaxPaymentAndDoesNotOverReducePrincipal() public {
+        (uint256 tokenId, bytes32 key) = _seedPosition(200 ether);
+
+        vm.startPrank(user);
+        uint256 loanId = facet.openFixedFromPosition(tokenId, PID, 50 ether, 0, 50 ether);
+        facet.repayFixedFromPosition(tokenId, PID, loanId, 20 ether, 30 ether);
+        vm.stopPrank();
+
+        Types.FixedTermLoan memory loan = facet.getFixedLoan(PID, loanId);
+        LendingSnapshot memory snap = facet.snapshot(PID, key);
+        assertEq(loan.principalRemaining, 30 ether, "principal reduced by intended amount only");
+        assertEq(snap.trackedBalance, 200 ether - 50 ether + 30 ether, "tracked increases by maxPayment");
     }
 
     /// @dev Deterministic success-path for gas reporting: rolling lifecycle (open + payment).

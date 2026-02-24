@@ -14,6 +14,7 @@ import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
 import {LibDirectRolling} from "../libraries/LibDirectRolling.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {DirectError_InvalidAsset, DirectError_InvalidOffer, DirectError_ZeroAmount} from "../libraries/Errors.sol";
 
 /// @notice Rolling-offer entrypoints for EqualLend Direct
@@ -82,7 +83,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
+        address borrowerOwner = LibDirectHelpers._requireNFTOwnership(nft, params.borrowerPositionId);
         _validateRollingOfferFlags(params.allowEarlyRepay, params.allowEarlyExercise, params.allowAmortization);
         _validateRollingAmounts(params.principal, params.collateralLockAmount, params.borrowAsset, params.collateralAsset);
 
@@ -129,7 +130,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             collateralPool, params.collateralPoolId, positionKey, encBefore, encAfter
         );
 
-        offerId = ++ds.nextRollingBorrowerOfferId;
+        offerId = ++ds.nextRollingOfferId;
 
         ds.rollingBorrowerOffers[offerId] = DirectTypes.DirectRollingBorrowerOffer({
             offerId: offerId,
@@ -153,6 +154,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             cancelled: false,
             filled: false
         });
+        ds.rollingOfferKindById[offerId] = DirectTypes.RollingOfferKind.Borrower;
         LibDirectStorage.trackRollingBorrowerOffer(ds, positionKey, offerId);
 
         emit RollingBorrowerOfferPosted(
@@ -182,6 +184,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             params.lenderPoolId,
             params.collateralPoolId
         );
+        LibPoints.accrueToKey(borrowerOwner, positionKey, LibPoints.ACTION_DIRECT_POST_ROLLING_BORROWER_OFFER);
     }
 
     function postRollingOffer(DirectTypes.DirectRollingOfferParams calldata params)
@@ -190,7 +193,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
         returns (uint256 offerId)
     {
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
+        address lenderOwner = LibDirectHelpers._requireNFTOwnership(nft, params.lenderPositionId);
         _validateRollingOfferFlags(params.allowEarlyRepay, params.allowEarlyExercise, params.allowAmortization);
         _validateRollingAmounts(params.principal, params.collateralLockAmount, params.borrowAsset, params.collateralAsset);
 
@@ -256,6 +259,7 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             cancelled: false,
             filled: false
         });
+        ds.rollingOfferKindById[offerId] = DirectTypes.RollingOfferKind.Lender;
         LibDirectStorage.trackRollingLenderOffer(ds, positionKey, offerId);
 
         emit RollingOfferPosted(
@@ -285,14 +289,16 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
             params.lenderPoolId,
             params.collateralPoolId
         );
+        LibPoints.accrueToKey(lenderOwner, positionKey, LibPoints.ACTION_DIRECT_POST_ROLLING_LENDER_OFFER);
     }
 
     function cancelRollingOffer(uint256 offerId) external nonReentrant {
         PositionNFT nft = LibDirectHelpers._positionNFT();
         DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
-        DirectTypes.DirectRollingOffer storage offer = ds.rollingOffers[offerId];
+        DirectTypes.RollingOfferKind kind = ds.rollingOfferKindById[offerId];
 
-        if (offer.lender != address(0)) {
+        if (kind == DirectTypes.RollingOfferKind.Lender) {
+            DirectTypes.DirectRollingOffer storage offer = ds.rollingOffers[offerId];
             if (offer.cancelled || offer.filled) revert DirectError_InvalidOffer();
             LibDirectHelpers._requireNFTOwnership(nft, offer.lenderPositionId);
             if (offer.lender != msg.sender) {
@@ -314,36 +320,44 @@ contract EqualLendDirectRollingOfferFacet is ReentrancyGuardModifiers {
                 lenderPool, offer.lenderPoolId, positionKey, encBefore, encAfter
             );
             LibDirectStorage.untrackRollingLenderOffer(ds, positionKey, offerId);
+            delete ds.rollingOfferKindById[offerId];
             emit RollingOfferCancelled(offerId, false, msg.sender);
             return;
         }
 
-        DirectTypes.DirectRollingBorrowerOffer storage borrowerOffer = ds.rollingBorrowerOffers[offerId];
-        if (borrowerOffer.borrower == address(0) || borrowerOffer.cancelled || borrowerOffer.filled) {
-            revert DirectError_InvalidOffer();
-        }
-        LibDirectHelpers._requireNFTOwnership(nft, borrowerOffer.borrowerPositionId);
-        if (borrowerOffer.borrower != msg.sender) {
-            revert NotNFTOwner(msg.sender, borrowerOffer.borrowerPositionId);
+        if (kind == DirectTypes.RollingOfferKind.Borrower) {
+            DirectTypes.DirectRollingBorrowerOffer storage borrowerOffer = ds.rollingBorrowerOffers[offerId];
+            if (borrowerOffer.cancelled || borrowerOffer.filled) {
+                revert DirectError_InvalidOffer();
+            }
+            LibDirectHelpers._requireNFTOwnership(nft, borrowerOffer.borrowerPositionId);
+            if (borrowerOffer.borrower != msg.sender) {
+                revert NotNFTOwner(msg.sender, borrowerOffer.borrowerPositionId);
+            }
+
+            borrowerOffer.cancelled = true;
+            bytes32 borrowerKey = nft.getPositionKey(borrowerOffer.borrowerPositionId);
+            LibActiveCreditIndex.settle(borrowerOffer.collateralPoolId, borrowerKey);
+            Types.PoolData storage collateralPool = LibDirectHelpers._pool(borrowerOffer.collateralPoolId);
+            uint256 locked = LibEncumbrance.position(borrowerKey, borrowerOffer.collateralPoolId).directLocked;
+            uint256 encBefore = LibEncumbrance.totalForActiveCredit(borrowerKey, borrowerOffer.collateralPoolId);
+            if (locked >= borrowerOffer.collateralLockAmount) {
+                LibEncumbrance.position(borrowerKey, borrowerOffer.collateralPoolId).directLocked =
+                    locked - borrowerOffer.collateralLockAmount;
+            } else {
+                LibEncumbrance.position(borrowerKey, borrowerOffer.collateralPoolId).directLocked = 0;
+            }
+            uint256 encAfter = LibEncumbrance.totalForActiveCredit(borrowerKey, borrowerOffer.collateralPoolId);
+            LibActiveCreditIndex.applyEncumbranceDelta(
+                collateralPool, borrowerOffer.collateralPoolId, borrowerKey, encBefore, encAfter
+            );
+            LibDirectStorage.untrackRollingBorrowerOffer(ds, borrowerKey, offerId);
+            delete ds.rollingOfferKindById[offerId];
+            emit RollingOfferCancelled(offerId, true, msg.sender);
+            return;
         }
 
-        borrowerOffer.cancelled = true;
-        bytes32 borrowerKey = nft.getPositionKey(borrowerOffer.borrowerPositionId);
-        LibActiveCreditIndex.settle(borrowerOffer.collateralPoolId, borrowerKey);
-        Types.PoolData storage collateralPool = LibDirectHelpers._pool(borrowerOffer.collateralPoolId);
-        uint256 locked = LibEncumbrance.position(borrowerKey, borrowerOffer.collateralPoolId).directLocked;
-        uint256 encBefore = LibEncumbrance.totalForActiveCredit(borrowerKey, borrowerOffer.collateralPoolId);
-        if (locked >= borrowerOffer.collateralLockAmount) {
-            LibEncumbrance.position(borrowerKey, borrowerOffer.collateralPoolId).directLocked = locked - borrowerOffer.collateralLockAmount;
-        } else {
-            LibEncumbrance.position(borrowerKey, borrowerOffer.collateralPoolId).directLocked = 0;
-        }
-        uint256 encAfter = LibEncumbrance.totalForActiveCredit(borrowerKey, borrowerOffer.collateralPoolId);
-        LibActiveCreditIndex.applyEncumbranceDelta(
-            collateralPool, borrowerOffer.collateralPoolId, borrowerKey, encBefore, encAfter
-        );
-        LibDirectStorage.untrackRollingBorrowerOffer(ds, borrowerKey, offerId);
-        emit RollingOfferCancelled(offerId, true, msg.sender);
+        revert DirectError_InvalidOffer();
     }
 
     function getRollingOffer(uint256 offerId) external view returns (DirectTypes.DirectRollingOffer memory) {

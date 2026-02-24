@@ -105,4 +105,79 @@ contract DirectStateConsistencyPropertyTest is DirectDiamondTestBase {
             views.getPositionDirectState(borrowerPositionId, offerOne.collateralPoolId);
         assertEq(borrowerLockedAfterUnlock, 10 ether, "borrower locked updates cumulatively");
     }
+
+    function testProperty_RollingActiveDirectLentInvariant_AfterAmortizationAndClose() public {
+        DirectTypes.DirectRollingConfig memory rollingCfg = DirectTypes.DirectRollingConfig({
+            minPaymentIntervalSeconds: 604_800,
+            maxPaymentCount: 520,
+            maxUpfrontPremiumBps: 5_000,
+            minRollingApyBps: 1,
+            maxRollingApyBps: 10_000,
+            defaultPenaltyBps: 1_000,
+            minPaymentBps: 1
+        });
+        harness.setRollingConfig(rollingCfg);
+
+        uint256 lenderPositionId = nft.mint(lenderOwner, 11);
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 12);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 1_000 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 400 ether, true);
+        asset.transfer(borrowerOwner, 500 ether);
+        vm.prank(borrowerOwner);
+        asset.approve(address(diamond), type(uint256).max);
+
+        DirectTypes.DirectRollingOfferParams memory offerParams = DirectTypes.DirectRollingOfferParams({
+            lenderPositionId: lenderPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(asset),
+            borrowAsset: address(asset),
+            principal: 100 ether,
+            collateralLockAmount: 50 ether,
+            paymentIntervalSeconds: 7 days,
+            rollingApyBps: 800,
+            gracePeriodSeconds: 6 days,
+            maxPaymentCount: 520,
+            upfrontPremium: 0,
+            allowAmortization: true,
+            allowEarlyRepay: true,
+            allowEarlyExercise: false
+        });
+
+        vm.prank(lenderOwner);
+        uint256 offerA = rollingOffers.postRollingOffer(offerParams);
+        vm.prank(borrowerOwner);
+        uint256 agreementA = rollingAgreements.acceptRollingOffer(offerA, borrowerPositionId, 0, 0);
+
+        vm.prank(lenderOwner);
+        uint256 offerB = rollingOffers.postRollingOffer(offerParams);
+        vm.prank(borrowerOwner);
+        uint256 agreementB = rollingAgreements.acceptRollingOffer(offerB, borrowerPositionId, 0, 0);
+
+        assertEq(views.getActiveDirectLent(1), 200 ether, "initial aggregate active lent");
+
+        uint256 closeBMaxPayment = _rollingMaxPayment(agreementB);
+        vm.prank(borrowerOwner);
+        rollingLifecycle.repayRollingInFull(agreementB, closeBMaxPayment, 0);
+        assertEq(views.getActiveDirectLent(1), 100 ether, "after terminal close B");
+
+        vm.warp(block.timestamp + 8 days);
+        vm.prank(borrowerOwner);
+        rollingPayments.makeRollingPayment(agreementA, 20 ether, 20 ether, 0);
+        DirectTypes.DirectRollingAgreement memory afterAmortization = rollingAgreements.getRollingAgreement(agreementA);
+        assertEq(
+            views.getActiveDirectLent(1),
+            afterAmortization.outstandingPrincipal,
+            "after partial amortization equals active outstanding"
+        );
+
+        uint256 closeAMaxPayment = _rollingMaxPayment(agreementA);
+        vm.prank(borrowerOwner);
+        rollingLifecycle.repayRollingInFull(agreementA, closeAMaxPayment, 0);
+        assertEq(views.getActiveDirectLent(1), 0, "after terminal close A");
+    }
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {LibCurrency} from "./LibCurrency.sol";
 
 library LibDerivativeFees {
     uint16 internal constant BPS_DENOMINATOR = 10_000;
@@ -41,7 +41,7 @@ library LibDerivativeFees {
         if (flatFeeWad == 0) {
             return 0;
         }
-        uint8 decimals = IERC20Metadata(feeToken).decimals();
+        uint8 decimals = LibCurrency.decimals(feeToken);
         return Math.mulDiv(uint256(flatFeeWad), 10 ** uint256(decimals), WAD);
     }
 }

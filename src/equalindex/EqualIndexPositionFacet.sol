@@ -12,6 +12,7 @@ import {LibIndexEncumbrance} from "../libraries/LibIndexEncumbrance.sol";
 import {LibPoolMembership} from "../libraries/LibPoolMembership.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {Types} from "../libraries/Types.sol";
 import "../libraries/Errors.sol";
@@ -147,6 +148,7 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         }
         indexPool.userFeeIndex[positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[positionKey] = indexPool.maintenanceIndex;
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_INDEX_MINT_POSITION);
     }
 
     /// @notice Burn index tokens and unencumber underlying assets.
@@ -234,6 +236,9 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
                     }
                     pool.userPrincipal[positionKey] = currentPrincipal + potOut;
                     pool.totalDeposits += potOut;
+                    pool.trackedBalance += potOut;
+                    // potOut is a reclassification from index fee pot into pool principal.
+                    // Native backing is already counted in nativeTrackedTotal, so no global adjustment here.
                     if (isNewUser && potOut > 0) {
                         pool.userCount += 1;
                     }
@@ -259,5 +264,6 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         }
         indexPool.userFeeIndex[positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[positionKey] = indexPool.maintenanceIndex;
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_INDEX_BURN_POSITION);
     }
 }

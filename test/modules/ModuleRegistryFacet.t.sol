@@ -12,6 +12,7 @@ import {
     ModuleNotFound,
     ModuleInactive,
     NotModuleOwner,
+    InvalidModuleOwner,
     ModuleAumOutOfBounds,
     InvalidAumFeeBounds
 } from "../../src/libraries/Errors.sol";
@@ -169,6 +170,24 @@ contract ModuleRegistryFacetTest is Test {
 
         (address ownerAfter,,,,) = facet.getModule(moduleId);
         assertEq(ownerAfter, newOwner);
+    }
+
+    function test_setModuleOwner_revertsForZeroAddress() public {
+        vm.prank(OWNER);
+        uint256 moduleId = facet.registerModule(keccak256("m5-zero"));
+
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(InvalidModuleOwner.selector, address(0)));
+        facet.setModuleOwner(moduleId, address(0));
+
+        (address ownerAfterReject,,,,) = facet.getModule(moduleId);
+        assertEq(ownerAfterReject, OWNER, "rejected zero-address update must keep existing owner");
+
+        address newOwner = address(new DummyOwner());
+        vm.prank(OWNER);
+        facet.setModuleOwner(moduleId, newOwner);
+        (address ownerAfterValidTransfer,,,,) = facet.getModule(moduleId);
+        assertEq(ownerAfterValidTransfer, newOwner, "valid owner transfer should still work after rejection");
     }
 
     function test_pauseUnpause_ownerAndGovernance_withInactiveNoReactivation() public {

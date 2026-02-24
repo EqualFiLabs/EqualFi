@@ -1,6 +1,6 @@
 # EqualIndex - Design Document
 
-**Version:** 3.2
+**Version:** 3.3
 
 ---
 
@@ -39,7 +39,7 @@ EqualIndex is a tokenized asset basket system that enables users to create, mana
 | **Fee Pot Distribution** | Accumulated fees distributed proportionally to holders on redemption |
 | **Flash Loan Support** | Borrow proportional basket amounts with fees |
 | **Centralized Fee Routing** | Fees split between Fee Index, Fee Pot, and Protocol (ACI/FI/Treasury) |
-| **Position Integration** | Mint/burn using Position NFT collateral (centralized encumbrance system) |
+| **Position Integration** | Mint/burn using Position NFT principal (centralized encumbrance system) |
 | **Pool Fee Routing** | Configurable portion of fees routed to underlying asset pool depositors |
 | **No External Oracles** | Deterministic pricing based on bundle composition |
 
@@ -53,7 +53,7 @@ EqualIndex is a tokenized asset basket system that enables users to create, mana
 | **Holder** | Owner of index tokens with proportional claim on vault + fee pots |
 | **Redeemer** | Holder who burns index tokens to receive underlying assets |
 | **Flash Borrower** | Contract that borrows basket assets within a single transaction |
-| **Position Holder** | Position NFT owner who can mint/burn using encumbered collateral |
+| **Position Holder** | Position NFT owner who can mint/burn from position principal |
 
 ### High-Level Flow
 
@@ -165,8 +165,8 @@ struct EqualIndexStorage {
     mapping(uint256 => mapping(address => uint256)) vaultBalances;   // NAV per asset
     mapping(uint256 => mapping(address => uint256)) feePots;         // Accumulated fees per asset
     mapping(uint256 => uint256) indexToPoolId;                       // Index token pool mapping
-    uint16 poolFeeShareBps;                                          // Share routed to pool fee index (flash loans)
-    uint16 mintBurnFeeIndexShareBps;                                 // Share routed to pool fee index (mint/burn)
+    uint16 poolFeeShareBps;                                          // Share routed through pool fee router (flash loans)
+    uint16 mintBurnFeeIndexShareBps;                                 // Share routed through pool fee router (mint/burn)
 }
 ```
 
@@ -253,13 +253,17 @@ function mint(uint256 indexId, uint256 units, address to, uint256[] calldata max
 2. Verify index exists and is not paused
 3. Validate `maxInputAmounts.length == assets.length`
 4. For each asset:
-   - Calculate required amount: `bundleAmount × units / INDEX_SCALE`
-   - Calculate mint fee: `required × mintFeeBps / 10_000`
-   - Compute total input: `required + fee`
+   - Calculate vault input:
+     - First mint (`totalSupply == 0`): `bundleAmount × units / INDEX_SCALE`
+     - Existing supply: `vaultBalance × units / totalSupply` (ceil)
+   - Calculate fee-pot buy-in (existing supply only): `feePotBalance × units / totalSupply` (ceil)
+   - Calculate gross input: `vaultInput + potBuyIn`
+   - Calculate mint fee: `grossInput × mintFeeBps / 10_000` (ceil)
+   - Compute total input: `grossInput + fee`
    - Enforce `maxInputAmounts[i] >= total`
    - Pull total from user (`pullAtLeast` for ERC20; native path supports ETH indexes)
    - Verify received amount ≥ expected (fee-on-transfer protection)
-   - Credit `required` to vault balance
+   - Credit `vaultInput` to vault balance
    - Split fee between fee pot and pool-routed share
 5. Mint exactly `units`
 6. Mint index tokens to recipient
@@ -273,9 +277,17 @@ EqualIndex V3 mints exactly the requested `units` (subject to bundle + fee input
 ### Fee Calculation
 
 ```
-Required Amount = Bundle Amount × Units ÷ INDEX_SCALE
-Mint Fee = Required Amount × Mint Fee BPS ÷ 10,000
-Total Transfer = Required Amount + Mint Fee
+vaultInput = totalSupply == 0
+    ? bundleAmount × units ÷ INDEX_SCALE
+    : ceil(vaultBalance × units ÷ totalSupply)
+
+potBuyIn = totalSupply == 0
+    ? 0
+    : ceil(feePotBalance × units ÷ totalSupply)
+
+grossInput = vaultInput + potBuyIn
+mintFee = ceil(grossInput × mintFeeBps ÷ 10,000)
+totalTransfer = grossInput + mintFee
 ```
 
 
@@ -372,7 +384,7 @@ Flash loan fees are distributed through the centralized fee mechanism:
 
 | Recipient | Share | Purpose |
 |-----------|-------|---------|
-| **Fee Index (Pool Depositors)** | `poolFeeShareBps` (default 10%) | Rewards underlying pool depositors |
+| **Pool-Routed Share** | `poolFeeShareBps` (default 10%) | Routed by pool router |
 | **Fee Pot** | `fee - poolShare` | Distributed to index holders |
 | **Pool Router Split** | Inside `poolShare` via `LibFeeRouter` | Split to Treasury/ACI/FI using global app config |
 
@@ -382,7 +394,7 @@ Flash loan fees are distributed through the centralized fee mechanism:
 
 ### Overview
 
-Position NFT holders can mint and burn index tokens using their encumbered collateral, without transferring assets externally. This enables capital-efficient index exposure.
+Position NFT holders can mint and burn index tokens from existing position principal, without transferring assets externally. Minting encumbers principal for index backing, enabling capital-efficient index exposure.
 
 ### Encumbrance System
 
@@ -395,6 +407,7 @@ struct Encumbrance {
     uint256 directLent;         // Direct lending lent amounts
     uint256 directOfferEscrow;  // Direct offer escrow amounts
     uint256 indexEncumbered;    // Index-encumbered principal
+    uint256 moduleEncumbered;   // Module-reserved principal
 }
 
 struct EncumbranceStorage {
@@ -403,9 +416,12 @@ struct EncumbranceStorage {
     
     // positionKey => poolId => indexId => encumbered for specific index
     mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByIndex;
+
+    // positionKey => poolId => moduleId => encumbered for specific module
+    mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByModule;
 }
 
-// Total encumbered = directLocked + directLent + directOfferEscrow + indexEncumbered
+// Total encumbered = directLocked + directLent + directOfferEscrow + indexEncumbered + moduleEncumbered
 ```
 
 This centralized design ensures consistent available principal calculations across all protocol features.
@@ -425,10 +441,11 @@ function mintFromPosition(uint256 positionId, uint256 indexId, uint256 units)
 **Process:**
 1. Validate ownership and pool membership
 2. For each asset:
-   - Calculate required amount + fee
+   - Calculate vault input (+ fee-pot buy-in when supply > 0) and fee
    - Verify available principal ≥ total needed
-   - Encumber the amount from position
-   - Credit to vault balance
+   - Encumber vault input from position
+   - Credit vault input to index vault balance
+   - Deduct fee-pot buy-in and fee from position principal
    - Route fees to pool fee index and fee pot
 3. Mint index tokens to the diamond (held for position)
 4. Credit index tokens to position's principal in the index token pool
@@ -471,16 +488,34 @@ event EncumbranceDecreased(
     uint256 totalEncumbered,
     uint256 indexEncumbered
 );
+
+event ModuleEncumbranceIncreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
+);
+
+event ModuleEncumbranceDecreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
+);
 ```
 
 ### Position vs Direct Minting
 
 | Aspect | Direct Minting | Position Minting |
 |--------|----------------|------------------|
-| **Asset Source** | External wallet | Position collateral |
+| **Asset Source** | External wallet | Position principal |
 | **Token Recipient** | Any address | Position (in index pool) |
 | **Capital Efficiency** | Requires full transfer | Uses existing deposits |
-| **Fee Index Share** | `mintBurnFeeIndexShareBps` (40%) | `poolFeeShareBps` (10%) |
+| **Pool-Routed Share Parameter** | `mintBurnFeeIndexShareBps` (40%) | `poolFeeShareBps` (10%) |
 | **Fee Routing** | Fee pot + routed pool share (Treasury/ACI/FI) | Fee pot + routed pool share (Treasury/ACI/FI) |
 | **Composability** | Standard ERC20 | Integrated with Equalis |
 
@@ -516,12 +551,12 @@ function _distributeIndexFee(
 }
 ```
 
-### Fee Index Share Parameters
+### Pool-Routed Share Parameters
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
-| `poolFeeShareBps` | 1000 (10%) | Fee Index share for flash loan fees |
-| `mintBurnFeeIndexShareBps` | 4000 (40%) | Fee Index share for mint/burn fees |
+| `poolFeeShareBps` | 1000 (10%) | Pool-routed share for flash loan fees |
+| `mintBurnFeeIndexShareBps` | 4000 (40%) | Pool-routed share for mint/burn fees |
 
 ### Pool Router Split
 
@@ -535,8 +570,8 @@ The pool-routed share is routed through `LibFeeRouter.routeSamePool`, which spli
 
 ### Fee Sources
 
-| Operation | Fee Basis | Fee Rate | Fee Index Share | Distribution |
-|-----------|-----------|----------|-----------------|--------------|
+| Operation | Fee Basis | Fee Rate | Pool-Routed Share | Distribution |
+|-----------|-----------|----------|-------------------|--------------|
 | **Mint** | Required asset amount | Per-asset `mintFeeBps` | 40% (default) | Fee pot + routed pool share |
 | **Burn** | Gross redemption amount | Per-asset `burnFeeBps` | 40% (default) | Fee pot + routed pool share |
 | **Flash Loan** | Loan amount (bundle share) | `flashFeeBps` | 10% (default) | Fee pot + routed pool share |
@@ -1286,17 +1321,19 @@ positionFacet.mintFromPosition(42, indexId, 50e18);
 ```
 Required ETH: 0.5 × 50 = 25 ETH
 ETH Fee: 25 × 1% = 0.25 ETH
-Total ETH Encumbered: 25.25 ETH
+ETH Encumbered (vault backing): 25 ETH
+ETH Principal Deducted for Fees: 0.25 ETH
 
 Required USDC: 1000 × 50 = 50,000 USDC
 USDC Fee: 50,000 × 1% = 500 USDC
-Total USDC Encumbered: 50,500 USDC
+USDC Encumbered (vault backing): 50,000 USDC
+USDC Principal Deducted for Fees: 500 USDC
 ```
 
 **Position State After:**
 ```
-ETH Pool Principal: 100 ETH (25.25 encumbered, 74.75 available)
-USDC Pool Principal: 200,000 USDC (50,500 encumbered, 149,500 available)
+ETH Pool Principal: 99.75 ETH (25 encumbered, 74.75 available)
+USDC Pool Principal: 199,500 USDC (50,000 encumbered, 149,500 available)
 Index Token Pool Principal: 50 index units
 ```
 
@@ -1370,17 +1407,17 @@ CreateIndexParams({
 |-------|-------|
 | `UnknownIndex(uint256 indexId)` | Reference to non-existent index |
 | `IndexPaused(uint256 indexId)` | Operation on paused index |
-| `FlashLoanUnderpaid(uint256 indexId, address asset, uint256 expected, uint256 actual)` | Insufficient repayment |
+| `FlashLoanUnderpaid(uint256 indexId, address asset, uint256 expected, uint256 received)` | Insufficient repayment |
 
 ### Position Integration Errors
 
 | Error | Cause |
 |-------|-------|
 | `NotMemberOfRequiredPool(bytes32, uint256)` | Position not member of basket asset pool |
-| `InsufficientUnencumberedPrincipal(uint256 required, uint256 available)` | Not enough available collateral |
+| `InsufficientUnencumberedPrincipal(uint256 requested, uint256 available)` | Not enough available collateral |
 | `InsufficientIndexTokens(uint256 requested, uint256 available)` | Position lacks index token balance |
 | `PoolNotInitialized(uint256)` | Index token pool not created |
-| `EncumbranceUnderflow(uint256 amount, uint256 current)` | Unencumber exceeds encumbered amount |
+| `EncumbranceUnderflow(uint256 requested, uint256 available)` | Unencumber exceeds encumbered amount |
 
 ---
 
@@ -1467,6 +1504,24 @@ event EncumbranceDecreased(
     uint256 totalEncumbered,
     uint256 indexEncumbered
 );
+
+event ModuleEncumbranceIncreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
+);
+
+event ModuleEncumbranceDecreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
+);
 ```
 
 ---
@@ -1479,7 +1534,7 @@ Minting output is exactly requested `units` (if bundle+fee inputs are satisfied)
 
 ### 2. Fee-on-Transfer Protection
 
-Mint operations verify received amounts match expected amounts, reverting if fee-on-transfer tokens cause shortfalls.
+Mint operations enforce that received amounts are at least expected amounts, reverting on fee-on-transfer shortfalls.
 
 ### 3. Solvency Invariant
 
@@ -1505,6 +1560,7 @@ Position encumbrance is tracked through the centralized `LibEncumbrance` library
 - Direct lending lent amounts  
 - Direct offer escrow amounts
 - Index-encumbered principal
+- Module-reserved principal
 
 This centralized design ensures accurate available principal calculations across all protocol features and prevents double-counting.
 
@@ -1544,7 +1600,7 @@ Total assets distributed equals bundle share + fee pot share minus burn fees.
 Contract balance after repayment equals balance before plus fees for each asset.
 
 ### Property 6: Encumbrance Consistency
-For any position: `LibEncumbrance.total(positionKey, poolId) = directLocked + directLent + directOfferEscrow + indexEncumbered`, and `indexEncumbered = Σ encumberedByIndex[positionKey][poolId][indexId]`.
+For any position: `LibEncumbrance.total(positionKey, poolId) = directLocked + directLent + directOfferEscrow + indexEncumbered + moduleEncumbered`, with `indexEncumbered = Σ encumberedByIndex[positionKey][poolId][indexId]` and `moduleEncumbered = Σ encumberedByModule[positionKey][poolId][moduleId]`.
 
 ### Property 7: Solvency Invariant
 For any index: `vaultBalance[asset] >= bundleAmount[asset] × totalSupply / INDEX_SCALE`.
@@ -1560,7 +1616,7 @@ Administrative functions succeed iff caller is timelock.
 
 ---
 
-**Document Version:** 3.2
+**Document Version:** 3.3
 **Last Updated:** February 2026
 
-*Changes in 3.2: Aligned with current V3 selectors and economics: `mint(..., maxInputAmounts)`, fixed-bundle burn/flash math, pool-share fee routing model, and updated data models/examples.*
+*Changes in 3.3: Added `moduleEncumbered` coverage for centralized encumbrance, clarified pro-rata mint math (vault + fee-pot buy-in), and aligned event/error wording with current contracts.*

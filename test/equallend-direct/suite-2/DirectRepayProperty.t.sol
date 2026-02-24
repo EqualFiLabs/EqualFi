@@ -4,7 +4,8 @@ pragma solidity ^0.8.20;
 import {DirectTypes} from "../../../src/libraries/DirectTypes.sol";
 import {
     DirectError_EarlyRepayNotAllowed,
-    DirectError_GracePeriodExpired
+    DirectError_GracePeriodExpired,
+    UnexpectedMsgValue
 } from "../../../src/libraries/Errors.sol";
 import {MockERC20} from "../../../src/mocks/MockERC20.sol";
 import {DirectTestUtils} from "../DirectTestUtils.sol";
@@ -191,5 +192,101 @@ contract DirectRepayFunctionalityPropertyTest is DirectDiamondTestBase {
 
         uint256 borrowerBalanceAfter = asset.balanceOf(borrowerOwner);
         assertEq(borrowerBalanceBefore - borrowerBalanceAfter, interest, "premium retained");
+    }
+
+    function test_repay_revertsOnStrayEthForErc20() public {
+        vm.warp(200 days);
+        uint256 lenderPositionId = nft.mint(lenderOwner, 10);
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 20);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 200 ether, true);
+
+        asset.transfer(lenderOwner, 500 ether);
+        vm.prank(lenderOwner);
+        asset.approve(address(diamond), type(uint256).max);
+
+        DirectTypes.DirectOfferParams memory params = DirectTypes.DirectOfferParams({
+            lenderPositionId: lenderPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(asset),
+            borrowAsset: address(asset),
+            principal: 100 ether,
+            aprBps: 800,
+            durationSeconds: 3 days,
+            collateralLockAmount: 10 ether,
+            allowEarlyRepay: true,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(lenderOwner);
+        uint256 offerId = offers.postOffer(params);
+        vm.prank(borrowerOwner);
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerPositionId, 0);
+
+        vm.deal(borrowerOwner, 1 ether);
+        uint256 maxPayment = _maxPayment(agreementId);
+        vm.prank(borrowerOwner);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMsgValue.selector, 1));
+        lifecycle.repay{value: 1}(agreementId, maxPayment);
+    }
+
+    function test_repay_acceptsOversizedMaxPaymentForErc20() public {
+        vm.warp(220 days);
+        uint256 lenderPositionId = nft.mint(lenderOwner, 21);
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 22);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 200 ether, true);
+        asset.transfer(lenderOwner, 500 ether);
+        vm.prank(lenderOwner);
+        asset.approve(address(diamond), type(uint256).max);
+
+        DirectTypes.DirectOfferParams memory params = DirectTypes.DirectOfferParams({
+            lenderPositionId: lenderPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(asset),
+            borrowAsset: address(asset),
+            principal: 100 ether,
+            aprBps: 0,
+            durationSeconds: 3 days,
+            collateralLockAmount: 10 ether,
+            allowEarlyRepay: true,
+            allowEarlyExercise: false,
+            allowLenderCall: false
+        });
+
+        vm.prank(lenderOwner);
+        uint256 offerId = offers.postOffer(params);
+        vm.prank(borrowerOwner);
+        uint256 agreementId = agreements.acceptOffer(offerId, borrowerPositionId, 0);
+
+        uint256 required = _maxPayment(agreementId);
+        uint256 maxPayment = required + 5 ether;
+        asset.transfer(borrowerOwner, 10 ether);
+        vm.prank(borrowerOwner);
+        asset.approve(address(diamond), type(uint256).max);
+        uint256 lenderPrincipalBefore = views.getUserPrincipal(1, lenderKey);
+        uint256 borrowerBalanceBefore = asset.balanceOf(borrowerOwner);
+
+        vm.prank(borrowerOwner);
+        lifecycle.repay(agreementId, maxPayment);
+
+        assertEq(asset.balanceOf(borrowerOwner), borrowerBalanceBefore - maxPayment, "borrower overpull paid");
+        assertEq(
+            views.getUserPrincipal(1, lenderKey),
+            lenderPrincipalBefore + maxPayment,
+            "lender principal credited with pulled max"
+        );
+        assertEq(uint8(views.getAgreement(agreementId).status), uint8(DirectTypes.DirectStatus.Repaid), "agreement repaid");
     }
 }

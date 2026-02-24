@@ -15,6 +15,18 @@ contract DirectStoragePropertyTest is DirectDiamondTestBase {
         setUpDiamond();
     }
 
+    function _rollingConfig() internal pure returns (DirectTypes.DirectRollingConfig memory cfg) {
+        cfg = DirectTypes.DirectRollingConfig({
+            minPaymentIntervalSeconds: 1 days,
+            maxPaymentCount: 520,
+            maxUpfrontPremiumBps: 5_000,
+            minRollingApyBps: 1,
+            maxRollingApyBps: 10_000,
+            defaultPenaltyBps: 1_000,
+            minPaymentBps: 1
+        });
+    }
+
     function testProperty_DataIntegrityPreservation(
         address lender,
         address borrower,
@@ -236,5 +248,164 @@ contract DirectStoragePropertyTest is DirectDiamondTestBase {
         assertTrue(stored.cancelled, "offer cancelled");
         assertEq(views.trancheRemaining(offerId), 0, "tranche cleared");
         assertEq(views.offerEscrow(positionKey, lenderPoolId), escrowed - remaining, "escrow reduced");
+    }
+
+    function testProperty_RollingLenderOfferCleanupOnCancel() public {
+        harness.setRollingConfig(_rollingConfig());
+
+        address lenderOwner = address(0xAA11);
+        uint256 lenderPositionId = nft.mint(lenderOwner, 1);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+
+        harness.seedPoolWithMembership(1, address(0x1234), lenderKey, 500 ether, false);
+        harness.seedPoolWithMembership(2, address(0x1234), lenderKey, 500 ether, false);
+
+        DirectTypes.DirectRollingOfferParams memory params = DirectTypes.DirectRollingOfferParams({
+            lenderPositionId: lenderPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(0x1234),
+            borrowAsset: address(0x1234),
+            principal: 100 ether,
+            collateralLockAmount: 25 ether,
+            paymentIntervalSeconds: 7 days,
+            rollingApyBps: 800,
+            gracePeriodSeconds: 6 days,
+            maxPaymentCount: 300,
+            upfrontPremium: 0,
+            allowAmortization: true,
+            allowEarlyRepay: true,
+            allowEarlyExercise: false
+        });
+
+        vm.prank(lenderOwner);
+        uint256 offerId = rollingOffers.postRollingOffer(params);
+        assertTrue(offers.hasOpenOffers(lenderKey), "rolling lender offer should be tracked");
+        assertEq(views.offerEscrow(lenderKey, 1), 100 ether, "rolling lender offer should escrow principal");
+
+        vm.prank(lenderOwner);
+        offers.cancelOffersForPosition(lenderPositionId);
+
+        DirectTypes.DirectRollingOffer memory stored = rollingOffers.getRollingOffer(offerId);
+        assertTrue(stored.cancelled, "rolling lender offer should be cancelled");
+        assertEq(views.offerEscrow(lenderKey, 1), 0, "rolling lender escrow should be released");
+        assertFalse(offers.hasOpenOffers(lenderKey), "no outstanding offers should remain");
+    }
+
+    function testProperty_RollingBorrowerOfferCleanupOnCancel() public {
+        harness.setRollingConfig(_rollingConfig());
+
+        address borrowerOwner = address(0xBB22);
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 2);
+        finalizePositionNFT();
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+
+        harness.seedPoolWithMembership(1, address(0x5678), borrowerKey, 500 ether, false);
+        harness.seedPoolWithMembership(2, address(0x5678), borrowerKey, 500 ether, false);
+
+        DirectTypes.DirectRollingBorrowerOfferParams memory params = DirectTypes.DirectRollingBorrowerOfferParams({
+            borrowerPositionId: borrowerPositionId,
+            lenderPoolId: 1,
+            collateralPoolId: 2,
+            collateralAsset: address(0x5678),
+            borrowAsset: address(0x5678),
+            principal: 80 ether,
+            collateralLockAmount: 30 ether,
+            paymentIntervalSeconds: 7 days,
+            rollingApyBps: 750,
+            gracePeriodSeconds: 6 days,
+            maxPaymentCount: 200,
+            upfrontPremium: 0,
+            allowAmortization: false,
+            allowEarlyRepay: true,
+            allowEarlyExercise: true
+        });
+
+        vm.prank(borrowerOwner);
+        uint256 offerId = rollingOffers.postBorrowerRollingOffer(params);
+        assertTrue(offers.hasOpenOffers(borrowerKey), "rolling borrower offer should be tracked");
+        assertEq(views.directLocked(borrowerKey, 2), 30 ether, "rolling borrower offer should lock collateral");
+
+        vm.prank(borrowerOwner);
+        offers.cancelOffersForPosition(borrowerPositionId);
+
+        DirectTypes.DirectRollingBorrowerOffer memory stored = rollingOffers.getRollingBorrowerOffer(offerId);
+        assertTrue(stored.cancelled, "rolling borrower offer should be cancelled");
+        assertEq(views.directLocked(borrowerKey, 2), 0, "rolling borrower collateral should unlock");
+        assertFalse(offers.hasOpenOffers(borrowerKey), "no outstanding offers should remain");
+    }
+
+    function testProperty_CancelOffersForPositionHighCardinalityLiveness() public {
+        address lenderOwner = address(0xCC33);
+        uint256 lenderPositionId = nft.mint(lenderOwner, 1);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+
+        address borrowAsset = address(0x7777);
+        address collateralAsset = address(0x8888);
+        harness.seedPoolWithMembership(1, borrowAsset, lenderKey, 10_000 ether, false);
+        harness.seedPoolWithMembership(2, collateralAsset, lenderKey, 10_000 ether, false);
+
+        uint256 directCount = 16;
+        uint256 ratioCount = 16;
+        uint256[] memory directIds = new uint256[](directCount);
+        uint256[] memory ratioIds = new uint256[](ratioCount);
+
+        vm.startPrank(lenderOwner);
+        for (uint256 i = 0; i < directCount; i++) {
+            DirectTypes.DirectOfferParams memory directParams = DirectTypes.DirectOfferParams({
+                lenderPositionId: lenderPositionId,
+                lenderPoolId: 1,
+                collateralPoolId: 2,
+                collateralAsset: collateralAsset,
+                borrowAsset: borrowAsset,
+                principal: 10 ether + i,
+                aprBps: 0,
+                durationSeconds: 7 days,
+                collateralLockAmount: 10 ether + i,
+                allowEarlyRepay: false,
+                allowEarlyExercise: false,
+                allowLenderCall: false
+            });
+            directIds[i] = offers.postOffer(directParams);
+        }
+
+        for (uint256 i = 0; i < ratioCount; i++) {
+            DirectTypes.DirectRatioTrancheParams memory ratioParams = DirectTypes.DirectRatioTrancheParams({
+                lenderPositionId: lenderPositionId,
+                lenderPoolId: 1,
+                collateralPoolId: 2,
+                collateralAsset: collateralAsset,
+                borrowAsset: borrowAsset,
+                principalCap: 10 ether + i,
+                priceNumerator: 2,
+                priceDenominator: 1,
+                minPrincipalPerFill: 1,
+                aprBps: 0,
+                durationSeconds: 7 days,
+                allowEarlyRepay: false,
+                allowEarlyExercise: false,
+                allowLenderCall: false
+            });
+            ratioIds[i] = offers.postRatioTrancheOffer(ratioParams);
+        }
+        vm.stopPrank();
+
+        assertTrue(offers.hasOpenOffers(lenderKey), "lender should have outstanding offers before bulk cancel");
+
+        uint256 gasStart = gasleft();
+        vm.prank(lenderOwner);
+        offers.cancelOffersForPosition(lenderPositionId);
+        uint256 gasUsed = gasStart - gasleft();
+
+        assertLt(gasUsed, 12_000_000, "bulk cancellation should stay within practical gas bounds");
+        assertFalse(offers.hasOpenOffers(lenderKey), "bulk cancel should clear all tracked offers");
+        assertEq(views.offerEscrow(lenderKey, 1), 0, "bulk cancel should release lender escrow");
+
+        assertTrue(views.getOffer(directIds[0]).cancelled, "first direct offer should be cancelled");
+        assertTrue(views.getOffer(directIds[directCount - 1]).cancelled, "last direct offer should be cancelled");
+        assertTrue(views.getRatioTrancheOffer(ratioIds[0]).cancelled, "first ratio offer should be cancelled");
+        assertTrue(views.getRatioTrancheOffer(ratioIds[ratioCount - 1]).cancelled, "last ratio offer should be cancelled");
     }
 }

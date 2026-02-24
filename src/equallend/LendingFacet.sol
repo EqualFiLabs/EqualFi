@@ -16,6 +16,7 @@ import {LibLoanManager} from "../libraries/LibLoanManager.sol";
 import {LibLoanHelpers} from "../libraries/LibLoanHelpers.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {
     NotNFTOwner,
@@ -23,7 +24,8 @@ import {
     InsufficientPrincipal,
     SolvencyViolation,
     LoanBelowMinimum,
-    RollingError_MinPayment
+    RollingError_MinPayment,
+    UnexpectedMsgValue
 } from "../libraries/Errors.sol";
 
 /// @title LendingFacet
@@ -111,8 +113,8 @@ contract LendingFacet is ReentrancyGuardModifiers {
     }
 
     /// @notice Require that the caller owns the specified NFT
-    function _requireOwnership(uint256 tokenId) internal view {
-        LibPositionHelpers.requireOwnership(tokenId);
+    function _requireOwnership(uint256 tokenId) internal view returns (address owner) {
+        owner = LibPositionHelpers.requireOwnership(tokenId);
     }
 
     /// @notice Get the position key for a token ID
@@ -153,6 +155,14 @@ contract LendingFacet is ReentrancyGuardModifiers {
         uint256 newDebt
     ) internal view returns (bool isSolvent) {
         return LibSolvencyChecks.checkSolvency(p, positionKey, newPrincipal, newDebt);
+    }
+
+    function _assertRepayOrCloseMsgValue(Types.PoolData storage p, uint256 maxPayment) internal view {
+        if (LibCurrency.isNative(p.underlying)) {
+            if (msg.value != maxPayment) revert UnexpectedMsgValue(msg.value);
+        } else {
+            LibCurrency.assertZeroMsgValue();
+        }
     }
 
     function _calculateTotalDebt(
@@ -279,6 +289,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         loan.principalAtOpen = principalAtOpen;
 
         _increaseActiveCreditDebt(p, pid, positionKey, amount);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_BORROW_ROLLING);
 
         emit RollingLoanOpenedFromPosition(tokenId, msg.sender, pid, amount, true);
     }
@@ -297,6 +308,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
+        _assertRepayOrCloseMsgValue(p, maxPayment);
         bytes32 positionKey = _getPositionKey(tokenId);
         _ensurePoolMembership(positionKey, pid, false);
 
@@ -350,6 +362,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         if (loan.principalRemaining == 0) {
             loan.active = false;
         }
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_REPAY_ROLLING);
 
         emit PaymentMadeFromPosition(
             tokenId,
@@ -449,6 +462,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
+        _assertRepayOrCloseMsgValue(p, maxPayment);
         bytes32 positionKey = _getPositionKey(tokenId);
         _ensurePoolMembership(positionKey, pid, false);
 
@@ -594,6 +608,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
         _addLoanIdWithIndex(p, pid, positionKey, loanId);
 
         _increaseActiveCreditDebt(p, pid, positionKey, amount);
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_BORROW_FIXED);
 
         emit FixedLoanOpenedFromPosition(
             tokenId, msg.sender, pid, loanId, amount, 0, loan.expiry, cfg.apyBps, false
@@ -616,6 +631,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
 
         // Get pool and position key
         Types.PoolData storage p = _pool(pid);
+        _assertRepayOrCloseMsgValue(p, maxPayment);
         bytes32 positionKey = _getPositionKey(tokenId);
         _ensurePoolMembership(positionKey, pid, false);
 
@@ -654,6 +670,7 @@ contract LendingFacet is ReentrancyGuardModifiers {
             uint256 loanIndex = p.loanIdToIndex[positionKey][loanId];
             _removeLoanIdByIndex(p, pid, positionKey, loanId, loanIndex);
         }
+        LibPoints.accrueToKey(msg.sender, positionKey, LibPoints.ACTION_REPAY_FIXED);
 
         emit FixedLoanRepaidFromPosition(
             tokenId,

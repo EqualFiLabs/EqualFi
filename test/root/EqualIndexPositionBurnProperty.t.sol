@@ -12,6 +12,7 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract EqualIndexPositionBurnHarness is EqualIndexPositionFacet {
     function setPositionNFT(address nft) external {
@@ -83,9 +84,64 @@ contract EqualIndexPositionBurnHarness is EqualIndexPositionFacet {
     function setIndexPoolId(uint256 indexId, uint256 pid) external {
         s().indexToPoolId[indexId] = pid;
     }
+
+    function getPoolTrackedBalance(uint256 pid) external view returns (uint256) {
+        return LibAppStorage.s().pools[pid].trackedBalance;
+    }
+
+    function getPoolTotalDeposits(uint256 pid) external view returns (uint256) {
+        return LibAppStorage.s().pools[pid].totalDeposits;
+    }
+
+    function getVaultBalance(uint256 indexId, address asset) external view returns (uint256) {
+        return s().vaultBalances[indexId][asset];
+    }
+
+    function getFeePot(uint256 indexId, address asset) external view returns (uint256) {
+        return s().feePots[indexId][asset];
+    }
+
+    function getIndexTotalUnits(uint256 indexId) external view returns (uint256) {
+        return s().indexes[indexId].totalUnits;
+    }
+
+    function getPoolFeeShareBps() external view returns (uint16) {
+        return _poolFeeShareBps();
+    }
 }
 
 contract EqualIndexPositionBurnPropertyTest is Test {
+    function test_burnFromPositionCreditsTrackedBalanceForPotOut() public {
+        uint256 units = LibEqualIndex.INDEX_SCALE;
+        (EqualIndexPositionBurnHarness facet,, uint256 tokenId, address owner, MockERC20 assetA,) = _setup(units);
+
+        uint256 trackedBefore = facet.getPoolTrackedBalance(1);
+        uint256 totalDepositsBefore = facet.getPoolTotalDeposits(1);
+        uint256 vaultBefore = facet.getVaultBalance(0, address(assetA));
+        uint256 potBefore = facet.getFeePot(0, address(assetA));
+        uint256 totalSupplyBefore = facet.getIndexTotalUnits(0);
+
+        uint256 bundleOut = Math.mulDiv(1 ether, units, LibEqualIndex.INDEX_SCALE);
+        uint256 potShare = Math.mulDiv(potBefore, units, totalSupplyBefore);
+        uint256 gross = bundleOut + potShare;
+        uint256 burnFee = Math.mulDiv(gross, 200, 10_000);
+        uint256 poolShare = Math.mulDiv(burnFee, facet.getPoolFeeShareBps(), 10_000);
+        uint256 payout = gross - burnFee;
+        uint256 navOut = Math.mulDiv(payout, bundleOut, gross);
+        uint256 potOut = payout - navOut;
+
+        vm.prank(owner);
+        facet.burnFromPosition(tokenId, 0, units);
+
+        assertEq(facet.getPoolTotalDeposits(1) - totalDepositsBefore, potOut, "principal credit mismatch");
+        assertEq(
+            facet.getPoolTrackedBalance(1) - trackedBefore,
+            poolShare + potOut,
+            "tracked balance must include pool fee share and potOut backing"
+        );
+        assertEq(facet.getVaultBalance(0, address(assetA)), vaultBefore - bundleOut, "vault should debit nav share");
+    }
+
     function testFuzz_noExternalTransfersOnBurn(uint256 unitsRaw) public {
         uint256 units = _boundUnits(unitsRaw);
         (EqualIndexPositionBurnHarness facet, PositionNFT nft, uint256 tokenId, address owner, MockERC20 assetA, MockERC20 assetB) =

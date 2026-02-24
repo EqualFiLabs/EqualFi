@@ -1,163 +1,163 @@
 # EqualLend / EqualIndex Gas Estimates
 
-_Generated via `forge test --match-path test/root/GasScenarioReport.t.sol --gas-report`, `forge test --match-path "test/gas/*t.sol" --gas-report`, and single-file derivative gas harness runs on 2026-02-06 (UTC)._
-_Sources of truth: `gas-report-scenarios.txt` (scenario tables) and `gas-report-latest.txt` (function-level + derivative harness tables)._
+_Generated on 2026-02-18 (UTC) via:_
+- `forge test --match-path test/root/GasScenarioReport.t.sol --gas-report`
+- `forge test --match-path "test/gas/*t.sol" --gas-report`
+- `forge test --match-path test/derivatives/AmmAuctionGas.t.sol --gas-report`
+- `forge test --match-path test/derivatives/MamCurveGas.t.sol --gas-report`
+- `forge test --match-path test/derivatives/OptionsGas.t.sol --gas-report`
+- `forge test --match-path test/derivatives/FuturesGas.t.sol --gas-report`
+- `forge test --match-path test/derivatives/CommunityAuctionGas.t.sol --gas-report`
+- `forge test --match-path test/derivatives/AmmAuctionGas.t.sol --match-test testGasSwapExactIn -vv`
+- `forge test --match-path test/derivatives/MamCurveGas.t.sol --match-test testGasExecuteCurveSwap -vv`
+
+_Sources of truth: `gas-report-scenarios.txt`, `gas-report-latest.txt`, `gas-report-derivatives.txt`._
 
 ## Methodology
-- Scenario report values come from the dedicated gas scenario suite and reflect end-to-end flows.
-- Function-level values use the **Max** column to avoid 0-min artifacts when a function is invoked during setup.
-- Gas tests pause metering during setup so the reported values focus on the target call.
-- Derivative AMM/MAM swap values use `swap_only` deltas captured inside the test (`gasleft()` before and after the swap call), then logged via `log_named_uint`.
-- This isolates swap execution from setup noise and from `--gas-report` aggregation behavior.
-- `swap_only` still includes test-context call overhead (`vm.prank`, external call frame), so treat it as a relative benchmark under the same harness, not exact EOA tx cost.
-- Options/Futures harness values are from single-file gas runs and are appended to `gas-report-latest.txt`.
-- `N/A` indicates no active gas benchmark for that function in the current test suites.
+- Scenario values come from `GasScenarioReport.t.sol` and represent end-to-end flows.
+- Function-level values come from `test/gas/*t.sol`.
+- Derivative swap `swap_only` values come from explicit `gasleft()` deltas logged in the two `-vv` runs.
+- `N/A` means there is no active benchmark in the current suites for that function.
 
 ## Scenario Benchmarks (GasScenarioReport.t.sol)
 ### EqualIndex Flows
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Index creation w/ fee (`test_gas_IndexCreateWithFee`) | `EqualIndexFacetV3.createIndex` | **2,974,326** |
-| Index mint only (`test_gas_IndexMintOnly`) | `EqualIndexFacetV3.mint` | **341,778** |
-| Index burn only (`test_gas_IndexBurnOnly`) | `EqualIndexFacetV3.burn` | **148,208** |
-| Index flash loan fee split (`test_gas_IndexFlashLoanFeeSplit`) | `EqualIndexFacetV3.flashLoan` | **133,879** |
-| Index mint + burn (`test_gas_IndexMintBurnFlow`) | `EqualIndexFacetV3.mint + EqualIndexFacetV3.burn` | **11,735,828** |
-
-_Notes_:
-- Full per-function min/avg/median/max data for `EqualIndexFacetV3` and `IndexToken` are in `gas-report-scenarios.txt`.
+| Index creation w/ fee (`test_gas_IndexCreateWithFee`) | `EqualIndexFacetV3.createIndex` | **3,088,575** |
+| Index mint only (`test_gas_IndexMintOnly`) | `EqualIndexFacetV3.mint` | **365,591** |
+| Index burn only (`test_gas_IndexBurnOnly`) | `EqualIndexFacetV3.burn` | **154,870** |
+| Index flash loan fee split (`test_gas_IndexFlashLoanFeeSplit`) | `EqualIndexFacetV3.flashLoan` | **138,145** |
+| Index mint + burn (`test_gas_IndexMintBurnFlow`) | `EqualIndexFacetV3.mint + EqualIndexFacetV3.burn` | **12,574,544** |
 
 ### Pool Creation & Admin
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
 | Minimal pool initialization (`test_gas_PoolInitMinimal`) | `PoolManagementFacet.initPool` | **811,680** |
 
-_Notes_:
-- Pool creation lives in `PoolManagementFacet`; non-governance callers also pay the configured creation fee (not included here).
-
 ### Position Management & Membership
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Mint + deposit (`test_gas_PositionMintAndDeposit`) | `PositionManagementFacet.mintPosition + depositToPosition` | **479,300** |
-| Deposit only (`test_gas_PositionDepositOnly`) | `PositionManagementFacet.depositToPosition` | **249,309** |
-| Withdraw only (`test_gas_PositionWithdrawOnly`) | `PositionManagementFacet.withdrawFromPosition` | **107,910** |
+| Mint + deposit (`test_gas_PositionMintAndDeposit`) | `PositionManagementFacet.mintPosition + depositToPosition` | **482,322** |
+| Deposit only (`test_gas_PositionDepositOnly`) | `PositionManagementFacet.depositToPosition` | **252,033** |
+| Withdraw only (`test_gas_PositionWithdrawOnly`) | `PositionManagementFacet.withdrawFromPosition` | **111,950** |
 | Roll yield to principal (`test_gas_RollYieldToPosition`) | `PositionManagementFacet.rollYieldToPosition` | **102,292** |
-| Close pool position (no commitments) (`test_gas_PositionClosePoolPosition`) | `PositionManagementFacet.closePoolPosition` | **105,813** |
-| Deposit + withdraw + cleanup (`test_gas_PositionDepositWithdrawCloseCleanup`) | `PositionManagementFacet.depositToPosition + withdrawFromPosition + cleanupMembership` | **6,704,229** |
+| Close pool position (no commitments) (`test_gas_PositionClosePoolPosition`) | `PositionManagementFacet.closePoolPosition` | **109,759** |
+| Deposit + withdraw + cleanup (`test_gas_PositionDepositWithdrawCloseCleanup`) | `PositionManagementFacet.depositToPosition + withdrawFromPosition + cleanupMembership` | **7,113,826** |
 
 ### Borrowing
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Open rolling borrow (`test_gas_BorrowRollingOnly`) | `LendingFacet.openRollingFromPosition` | **349,957** |
-| Open fixed-term borrow (`test_gas_BorrowFixedOnly`) | `LendingFacet.openFixedFromPosition` | **585,977** |
+| Open rolling borrow (`test_gas_BorrowRollingOnly`) | `LendingFacet.openRollingFromPosition` | **356,162** |
+| Open fixed-term borrow (`test_gas_BorrowFixedOnly`) | `LendingFacet.openFixedFromPosition` | **592,432** |
 
 ### Loan Lifecycles
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Rolling lifecycle (`test_gas_RollingLifecycle`) | `LendingFacet.openRollingFromPosition + makePaymentFromPosition + closeRollingCreditFromPosition` | **7,782,239** |
-| Fixed lifecycle (`test_gas_FixedLifecycle`) | `LendingFacet.openFixedFromPosition + repayFixedFromPosition` | **7,991,123** |
+| Rolling lifecycle (`test_gas_RollingLifecycle`) | `LendingFacet.openRollingFromPosition + makePaymentFromPosition + closeRollingCreditFromPosition` | **8,175,173** |
+| Fixed lifecycle (`test_gas_FixedLifecycle`) | `LendingFacet.openFixedFromPosition + repayFixedFromPosition` | **8,382,849** |
 
 ### Direct Offers
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Post lender offer (`test_gas_DirectPostOfferOnly`) | `EqualLendDirectOfferFacet.postOffer` | **625,480** |
-| Accept lender offer (`test_gas_DirectAcceptOfferOnly`) | `EqualLendDirectAgreementFacet.acceptOffer` | **1,072,298** |
-| Post borrower offer (`test_gas_DirectPostBorrowerOfferOnly`) | `EqualLendDirectOfferFacet.postBorrowerOffer` | **600,165** |
-| Accept borrower offer (`test_gas_DirectAcceptBorrowerOfferOnly`) | `EqualLendDirectAgreementFacet.acceptBorrowerOffer` | **1,082,391** |
-| Direct offer repay flow (`test_gas_DirectOfferRepayFlow`) | `EqualLendDirectOfferFacet.postOffer + EqualLendDirectAgreementFacet.acceptOffer + EqualLendDirectLifecycleFacet.repay` | **41,895,777** |
+| Post lender offer (`test_gas_DirectPostOfferOnly`) | `EqualLendDirectOfferFacet.postOffer` | **649,932** |
+| Accept lender offer (`test_gas_DirectAcceptOfferOnly`) | `EqualLendDirectAgreementFacet.acceptOffer` | **1,085,867** |
+| Post borrower offer (`test_gas_DirectPostBorrowerOfferOnly`) | `EqualLendDirectOfferFacet.postBorrowerOffer` | **630,246** |
+| Accept borrower offer (`test_gas_DirectAcceptBorrowerOfferOnly`) | `EqualLendDirectAgreementFacet.acceptBorrowerOffer` | **1,090,737** |
+| Direct offer repay flow (`test_gas_DirectOfferRepayFlow`) | `EqualLendDirectOfferFacet.postOffer + EqualLendDirectAgreementFacet.acceptOffer + EqualLendDirectLifecycleFacet.repay` | **45,645,161** |
 
 ### Penalties
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Rolling penalty (`test_gas_PenaltyRolling`) | `PenaltyFacet.penalizePositionRolling` | **5,776,480** |
-| Fixed penalty (`test_gas_PenaltyFixed`) | `PenaltyFacet.penalizePositionFixed` | **5,899,903** |
+| Rolling penalty (`test_gas_PenaltyRolling`) | `PenaltyFacet.penalizePositionRolling` | **5,848,784** |
+| Fixed penalty (`test_gas_PenaltyFixed`) | `PenaltyFacet.penalizePositionFixed` | **5,972,202** |
 
 ### Derivative swap harnesses (test/derivatives/*Gas.t.sol)
 | Scenario (Foundry test) | Entry point(s) | Gas (`swap_only`) |
 | --- | --- | --- |
-| AMM swap exact-in (`testGasSwapExactIn`) | `AmmAuctionFacet.swapExactIn` | **197,872** |
-| MAM curve swap (`testGasExecuteCurveSwap`) | `MamCurveFacet.executeCurveSwap` | **257,545** |
+| AMM swap exact-in (`testGasSwapExactIn`) | `AmmAuctionFacet.swapExactIn` | **203,139** |
+| MAM curve swap (`testGasExecuteCurveSwap`) | `MamCurveFacet.executeCurveSwap` | **255,375** |
 
 ### Options & Futures harnesses (test/derivatives/*Gas.t.sol)
-| Scenario (Foundry test) | Entry point(s) | Gas (max) |
+| Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Options create series (`testGasCreateOptionSeries`) | `OptionsFacet.createOptionSeries` | **797,957** |
-| Options exercise (`testGasExerciseOptions`) | `OptionsFacet.exerciseOptions` | **218,631** |
-| Futures create series (`testGasCreateFuturesSeries`) | `FuturesFacet.createFuturesSeries` | **798,409** |
-| Futures settle (`testGasSettleFutures`) | `FuturesFacet.settleFutures` | **216,618** |
+| Options create series (`testGasCreateOptionSeries`) | `OptionsFacet.createOptionSeries` | **817,113** |
+| Options exercise (`testGasExerciseOptions`) | `OptionsFacet.exerciseOptions` | **200,272** |
+| Futures create series (`testGasCreateFuturesSeries`) | `FuturesFacet.createFuturesSeries` | **817,456** |
+| Futures settle (`testGasSettleFutures`) | `FuturesFacet.settleFutures` | **196,839** |
 
 ## Function-Level Gas Tests (test/gas/*t.sol)
 ### EqualIndexAdminFacetV3
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `setIndexFees` | 65,204 |
+| `setIndexFees` | 76,606 |
 
 ### IndexToken (state-changing)
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `mintIndexUnits` | 71,095 |
-| `burnIndexUnits` | 31,932 |
-| `recordMintDetails` | 59,912 |
-| `recordBurnDetails` | 60,528 |
-| `setFlashFeeBps` | 26,668 |
+| `mintIndexUnits` | 45,246 |
+| `burnIndexUnits` | 35,057 |
+| `recordMintDetails` | 77,010 |
+| `recordBurnDetails` | 77,692 |
+| `setFlashFeeBps` | 37,973 |
 
 ### IndexToken (views)
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `assetsPaginated` | 13,042 |
-| `bundleAmountsPaginated` | 13,005 |
-| `previewMintPaginated` | 58,006 |
-| `previewRedeem` | 65,450 |
-| `previewRedeemPaginated` | 73,178 |
-| `previewFlashLoanPaginated` | 22,237 |
-| `isSolvent` | 24,870 |
+| `assetsPaginated` | 22,072 |
+| `bundleAmountsPaginated` | 21,970 |
+| `previewMintPaginated` | 68,919 |
+| `previewRedeem` | 73,450 |
+| `previewRedeemPaginated` | 77,296 |
+| `previewFlashLoanPaginated` | 32,203 |
+| `isSolvent` | 33,258 |
 
 ### EqualIndexViewFacetV3 (views)
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `getIndexAssets` | 22,647 |
-| `getIndexAssetCount` | 4,625 |
-| `getProtocolBalance` | 242 |
+| `getIndexAssets` | 32,641 |
+| `getIndexAssetCount` | 12,943 |
+| `getProtocolBalance` | 8,381 |
 
 ### Direct lifecycle
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `exerciseDirect` | 301,347 |
-| `callDirect` | 42,003 |
+| `exerciseDirect` | 210,120 |
+| `callDirect` | 74,101 |
 
 ### Direct offer cancellations
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `cancelOffer` | 135,648 |
-| `cancelBorrowerOffer` | 148,663 |
-| `cancelRatioTrancheOffer` | 117,660 |
-| `cancelBorrowerRatioTrancheOffer` | 117,607 |
-| `cancelOffersForPosition(uint256)` | 135,599 |
-| `cancelOffersForPosition(bytes32)` | 130,596 |
+| `cancelOffer` | 102,399 |
+| `cancelBorrowerOffer` | 110,746 |
+| `cancelRatioTrancheOffer` | 91,080 |
+| `cancelBorrowerRatioTrancheOffer` | 90,888 |
+| `cancelOffersForPosition(uint256)` | 105,700 |
+| `cancelOffersForPosition(bytes32)` | 102,702 |
 
 ### Rolling offers & lifecycle
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `postRollingOffer` | 633,829 |
-| `postBorrowerRollingOffer` | 634,981 |
-| `acceptRollingOffer` | 1,163,691 |
-| `cancelRollingOffer` | 113,955 |
-| `makeRollingPayment` | 184,877 |
-| `exerciseRolling` | 253,615 |
-| `repayRollingInFull` | 272,749 |
-| `recoverRolling` | 333,038 |
+| `postRollingOffer` | 693,648 |
+| `postBorrowerRollingOffer` | 700,509 |
+| `acceptRollingOffer` | 1,149,424 |
+| `cancelRollingOffer` | 92,094 |
+| `makeRollingPayment` | 234,615 |
+| `exerciseRolling` | 179,639 |
+| `repayRollingInFull` | 236,396 |
+| `recoverRolling` | 230,562 |
 
 ### Rolling views
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `getRollingAgreement` | 36,217 |
-| `getRollingOffer` | 27,375 |
-| `getRollingBorrowerOffer` | 27,356 |
-| `calculateRollingPayment` | 7,129 |
-| `getRollingStatus` | 4,874 |
-| `aggregateRollingExposure` | 16,509 |
+| `getRollingAgreement` | 47,252 |
+| `getRollingOffer` | 38,018 |
+| `getRollingBorrowerOffer` | 38,041 |
+| `calculateRollingPayment` | 17,922 |
+| `getRollingStatus` | 16,033 |
+| `aggregateRollingExposure` | 30,037 |
 
 ### Limit order views
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
 | `getLimitOrder` | N/A |
 | `getActiveLimitOrders` | N/A |
@@ -166,224 +166,95 @@ _Notes_:
 | `getLimitOrderConfig` | N/A |
 
 ### Diamond loupe views
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `facetAddress` | 2,490 |
-| `facetAddresses` | 603,868 |
-| `facetFunctionSelectors` | 432,320 |
-| `supportsInterface` | 2,365 |
+| `facetAddress` | 15,717 |
+| `facetAddresses` | 642,665 |
+| `facetFunctionSelectors` | 464,191 |
+| `supportsInterface` | 15,740 |
 
 ### EqualLendDirectViewFacet (views)
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `fillsRemaining` | 11,793 |
-| `getBorrowerAgreements` | 16,123 |
-| `getBorrowerOffer` | 24,881 |
-| `getBorrowerOffers` | 18,745 |
-| `getBorrowerRatioTrancheOffer` | 29,571 |
-| `getLenderOffers` | 18,547 |
-| `getOffer` | 27,331 |
-| `getOfferSummary` | 30,230 |
-| `getOfferTranche` | 12,821 |
-| `getPoolActiveDirectLent` | 2,541 |
-| `getPositionDirectState` | 17,756 |
-| `getRatioBorrowerOffers` | 16,052 |
-| `getRatioLenderOffers` | 21,042 |
-| `getRatioTrancheOffer` | 29,842 |
-| `getRatioTrancheStatus` | 16,222 |
-| `getTrancheStatus` | 12,802 |
-| `isTrancheDepleted` | 12,129 |
-| `isTrancheOffer` | 4,901 |
+| `fillsRemaining` | 19,945 |
+| `getBorrowerAgreements` | 27,432 |
+| `getBorrowerOffer` | 34,730 |
+| `getBorrowerOffers` | 29,929 |
+| `getBorrowerRatioTrancheOffer` | 39,093 |
+| `getLenderOffers` | 29,621 |
+| `getOffer` | 36,959 |
+| `getOfferSummary` | 45,615 |
+| `getOfferTranche` | 22,165 |
+| `getPoolActiveDirectLent` | 11,202 |
+| `getPositionDirectState` | 30,228 |
+| `getRatioBorrowerOffers` | 27,008 |
+| `getRatioLenderOffers` | 32,388 |
+| `getRatioTrancheOffer` | 39,929 |
+| `getRatioTrancheStatus` | 25,487 |
+| `getTrancheStatus` | 21,931 |
+| `isTrancheDepleted` | 20,724 |
+| `isTrancheOffer` | 13,364 |
 
 ### Pool Management - Initialization
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `initPoolWithActionFees` | 306,951 |
-| `initManagedPool` | 720,101 |
+| `initPoolWithActionFees` | 319,316 |
+| `initManagedPool` | 738,538 |
 
 ### Pool Management - Managed config
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `setRollingApy` | 33,604 |
+| `setRollingApy` | 37,440 |
 | `setRollingApyExternal` | N/A |
-| `setDepositorLTV` | 34,079 |
+| `setDepositorLTV` | 38,179 |
 | `setExternalBorrowCR` | N/A |
-| `setMinDepositAmount` | 33,601 |
-| `setMinLoanAmount` | 33,381 |
-| `setMinTopupAmount` | 33,623 |
-| `setDepositCap` | 33,415 |
-| `setIsCapped` | 33,157 |
-| `setMaxUserCount` | 33,629 |
-| `setMaintenanceRate` | 36,177 |
-| `setFlashLoanFee` | 33,797 |
-| `setActionFees` | 57,164 |
+| `setMinDepositAmount` | 37,569 |
+| `setMinLoanAmount` | 37,591 |
+| `setMinTopupAmount` | 37,503 |
+| `setDepositCap` | 37,691 |
+| `setIsCapped` | 37,191 |
+| `setMaxUserCount` | 37,487 |
+| `setMaintenanceRate` | 40,497 |
+| `setFlashLoanFee` | 38,183 |
+| `setActionFees` | 61,718 |
 
 ### Pool Management - Whitelist & manager
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `addToWhitelist` | 59,556 |
-| `removeFromWhitelist` | 37,803 |
-| `setWhitelistEnabled` | 32,839 |
-| `transferManager` | 29,161 |
-| `renounceManager` | 28,648 |
+| `addToWhitelist` | 63,497 |
+| `removeFromWhitelist` | 37,164 |
+| `setWhitelistEnabled` | 37,137 |
+| `transferManager` | 33,415 |
+| `renounceManager` | 32,579 |
 
 ### PositionManagementFacet
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `mintPositionWithDeposit` | 442,183 |
+| `mintPositionWithDeposit` | 454,105 |
 
 ### FlashLoanFacet (includes onFlashLoan callback)
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `flashLoan` | 171,084 |
+| `flashLoan` | 187,284 |
 
 ### FeeFacet (views)
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `getPoolActionFee` | 4,989 |
-| `getIndexActionFee` | 4,942 |
-| `previewActionFee` | 4,747 |
-| `previewIndexActionFee` | 4,873 |
-| `getPoolActionFees` | 24,939 |
-| `previewActionFees` | 24,642 |
+| `getPoolActionFee` | 13,514 |
+| `getIndexActionFee` | 13,533 |
+| `previewActionFee` | 13,101 |
+| `previewIndexActionFee` | 13,117 |
+| `getPoolActionFees` | 35,086 |
+| `previewActionFees` | 33,056 |
 
 ### ActiveCreditViewFacet
-| Function | Gas (max) |
+| Function | Gas |
 | --- | --- |
-| `getActiveCreditIndex` | 8,785 |
-| `getActiveCreditStates` | 16,204 |
-| `getActiveCreditStatesByPosition` | 24,160 |
-| `getActiveCreditStatus` | 13,026 |
-| `getActiveCreditStatusByPosition` | 21,148 |
-| `pendingActiveCredit` | 11,556 |
-| `pendingActiveCreditByPosition` | 19,687 |
-| `selectors` | 1,584 |
-
-### ConfigViewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `getAumFeeInfo` | 6,797 |
-| `getFixedTermConfigs` | 5,124 |
-| `getFlashConfig` | 4,808 |
-| `getImmutableConfig` | N/A |
-| `getMaintenanceState` | 11,478 |
-| `getManagedPoolConfig` | 38,789 |
-| `getMinDepositAmount` | 4,606 |
-| `getMinLoanAmount` | 4,540 |
-| `getPoolCaps` | 7,141 |
-| `getPoolConfig` | 36,517 |
-| `getPoolInfo` | 40,692 |
-| `getPoolList` | 45,080 |
-| `getPoolManager` | 4,762 |
-| `getPoolUnderlying` | 2,838 |
-| `getRollingDelinquencyThresholds` | 2,995 |
-| `isManagedPool` | 4,794 |
-| `isPoolDeprecated` | 4,976 |
-| `isWhitelistEnabled` | 4,960 |
-| `isWhitelisted` | 18,695 |
-| `selectors` | 5,203 |
-
-### EnhancedLoanViewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `canOpenFixedLoan` | 39,714 |
-| `getFixedLoanAccrued` | 11,376 |
-| `getUserFixedLoansDetailed` | 24,808 |
-| `getUserFixedLoansPaginated` | 23,845 |
-| `getUserHealthMetrics` | 39,740 |
-| `previewBorrowFixed` | 39,463 |
-| `previewRepayFixed` | 9,428 |
-| `selectors` | 1,776 |
-
-### EqualIndexViewFacetV3
-| Function | Gas (max) |
-| --- | --- |
-| `getIndexAssets` | 22,647 |
-| `getIndexAssetCount` | 4,625 |
-| `getProtocolBalance` | 242 |
-
-### EqualLendDirectViewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `fillsRemaining` | 11,793 |
-| `getBorrowerAgreements` | 16,123 |
-| `getBorrowerOffer` | 24,881 |
-| `getBorrowerOffers` | 18,745 |
-| `getBorrowerRatioTrancheOffer` | 29,571 |
-| `getLenderOffers` | 18,547 |
-| `getOffer` | 27,331 |
-| `getOfferSummary` | 30,230 |
-| `getOfferTranche` | 12,821 |
-| `getPoolActiveDirectLent` | 2,541 |
-| `getPositionDirectState` | 17,756 |
-| `getRatioBorrowerOffers` | 16,052 |
-| `getRatioLenderOffers` | 21,042 |
-| `getRatioTrancheOffer` | 29,842 |
-| `getRatioTrancheStatus` | 16,222 |
-| `getTrancheStatus` | 12,802 |
-| `isTrancheDepleted` | 12,129 |
-| `isTrancheOffer` | 4,901 |
-
-### LiquidityViewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `getTotalPoolDeposits` | 4,591 |
-| `getUserBalances` | 11,244 |
-| `pendingYield` | 15,562 |
-| `totalAvailableLiquidity` | 8,033 |
-| `selectors` | 1,216 |
-
-### LoanViewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `getRollingLoan` | 11,999 |
-| `previewBorrowExternal` | N/A |
-| `previewBorrowRolling` | 6,957 |
-| `selectors` | 1,238 |
-
-### MultiPoolPositionViewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `getMultiPoolPositionState` | 98,888 |
-| `getPositionActivePools` | 37,213 |
-| `getPositionAggregatedSummary` | 92,960 |
-| `getPositionDirectAgreementIds` | 22,252 |
-| `getPositionDirectAgreements` | 86,877 |
-| `getPositionDirectSummary` | 45,359 |
-| `getPositionDirectSummaryByAsset` | 84,893 |
-| `getPositionPoolData` | 36,650 |
-| `getPositionPoolDataPoolOnly` | 34,199 |
-| `getPositionPoolMemberships` | 36,637 |
-| `getPositionPoolStates` | 67,145 |
-| `getUserPositions` | 16,382 |
-| `isPositionMemberOfPool` | 10,775 |
-| `selectors` | 3,389 |
-
-### PoolUtilizationViewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `getPoolCapacity` | 13,063 |
-| `getPoolStats` | 14,803 |
-| `selectors` | 1,238 |
-
-### PositionViewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `getLoansDetails` | 19,396 |
-| `getPositionLoanIds` | 17,843 |
-| `getPositionLoanSummary` | 31,297 |
-| `getPositionMetadata` | 14,526 |
-| `getPositionSolvency` | 22,256 |
-| `getPositionState` | 51,556 |
-| `isPositionDelinquent` | 15,832 |
-| `selectors` | 1,959 |
-
-### LoanPreviewFacet
-| Function | Gas (max) |
-| --- | --- |
-| `selectors` | 1,363 |
-
-### MaintenanceFacet
-| Function | Gas (max) |
-| --- | --- |
-| `selectors` | 715 |
+| `getActiveCreditIndex` | 17,293 |
+| `getActiveCreditStates` | 27,279 |
+| `getActiveCreditStatesByPosition` | 34,993 |
+| `getActiveCreditStatus` | 23,697 |
+| `getActiveCreditStatusByPosition` | 32,039 |
+| `pendingActiveCredit` | 22,148 |
+| `pendingActiveCreditByPosition` | 30,037 |
+| `selectors` | 11,144 |

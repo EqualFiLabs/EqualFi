@@ -49,7 +49,7 @@ contract AmmAuctionStatefulHandler is Test {
         vm.prank(taker);
         tokenIn.approve(address(harness), amountIn);
         vm.prank(taker);
-        harness.swapExactIn(auctionId, address(tokenIn), amountIn, amountIn, 0, taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenIn), amountIn, amountIn, 0, taker);
     }
 
     function _snapshotK() internal {

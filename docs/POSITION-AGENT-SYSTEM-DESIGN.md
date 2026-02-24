@@ -104,7 +104,8 @@ The Position Agent System enables Position NFTs to act as first-class agents in 
 │                                         │                             │    │
 │                                         │  agentId: 123               │    │
 │                                         │  agentURI: ipfs://...       │    │
-│                                         │  agentWallet: TBA address   │    │
+│                                         │  wallet fields: registry-   │    │
+│                                         │  specific (if supported)    │    │
 │                                         └─────────────────────────────┘    │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -129,7 +130,7 @@ The Position Agent System enables Position NFTs to act as first-class agents in 
 When the Position NFT transfers, the entire ownership chain automatically updates:
 - New owner gains control of the TBA (inherent ERC-6551 behavior)
 - Identity NFT remains in the TBA
-- `agentWallet` remains valid (set to TBA address)
+- Registry-specific wallet fields (if any) typically continue to reference the same TBA address
 
 ### 2.3 Component Interaction Diagram
 
@@ -184,7 +185,7 @@ The Position NFT is the core protocol asset representing an isolated account con
 
 The TBA is an ERC-6551 account implementation using the ERC-6900 Modular Smart Contract Account (MSCA) architecture.
 
-**Contract:** `PositionMSCA` / `PositionMSCAImpl`
+**Contract:** `PositionMSCAImpl` (concrete implementation built on `ERC721BoundMSCA`)
 
 **Capabilities:**
 - Execute arbitrary calls on behalf of the Position NFT owner
@@ -212,7 +213,7 @@ The Identity NFT is minted by the canonical ERC-8004 Identity Registry and repre
 
 **Properties:**
 - Owned by the TBA (not the EOA)
-- `agentWallet` set to TBA address
+- Protocol verifies ownership with `ownerOf(agentId)` when recording registration
 - `tokenURI` points to off-chain registration file
 - Globally discoverable by ERC-8004 indexers
 
@@ -302,10 +303,10 @@ This document lists the Ethereum addresses used by the deployment scripts.
 | Arbitrum One | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | Arbitrum Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
 
-**Key Functions:**
+**Common Registry Functions (implementation-dependent):**
 - `register(agentURI)` - Mint Identity NFT with metadata URI
 - `setAgentURI(agentId, newURI)` - Update agent metadata
-- `setAgentWallet(agentId, newWallet, deadline, signature)` - Update payment address
+- `ownerOf(agentId)` - Ownership verification used by this protocol
 
 ### 4.4 ERC-4337: Account Abstraction
 
@@ -556,7 +557,8 @@ The registration process involves two steps:
      │                     │─────────────────────►│                         │
      │                     │                      │                         │
      │                     │                      │  _safeMint(tba, agentId)│
-     │                     │                      │  agentWallet = tba      │
+     │                     │                      │  (other fields are      │
+     │                     │                      │   registry-specific)     │
      │                     │                      │                         │
      │                     │◄─────────────────────│                         │
      │                     │      agentId         │                         │
@@ -606,7 +608,7 @@ When a Position NFT transfers, the agent identity automatically follows:
       │                      │─────────────────────────────────────────────►│
       │                      │                       │                      │
       │                      │  Identity NFT still owned by TBA             │
-      │                      │  agentWallet still set to TBA                │
+      │                      │  Registry wallet fields (if any) unchanged   │
       │                      │  No additional transactions needed           │
 ```
 
@@ -703,9 +705,9 @@ The ERC-6900 module system supports four types of modules:
 | **Execution Module** | `IERC6900ExecutionModule` | Add new callable functions |
 | **Execution Hook** | `IERC6900ExecutionHookModule` | Pre/post execution checks (policies) |
 
-### 7.2 Default Validation Module
+### 7.2 Common First Validation Module
 
-The `OwnerValidationModule` is the default validation module that validates signatures against the Position NFT owner.
+Accounts start in bootstrap validation mode by default. A common first installed module is `OwnerValidationModule`, which validates signatures against the Position NFT owner.
 
 **Features:**
 - EIP-712 typed data signing
@@ -716,7 +718,7 @@ The `OwnerValidationModule` is the default validation module that validates sign
 **Signature Domain:**
 ```solidity
 EIP712Domain(
-    string name,      // "EqualLend Owner Validation"
+    string name,      // "Agent Wallet Owner Validation"
     string version,   // "1.0.0"
     uint256 chainId,  // Current chain ID
     address verifyingContract  // TBA address
@@ -728,9 +730,9 @@ EIP712Domain(
 New TBAs start in bootstrap mode with native EIP-712 owner validation:
 
 1. **Initial State**: `_bootstrapActive = true`
-2. **Bootstrap Validation**: Direct ECDSA signature verification against Position NFT owner
-3. **Module Installation**: First validation module installed using bootstrap validation
-4. **Post-Bootstrap**: Bootstrap mode may remain as emergency fallback
+2. **Bootstrap Validation**: Native ECDSA validation against Position NFT owner
+3. **Module Installation (optional)**: Validation modules can be installed with owner authorization
+4. **Post-Bootstrap**: Bootstrap can be disabled via `disableBootstrap()`
 
 ### 7.4 Module Installation Requirements
 
@@ -868,7 +870,7 @@ function onERC721Received(
 All signatures are bound to:
 - **Account Address**: Prevents cross-account replay
 - **Chain ID**: Prevents cross-chain replay
-- **Deadline**: Time-limited validity (for `setAgentWallet`)
+- **Policy/window constraints**: Enforced by bootstrap logic or installed validation modules
 
 ### 8.5 Position NFT Burn Edge Case
 
@@ -1014,7 +1016,7 @@ bytes memory signature = abi.encodePacked(r, s, v);  // Standard ECDSA
 2. **Deploy Beacon + ERC-6551 Implementation Proxy**
    ```solidity
    UpgradeableBeacon beacon = new UpgradeableBeacon(address(msca), owner);
-   ERC6551BeaconProxy beaconProxy = new ERC6551BeaconProxy(address(beacon));
+   BeaconProxy beaconProxy = new BeaconProxy(address(beacon));
    ```
 
 3. **Deploy Diamond Facets**
@@ -1063,7 +1065,7 @@ The system uses a fixed salt (`bytes32(0)`) for TBA derivation:
 ### 10.4 Upgrade Strategy
 
 **Beacon-Based Upgrade Path (current deployment scripts):**
-- TBAs are deployed via ERC-6551 using a shared `ERC6551BeaconProxy` as implementation
+- TBAs are deployed via ERC-6551 using a shared `BeaconProxy` implementation address
 - The beacon points to `PositionMSCAImpl`
 - Upgrading the beacon implementation updates behavior for all TBAs using that beacon
 - Beacon ownership (deployer-configured governance owner) controls upgrades
@@ -1101,7 +1103,11 @@ The system uses a fixed salt (`bytes32(0)`) for TBA derivation:
 error PositionAgent_Unauthorized(address caller, uint256 positionTokenId);
 error PositionAgent_NotAdmin(address caller);
 error PositionAgent_AlreadyRegistered(uint256 positionTokenId);
+error PositionAgent_InvalidAgentId(uint256 agentId);
 error PositionAgent_InvalidAgentOwner(address expected, address actual);
+error PositionAgent_InvalidConfigAddress(address configAddress);
+error PositionAgent_CreateAccountAddressMismatch(address expected, address actual);
+error PositionAgent_TBANotDeployed(address tbaAddress);
 ```
 
 **MSCA Errors:**

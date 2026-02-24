@@ -14,6 +14,7 @@ import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibSolvencyChecks} from "../../src/libraries/LibSolvencyChecks.sol";
 import {Types} from "../../src/libraries/Types.sol";
+import {ModuleInactive} from "../../src/libraries/Errors.sol";
 
 contract ModuleEncumbrancePropertyHarness is ModuleGatewayFacet {
     receive() external payable {}
@@ -137,6 +138,10 @@ contract ModuleEncumbrancePropertyHarness is ModuleGatewayFacet {
 
     function lastAumEpoch(bytes32 positionKey, uint256 poolId, uint256 moduleId) external view returns (uint64) {
         return LibModuleRegistry.tupleAumState(positionKey, poolId, moduleId).lastAumEpoch;
+    }
+
+    function moduleInactive(uint256 moduleId) external view returns (bool) {
+        return LibModuleRegistry.module(moduleId).inactive;
     }
 }
 
@@ -369,5 +374,49 @@ contract ModuleEncumbrancePropertyTest is Test {
         assertEq(charged, feeDue);
         assertEq(trackedBefore - trackedAfter, charged);
         assertEq(treasuryAfter - treasuryBefore, charged);
+    }
+
+    function test_multiUserLiveness_afterGlobalDeactivation() public {
+        address borrowerTwo = address(0xB0B);
+
+        (ModuleEncumbrancePropertyHarness h, PositionNFT nft, MockERC20 token, bytes32 keyOne) = _bootstrapErc20(2_000_000, 2_000_000);
+        uint256 tokenIdTwo = nft.mint(borrowerTwo, POOL_ID);
+        bytes32 keyTwo = nft.getPositionKey(tokenIdTwo);
+
+        h.setPrincipal(POOL_ID, keyOne, 10);
+        h.setPrincipal(POOL_ID, keyTwo, 1_000);
+        h.joinPool(keyTwo, POOL_ID);
+        h.setModuleConfig(MODULE_ID, MODULE_OWNER, false, false, AUM_BPS, AUM_BPS, 2);
+
+        uint256 riskyEncumbered = (30 * 365 * 10_000) / AUM_BPS; // 30/day at 1% AUM
+        uint256 healthyEncumbered = 365_000; // 10/day at 1% AUM
+        h.setModuleEncumberedRaw(keyOne, POOL_ID, MODULE_ID, riskyEncumbered);
+        h.setModuleEncumberedRaw(keyTwo, POOL_ID, MODULE_ID, healthyEncumbered);
+
+        vm.warp(1 days);
+        h.accrueAum(keyOne, POOL_ID, MODULE_ID);
+        h.accrueAum(keyTwo, POOL_ID, MODULE_ID);
+
+        vm.warp(2 days);
+        h.accrueAum(keyOne, POOL_ID, MODULE_ID);
+        vm.warp(3 days);
+        h.accrueAum(keyOne, POOL_ID, MODULE_ID);
+        vm.warp(4 days);
+        h.accrueAum(keyOne, POOL_ID, MODULE_ID);
+        assertTrue(h.moduleInactive(MODULE_ID), "one delinquent tuple should globally deactivate module");
+
+        vm.prank(borrowerTwo);
+        vm.expectRevert(abi.encodeWithSelector(ModuleInactive.selector, MODULE_ID));
+        h.encumberPosition(tokenIdTwo, POOL_ID, MODULE_ID, 1);
+
+        vm.warp(5 days);
+        h.accrueAum(keyTwo, POOL_ID, MODULE_ID);
+        assertEq(h.principalOf(POOL_ID, keyTwo), 960, "other tuple should keep accruing after global deactivation");
+
+        vm.prank(borrowerTwo);
+        h.unencumberPosition(tokenIdTwo, POOL_ID, MODULE_ID, healthyEncumbered);
+        assertEq(h.moduleEncumberedForModule(keyTwo, POOL_ID, MODULE_ID), 0, "other tuple should still be able to unencumber");
+
+        token; // silence warning for tuple return readability
     }
 }

@@ -12,10 +12,12 @@ import {LibCurrency} from "../libraries/LibCurrency.sol";
 import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibEncumbrance} from "../libraries/LibEncumbrance.sol";
 import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {
     RollingError_AmortizationDisabled,
     RollingError_InvalidInterval,
-    RollingError_DustPayment
+    RollingError_DustPayment,
+    UnexpectedMsgValue
 } from "../libraries/Errors.sol";
 import {DirectError_InvalidAgreementState} from "../libraries/Errors.sol";
 
@@ -49,7 +51,8 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         if (agreement.status != DirectTypes.DirectStatus.Active) revert DirectError_InvalidAgreementState();
 
         PositionNFT nft = LibDirectHelpers._positionNFT();
-        LibDirectHelpers._requireNFTOwnership(nft, agreement.borrowerPositionId);
+        address borrowerOwner = LibDirectHelpers._requireNFTOwnership(nft, agreement.borrowerPositionId);
+        address lenderRecipient = nft.ownerOf(agreement.lenderPositionId);
 
         Types.PoolData storage lenderPool = LibDirectHelpers._pool(agreement.lenderPoolId);
         Types.PoolData storage collateralPool = LibDirectHelpers._pool(agreement.collateralPoolId);
@@ -80,6 +83,14 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         uint256 currentIntervalInterest =
             _rollingInterest(agreement.outstandingPrincipal, agreement.rollingApyBps, agreement.paymentIntervalSeconds);
 
+        if (LibCurrency.isNative(agreement.borrowAsset)) {
+            if (msg.value != maxPayment) {
+                revert UnexpectedMsgValue(msg.value);
+            }
+        } else {
+            LibCurrency.assertZeroMsgValue();
+        }
+
         // Pull funds
         uint256 received = LibCurrency.pullAtLeast(agreement.borrowAsset, msg.sender, amount, maxPayment);
 
@@ -108,6 +119,9 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
             LibActiveCreditIndex.applyEncumbranceDelta(
                 lenderPool, agreement.lenderPoolId, lenderKey, lenderEncBefore, lenderEncAfter
             );
+            uint256 activeLent = ds.activeDirectLentPerPool[agreement.lenderPoolId];
+            ds.activeDirectLentPerPool[agreement.lenderPoolId] =
+                activeLent >= principalPaid ? activeLent - principalPaid : 0;
             if (collateralPool.activeCreditPrincipalTotal >= principalPaid) {
                 collateralPool.activeCreditPrincipalTotal -= principalPaid;
             } else {
@@ -138,10 +152,11 @@ contract EqualLendDirectRollingPaymentFacet is ReentrancyGuardModifiers {
         }
 
         // Pay lender
-        LibCurrency.transferWithMin(agreement.borrowAsset, agreement.lender, received, minReceived);
+        LibCurrency.transferWithMin(agreement.borrowAsset, lenderRecipient, received, minReceived);
         if (LibCurrency.isNative(agreement.borrowAsset) && received > 0) {
             LibAppStorage.s().nativeTrackedTotal -= received;
         }
+        LibPoints.accrueToKey(borrowerOwner, borrowerKey, LibPoints.ACTION_ROLLING_PAYMENT);
 
         emit RollingPaymentMade(
             agreementId,

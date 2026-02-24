@@ -7,6 +7,7 @@ import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
 import {LibMamMath} from "../libraries/LibMamMath.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
 import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {InsufficientPrincipal} from "../libraries/Errors.sol";
@@ -117,17 +118,18 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         address baseToken = baseIsA ? imm.tokenA : imm.tokenB;
         address quoteToken = baseIsA ? imm.tokenB : imm.tokenA;
 
+        LibCurrency.assertMsgValue(quoteToken, maxQuote);
         uint256 received = LibCurrency.pullAtLeast(quoteToken, msg.sender, totalQuote, maxQuote);
+        uint256 excess = received - totalQuote;
 
         Types.PoolData storage quotePool = LibAppStorage.s().pools[quotePoolId];
-        quotePool.trackedBalance += received;
+        quotePool.trackedBalance += totalQuote;
 
         uint16 makerShareBps = ds.config.mamMakerShareBps;
         uint256 makerFee = (feeAmount * makerShareBps) / 10_000;
         uint256 protocolFee = feeAmount - makerFee;
 
-        uint256 excess = received - totalQuote;
-        uint256 makerIncrease = amountIn + makerFee + excess;
+        uint256 makerIncrease = amountIn + makerFee;
         quotePool.userPrincipal[data.makerPositionKey] += makerIncrease;
         quotePool.totalDeposits += makerIncrease;
 
@@ -149,14 +151,23 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
             ? basePool.totalDeposits - baseFill
             : 0;
         basePool.trackedBalance -= baseFill;
-        if (LibCurrency.isNative(basePool.underlying)) {
-            LibAppStorage.s().nativeTrackedTotal -= baseFill;
-        }
-        LibCurrency.transferWithMin(baseToken, recipient, baseFill, minOut);
 
         uint256 remaining = _consumeCurve(curveId, uint128(baseFill));
 
-        emit CurveFilled(curveId, msg.sender, recipient, amountIn, received, amountOut, feeAmount, remaining);
+        if (excess > 0) {
+            if (LibCurrency.isNative(quoteToken)) {
+                LibAppStorage.s().nativeTrackedTotal -= excess;
+            }
+            LibCurrency.transfer(quoteToken, msg.sender, excess);
+        }
+
+        if (LibCurrency.isNative(baseToken)) {
+            LibAppStorage.s().nativeTrackedTotal -= baseFill;
+        }
+        LibCurrency.transferWithMin(baseToken, recipient, baseFill, minOut);
+        LibPoints.accrueToDefaultPosition(msg.sender, LibPoints.ACTION_SWAP_MAM_CURVE);
+
+        emit CurveFilled(curveId, msg.sender, recipient, amountIn, totalQuote, amountOut, feeAmount, remaining);
     }
 
     function _consumeCurve(uint256 curveId, uint128 baseFill) internal returns (uint128 remainingAfter) {

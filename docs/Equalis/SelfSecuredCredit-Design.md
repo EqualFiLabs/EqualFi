@@ -221,20 +221,29 @@ Position NFTs are fully transferable. When transferred:
 
 ### Pool Configuration
 
-Each pool is initialized with immutable parameters:
+Each pool is initialized with core parameters (mostly immutable; action-fee overrides are governance-controlled):
 
 ```solidity
 struct PoolConfig {
+    uint16 rollingApyBps;           // Rolling-credit APY (stored in config)
     uint16 depositorLTVBps;         // Max LTV for borrowing (e.g., 9500 = 95%)
     uint16 maintenanceRateBps;      // Annual maintenance fee rate
     uint16 flashLoanFeeBps;         // Flash loan fee in basis points
+    bool flashLoanAntiSplit;        // Anti-split protection toggle
     uint256 minDepositAmount;       // Minimum deposit threshold
     uint256 minLoanAmount;          // Minimum loan threshold
     uint256 minTopupAmount;         // Minimum credit expansion amount
     bool isCapped;                  // Whether deposit cap is enforced
     uint256 depositCap;             // Max principal per user
     uint256 maxUserCount;           // Maximum users (0 = unlimited)
+    uint16 aumFeeMinBps;            // Immutable lower bound for currentAumFeeBps
+    uint16 aumFeeMaxBps;            // Immutable upper bound for currentAumFeeBps
     FixedTermConfig[] fixedTermConfigs;  // Fixed-term loan options
+    ActionFeeConfig borrowFee;      // Set at creation, can be overridden post-create
+    ActionFeeConfig repayFee;
+    ActionFeeConfig withdrawFee;
+    ActionFeeConfig flashFee;
+    ActionFeeConfig closeRollingFee;
 }
 ```
 
@@ -535,10 +544,14 @@ Pools can enable anti-split protection to prevent fee arbitrage via multiple sma
 ### Pool Data
 
 ```solidity
+// Representative layout (abridged for readability; see Types.PoolData for full mapping layout)
 struct PoolData {
     // Core identity
     address underlying;                              // ERC20 token
+    bool initialized;                                // Pool initialization flag
     PoolConfig poolConfig;                           // Immutable parameters
+    uint16 currentAumFeeBps;                         // Mutable AUM fee within pool bounds
+    bool deprecated;                                 // UI guidance flag
     
     // Fee index state (managed by LibFeeIndex)
     uint256 feeIndex;                                // Global fee index (1e18 scale)
@@ -561,18 +574,36 @@ struct PoolData {
     
     // Pool totals
     uint256 totalDeposits;                           // Sum of all principal
+    uint256 pendingMaintenance;                      // Pending maintenance amount
+    uint256 nextFixedLoanId;                         // Monotonic fixed-loan id
     uint256 trackedBalance;                          // Actual token balance
     uint256 userCount;                               // Total users with deposits
+    
+    // Managed pool controls
+    bool isManagedPool;
+    address manager;
+    bool whitelistEnabled;
+    mapping(bytes32 => bool) whitelist;
     
     // Per-user ledger
     mapping(bytes32 => uint256) userPrincipal;       // Per-position principal
     mapping(bytes32 => uint256) userFeeIndex;        // Per-position fee checkpoint
     mapping(bytes32 => uint256) userMaintenanceIndex;// Per-position maintenance checkpoint
     mapping(bytes32 => uint256) userAccruedYield;    // Settled yield
+    mapping(bytes32 => uint256) externalCollateral;  // External collateral accounting
+    mapping(uint256 => uint256) sameAssetDebt;       // Per-position same-asset debt cache
+    mapping(uint256 => uint256) crossAssetDebt;      // Per-position cross-asset debt cache
+    mapping(uint256 => uint256) feeBaseCheckpoint;   // Fee base checkpoint
+    mapping(uint256 => uint256) lastFeeBase;         // Last fee base
     
     // Loan state
     mapping(bytes32 => RollingCreditLoan) rollingLoans;
     mapping(uint256 => FixedTermLoan) fixedTermLoans;
+    mapping(bytes32 => uint256) activeFixedLoanCount;
+    mapping(bytes32 => uint256) fixedTermPrincipalRemaining;
+    mapping(bytes32 => uint256[]) userFixedLoanIds;
+    mapping(bytes32 => mapping(uint256 => uint256)) loanIdToIndex;
+    mapping(bytes32 => ActionFeeConfig) actionFees;
     
     // Active credit per-user state
     mapping(bytes32 => ActiveCreditState) userActiveCreditStateEncumbrance;
@@ -595,6 +626,7 @@ Position encumbrance is tracked centrally via `LibEncumbrance.sol`:
 struct EncumbranceStorage {
     mapping(bytes32 => mapping(uint256 => Encumbrance)) encumbrance;
     mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByIndex;
+    mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByModule;
 }
 
 struct Encumbrance {
@@ -602,6 +634,7 @@ struct Encumbrance {
     uint256 directLent;         // Principal actively lent out
     uint256 directOfferEscrow;  // Principal escrowed for pending offers
     uint256 indexEncumbered;    // Principal encumbered by index positions
+    uint256 moduleEncumbered;   // Principal reserved by module encumbrance
 }
 
 // Access pattern
@@ -636,7 +669,7 @@ struct FixedTermLoan {
     uint256 fullInterest;           // Interest snapshot (0 in current self-secured flow)
     uint40 openedAt;                // Loan creation timestamp
     uint40 expiry;                  // Maturity timestamp
-    uint16 apyBps;                  // Interest rate (0 for self-secured)
+    uint16 apyBps;                  // Configured fixed-term APY (interest realization currently disabled)
     bytes32 borrower;               // Position key
     bool closed;                    // Loan status
     bool interestRealized;          // Interest realization flag
@@ -669,6 +702,7 @@ struct PositionEncumbrance {
     uint256 directLent;             // From LibEncumbrance
     uint256 directOfferEscrow;      // From LibEncumbrance
     uint256 indexEncumbered;        // From LibEncumbrance
+    uint256 moduleEncumbered;       // From LibEncumbrance
     uint256 totalEncumbered;        // Sum of all types
 }
 ```
@@ -1158,6 +1192,24 @@ event EncumbranceDecreased(
     uint256 amount,
     uint256 totalEncumbered,
     uint256 indexEncumbered
+);
+
+event ModuleEncumbranceIncreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
+);
+
+event ModuleEncumbranceDecreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
 );
 ```
 

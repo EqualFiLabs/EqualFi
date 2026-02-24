@@ -11,12 +11,15 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {OptionToken} from "../../src/derivatives/OptionToken.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 
 contract OptionsGasTest is Test {
+    bytes32 internal constant POINTS_STORAGE_POSITION = keccak256("equallend.points.storage");
+
     OptionsGasHarness internal harness;
     PositionNFT internal nft;
     OptionToken internal optionToken;
@@ -39,6 +42,7 @@ contract OptionsGasTest is Test {
         optionToken = new OptionToken("", address(this), address(harness));
         harness.setOptionTokenDirect(address(optionToken));
         harness.configurePositionNFT(address(nft));
+        _configurePointsIfEnabled();
 
         makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
@@ -106,6 +110,17 @@ contract OptionsGasTest is Test {
         vm.prank(holder);
 
         harness.exerciseOptions(seriesId, 1e18, holder, payment, 0);
+    }
+
+    function _configurePointsIfEnabled() internal {
+        if (!vm.envOr("POINTS_ON_GAS", false)) return;
+        _setPoints(address(harness), LibPoints.ACTION_DERIVATIVE_CREATE_OPTION, 1);
+    }
+
+    function _setPoints(address target, bytes32 actionType, uint256 amount) internal {
+        bytes32 pointsPerActionSlot = bytes32(uint256(POINTS_STORAGE_POSITION) + 1);
+        bytes32 valueSlot = keccak256(abi.encode(actionType, pointsPerActionSlot));
+        vm.store(target, valueSlot, bytes32(amount));
     }
 }
 

@@ -540,6 +540,19 @@ contract PenaltyFacetUnitTest is Test {
         facet.penalizePositionRolling(tokenId, PID, enforcer);
     }
 
+    function test_penalizeRolling_allowsThresholdAboveThreeAfterElapsedEpochs() public {
+        facet.initPool(PID, address(token), 4, 5);
+        (uint256 tokenId, bytes32 key) = _mintAndSeed(100 ether);
+        facet.seedRollingLoan(PID, key, 50 ether, 0);
+
+        vm.warp(block.timestamp + 5 days);
+
+        facet.penalizePositionRolling(tokenId, PID, enforcer);
+        PenaltySnapshot memory snap = facet.snapshot(PID, key, enforcer, treasury);
+        assertFalse(snap.rollingLoan.active, "rolling loan should be closed after penalty");
+        assertEq(snap.rollingLoan.principalRemaining, 0, "rolling principal should be cleared");
+    }
+
     function test_penalizeRolling_revertsWhenNotActive() public {
         (uint256 tokenId, bytes32 key) = _mintAndSeed(100 ether);
         facet.seedRollingLoan(PID, key, 50 ether, 5);

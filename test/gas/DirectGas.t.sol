@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {DirectDiamondTestBase} from "../equallend-direct/DirectDiamondTestBase.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {DiamondCutFacet} from "../../src/core/DiamondCutFacet.sol";
@@ -95,6 +96,7 @@ contract DirectOfferGasTest is DirectDiamondTestBase {
         setUpDiamond();
         tokenA = new MockERC20("TokenA", "TKA", 18, 1_000_000 ether);
         tokenB = new MockERC20("TokenB", "TKB", 18, 1_000_000 ether);
+        _configureDirectPointsIfEnabled();
 
         DirectTypes.DirectConfig memory cfg = DirectTypes.DirectConfig({
             platformFeeBps: 0,
@@ -104,6 +106,18 @@ contract DirectOfferGasTest is DirectDiamondTestBase {
             minInterestDuration: 0
         });
         views.setDirectConfig(cfg);
+    }
+
+    function _configureDirectPointsIfEnabled() internal {
+        if (!vm.envOr("POINTS_ON_GAS", false)) return;
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_POST_LENDER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_POST_BORROWER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_POST_RATIO_LENDER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_POST_RATIO_BORROWER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_ACCEPT_LENDER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_ACCEPT_BORROWER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_ACCEPT_RATIO_LENDER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_ACCEPT_RATIO_BORROWER_OFFER, 1);
     }
 
     function _seedPositions()
@@ -277,6 +291,7 @@ contract DirectRollingGasTest is DirectDiamondTestBase {
         setUpDiamond();
         asset = new MockERC20("Asset", "AST", 18, 5_000_000 ether);
         collateral = new MockERC20("Collateral", "COL", 18, 5_000_000 ether);
+        _configureRollingPointsIfEnabled();
 
         DirectTypes.DirectRollingConfig memory rollingCfg = DirectTypes.DirectRollingConfig({
             minPaymentIntervalSeconds: 1 days,
@@ -297,6 +312,14 @@ contract DirectRollingGasTest is DirectDiamondTestBase {
             minInterestDuration: 0
         });
         views.setDirectConfig(cfg);
+    }
+
+    function _configureRollingPointsIfEnabled() internal {
+        if (!vm.envOr("POINTS_ON_GAS", false)) return;
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_POST_ROLLING_LENDER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_POST_ROLLING_BORROWER_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_DIRECT_ACCEPT_ROLLING_OFFER, 1);
+        harness.setPointsPerAction(LibPoints.ACTION_ROLLING_PAYMENT, 1);
     }
 
     function _seedPositions(uint256 lenderPool, uint256 borrowerPool)

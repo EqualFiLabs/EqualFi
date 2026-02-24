@@ -6,7 +6,7 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPositionAgentStorage} from "../../src/libraries/LibPositionAgentStorage.sol";
 import {PositionAgentRegistryFacet} from "../../src/agent-wallet/erc6551/PositionAgentRegistryFacet.sol";
-import {PositionAgent_InvalidAgentOwner} from "../../src/libraries/PositionAgentErrors.sol";
+import {PositionAgent_InvalidAgentId, PositionAgent_InvalidAgentOwner} from "../../src/libraries/PositionAgentErrors.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {MockBeacon} from "../helpers/MockBeacon.sol";
 
@@ -122,5 +122,13 @@ contract PositionAgentRegistrationVerifyPropertyTest is Test {
         );
         vm.prank(owner);
         facet.recordAgentRegistration(tokenId, agentId);
+    }
+
+    function test_recordAgentRegistrationVerifyPath_revertsOnZeroAgentId() public {
+        uint256 tokenId = nft.mint(owner, 1);
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(PositionAgent_InvalidAgentId.selector, 0));
+        facet.recordAgentRegistration(tokenId, 0);
     }
 }

@@ -69,8 +69,8 @@ contract PositionViewFacet {
         state.fixedLoanIds = p.userFixedLoanIds[positionKey];
 
         uint256 missedEpochs = _calculateMissedEpochsView(state.rollingLoan);
-        if (missedEpochs > 3) {
-            missedEpochs = 3;
+        if (missedEpochs > type(uint8).max) {
+            missedEpochs = type(uint8).max;
         }
         if (missedEpochs > state.rollingLoan.missedPayments) {
             state.rollingLoan.missedPayments = uint8(missedEpochs);
@@ -113,7 +113,7 @@ contract PositionViewFacet {
 
             (uint8 delinquentEpochs,) = _delinquencyThresholds();
             uint256 missedEpochs = _calculateMissedEpochs(rollingLoan);
-            if (missedEpochs > 3) missedEpochs = 3;
+            if (missedEpochs > type(uint8).max) missedEpochs = type(uint8).max;
             uint256 effectiveMissed = missedEpochs > rollingLoan.missedPayments ? missedEpochs : rollingLoan.missedPayments;
             if (effectiveMissed >= delinquentEpochs) {
                 hasDelinquentLoans = true;
@@ -200,7 +200,7 @@ contract PositionViewFacet {
         if (rollingLoan.active) {
             (uint8 delinquentEpochs,) = _delinquencyThresholds();
             uint256 missedEpochs = _calculateMissedEpochs(rollingLoan);
-            if (missedEpochs > 3) missedEpochs = 3;
+            if (missedEpochs > type(uint8).max) missedEpochs = type(uint8).max;
             uint256 effectiveMissed = missedEpochs > rollingLoan.missedPayments ? missedEpochs : rollingLoan.missedPayments;
             if (effectiveMissed >= delinquentEpochs) {
                 return true;
@@ -290,7 +290,7 @@ contract PositionViewFacet {
         if (rollingLoan.active) {
             (uint8 delinquentEpochs, uint8 penaltyEpochs) = _delinquencyThresholds();
             uint256 missedEpochs = _calculateMissedEpochsView(rollingLoan);
-            if (missedEpochs > 3) missedEpochs = 3;
+            if (missedEpochs > type(uint8).max) missedEpochs = type(uint8).max;
             uint256 effectiveMissed =
                 missedEpochs > rollingLoan.missedPayments ? missedEpochs : rollingLoan.missedPayments;
             if (effectiveMissed >= delinquentEpochs) {

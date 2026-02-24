@@ -96,6 +96,93 @@ contract DirectRollingOfferPropertyTest is DirectDiamondTestBase {
         rollingOffers.postBorrowerRollingOffer(borrowerParams);
     }
 
+    function test_postRollingOffers_useUnifiedIdNamespace() public {
+        uint256 lenderPositionId = nft.mint(lenderOwner, 7);
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 8);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 100 ether, true);
+
+        uint256 borrowerOfferId = _postBorrowerRollingOffer(borrowerPositionId);
+        uint256 lenderOfferId = _postLenderRollingOffer(lenderPositionId);
+
+        assertEq(borrowerOfferId, 1, "first rolling offer id");
+        assertEq(lenderOfferId, 2, "second rolling offer id");
+        assertEq(rollingOffers.getRollingBorrowerOffer(borrowerOfferId).borrower, borrowerOwner, "borrower offer stored");
+        assertEq(rollingOffers.getRollingOffer(lenderOfferId).lender, lenderOwner, "lender offer stored");
+    }
+
+    function test_cancelRollingOffer_dispatchesByRollingKind() public {
+        uint256 lenderPositionId = nft.mint(lenderOwner, 9);
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 10);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 100 ether, true);
+
+        uint256 borrowerOfferId = _postBorrowerRollingOffer(borrowerPositionId);
+        uint256 lenderOfferId = _postLenderRollingOffer(lenderPositionId);
+
+        vm.prank(borrowerOwner);
+        rollingOffers.cancelRollingOffer(borrowerOfferId);
+        assertTrue(rollingOffers.getRollingBorrowerOffer(borrowerOfferId).cancelled, "borrower offer cancelled");
+        assertEq(views.directLocked(borrowerKey, 2), 0, "borrower collateral unlocked");
+
+        vm.prank(lenderOwner);
+        rollingOffers.cancelRollingOffer(lenderOfferId);
+        assertTrue(rollingOffers.getRollingOffer(lenderOfferId).cancelled, "lender offer cancelled");
+        assertEq(views.offerEscrow(lenderKey, 1), 0, "lender escrow released");
+    }
+
+    function test_cancelOffersForPosition_cancelsRollingLenderOffers() public {
+        uint256 lenderPositionId = nft.mint(lenderOwner, 11);
+        finalizePositionNFT();
+        bytes32 lenderKey = nft.getPositionKey(lenderPositionId);
+        harness.seedPoolWithMembership(1, address(asset), lenderKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), lenderKey, 500 ether, true);
+
+        uint256 offerId = _postLenderRollingOffer(lenderPositionId);
+        assertTrue(offers.hasOpenOffers(lenderKey), "open offers tracked");
+        assertEq(views.offerEscrow(lenderKey, 1), 100 ether, "escrowed before cancel");
+
+        vm.prank(lenderOwner);
+        offers.cancelOffersForPosition(lenderPositionId);
+
+        DirectTypes.DirectRollingOffer memory offer = rollingOffers.getRollingOffer(offerId);
+        assertTrue(offer.cancelled, "rolling lender offer cancelled");
+        assertEq(views.offerEscrow(lenderKey, 1), 0, "escrow released");
+        assertFalse(offers.hasOpenOffers(lenderKey), "no remaining open offers");
+
+        vm.prank(lenderOwner);
+        nft.transferFrom(lenderOwner, address(0xCAFE), lenderPositionId);
+    }
+
+    function test_cancelOffersForPosition_cancelsRollingBorrowerOffers() public {
+        uint256 borrowerPositionId = nft.mint(borrowerOwner, 12);
+        finalizePositionNFT();
+        bytes32 borrowerKey = nft.getPositionKey(borrowerPositionId);
+        harness.seedPoolWithMembership(1, address(asset), borrowerKey, 500 ether, true);
+        harness.seedPoolWithMembership(2, address(asset), borrowerKey, 500 ether, true);
+
+        uint256 offerId = _postBorrowerRollingOffer(borrowerPositionId);
+        assertTrue(offers.hasOpenOffers(borrowerKey), "open offers tracked");
+        assertEq(views.directLocked(borrowerKey, 2), 25 ether, "collateral locked before cancel");
+
+        vm.prank(borrowerOwner);
+        offers.cancelOffersForPosition(borrowerPositionId);
+
+        DirectTypes.DirectRollingBorrowerOffer memory offer = rollingOffers.getRollingBorrowerOffer(offerId);
+        assertTrue(offer.cancelled, "rolling borrower offer cancelled");
+        assertEq(views.directLocked(borrowerKey, 2), 0, "collateral unlocked");
+        assertFalse(offers.hasOpenOffers(borrowerKey), "no remaining open offers");
+
+        vm.prank(borrowerOwner);
+        nft.transferFrom(borrowerOwner, address(0xC0FFEE), borrowerPositionId);
+    }
+
     function _postLenderRollingOffer(uint256 lenderPositionId) internal returns (uint256 offerId) {
         DirectTypes.DirectRollingOfferParams memory offerParams = DirectTypes.DirectRollingOfferParams({
             lenderPositionId: lenderPositionId,

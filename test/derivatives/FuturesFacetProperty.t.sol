@@ -6,7 +6,8 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {FuturesToken} from "../../src/derivatives/FuturesToken.sol";
 import {
     FuturesFacet,
-    Futures_GracePeriodNotElapsed
+    Futures_GracePeriodNotElapsed,
+    Futures_NotReclaimed
 } from "../../src/derivatives/FuturesFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
@@ -77,6 +78,12 @@ contract FuturesFacetPropertyTest is Test {
 
         vm.prank(maker);
         uint256 seriesId = harness.createFuturesSeries(params);
+        vm.prank(maker);
+        futuresToken.safeTransferFrom(maker, holder, seriesId, totalSize / 2, "");
+        uint256 holderBalanceBefore = futuresToken.balanceOf(holder, seriesId);
+        vm.prank(address(0xCAFE));
+        vm.expectRevert(abi.encodeWithSelector(Futures_NotReclaimed.selector, seriesId));
+        harness.burnReclaimedFuturesClaims(holder, seriesId, 1);
         uint64 graceUnlockTime = harness.getGraceUnlockTime(seriesId);
 
         vm.warp(graceUnlockTime - 1);
@@ -88,8 +95,16 @@ contract FuturesFacetPropertyTest is Test {
         vm.prank(maker);
         harness.reclaimFutures(seriesId);
 
-        assertEq(futuresToken.balanceOf(maker, seriesId), 0, "reclaim burns remaining supply");
+        assertEq(futuresToken.balanceOf(holder, seriesId), holderBalanceBefore, "holder claims remain outstanding");
+        assertEq(futuresToken.balanceOf(maker, seriesId), totalSize / 2, "maker claims remain outstanding");
         assertEq(harness.getLocked(positionKey, 1), 0, "collateral unlocked");
+        DerivativeTypes.FuturesSeries memory series = harness.getFuturesSeries(seriesId);
+        assertEq(series.remaining, 0, "series marked fully reclaimed");
+        assertTrue(series.reclaimed, "series reclaimed");
+
+        vm.prank(address(0xCAFE));
+        harness.burnReclaimedFuturesClaims(holder, seriesId, holderBalanceBefore / 2);
+        assertEq(futuresToken.balanceOf(holder, seriesId), holderBalanceBefore / 2, "post-reclaim claims burnable");
     }
 
     /// @notice Property: Principal conservation on settlement
@@ -160,6 +175,92 @@ contract FuturesFacetPropertyTest is Test {
         assertEq(quote.balanceOf(holder), 0, "holder pays quote amount");
     }
 
+    function test_settleFutures_refundsExcessAndCreditsOnlyRequiredPayment() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 totalSize = 1e18;
+        uint256 forwardPrice = 2e18;
+        uint256 requiredQuote = _quoteAmount(totalSize, forwardPrice);
+
+        harness.seedPool(1, address(underlying), positionKey, totalSize + 1e6, totalSize + 1e6);
+        harness.seedPool(2, address(quote), positionKey, requiredQuote + 1e6, requiredQuote + 1e6);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 seriesId = harness.createFuturesSeries(
+            DerivativeTypes.CreateFuturesSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                quotePoolId: 2,
+                forwardPrice: forwardPrice,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: totalSize,
+                isEuropean: true,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        vm.prank(maker);
+        futuresToken.safeTransferFrom(maker, holder, seriesId, totalSize, "");
+
+        uint256 payment = harness.previewSettlePayment(seriesId, totalSize);
+        uint256 maxPayment = payment + 1e17;
+        quote.mint(holder, maxPayment);
+        vm.prank(holder);
+        quote.approve(address(harness), maxPayment);
+
+        uint256 holderQuoteBefore = quote.balanceOf(holder);
+        uint256 makerQuoteBefore = harness.getPrincipal(positionKey, 2);
+
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(holder);
+        harness.settleFutures(seriesId, totalSize, holder, maxPayment, 0);
+
+        assertEq(holderQuoteBefore - quote.balanceOf(holder), payment, "holder pays required amount only");
+        assertEq(harness.getPrincipal(positionKey, 2) - makerQuoteBefore, payment, "maker receives required amount only");
+    }
+
+    function test_createFuturesSeries_supportsNativeUnderlyingFlatFee() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principal = 5e18;
+        uint256 flatFee = 2e16; // 0.02 native
+        vm.deal(address(harness), principal);
+        harness.seedPool(1, address(0), positionKey, principal, principal);
+        harness.seedPool(2, address(quote), positionKey, principal, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setFeeSplits(0, 0);
+        harness.setDefaultCreateFeeConfig(0, uint128(flatFee));
+
+        uint256 principalBefore = harness.getPrincipal(positionKey, 1);
+        vm.prank(maker);
+        uint256 seriesId = harness.createFuturesSeries(
+            DerivativeTypes.CreateFuturesSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                quotePoolId: 2,
+                forwardPrice: 2e18,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: 1e18,
+                isEuropean: false,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        assertGt(seriesId, 0, "series created");
+        assertEq(harness.getPrincipal(positionKey, 1), principalBefore - flatFee, "native flat fee applied");
+    }
+
     function _quoteAmount(uint256 amount, uint256 forwardPrice) internal view returns (uint256) {
         uint256 underlyingScale = 10 ** uint256(underlying.decimals());
         uint256 quoteScale = 10 ** uint256(quote.decimals());
@@ -187,6 +288,20 @@ contract FuturesHarness is FuturesFacet {
         LibDerivativeStorage.derivativeStorage().config.defaultGracePeriodSeconds = gracePeriod;
     }
 
+    function setDefaultCreateFeeConfig(uint16 feeBps, uint128 flatFeeWad) external {
+        LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
+        ds.config.defaultCreateFeeBps = feeBps;
+        ds.config.defaultCreateFeeFlatWad = flatFeeWad;
+    }
+
+    function setFeeSplits(uint16 treasuryBps, uint16 activeCreditBps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = treasuryBps;
+        store.treasuryShareConfigured = true;
+        store.activeCreditShareBps = activeCreditBps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function seedPool(
         uint256 pid,
         address underlying,
@@ -201,7 +316,11 @@ contract FuturesHarness is FuturesFacet {
         p.totalDeposits = principal;
         p.trackedBalance = tracked;
         if (tracked > 0) {
-            MockERC20(underlying).mint(address(this), tracked);
+            if (underlying == address(0)) {
+                LibAppStorage.s().nativeTrackedTotal += tracked;
+            } else {
+                MockERC20(underlying).mint(address(this), tracked);
+            }
         }
         if (p.feeIndex == 0) {
             p.feeIndex = LibFeeIndex.INDEX_SCALE;

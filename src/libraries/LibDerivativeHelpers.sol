@@ -24,6 +24,16 @@ library LibDerivativeHelpers {
         positionKey = LibPositionNFT.getPositionKey(address(nft), positionId);
     }
 
+    function _requirePositionOwnershipAndOwner(uint256 positionId)
+        internal
+        view
+        returns (bytes32 positionKey, address owner)
+    {
+        PositionNFT nft = LibDirectHelpers._positionNFT();
+        owner = LibDirectHelpers._requireBorrowerAuthority(nft, positionId);
+        positionKey = LibPositionNFT.getPositionKey(address(nft), positionId);
+    }
+
     function _validateTimeWindow(uint64 startTime, uint64 endTime) internal pure {
         if (endTime <= startTime) {
             revert DerivativeError_InvalidTimeWindow(startTime, endTime);
@@ -39,8 +49,7 @@ library LibDerivativeHelpers {
         uint256 userPrincipal = pool.userPrincipal[positionKey];
         LibEncumbrance.Encumbrance storage enc = LibEncumbrance.position(positionKey, poolId);
         uint256 currentLocked = enc.directLocked;
-        uint256 currentLent = enc.directLent;
-        uint256 used = currentLocked + currentLent;
+        uint256 used = LibEncumbrance.total(positionKey, poolId);
         uint256 available = userPrincipal > used ? userPrincipal - used : 0;
 
         if (available < amount) {
@@ -73,9 +82,8 @@ library LibDerivativeHelpers {
 
         uint256 userPrincipal = pool.userPrincipal[positionKey];
         LibEncumbrance.Encumbrance storage enc = LibEncumbrance.position(positionKey, poolId);
-        uint256 currentLocked = enc.directLocked;
         uint256 currentLent = enc.directLent;
-        uint256 used = currentLocked + currentLent;
+        uint256 used = LibEncumbrance.total(positionKey, poolId);
         uint256 available = userPrincipal > used ? userPrincipal - used : 0;
 
         if (available < amount) {

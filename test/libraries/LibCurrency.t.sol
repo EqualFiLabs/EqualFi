@@ -17,6 +17,17 @@ contract LibCurrencyHarness {
         return LibCurrency.pull(token, from, amount);
     }
 
+    function pullAtLeastToken(address token, address from, uint256 minAmount, uint256 maxAmount)
+        external
+        returns (uint256)
+    {
+        return LibCurrency.pullAtLeast(token, from, minAmount, maxAmount);
+    }
+
+    function pullAtLeastNative(uint256 minAmount, uint256 maxAmount) external payable returns (uint256) {
+        return LibCurrency.pullAtLeast(address(0), msg.sender, minAmount, maxAmount);
+    }
+
     function doTransfer(address token, address to, uint256 amount) external {
         LibCurrency.transfer(token, to, amount);
     }
@@ -181,5 +192,50 @@ contract LibCurrencyTest is Test {
         assertEq(received, 3 ether);
         assertEq(harness.nativeTrackedTotal(), 5 ether);
         assertEq(address(harness).balance, 10 ether);
+    }
+
+    function test_pullAtLeast_erc20_overpullTransfersMaxAmount() public {
+        MockERC20 token = new MockERC20("Mock", "MOCK", 18, 0);
+        uint256 minAmount = 10 ether;
+        uint256 maxAmount = 100 ether;
+        token.mint(user, maxAmount);
+
+        vm.startPrank(user);
+        token.approve(address(harness), maxAmount);
+        uint256 received = harness.pullAtLeastToken(address(token), user, minAmount, maxAmount);
+        vm.stopPrank();
+
+        assertEq(received, maxAmount, "non-FoT pullAtLeast should receive full maxAmount");
+        assertEq(token.balanceOf(address(harness)), maxAmount, "harness should hold full pulled amount");
+        assertEq(token.balanceOf(user), 0, "user should be debited by maxAmount");
+    }
+
+    function test_pullAtLeast_feeOnTransfer_overpullUsesMaxForGrossPull() public {
+        uint16 feeBps = 1_000; // 10%
+        uint256 minAmount = 90 ether;
+        uint256 maxAmount = 100 ether;
+        FeeOnTransferERC20 token = new FeeOnTransferERC20("FeeToken", "FEE", 18, 0, feeBps, receiver);
+        token.mint(user, maxAmount);
+
+        vm.startPrank(user);
+        token.approve(address(harness), maxAmount);
+        uint256 received = harness.pullAtLeastToken(address(token), user, minAmount, maxAmount);
+        vm.stopPrank();
+
+        assertEq(received, 90 ether, "received amount should be computed from maxAmount gross pull");
+        assertEq(token.balanceOf(address(harness)), 90 ether, "harness should receive net amount");
+        assertEq(token.balanceOf(receiver), 10 ether, "fee recipient should receive fee");
+    }
+
+    function test_pullAtLeast_native_overpullRequiresAndTracksExactMax() public {
+        uint256 minAmount = 1 ether;
+        uint256 maxAmount = 7 ether;
+        vm.deal(address(this), maxAmount);
+
+        uint256 trackedBefore = harness.nativeTrackedTotal();
+        uint256 received = harness.pullAtLeastNative{value: maxAmount}(minAmount, maxAmount);
+
+        assertEq(received, maxAmount, "native pullAtLeast should receive msg.value == maxAmount");
+        assertEq(harness.nativeTrackedTotal(), trackedBefore + maxAmount, "native tracked should increase by maxAmount");
     }
 }

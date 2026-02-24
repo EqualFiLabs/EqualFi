@@ -9,6 +9,8 @@ import {DiamondCutFacet} from "../src/core/DiamondCutFacet.sol";
 import {DiamondLoupeFacet} from "../src/core/DiamondLoupeFacet.sol";
 import {OwnershipFacet} from "../src/core/OwnershipFacet.sol";
 import {AdminFacet} from "../src/admin/AdminFacet.sol";
+import {PointsAdminFacet} from "../src/admin/PointsAdminFacet.sol";
+import {PointsRedemptionFacet} from "../src/points/PointsRedemptionFacet.sol";
 import {MaintenanceFacet} from "../src/core/MaintenanceFacet.sol";
 import {AdminGovernanceFacet} from "../src/admin/AdminGovernanceFacet.sol";
 import {PoolManagementFacet} from "../src/equallend/PoolManagementFacet.sol";
@@ -18,6 +20,7 @@ import {EqualIndexPositionFacet} from "../src/equalindex/EqualIndexPositionFacet
 import {EqualIndexViewFacetV3} from "../src/views/EqualIndexViewFacetV3.sol";
 import {EqualIndexBaseV3} from "../src/equalindex/EqualIndexBaseV3.sol";
 import {ConfigViewFacet} from "../src/views/ConfigViewFacet.sol";
+import {PointsViewFacet} from "../src/views/PointsViewFacet.sol";
 import {PositionViewFacet} from "../src/views/PositionViewFacet.sol";
 import {PositionNFTMetadataFacet} from "../src/views/PositionNFTMetadataFacet.sol";
 import {MultiPoolPositionViewFacet} from "../src/views/MultiPoolPositionViewFacet.sol";
@@ -44,6 +47,7 @@ import {PositionAgentConfigFacet} from "../src/agent-wallet/erc6551/PositionAgen
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 interface IPoolManagementFacetInitDefault {
     function initPool(address underlying) external payable returns (uint256);
@@ -51,6 +55,71 @@ interface IPoolManagementFacetInitDefault {
 
 interface IPoolManagementFacetInitConfig {
     function initPool(uint256 pid, address underlying, Types.PoolConfig calldata config) external payable;
+}
+
+contract LocalERC6551Registry is IERC6551Registry {
+    function createAccount(
+        address implementation,
+        bytes32 salt,
+        uint256 chainId,
+        address,
+        uint256
+    ) external returns (address) {
+        assembly {
+            pop(chainId)
+            calldatacopy(0x8c, 0x24, 0x80)
+            mstore(0x6c, 0x5af43d82803e903d91602b57fd5bf3)
+            mstore(0x5d, implementation)
+            mstore(0x49, 0x3d60ad80600a3d3981f3363d3d373d3d3d363d73)
+
+            mstore8(0x00, 0xff)
+            mstore(0x35, keccak256(0x55, 0xb7))
+            mstore(0x01, shl(96, address()))
+            mstore(0x15, salt)
+
+            let computed := keccak256(0x00, 0x55)
+
+            if iszero(extcodesize(computed)) {
+                let deployed := create2(0, 0x55, 0xb7, salt)
+                if iszero(deployed) {
+                    mstore(0x00, 0x20188a59)
+                    revert(0x1c, 0x04)
+                }
+                mstore(0x6c, deployed)
+                return(0x6c, 0x20)
+            }
+
+            mstore(0x00, shr(96, shl(96, computed)))
+            return(0x00, 0x20)
+        }
+    }
+
+    function account(
+        address implementation,
+        bytes32 salt,
+        uint256 chainId,
+        address tokenContract,
+        uint256 tokenId
+    ) external view returns (address) {
+        assembly {
+            pop(chainId)
+            pop(tokenContract)
+            pop(tokenId)
+
+            calldatacopy(0x8c, 0x24, 0x80)
+            mstore(0x6c, 0x5af43d82803e903d91602b57fd5bf3)
+            mstore(0x5d, implementation)
+            mstore(0x49, 0x3d60ad80600a3d3981f3363d3d373d3d3d363d73)
+
+            mstore8(0x00, 0xff)
+            mstore(0x35, keccak256(0x55, 0xb7))
+            mstore(0x01, shl(96, address()))
+            mstore(0x15, salt)
+
+            mstore(0x00, shr(96, shl(96, keccak256(0x00, 0x55))))
+            return(0x00, 0x20)
+        }
+    }
 }
 
 /// @notice Lean deployment script for EqualIndex, AMM auctions, MAM curves, and self-secured lending.
@@ -146,6 +215,7 @@ contract LeanDeployScript is Script {
         DiamondLoupeFacet loupe = new DiamondLoupeFacet();
         OwnershipFacet own = new OwnershipFacet();
         AdminFacet adminFacet = new AdminFacet();
+        PointsAdminFacet pointsAdmin = new PointsAdminFacet();
         MaintenanceFacet maintenance = new MaintenanceFacet();
         AdminGovernanceFacet admin = new AdminGovernanceFacet();
         PoolManagementFacet poolManagement = new PoolManagementFacet();
@@ -154,6 +224,7 @@ contract LeanDeployScript is Script {
         EqualIndexPositionFacet equalIndexPosition = new EqualIndexPositionFacet();
         EqualIndexViewFacetV3 equalIndexView = new EqualIndexViewFacetV3();
         ConfigViewFacet cfgView = new ConfigViewFacet();
+        PointsViewFacet pointsView = new PointsViewFacet();
         PositionViewFacet positionView = new PositionViewFacet();
         PositionNFTMetadataFacet positionNftMetadata = new PositionNFTMetadataFacet();
         MultiPoolPositionViewFacet multiPoolView = new MultiPoolPositionViewFacet();
@@ -173,8 +244,9 @@ contract LeanDeployScript is Script {
         PositionAgentRegistryFacet positionAgentRegistry = new PositionAgentRegistryFacet();
         PositionAgentViewFacet positionAgentView = new PositionAgentViewFacet();
         PositionAgentConfigFacet positionAgentConfig = new PositionAgentConfigFacet();
+        PointsRedemptionFacet pointsRedemption = new PointsRedemptionFacet();
 
-        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](30);
+        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](33);
         cuts[0] = _cut(address(cut), _selectors(cut));
         cuts[1] = _cut(address(loupe), _selectors(loupe));
         cuts[2] = _cut(address(own), _selectors(own));
@@ -205,6 +277,9 @@ contract LeanDeployScript is Script {
         cuts[27] = _cut(address(positionAgentRegistry), _selectors(positionAgentRegistry));
         cuts[28] = _cut(address(positionAgentView), _selectors(positionAgentView));
         cuts[29] = _cut(address(positionAgentConfig), _selectors(positionAgentConfig));
+        cuts[30] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
+        cuts[31] = _cut(address(pointsView), _selectors(pointsView));
+        cuts[32] = _cut(address(pointsRedemption), _selectors(pointsRedemption));
 
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
         diamondAddress = address(diamond);
@@ -234,11 +309,13 @@ contract LeanDeployScript is Script {
 
         address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(beaconProxy));
         address identityRegistry = _resolveIdentityRegistry();
-        PositionAgentConfigFacet(address(diamond)).setERC6551Registry(ERC6551_REGISTRY);
+        address erc6551Registry = _resolveERC6551Registry();
+        PositionAgentConfigFacet(address(diamond)).setERC6551Registry(erc6551Registry);
         if (erc6551Implementation == address(0)) {
             erc6551Implementation = address(beaconProxy);
         }
         PositionAgentConfigFacet(address(diamond)).setERC6551Implementation(erc6551Implementation);
+        console2.log("Using ERC6551 registry:", erc6551Registry);
         console2.log("Using ERC6551 implementation:", erc6551Implementation);
         if (identityRegistry != address(0)) {
             PositionAgentConfigFacet(address(diamond)).setIdentityRegistry(identityRegistry);
@@ -305,7 +382,25 @@ contract LeanDeployScript is Script {
         if (block.chainid == 11155111) {
             return ERC8004_SEPOLIA;
         }
-        return vm.envOr("IDENTITY_REGISTRY", address(0));
+        address configured = vm.envOr("IDENTITY_REGISTRY", address(0));
+        if (configured != address(0) && configured.code.length > 0) {
+            return configured;
+        }
+        return address(0);
+    }
+
+    function _resolveERC6551Registry() internal returns (address) {
+        if (ERC6551_REGISTRY.code.length > 0) {
+            return ERC6551_REGISTRY;
+        }
+
+        address configured = vm.envOr("ERC6551_REGISTRY", address(0));
+        if (configured != address(0) && configured.code.length > 0) {
+            return configured;
+        }
+
+        LocalERC6551Registry localRegistry = new LocalERC6551Registry();
+        return address(localRegistry);
     }
 
     function _resolveEntryPoint() internal view returns (address) {
@@ -342,6 +437,25 @@ contract LeanDeployScript is Script {
         s = new bytes4[](2);
         s[0] = AdminFacet.setTimelock.selector;
         s[1] = AdminFacet.timelock.selector;
+    }
+
+    function _selectors(PointsAdminFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](9);
+        s[0] = PointsAdminFacet.setPointsPerAction.selector;
+        s[1] = PointsAdminFacet.setPointsPerActionBatch.selector;
+        s[2] = PointsAdminFacet.setDailyPointsCap.selector;
+        s[3] = PointsAdminFacet.setAccrualCooldown.selector;
+        s[4] = PointsAdminFacet.setRedemptionToken.selector;
+        s[5] = PointsAdminFacet.setRedemptionEnabled.selector;
+        s[6] = PointsAdminFacet.setRedemptionRate.selector;
+        s[7] = PointsAdminFacet.setRedemptionGlobalMintCap.selector;
+        s[8] = PointsAdminFacet.setRedemptionEpochConfig.selector;
+    }
+
+    function _selectors(PointsRedemptionFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = PointsRedemptionFacet.redeem.selector;
+        s[1] = PointsRedemptionFacet.redeemFromPosition.selector;
     }
 
     function _selectors(MaintenanceFacet) internal pure returns (bytes4[] memory s) {
@@ -430,6 +544,10 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(ConfigViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
+        s = viewFacet.selectors();
+    }
+
+    function _selectors(PointsViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
         s = viewFacet.selectors();
     }
 

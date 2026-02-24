@@ -70,7 +70,8 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
         assertLt(totalCostInB, navInB, "amm discount below nav");
 
         vm.startPrank(arbitrageur);
-        uint256 swappedOut = amm.swapExactIn(auctionId, address(tokenB), AMM_AMOUNT_IN, AMM_AMOUNT_IN, requiredA, arbitrageur);
+        (uint256 swappedOut,) =
+            amm.swapExactInOrFinalize(auctionId, address(tokenB), AMM_AMOUNT_IN, AMM_AMOUNT_IN, requiredA, arbitrageur);
         assertGe(swappedOut, requiredA, "swap output");
 
         uint256[] memory maxInputs = new uint256[](2);
@@ -172,15 +173,14 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
     }
 
     function _selectorsAmm() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](8);
+        s = new bytes4[](7);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
-        s[2] = AmmAuctionFacet.swapExactIn.selector;
-        s[3] = AmmAuctionFacet.swapExactInOrFinalize.selector;
-        s[4] = AmmAuctionFacet.finalizeAuction.selector;
-        s[5] = AmmAuctionFacet.cancelAuction.selector;
-        s[6] = AmmAuctionFacet.getAuction.selector;
-        s[7] = AmmAuctionFacet.previewSwap.selector;
+        s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
+        s[3] = AmmAuctionFacet.finalizeAuction.selector;
+        s[4] = AmmAuctionFacet.cancelAuction.selector;
+        s[5] = AmmAuctionFacet.getAuction.selector;
+        s[6] = AmmAuctionFacet.previewSwap.selector;
     }
 
     function _selectorsIndexView() internal pure returns (bytes4[] memory s) {

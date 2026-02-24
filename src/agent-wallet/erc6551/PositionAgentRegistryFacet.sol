@@ -6,6 +6,7 @@ import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
 import {DirectError_InvalidPositionNFT} from "../../libraries/Errors.sol";
 import {
     PositionAgent_AlreadyRegistered,
+    PositionAgent_InvalidAgentId,
     PositionAgent_InvalidAgentOwner
 } from "../../libraries/PositionAgentErrors.sol";
 import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
@@ -18,6 +19,9 @@ contract PositionAgentRegistryFacet {
 
     function recordAgentRegistration(uint256 positionTokenId, uint256 agentId) external {
         LibPositionAgentStorage.requirePositionOwner(positionTokenId);
+        if (agentId == 0) {
+            revert PositionAgent_InvalidAgentId(agentId);
+        }
 
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
         if (ds.positionToAgentId[positionTokenId] != 0) {

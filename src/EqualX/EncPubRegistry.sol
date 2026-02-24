@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IEncPubRegistry} from "../interfaces/IEncPubRegistry.sol";
+import {LibSecp256k1Pubkey} from "../libraries/LibSecp256k1Pubkey.sol";
 
 /// @notice Minimal registry mapping participant addresses to compressed secp256k1 encryption pubkeys.
 contract EncPubRegistry is IEncPubRegistry {
@@ -11,7 +12,7 @@ contract EncPubRegistry is IEncPubRegistry {
 
     /// @inheritdoc IEncPubRegistry
     function registerEncPub(bytes calldata encPub) external override {
-        if (encPub.length != 33) revert InvalidPubkey();
+        if (!LibSecp256k1Pubkey.isValidCompressedPubkey(encPub)) revert InvalidPubkey();
         pubkeys[msg.sender] = encPub;
         emit KeyRegistered(msg.sender, encPub);
     }

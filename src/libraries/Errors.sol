@@ -86,6 +86,7 @@ error ModuleInactive(uint256 moduleId);
 error ModuleRegistrationDisabled();
 error ModuleIncorrectFee(uint256 sent, uint256 required);
 error NotModuleOwner(uint256 moduleId, address caller);
+error InvalidModuleOwner(address owner);
 error ModuleAumOutOfBounds(uint16 bps, uint16 minBps, uint16 maxBps);
 
 // Pool membership validation

@@ -13,6 +13,7 @@ import {LibIndexEncumbrance} from "../../src/libraries/LibIndexEncumbrance.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
+import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
@@ -20,6 +21,18 @@ import {MockERC20} from "../../src/mocks/MockERC20.sol";
 contract EqualIndexPositionIntegrationHarness is EqualIndexAdminFacetV3, EqualIndexPositionFacet {
     function setOwner(address owner) external {
         LibDiamond.setContractOwner(owner);
+    }
+
+    function setPointsPerAction(bytes32 actionType, uint256 amount) external {
+        LibPoints.setPointsPerAction(actionType, amount);
+    }
+
+    function pointsBalance(address user) external view returns (uint256) {
+        return LibPoints.balanceOf(user);
+    }
+
+    function pointsBalanceByKey(bytes32 pointsKey) external view returns (uint256) {
+        return LibPoints.balanceOf(pointsKey);
     }
 
     function setPositionNFT(address nft) external {
@@ -171,6 +184,45 @@ contract EqualIndexPositionIntegrationTest is Test {
         assertEq(facet.getEncumbered(positionKey, 1), 0);
         assertEq(facet.getEncumbered(positionKey, 2), 0);
         assertEq(facet.getUserPrincipal(indexPoolId, positionKey), 0);
+    }
+
+    function test_pointsAccrueOnPositionMintAndBurn() public {
+        MockERC20 assetA = new MockERC20("AssetA", "A", 18, 0);
+        MockERC20 assetB = new MockERC20("AssetB", "B", 18, 0);
+
+        EqualIndexPositionIntegrationHarness facet = new EqualIndexPositionIntegrationHarness();
+        facet.setOwner(address(this));
+        facet.setDefaultPoolConfig(_validPoolConfig());
+        facet.setPointsPerAction(LibPoints.ACTION_INDEX_MINT_POSITION, 6);
+        facet.setPointsPerAction(LibPoints.ACTION_INDEX_BURN_POSITION, 10);
+
+        PositionNFT nft = new PositionNFT();
+        nft.setMinter(address(this));
+        address owner = address(0xBEEF);
+        uint256 tokenId = nft.mint(owner, 1);
+        facet.setPositionNFT(address(nft));
+
+        bytes32 positionKey = nft.getPositionKey(tokenId);
+        facet.seedPool(1, address(assetA), 10_000 ether);
+        facet.seedPool(2, address(assetB), 10_000 ether);
+        facet.setUser(1, positionKey, 5_000 ether);
+        facet.setUser(2, positionKey, 5_000 ether);
+        facet.joinPool(positionKey, 1);
+        facet.joinPool(positionKey, 2);
+        facet.setAssetToPoolId(address(assetA), 1);
+        facet.setAssetToPoolId(address(assetB), 2);
+
+        EqualIndexBaseV3.CreateIndexParams memory params = _paramsForAssets(address(assetA), address(assetB), 0, 0);
+        (uint256 indexId,) = facet.createIndex(params);
+
+        assertEq(facet.pointsBalanceByKey(positionKey), 0);
+        vm.prank(owner);
+        facet.mintFromPosition(tokenId, indexId, LibEqualIndex.INDEX_SCALE);
+        assertEq(facet.pointsBalanceByKey(positionKey), 6);
+
+        vm.prank(owner);
+        facet.burnFromPosition(tokenId, indexId, LibEqualIndex.INDEX_SCALE);
+        assertEq(facet.pointsBalanceByKey(positionKey), 16);
     }
 
     function test_multiPositionProportionalBurn() public {

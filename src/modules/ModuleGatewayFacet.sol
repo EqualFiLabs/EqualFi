@@ -32,6 +32,10 @@ contract ModuleGatewayFacet is IModuleGatewayFacet, ReentrancyGuardModifiers {
 
         // Accrue tuple AUM before any new encumbrance mutation.
         LibModuleAum.accrue(positionKey, poolId, moduleId);
+        // Accrual may have auto-deactivated this module; do not allow new encumbrance afterward.
+        if (m.inactive) {
+            revert ModuleInactive(moduleId);
+        }
 
         uint256 available = LibSolvencyChecks.calculateAvailablePrincipal(pool, positionKey, poolId);
         if (amount > available) {

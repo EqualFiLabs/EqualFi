@@ -27,8 +27,8 @@ This document does not define a full UI/UX or key-management product.
 ### 3.1 Core Components
 
 - `PositionAgentTBAFacet`: computes/deploys deterministic ERC-6551 account address per Position NFT
-- `PositionMSCA` / `PositionMSCAImpl`: ERC-6900 modular smart account implementation used by TBA
-- `OwnerValidationModule`: default owner-signature validation module
+- `PositionMSCAImpl`: concrete ERC-6900 modular smart account implementation used by TBA
+- `OwnerValidationModule`: commonly installed owner-signature validation module
 - ERC-4337 `EntryPoint`: validates and executes UserOperations
 
 ### 3.2 Ownership and Control Root
@@ -121,9 +121,9 @@ Typical bounds:
 
 Implemented now:
 
-- Owner-based validation (`OwnerValidationModule`)
+- Bootstrap owner validation in account core, plus owner-based validation module support (`OwnerValidationModule`)
 - Selector-based module routing and validation framework
-- Dedicated session-key validation module (`SessionKeyValidationModule`) with:
+- Dedicated session-key validation module (`SessionKeyValidationModule`, from `agent-wallet-core`) with:
   - owner-controlled policy registration/revocation per `(account, entityId, sessionKey)`
   - selector allowlist
   - target allowlist for `execute` / `executeBatch`
@@ -176,16 +176,15 @@ The model is safe only if module policy is narrow, explicit, and revocable.
 
 ## 10. Reference Contracts
 
-- `src/erc6551/PositionAgentTBAFacet.sol`
+- `src/agent-wallet/erc6551/PositionAgentTBAFacet.sol`
 - `src/libraries/LibPositionAgentStorage.sol`
-- `src/erc6900/PositionMSCA.sol`
-- `src/erc6900/PositionMSCAImpl.sol`
-- `src/erc6900/OwnerValidationModule.sol`
-- `src/erc6900/SessionKeyValidationModule.sol`
-- `src/erc6900/ValidationFlowLib.sol`
-- `src/erc6900/ExecutionManagementLib.sol`
-- `src/erc6900/ValidationManagementLib.sol`
-- `src/erc6900/ModuleTypes.sol`
+- `src/agent-wallet/erc6900/PositionMSCAImpl.sol`
+- `lib/agent-wallet-core/src/modules/validation/OwnerValidationModule.sol`
+- `lib/agent-wallet-core/src/modules/validation/SessionKeyValidationModule.sol`
+- `lib/agent-wallet-core/src/libraries/ValidationFlowLib.sol`
+- `lib/agent-wallet-core/src/libraries/ExecutionManagementLib.sol`
+- `lib/agent-wallet-core/src/libraries/ValidationManagementLib.sol`
+- `lib/agent-wallet-core/src/libraries/ModuleTypes.sol`
 
 ## 11. Implementation Summary
 

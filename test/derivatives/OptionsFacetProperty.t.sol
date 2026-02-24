@@ -7,7 +7,7 @@ import {OptionToken} from "../../src/derivatives/OptionToken.sol";
 import {
     OptionsFacet,
     Options_ExerciseWindowClosed,
-    Options_InsufficientBalance
+    Options_NotReclaimed
 } from "../../src/derivatives/OptionsFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
@@ -367,9 +367,9 @@ contract OptionsFacetPropertyTest is Test {
         assertEq(supply, series.remaining, "erc1155 supply matches series remaining");
     }
 
-    /// @notice Property: reclaim burns remaining supply
+    /// @notice Property: reclaim unlocks by series state even if maker does not hold all claims
     /// @notice Validates: Requirements 8.2
-    function testProperty_ReclaimBurnRequirement() public {
+    function testProperty_ReclaimDecoupledFromMakerClaimBalance() public {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
 
@@ -402,19 +402,25 @@ contract OptionsFacetPropertyTest is Test {
 
         vm.prank(maker);
         optionToken.safeTransferFrom(maker, holder, seriesId, totalSize / 2, "");
+        uint256 holderBalanceBefore = optionToken.balanceOf(holder, seriesId);
+        vm.prank(address(0xCAFE));
+        vm.expectRevert(abi.encodeWithSelector(Options_NotReclaimed.selector, seriesId));
+        harness.burnReclaimedOptionsClaims(holder, seriesId, 1);
 
         vm.warp(block.timestamp + 2 days);
         vm.prank(maker);
-        vm.expectRevert(abi.encodeWithSelector(Options_InsufficientBalance.selector, maker, totalSize, totalSize / 2));
         harness.reclaimOptions(seriesId);
 
-        vm.prank(holder);
-        optionToken.safeTransferFrom(holder, maker, seriesId, totalSize / 2, "");
-        vm.prank(maker);
-        harness.reclaimOptions(seriesId);
-
-        assertEq(optionToken.balanceOf(maker, seriesId), 0, "reclaim burns remaining supply");
+        assertEq(optionToken.balanceOf(holder, seriesId), holderBalanceBefore, "holder claims remain outstanding");
+        assertEq(optionToken.balanceOf(maker, seriesId), totalSize / 2, "maker claims remain outstanding");
         assertEq(harness.getLocked(positionKey, 1), 0, "collateral unlocked");
+        DerivativeTypes.OptionSeries memory series = harness.getOptionSeries(seriesId);
+        assertEq(series.remaining, 0, "series marked fully reclaimed");
+        assertTrue(series.reclaimed, "series reclaimed");
+
+        vm.prank(address(0xCAFE));
+        harness.burnReclaimedOptionsClaims(holder, seriesId, holderBalanceBefore / 2);
+        assertEq(optionToken.balanceOf(holder, seriesId), holderBalanceBefore / 2, "post-reclaim claims burnable");
     }
 
     function _strikeAmount(uint256 amount, uint256 strikePrice) internal view returns (uint256) {
@@ -422,6 +428,93 @@ contract OptionsFacetPropertyTest is Test {
         uint256 strikeScale = 10 ** uint256(strike.decimals());
         uint256 normalizedUnderlying = Math.mulDiv(amount, strikePrice, underlyingScale);
         return Math.mulDiv(normalizedUnderlying, strikeScale, 1e18);
+    }
+
+    function test_exerciseOptions_refundsExcessAndCreditsOnlyRequiredPayment() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 totalSize = 1e18;
+        uint256 strikePrice = 2e18;
+        uint256 requiredStrike = _strikeAmount(totalSize, strikePrice);
+
+        harness.seedPool(1, address(underlying), positionKey, totalSize + 1e6, totalSize + 1e6);
+        harness.seedPool(2, address(strike), positionKey, requiredStrike + 1e6, requiredStrike + 1e6);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 seriesId = harness.createOptionSeries(
+            DerivativeTypes.CreateOptionSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                strikePoolId: 2,
+                strikePrice: strikePrice,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: totalSize,
+                isCall: true,
+                isAmerican: true,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        vm.prank(maker);
+        optionToken.safeTransferFrom(maker, holder, seriesId, totalSize, "");
+
+        uint256 payment = harness.previewExercisePayment(seriesId, totalSize);
+        uint256 maxPayment = payment + 1e17;
+        strike.mint(holder, maxPayment);
+        vm.prank(holder);
+        strike.approve(address(harness), maxPayment);
+
+        uint256 holderStrikeBefore = strike.balanceOf(holder);
+        uint256 makerStrikeBefore = harness.getPrincipal(positionKey, 2);
+
+        vm.prank(holder);
+        harness.exerciseOptions(seriesId, totalSize, holder, maxPayment, 0);
+
+        assertEq(holderStrikeBefore - strike.balanceOf(holder), payment, "holder pays required amount only");
+        assertEq(harness.getPrincipal(positionKey, 2) - makerStrikeBefore, payment, "maker receives required amount only");
+    }
+
+    function test_createOptionSeries_supportsNativeCollateralFlatFee() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principal = 5e18;
+        uint256 flatFee = 1e16; // 0.01 native
+        vm.deal(address(harness), principal);
+        harness.seedPool(1, address(0), positionKey, principal, principal);
+        harness.seedPool(2, address(strike), positionKey, principal, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setFeeSplits(0, 0);
+        harness.setDefaultCreateFeeConfig(0, uint128(flatFee));
+
+        uint256 principalBefore = harness.getPrincipal(positionKey, 1);
+        vm.prank(maker);
+        uint256 seriesId = harness.createOptionSeries(
+            DerivativeTypes.CreateOptionSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                strikePoolId: 2,
+                strikePrice: 2e18,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: 1e18,
+                isCall: true,
+                isAmerican: true,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        assertGt(seriesId, 0, "series created");
+        assertEq(harness.getPrincipal(positionKey, 1), principalBefore - flatFee, "native flat fee applied");
     }
 }
 
@@ -440,6 +533,20 @@ contract OptionsHarness is OptionsFacet {
         LibDerivativeStorage.derivativeStorage().config.europeanToleranceSeconds = tolerance;
     }
 
+    function setDefaultCreateFeeConfig(uint16 feeBps, uint128 flatFeeWad) external {
+        LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
+        ds.config.defaultCreateFeeBps = feeBps;
+        ds.config.defaultCreateFeeFlatWad = flatFeeWad;
+    }
+
+    function setFeeSplits(uint16 treasuryBps, uint16 activeCreditBps) external {
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasuryShareBps = treasuryBps;
+        store.treasuryShareConfigured = true;
+        store.activeCreditShareBps = activeCreditBps;
+        store.activeCreditShareConfigured = true;
+    }
+
     function seedPool(
         uint256 pid,
         address underlying,
@@ -454,7 +561,11 @@ contract OptionsHarness is OptionsFacet {
         p.totalDeposits = principal;
         p.trackedBalance = tracked;
         if (tracked > 0) {
-            MockERC20(underlying).mint(address(this), tracked);
+            if (underlying == address(0)) {
+                LibAppStorage.s().nativeTrackedTotal += tracked;
+            } else {
+                MockERC20(underlying).mint(address(this), tracked);
+            }
         }
         if (p.feeIndex == 0) {
             p.feeIndex = LibFeeIndex.INDEX_SCALE;
@@ -475,5 +586,9 @@ contract OptionsHarness is OptionsFacet {
 
     function getLocked(bytes32 positionKey, uint256 pid) external view returns (uint256) {
         return LibEncumbrance.position(positionKey, pid).directLocked;
+    }
+
+    function getPrincipal(bytes32 positionKey, uint256 pid) external view returns (uint256) {
+        return LibAppStorage.s().pools[pid].userPrincipal[positionKey];
     }
 }

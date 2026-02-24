@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {PositionNFT} from "../nft/PositionNFT.sol";
 import {FuturesToken} from "../derivatives/FuturesToken.sol";
 import {LibAccess} from "../libraries/LibAccess.sol";
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
@@ -15,6 +14,7 @@ import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
 import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
 import {LibDerivativeFees} from "../libraries/LibDerivativeFees.sol";
 import {LibFeeTreasury} from "../libraries/LibFeeTreasury.sol";
+import {LibPoints} from "../libraries/LibPoints.sol";
 import {DerivativeTypes} from "../libraries/DerivativeTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {InsufficientPrincipal, PoolMembershipRequired} from "../libraries/Errors.sol";
@@ -30,6 +30,7 @@ error Futures_InvalidSeries(uint256 seriesId);
 error Futures_SettlementWindowClosed(uint256 seriesId);
 error Futures_GracePeriodNotElapsed(uint256 seriesId);
 error Futures_Reclaimed(uint256 seriesId);
+error Futures_NotReclaimed(uint256 seriesId);
 error Futures_NotTokenHolder(address caller, uint256 seriesId);
 error Futures_InvalidRecipient(address recipient);
 error Futures_InsufficientBalance(address holder, uint256 required, uint256 available);
@@ -68,6 +69,7 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 remainingSize,
         uint256 collateralUnlocked
     );
+    event ReclaimedClaimsBurned(uint256 indexed seriesId, address indexed holder, uint256 amount);
 
     event FuturesTokenUpdated(address indexed token);
     event FuturesPausedUpdated(bool paused);
@@ -100,7 +102,7 @@ contract FuturesFacet is ReentrancyGuardModifiers {
             revert Futures_InvalidPool(params.underlyingPoolId);
         }
 
-        bytes32 positionKey = LibDerivativeHelpers._requirePositionOwnership(params.positionId);
+        (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
 
         Types.PoolData storage underlyingPool = LibDirectHelpers._pool(params.underlyingPoolId);
         Types.PoolData storage quotePool = LibDirectHelpers._pool(params.quotePoolId);
@@ -158,9 +160,8 @@ contract FuturesFacet is ReentrancyGuardModifiers {
 
         LibDerivativeStorage.addFuturesSeries(positionKey, seriesId);
 
-        PositionNFT nft = LibDirectHelpers._positionNFT();
-        address makerOwner = nft.ownerOf(params.positionId);
         _futuresToken().managerMint(makerOwner, seriesId, params.totalSize, "");
+        LibPoints.accrueToKey(makerOwner, positionKey, LibPoints.ACTION_DERIVATIVE_CREATE_FUTURES);
 
         emit SeriesCreated(
             seriesId,
@@ -306,13 +307,6 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 remaining = series.remaining;
         uint256 collateralUnlocked;
         if (remaining > 0) {
-            FuturesToken token = _futuresToken();
-            uint256 balance = token.balanceOf(msg.sender, seriesId);
-            if (balance < remaining) {
-                revert Futures_InsufficientBalance(msg.sender, remaining, balance);
-            }
-            token.managerBurn(msg.sender, seriesId, remaining);
-
             collateralUnlocked = remaining;
             LibDerivativeHelpers._unlockCollateral(positionKey, series.underlyingPoolId, collateralUnlocked);
             series.underlyingLocked -= collateralUnlocked;
@@ -333,6 +327,22 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.removeFuturesSeries(positionKey, seriesId);
 
         emit Reclaimed(seriesId, positionKey, remaining, collateralUnlocked);
+    }
+
+    /// @notice Permissionless cleanup for already reclaimed series claim tokens.
+    function burnReclaimedFuturesClaims(address holder, uint256 seriesId, uint256 amount) external nonReentrant {
+        if (amount == 0) revert Futures_InvalidAmount(amount);
+        DerivativeTypes.FuturesSeries storage series = LibDerivativeStorage.derivativeStorage().futuresSeries[seriesId];
+        if (series.makerPositionKey == bytes32(0)) revert Futures_InvalidSeries(seriesId);
+        if (!series.reclaimed) revert Futures_NotReclaimed(seriesId);
+
+        FuturesToken token = _futuresToken();
+        uint256 balance = token.balanceOf(holder, seriesId);
+        if (balance < amount) {
+            revert Futures_InsufficientBalance(holder, amount, balance);
+        }
+        token.managerBurn(holder, seriesId, amount);
+        emit ReclaimedClaimsBurned(seriesId, holder, amount);
     }
 
     function getFuturesSeries(uint256 seriesId) external view returns (DerivativeTypes.FuturesSeries memory) {
@@ -463,6 +473,14 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint128 flatFeeWad
     ) internal returns (uint256 feeAmount, uint256 received) {
         received = LibCurrency.pullAtLeast(paymentAsset, payer, paymentAmount, maxPaymentAmount);
+        if (received > paymentAmount) {
+            uint256 excess = received - paymentAmount;
+            if (LibCurrency.isNative(paymentAsset)) {
+                LibAppStorage.s().nativeTrackedTotal -= excess;
+            }
+            LibCurrency.transfer(paymentAsset, payer, excess);
+            received = paymentAmount;
+        }
         pool.trackedBalance += received;
         if (feeBps == 0 && flatFeeWad == 0) {
             return (0, received);

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {LibAccess} from "../../libraries/LibAccess.sol";
 import {LibPositionAgentStorage} from "../../libraries/LibPositionAgentStorage.sol";
-import {PositionAgent_NotAdmin} from "../../libraries/PositionAgentErrors.sol";
+import {PositionAgent_InvalidConfigAddress, PositionAgent_NotAdmin} from "../../libraries/PositionAgentErrors.sol";
 import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 /// @title PositionAgentConfigFacet
@@ -15,6 +15,7 @@ contract PositionAgentConfigFacet {
 
     function setERC6551Registry(address newRegistry) external {
         _requireAdmin();
+        _requireContractAddress(newRegistry);
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
         address previous = ds.erc6551Registry;
         ds.erc6551Registry = address(IERC6551Registry(newRegistry));
@@ -24,6 +25,7 @@ contract PositionAgentConfigFacet {
     /// @notice Sets the ERC-6551 account implementation (beacon proxy implementation)
     function setERC6551Implementation(address newImplementation) external {
         _requireAdmin();
+        _requireContractAddress(newImplementation);
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
         address previous = ds.erc6551Implementation;
         ds.erc6551Implementation = newImplementation;
@@ -32,6 +34,7 @@ contract PositionAgentConfigFacet {
 
     function setIdentityRegistry(address newRegistry) external {
         _requireAdmin();
+        _requireContractAddress(newRegistry);
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
         address previous = ds.identityRegistry;
         ds.identityRegistry = newRegistry;
@@ -41,6 +44,12 @@ contract PositionAgentConfigFacet {
     function _requireAdmin() internal view {
         if (!LibAccess.isOwnerOrTimelock(msg.sender)) {
             revert PositionAgent_NotAdmin(msg.sender);
+        }
+    }
+
+    function _requireContractAddress(address candidate) internal view {
+        if (candidate == address(0) || candidate.code.length == 0) {
+            revert PositionAgent_InvalidConfigAddress(candidate);
         }
     }
 }

@@ -22,12 +22,15 @@ import {ModuleViewFacet} from "../../src/modules/ModuleViewFacet.sol";
 contract DeployDiamondScriptTest is Test {
     uint256 internal constant DEPLOYER_PK = 0xA11CE;
     address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
+    string internal constant ARBITRUM_SEPOLIA_RPC = "https://sepolia-rollup.arbitrum.io/rpc";
 
     function testRunDeploysAndInitializesFullProtocol() public {
+        // Fork Arbitrum Sepolia to test with canonical registries
+        vm.createSelectFork(ARBITRUM_SEPOLIA_RPC);
+        
         address owner = vm.addr(DEPLOYER_PK);
         address timelock = address(0xBEEF);
         address treasury = address(0xCAFE);
-        address identityRegistry = address(0x8004);
         address entryPoint = address(0x1337);
 
         vm.deal(owner, 1_000 ether);
@@ -35,7 +38,6 @@ contract DeployDiamondScriptTest is Test {
         vm.setEnv("TIMELOCK", vm.toString(timelock));
         vm.setEnv("TREASURY", vm.toString(treasury));
         vm.setEnv("PRIVATE_KEY", vm.toString(DEPLOYER_PK));
-        vm.setEnv("IDENTITY_REGISTRY", vm.toString(identityRegistry));
         vm.setEnv("ENTRYPOINT_ADDRESS", vm.toString(entryPoint));
 
         DeployDiamondScript script = new DeployDiamondScript();
@@ -125,9 +127,13 @@ contract DeployDiamondScriptTest is Test {
 
         (address registry, address implementation, address idRegistry) =
             PositionAgentViewFacet(diamond).getCanonicalRegistries();
-        assertEq(registry, ERC6551_REGISTRY, "erc6551 registry");
+        assertTrue(registry != address(0), "erc6551 registry unset");
+        assertGt(registry.code.length, 0, "erc6551 registry must be contract");
+        if (ERC6551_REGISTRY.code.length > 0) {
+            assertEq(registry, ERC6551_REGISTRY, "erc6551 registry");
+        }
         assertTrue(implementation != address(0), "erc6551 implementation");
-        assertEq(idRegistry, identityRegistry, "identity registry");
+        assertEq(idRegistry, 0x8004A818BFB912233c491871b3d84c89A494BD9e, "identity registry should be canonical testnet address");
 
         EqualIndexViewFacetV3 viewFacet = EqualIndexViewFacetV3(diamond);
         EqualIndexViewFacetV3.IndexView memory idx0 = viewFacet.getIndex(0);
