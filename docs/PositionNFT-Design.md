@@ -50,7 +50,7 @@ A Position NFT is a transferable on-chain identity that:
 | Role | Description |
 |------|-------------|
 | **Position Owner** | NFT holder who controls deposits, withdrawals, and borrowing |
-| **Operator** | Approved address that can act on behalf of owner |
+| **Operator** | Approved address that can act on behalf of owner for selected borrower-authority paths |
 | **Pool** | Lending pool where the position holds deposits |
 | **Diamond** | Proxy contract containing position management logic |
 
@@ -71,7 +71,7 @@ This abstraction enables:
 
 - **Transferable positions**: Sell or transfer entire positions including obligations
 - **Multi-position management**: Single user can hold multiple independent positions
-- **Delegation**: Approve operators to manage positions without transferring ownership
+- **Delegation**: Use approved operators on borrower-authority flows without transferring ownership
 - **Agent identity**: Positions become discoverable on-chain agents
 
 ### Position Key
@@ -159,10 +159,10 @@ New positions are created by minting a Position NFT:
 
 ```solidity
 // Mint empty position
-function mintPosition(uint256 pid) external returns (uint256 tokenId);
+function mintPosition(uint256 pid, uint256 maxFee) external returns (uint256 tokenId);
 
 // Mint with initial deposit
-function mintPositionWithDeposit(uint256 pid, uint256 amount) 
+function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee)
     external returns (uint256 tokenId);
 ```
 
@@ -180,7 +180,7 @@ function mintPositionWithDeposit(uint256 pid, uint256 amount)
 Add capital to an existing position:
 
 ```solidity
-function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
+function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external;
 ```
 
 **Deposit Flow:**
@@ -196,7 +196,7 @@ function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) externa
 Remove capital from a position:
 
 ```solidity
-function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 principalToWithdraw) external;
+function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 principalToWithdraw, uint256 minReceived) external;
 ```
 
 **Withdrawal Flow:**
@@ -230,7 +230,7 @@ function rollYieldToPosition(uint256 tokenId, uint256 pid) external;
 Withdraw all available capital from a pool position:
 
 ```solidity
-function closePoolPosition(uint256 tokenId, uint256 pid) external;
+function closePoolPosition(uint256 tokenId, uint256 pid, uint256 minReceived) external;
 ```
 
 This withdraws maximum available principal while respecting encumbrances and solvency requirements.
@@ -288,7 +288,13 @@ mapping(bytes32 => RollingLoan) rollingLoans;
 
 ## ERC-8004 Integration
 
-Position NFTs are represented as ERC-8004 agents **via the canonical ERC-8004 Identity Registry and ERC-6551 TBAs**, not via in-protocol facets. Registration and metadata updates are executed directly by the Position NFT owner through the TBA, and the Identity NFT is minted by the canonical registry.
+Position NFTs integrate with ERC-8004 through ERC-6551 TBAs plus in-protocol agent facets:
+
+- `PositionAgentTBAFacet` computes/deploys deterministic TBAs
+- `PositionAgentRegistryFacet` records `(positionTokenId -> agentId)` after external registration
+- `PositionAgentViewFacet` exposes TBA/registration state for indexers and frontends
+
+External registration and metadata operations are executed through the TBA against the configured identity registry. This protocol's on-chain guarantee is ownership verification and mapping consistency (`ownerOf(agentId) == computedTBA`) when recording registration.
 
 For the current design and call flows, see `.kiro/specs/erc6551-position-agents/design.md`.
 
@@ -306,13 +312,6 @@ When a Position NFT is transferred, the new owner inherits:
 - All collateral relationships
 - Pool membership status
 
-### What Resets
-
-On transfer, the following are reset:
-
-- Agent wallet (set to `address(0)`)
-- Agent nonce (incremented to invalidate pending signatures)
-
 ### Transfer Restrictions
 
 Transfers are blocked when:
@@ -329,8 +328,6 @@ function _update(address to, uint256 tokenId, address auth)
         if (IDirectOfferCanceller(diamond).hasOpenOffers(positionKey)) {
             revert PositionNFTHasOpenOffers(positionKey);
         }
-        // Reset agent wallet on transfer
-        IERC8004Callback(diamond).onAgentTransfer(tokenId);
     }
     return super._update(to, tokenId, auth);
 }
@@ -341,8 +338,8 @@ function _update(address to, uint256 tokenId, address auth)
 After receiving a Position NFT, the new owner should:
 
 1. Review inherited obligations (loans, collateral)
-2. Set up agent wallet if using ERC-8004 features
-3. Update agent URI if needed
+2. Review TBA and agent registration status in agent view facets
+3. Update off-chain registration metadata (via TBA) if needed
 
 ---
 
@@ -417,13 +414,13 @@ function getCreationTime(uint256 tokenId) external view returns (uint40);
 
 ```solidity
 // Mint operations
-function mintPosition(uint256 pid) external returns (uint256 tokenId);
-function mintPositionWithDeposit(uint256 pid, uint256 amount) external returns (uint256 tokenId);
+function mintPosition(uint256 pid, uint256 maxFee) external returns (uint256 tokenId);
+function mintPositionWithDeposit(uint256 pid, uint256 amount, uint256 maxAmount, uint256 maxFee) external returns (uint256 tokenId);
 
 // Capital operations
-function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
-function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 amount) external;
-function closePoolPosition(uint256 tokenId, uint256 pid) external;
+function depositToPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 maxAmount) external;
+function withdrawFromPosition(uint256 tokenId, uint256 pid, uint256 amount, uint256 minReceived) external;
+function closePoolPosition(uint256 tokenId, uint256 pid, uint256 minReceived) external;
 
 // Yield operations
 function rollYieldToPosition(uint256 tokenId, uint256 pid) external;
@@ -443,14 +440,14 @@ function cleanupMembership(uint256 tokenId, uint256 pid) external;
 const diamond = new ethers.Contract(diamondAddress, PositionManagementFacetABI, signer);
 
 // Mint empty position
-const tx = await diamond.mintPosition(poolId);
+const tx = await diamond.mintPosition(poolId, maxFee);
 const receipt = await tx.wait();
 const tokenId = receipt.events.find(e => e.event === 'PositionMinted').args.tokenId;
 
 // Or mint with deposit
 const depositAmount = ethers.utils.parseUnits("1000", 18);
 await token.approve(diamondAddress, depositAmount);
-const tx2 = await diamond.mintPositionWithDeposit(poolId, depositAmount);
+const tx2 = await diamond.mintPositionWithDeposit(poolId, depositAmount, depositAmount, maxFee);
 ```
 
 ### Depositing to Position
@@ -458,54 +455,17 @@ const tx2 = await diamond.mintPositionWithDeposit(poolId, depositAmount);
 ```javascript
 const depositAmount = ethers.utils.parseUnits("500", 18);
 await token.approve(diamondAddress, depositAmount);
-await diamond.depositToPosition(tokenId, poolId, depositAmount);
+await diamond.depositToPosition(tokenId, poolId, depositAmount, depositAmount);
 ```
 
 ### Withdrawing from Position
 
 ```javascript
 const withdrawAmount = ethers.utils.parseUnits("250", 18);
-await diamond.withdrawFromPosition(tokenId, poolId, withdrawAmount);
+await diamond.withdrawFromPosition(tokenId, poolId, withdrawAmount, minReceived);
 ```
 
-### Setting Agent Wallet
-
-```javascript
-// Build EIP-712 typed data
-const domain = {
-    name: "PositionNFT",
-    version: "1",
-    chainId: chainId,
-    verifyingContract: positionNFTAddress
-};
-
-const types = {
-    SetAgentWallet: [
-        { name: "agentId", type: "uint256" },
-        { name: "newWallet", type: "address" },
-        { name: "nonce", type: "uint256" },
-        { name: "deadline", type: "uint256" }
-    ]
-};
-
-const nonce = await positionNFT.getAgentNonce(tokenId);
-const deadline = Math.floor(Date.now() / 1000) + 3600;
-
-const message = {
-    agentId: tokenId,
-    newWallet: walletAddress,
-    nonce: nonce,
-    deadline: deadline
-};
-
-// Sign with the wallet being registered
-const signature = await wallet._signTypedData(domain, types, message);
-
-// Submit from position owner
-await positionNFT.setAgentWallet(tokenId, walletAddress, deadline, signature);
-```
-
-### Querying Position Data
+### Querying Agent Integration State
 
 ```javascript
 // Get position key
@@ -514,11 +474,14 @@ const positionKey = await positionNFT.getPositionKey(tokenId);
 // Get pool ID
 const poolId = await positionNFT.getPoolId(tokenId);
 
-// Get agent wallet
-const agentWallet = await positionNFT.getAgentWallet(tokenId);
+// Query via PositionAgentViewFacet on the Diamond
+const tba = await diamond.getTBAAddress(tokenId);
+const agentId = await diamond.getAgentId(tokenId);
+const isRegistered = await diamond.isAgentRegistered(tokenId);
+const tbaDeployed = await diamond.isTBADeployed(tokenId);
 
-// Get agent URI
-const agentURI = await positionNFT.getAgentURI(tokenId);
+// PositionNFT tokenURI delegates to Diamond.getAgentURI(tokenId) when configured
+const agentURI = await positionNFT.tokenURI(tokenId);
 ```
 
 ---
@@ -558,7 +521,8 @@ Withdrawals respect locked and escrowed amounts:
 
 ```solidity
 uint256 totalEncumbered = enc.directLocked + enc.directLent + 
-                          enc.directOfferEscrow + enc.indexEncumbered;
+                          enc.directOfferEscrow + enc.indexEncumbered +
+                          enc.moduleEncumbered;
 
 if (totalEncumbered > currentPrincipal) {
     revert InsufficientPrincipal(totalEncumbered, currentPrincipal);
@@ -567,9 +531,8 @@ if (totalEncumbered > currentPrincipal) {
 
 ### Transfer Safety
 
-- Agent wallets reset on transfer to prevent payment hijacking
-- Nonces increment to invalidate pending signatures
 - Open offers block transfers to prevent manipulation
+- Default points token selection is updated for sender/receiver when needed
 
 ### Reentrancy Protection
 
@@ -585,7 +548,8 @@ contract PositionManagementFacet is ReentrancyGuardModifiers {
 ### Access Control
 
 - Only authorized minter can mint new NFTs
-- Only owner or approved operators can modify position state
+- Most position-mutating flows are owner-only (`requireOwnership`)
+- Selected borrower-authority flows (such as yield rolling) allow approved operators
 - Diamond address must be set for pool queries
 
 ---

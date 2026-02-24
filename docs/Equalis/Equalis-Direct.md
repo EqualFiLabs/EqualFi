@@ -99,7 +99,7 @@ Equalis Direct is a P2P lending system that enables bilateral loans between Posi
 
 The system integrates with existing Equalis infrastructure:
 
-1. **Position NFT System**: Validates ownership and retrieves position keys
+1. **Position NFT System**: Validates ownership/authority and retrieves position keys
 2. **Solvency Checks**: Uses `LibEncumbrance.total()` to include all encumbered principal as debt-like exposure
 3. **Withdrawal Logic**: Enforces encumbrance constraints via `LibSolvencyChecks.calculateAvailablePrincipal()`
 4. **Fee Router / FeeIndex**: Platform fee remainders route via the fee router into Treasury, Fee Index, and Active Credit Index
@@ -120,12 +120,14 @@ struct Encumbrance {
     uint256 directLent;         // Principal actively lent from specific pool
     uint256 directOfferEscrow;  // Escrowed offers for specific pool
     uint256 indexEncumbered;    // Principal encumbered by index positions
+    uint256 moduleEncumbered;   // Principal reserved by module integrations
 }
 
 // Access pattern
 LibEncumbrance.position(positionKey, poolId).directLocked
 LibEncumbrance.position(positionKey, poolId).directLent
 LibEncumbrance.position(positionKey, poolId).directOfferEscrow
+LibEncumbrance.position(positionKey, poolId).moduleEncumbered
 LibEncumbrance.total(positionKey, poolId)  // Sum of all encumbrance types
 ```
 
@@ -134,7 +136,7 @@ LibEncumbrance.total(positionKey, poolId)  // Sum of all encumbrance types
 - Enhanced solvency precision with pool-specific constraints
 - Improved liquidity management
 - Cross-pool safety (issues in one pool don't affect others, except explicit managed-pool system-share routing)
-- Unified encumbrance tracking across Direct lending and Index positions
+- Unified encumbrance tracking across Direct lending, Index positions, and module reservations
 
 ---
 
@@ -332,7 +334,7 @@ function repay(uint256 agreementId, uint256 maxPayment) external payable;
 ```solidity
 function exerciseDirect(uint256 agreementId) external payable;
 ```
-- Only callable by borrower
+- Only callable by borrower authority (Position NFT owner or approved operator)
 - Before due: requires `allowEarlyExercise = true`
 - Grace window (due to due + 24h): callable regardless of flag
 - Forfeit full collateral to lender with fee distribution
@@ -873,6 +875,7 @@ All position encumbrance is managed through `LibEncumbrance.sol`:
 struct EncumbranceStorage {
     mapping(bytes32 => mapping(uint256 => Encumbrance)) encumbrance;
     mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByIndex;
+    mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByModule;
 }
 
 struct Encumbrance {
@@ -880,6 +883,7 @@ struct Encumbrance {
     uint256 directLent;         // Principal actively lent out
     uint256 directOfferEscrow;  // Principal escrowed for pending offers
     uint256 indexEncumbered;    // Principal encumbered by index positions
+    uint256 moduleEncumbered;   // Principal reserved by module integrations
 }
 ```
 
@@ -1069,19 +1073,20 @@ error RollingError_RecoveryNotEligible();
 ### Inherited Errors
 
 ```solidity
-error PoolNotInitialized();
-error InsufficientPrincipal(uint256 required, uint256 available);
+error PoolNotInitialized(uint256 pid);
+error InsufficientPrincipal(uint256 requested, uint256 available);
 error NotNFTOwner(address caller, uint256 tokenId);
 ```
 
 ### Fee-on-Transfer Protection
 
 ```solidity
-function _pullExact(address token, uint256 amount) internal {
-    uint256 balanceBefore = IERC20(token).balanceOf(address(this));
-    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-    uint256 received = IERC20(token).balanceOf(address(this)) - balanceBefore;
-    require(received == amount, "Direct: insufficient amount received");
+function _pullAtLeast(address token, uint256 minAmount, uint256 maxAmount)
+    internal
+    returns (uint256 received)
+{
+    // Pulls from msg.sender and enforces at least `minAmount` received.
+    return LibCurrency.pullAtLeast(token, msg.sender, minAmount, maxAmount);
 }
 ```
 
@@ -1248,7 +1253,7 @@ event BorrowerRatioTrancheOfferCancelled(
 event DirectAgreementRepaid(
     uint256 indexed agreementId, 
     address indexed borrower, 
-    uint256 principalRepaid
+    uint256 paymentReceived
 );
 
 event DirectAgreementRecovered(
@@ -1434,6 +1439,24 @@ event EncumbranceDecreased(
     uint256 totalEncumbered,
     uint256 indexEncumbered
 );
+
+event ModuleEncumbranceIncreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
+);
+
+event ModuleEncumbranceDecreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
+);
 ```
 
 ### Fee Index Events
@@ -1485,7 +1508,7 @@ Property-based tests verify universal properties across all valid inputs using F
 
 **Core Properties**:
 
-1. **Ownership Validation**: All Direct operations require Position NFT ownership
+1. **Ownership/Authority Validation**: Direct operations enforce owner-only or borrower-authority checks per entrypoint
 2. **Capacity Management**: `LibEncumbrance.total(positionKey, poolId) <= userPrincipal` per pool
 3. **Tranche Conservation**: `trancheRemaining + converted = trancheAmount`
 4. **Fee Distribution Accuracy**: Fee splits sum correctly with normalized fee base
@@ -1502,9 +1525,9 @@ Integration tests verify:
 - Proper interaction with Equalis withdrawal restrictions
 - Correct integration with solvency check systems
 - FeeIndex and Active Credit Index distribution mechanics
-- Position NFT ownership validation
+- Position NFT ownership/authority validation
 - Cross-pool agreement scenarios
-- Position transfer behavior (offer cancellation)
+- Position transfer behavior (blocked while open offers exist)
 
 ### Test Scenarios
 
@@ -1533,7 +1556,7 @@ Integration tests verify:
 ## Appendix: Correctness Properties
 
 ### Property 1: Ownership Validation
-For any Direct operation, the caller must own the specified Position NFT.
+For any Direct operation, ownership/authority checks are enforced according to the entrypoint (owner-only or borrower-authority).
 
 ### Property 2: Capacity Management
 For any Position NFT and pool, `LibEncumbrance.total(positionKey, poolId) <= userPrincipal`.

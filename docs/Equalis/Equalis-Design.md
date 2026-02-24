@@ -232,7 +232,7 @@ Equalis uses the EIP-2535 Diamond standard for modular contract architecture:
 **Formula**:
 ```
 totalDebt = rollingPrincipalRemaining + fixedTermPrincipalRemaining + directBorrowedPrincipal
-totalEncumbrance = directLocked + directLent + directOfferEscrow + indexEncumbered
+totalEncumbrance = directLocked + directLent + directOfferEscrow + indexEncumbered + moduleEncumbered
 availableCollateral = userPrincipal - totalEncumbrance
 solvencyRatio = (availableCollateral * 10000) / totalDebt
 require(solvencyRatio >= depositorLTVBps)
@@ -347,10 +347,11 @@ struct PoolPositionState {
 ```
 
 **Position Operations** (all require `poolId` parameter):
-- `mintPositionWithDeposit(poolId, amount)`: Create new NFT with initial deposit in specified pool
-- `depositToPosition(tokenId, poolId, amount)`: Add principal to position in specified pool
-- `withdrawFromPosition(tokenId, poolId, amount)`: Remove principal from specified pool
-- `closePoolPosition(tokenId, poolId)`: Withdraw available principal respecting Direct commitments
+- `mintPosition(poolId, maxFee)`: Create new NFT without an initial deposit
+- `mintPositionWithDeposit(poolId, amount, maxAmount, maxFee)`: Create new NFT with initial deposit in specified pool
+- `depositToPosition(tokenId, poolId, amount, maxAmount)`: Add principal to position in specified pool
+- `withdrawFromPosition(tokenId, poolId, amount, minReceived)`: Remove principal from specified pool
+- `closePoolPosition(tokenId, poolId, minReceived)`: Withdraw available principal respecting Direct commitments
 - `rollYieldToPosition(tokenId, poolId)`: Convert accrued yield to principal in specified pool
 - `transferFrom`: Transfer NFT and all associated state across all pools to new owner
 
@@ -666,11 +667,13 @@ struct Encumbrance {
     uint256 directLent;         // Principal exposed as lender (AMM reserves)
     uint256 directOfferEscrow;  // Escrowed offers awaiting acceptance
     uint256 indexEncumbered;    // Principal backing index tokens
+    uint256 moduleEncumbered;   // Principal reserved by module integrations
 }
 
 struct EncumbranceStorage {
     mapping(bytes32 => mapping(uint256 => Encumbrance)) encumbrance;
     mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByIndex;
+    mapping(bytes32 => mapping(uint256 => mapping(uint256 => uint256))) encumberedByModule;
 }
 ```
 
@@ -690,6 +693,12 @@ LibEncumbrance.encumberIndex(positionKey, poolId, indexId, amount);
 LibEncumbrance.unencumberIndex(positionKey, poolId, indexId, amount);
 uint256 indexTotal = LibEncumbrance.getIndexEncumbered(positionKey, poolId);
 uint256 forIndex = LibEncumbrance.getIndexEncumberedForIndex(positionKey, poolId, indexId);
+
+// Module-specific encumbrance operations
+LibEncumbrance.encumberModule(positionKey, poolId, moduleId, amount);
+LibEncumbrance.unencumberModule(positionKey, poolId, moduleId, amount);
+uint256 moduleTotal = LibEncumbrance.getModuleEncumbered(positionKey, poolId);
+uint256 forModule = LibEncumbrance.getModuleEncumberedForModule(positionKey, poolId, moduleId);
 ```
 
 **Wrapper Libraries**:
@@ -720,6 +729,22 @@ event EncumbranceDecreased(
     uint256 amount,
     uint256 totalEncumbered,
     uint256 indexEncumbered
+);
+event ModuleEncumbranceIncreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
+);
+event ModuleEncumbranceDecreased(
+    bytes32 indexed positionKey,
+    uint256 indexed poolId,
+    uint256 indexed moduleId,
+    uint256 amount,
+    uint256 totalEncumbered,
+    uint256 moduleEncumbered
 );
 ```
 
@@ -847,7 +872,7 @@ function calculatePenalty(uint256 principalAtOpen) internal pure returns (uint25
 **Process**:
 1. Verify penalty eligibility (missed payments or expiry)
 2. Calculate available collateral from centralized encumbrance:  
-   `availableCollateral = userPrincipal - (directLocked + directLent + directOfferEscrow + indexEncumbered)`
+   `availableCollateral = userPrincipal - (directLocked + directLent + directOfferEscrow + indexEncumbered + moduleEncumbered)`
 3. Calculate 5% penalty: `penalty = principalAtOpen * 500 / 10_000`
 4. Apply penalty cap: `penaltyApplied = min(penalty, principalRemaining)`
 5. Enforce collateral coverage for full seizure:  
@@ -1324,14 +1349,16 @@ struct Encumbrance {
     uint256 directLent;         // Principal exposed as lender (AMM reserves)
     uint256 directOfferEscrow;  // Escrowed offers
     uint256 indexEncumbered;    // Principal backing index tokens
+    uint256 moduleEncumbered;   // Principal reserved by module integrations
 }
 
 // Access via LibEncumbrance
 LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, poolId);
 uint256 totalEncumbered = LibEncumbrance.total(positionKey, poolId);
 
-// Per-index tracking for index encumbrance
+// Per-index and per-module tracking
 uint256 indexSpecific = LibEncumbrance.getIndexEncumberedForIndex(positionKey, poolId, indexId);
+uint256 moduleSpecific = LibEncumbrance.getModuleEncumberedForModule(positionKey, poolId, moduleId);
 ```
 
 Additional Direct storage mappings:
@@ -1628,7 +1655,7 @@ function calculateAvailablePrincipal(
     // Get all encumbrance components from centralized storage
     LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, pid);
     uint256 totalEncumbered = 
-        enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+        enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered + enc.moduleEncumbered;
     
     if (totalEncumbered >= principal) {
         return 0;
@@ -1891,7 +1918,7 @@ event TermLoanDefaulted(uint256 indexed tokenId, address indexed enforcer, uint2
 ```solidity
 event DirectOfferPosted(uint256 indexed offerId, address indexed borrowAsset, uint256 indexed collateralPoolId, ...);
 event DirectOfferAccepted(uint256 indexed offerId, uint256 indexed agreementId, uint256 indexed borrowerPositionId, uint256 principalFilled, uint256 trancheAmount, uint256 trancheRemainingAfter, uint256 fillsRemaining, bool isDepleted);
-event DirectAgreementRepaid(uint256 indexed agreementId, address indexed borrower, uint256 principalRepaid);
+event DirectAgreementRepaid(uint256 indexed agreementId, address indexed borrower, uint256 paymentReceived);
 event DirectAgreementRecovered(uint256 indexed agreementId, address indexed executor, uint256 lenderShare, uint256 protocolShare, uint256 feeIndexShare);
 event DirectAgreementExercised(uint256 indexed agreementId, address indexed borrower);
 event DirectAgreementCalled(uint256 indexed agreementId, uint256 indexed lenderPositionId, uint64 newDueTimestamp);
@@ -2252,7 +2279,7 @@ Equalis includes oracle-free AMM Auctions, Options, Futures, and Maker Auction M
 **Key Characteristics**:
 - **Oracle-Free**: All products operate without external price oracles
 - **Fully Collateralized**: 100% collateralization at the smart contract level
-- **Flash Accounting**: Liabilities isolated via centralized `LibEncumbrance` (`directLocked`, `directLent`, `directOfferEscrow`, `indexEncumbered`)
+- **Flash Accounting**: Liabilities isolated via centralized `LibEncumbrance` (`directLocked`, `directLent`, `directOfferEscrow`, `indexEncumbered`, `moduleEncumbered`)
 - **Capital Efficient**: Locked collateral continues earning fee index yield
 - **Unified Identity**: Single Position NFT can simultaneously hold deposits, write options, sell futures, market-make AMMs, and create MAM curves
 
@@ -2617,6 +2644,7 @@ struct Encumbrance {
     uint256 directLent;         // AMM reserves (continues earning fee index)
     uint256 directOfferEscrow;  // Escrowed offers
     uint256 indexEncumbered;    // Principal backing index tokens
+    uint256 moduleEncumbered;   // Principal reserved by module integrations
 }
 ```
 
@@ -2657,7 +2685,7 @@ uint256 forIndex = LibIndexEncumbrance.getEncumberedForIndex(positionKey, poolId
 ```solidity
 // Get all encumbrance components in a single call
 LibEncumbrance.Encumbrance memory enc = LibEncumbrance.get(positionKey, poolId);
-uint256 totalEncumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered;
+uint256 totalEncumbered = enc.directLocked + enc.directLent + enc.directOfferEscrow + enc.indexEncumbered + enc.moduleEncumbered;
 
 // Or use the convenience function
 uint256 totalEncumbered = LibEncumbrance.total(positionKey, poolId);
@@ -2809,7 +2837,7 @@ The Position Agent System transforms Position NFTs into autonomous, discoverable
 
 The TBA is an ERC-6551 account implementation using the ERC-6900 Modular Smart Contract Account (MSCA) architecture.
 
-**Contract**: `PositionMSCA` / `PositionMSCAImpl`
+**Contract**: `PositionMSCAImpl` (concrete implementation built on `ERC721BoundMSCA`)
 
 **Capabilities**:
 - Execute arbitrary calls on behalf of the Position NFT owner
@@ -2837,7 +2865,7 @@ The Identity NFT is minted by the canonical ERC-8004 Identity Registry and repre
 
 **Properties**:
 - Owned by the TBA (not the EOA)
-- `agentWallet` set to TBA address
+- Protocol verifies ownership with `ownerOf(agentId)` when recording registration
 - `tokenURI` points to off-chain registration file
 - Globally discoverable by ERC-8004 indexers
 
@@ -3053,7 +3081,7 @@ When a Position NFT transfers, the agent identity automatically follows:
 1. Position NFT transfers from Alice to Bob
 2. TBA ownership automatically transfers (inherent ERC-6551 behavior)
 3. Identity NFT remains owned by TBA (no transfer needed)
-4. `agentWallet` remains valid (set to TBA address)
+4. Registry-specific wallet fields (if any) typically continue referencing the same TBA
 5. Bob can now execute through the TBA
 
 **No additional transactions required** - the ownership chain updates automatically.
@@ -3069,9 +3097,9 @@ When a Position NFT transfers, the agent identity automatically follows:
 | **Execution Module** | `IERC6900ExecutionModule` | Add new callable functions |
 | **Execution Hook** | `IERC6900ExecutionHookModule` | Pre/post execution checks (policies) |
 
-#### 12.7.2 Default Validation Module
+#### 12.7.2 Common First Validation Module
 
-The `OwnerValidationModule` is the default validation module that validates signatures against the Position NFT owner.
+Accounts start in bootstrap validation mode by default. A common first installed module is `OwnerValidationModule`, which validates signatures against the Position NFT owner.
 
 **Features**:
 - EIP-712 typed data signing
@@ -3082,7 +3110,7 @@ The `OwnerValidationModule` is the default validation module that validates sign
 **Signature Domain**:
 ```solidity
 EIP712Domain(
-    string name,      // "EqualLend Owner Validation"
+    string name,      // "Agent Wallet Owner Validation"
     string version,   // "1.0.0"
     uint256 chainId,  // Current chain ID
     address verifyingContract  // TBA address
@@ -3094,9 +3122,9 @@ EIP712Domain(
 New TBAs start in bootstrap mode with native EIP-712 owner validation:
 
 1. **Initial State**: `_bootstrapActive = true`
-2. **Bootstrap Validation**: Direct ECDSA signature verification against Position NFT owner
-3. **Module Installation**: First validation module installed using bootstrap validation
-4. **Post-Bootstrap**: Bootstrap mode may remain as emergency fallback
+2. **Bootstrap Validation**: Native ECDSA validation against Position NFT owner
+3. **Module Installation (optional)**: Validation modules can be installed with owner authorization
+4. **Post-Bootstrap**: Bootstrap can be disabled via `disableBootstrap()`
 
 #### 12.7.4 Module Installation
 
@@ -3337,7 +3365,7 @@ bytes32 positionKey = keccak256(abi.encodePacked(positionNFTContract, tokenId));
 - **Curve Commitment**: Hash of the full curve descriptor, updated on each generation change
 - **Flash Accounting**: Deferred ledger update model where userPrincipal and userFeeIndex are not updated during intermediate states
 - **Encumbered Balance**: Principal flagged as backing a derivative, preventing withdrawal but continuing to accrue fees
-- **LibEncumbrance**: Centralized library for all encumbrance tracking (directLocked, directLent, directOfferEscrow, indexEncumbered) per position and pool
+- **LibEncumbrance**: Centralized library for all encumbrance tracking (directLocked, directLent, directOfferEscrow, indexEncumbered, moduleEncumbered) per position and pool
 - **LibNetEquity**: Pure helper library for fee base calculations (same-asset, cross-asset, P2P borrower)
 - **LibFeeIndex**: Fee index accounting library (1e18 scale) for yield distribution
 - **LibSolvencyChecks**: Shared utilities for deterministic solvency and debt calculations
@@ -3357,7 +3385,7 @@ bytes32 positionKey = keccak256(abi.encodePacked(positionNFTContract, tokenId));
 - **Bootstrap Mode**: Initial TBA state with native EIP-712 validation before module installation
 - **Agent ID**: The ERC-721 tokenId minted by the ERC-8004 Identity Registry
 - **Agent URI**: The URI resolving to the agent's registration file (ERC-8004 tokenURI)
-- **Agent Wallet**: A verified address where the agent receives payments (set to TBA address)
+- **Agent Wallet**: Registry-specific wallet metadata field (if supported by that ERC-8004 implementation)
 - **Skill Module**: An execution module that provides specific capabilities (e.g., AMM auction creation)
 - **EntryPoint**: The ERC-4337 singleton contract that handles UserOperation bundles
 

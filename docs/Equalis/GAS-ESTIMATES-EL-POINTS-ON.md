@@ -1,22 +1,23 @@
-# EqualLend / EqualIndex Gas Estimates
+# EqualLend / EqualIndex Gas Estimates (Points Enabled)
 
 _Generated on 2026-02-18 (UTC) via:_
-- `forge test --match-path test/root/GasScenarioReport.t.sol --gas-report`
-- `forge test --match-path "test/gas/*t.sol" --gas-report`
-- `forge test --match-path test/derivatives/AmmAuctionGas.t.sol --gas-report`
-- `forge test --match-path test/derivatives/MamCurveGas.t.sol --gas-report`
-- `forge test --match-path test/derivatives/OptionsGas.t.sol --gas-report`
-- `forge test --match-path test/derivatives/FuturesGas.t.sol --gas-report`
-- `forge test --match-path test/derivatives/CommunityAuctionGas.t.sol --gas-report`
-- `forge test --match-path test/derivatives/AmmAuctionGas.t.sol --match-test testGasSwapExactIn -vv`
-- `forge test --match-path test/derivatives/MamCurveGas.t.sol --match-test testGasExecuteCurveSwap -vv`
+- `POINTS_ON_GAS=true forge test --match-path test/root/GasScenarioReport.t.sol --gas-report`
+- `POINTS_ON_GAS=true forge test --match-path "test/gas/*t.sol" --gas-report`
+- `POINTS_ON_GAS=true forge test --match-path test/derivatives/AmmAuctionGas.t.sol --gas-report`
+- `POINTS_ON_GAS=true forge test --match-path test/derivatives/MamCurveGas.t.sol --gas-report`
+- `POINTS_ON_GAS=true forge test --match-path test/derivatives/OptionsGas.t.sol --gas-report`
+- `POINTS_ON_GAS=true forge test --match-path test/derivatives/FuturesGas.t.sol --gas-report`
+- `POINTS_ON_GAS=true forge test --match-path test/derivatives/CommunityAuctionGas.t.sol --gas-report`
+- `POINTS_ON_GAS=true forge test --match-path test/derivatives/AmmAuctionGas.t.sol --match-test testGasSwapExactIn -vv`
+- `POINTS_ON_GAS=true forge test --match-path test/derivatives/MamCurveGas.t.sol --match-test testGasExecuteCurveSwap -vv`
 
-_Sources of truth: `gas-report-scenarios.txt`, `gas-report-latest.txt`, `gas-report-derivatives.txt`._
+_Sources of truth: `gas-report-scenarios-points-on.txt`, `gas-report-latest-points-on.txt`, `gas-report-derivatives-points-on.txt`._
 
 ## Methodology
 - Scenario values come from `GasScenarioReport.t.sol` and represent end-to-end flows.
 - Function-level values come from `test/gas/*t.sol`.
 - Derivative swap `swap_only` values come from explicit `gasleft()` deltas logged in the two `-vv` runs.
+- All runs used `POINTS_ON_GAS=true`, with gas harnesses seeding `pointsPerAction` for measured accrual paths.
 - `N/A` means there is no active benchmark in the current suites for that function.
 
 ## Scenario Benchmarks (GasScenarioReport.t.sol)
@@ -24,10 +25,10 @@ _Sources of truth: `gas-report-scenarios.txt`, `gas-report-latest.txt`, `gas-rep
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
 | Index creation w/ fee (`test_gas_IndexCreateWithFee`) | `EqualIndexFacetV3.createIndex` | **3,088,575** |
-| Index mint only (`test_gas_IndexMintOnly`) | `EqualIndexFacetV3.mint` | **365,591** |
-| Index burn only (`test_gas_IndexBurnOnly`) | `EqualIndexFacetV3.burn` | **154,870** |
+| Index mint only (`test_gas_IndexMintOnly`) | `EqualIndexFacetV3.mint` | **416,306** |
+| Index burn only (`test_gas_IndexBurnOnly`) | `EqualIndexFacetV3.burn` | **188,485** |
 | Index flash loan fee split (`test_gas_IndexFlashLoanFeeSplit`) | `EqualIndexFacetV3.flashLoan` | **138,145** |
-| Index mint + burn (`test_gas_IndexMintBurnFlow`) | `EqualIndexFacetV3.mint + EqualIndexFacetV3.burn` | **12,574,544** |
+| Index mint + burn (`test_gas_IndexMintBurnFlow`) | `EqualIndexFacetV3.mint + EqualIndexFacetV3.burn` | **12,661,004** |
 
 ### Pool Creation & Admin
 | Scenario (Foundry test) | Entry point(s) | Gas |
@@ -37,33 +38,33 @@ _Sources of truth: `gas-report-scenarios.txt`, `gas-report-latest.txt`, `gas-rep
 ### Position Management & Membership
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Mint + deposit (`test_gas_PositionMintAndDeposit`) | `PositionManagementFacet.mintPosition + depositToPosition` | **482,322** |
-| Deposit only (`test_gas_PositionDepositOnly`) | `PositionManagementFacet.depositToPosition` | **252,033** |
+| Mint + deposit (`test_gas_PositionMintAndDeposit`) | `PositionManagementFacet.mintPosition + depositToPosition` | **533,037** |
+| Deposit only (`test_gas_PositionDepositOnly`) | `PositionManagementFacet.depositToPosition` | **302,748** |
 | Withdraw only (`test_gas_PositionWithdrawOnly`) | `PositionManagementFacet.withdrawFromPosition` | **111,950** |
 | Roll yield to principal (`test_gas_RollYieldToPosition`) | `PositionManagementFacet.rollYieldToPosition` | **102,292** |
 | Close pool position (no commitments) (`test_gas_PositionClosePoolPosition`) | `PositionManagementFacet.closePoolPosition` | **109,759** |
-| Deposit + withdraw + cleanup (`test_gas_PositionDepositWithdrawCloseCleanup`) | `PositionManagementFacet.depositToPosition + withdrawFromPosition + cleanupMembership` | **7,113,826** |
+| Deposit + withdraw + cleanup (`test_gas_PositionDepositWithdrawCloseCleanup`) | `PositionManagementFacet.depositToPosition + withdrawFromPosition + cleanupMembership` | **7,166,676** |
 
 ### Borrowing
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Open rolling borrow (`test_gas_BorrowRollingOnly`) | `LendingFacet.openRollingFromPosition` | **356,162** |
-| Open fixed-term borrow (`test_gas_BorrowFixedOnly`) | `LendingFacet.openFixedFromPosition` | **592,432** |
+| Open rolling borrow (`test_gas_BorrowRollingOnly`) | `LendingFacet.openRollingFromPosition` | **406,964** |
+| Open fixed-term borrow (`test_gas_BorrowFixedOnly`) | `LendingFacet.openFixedFromPosition` | **643,234** |
 
 ### Loan Lifecycles
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Rolling lifecycle (`test_gas_RollingLifecycle`) | `LendingFacet.openRollingFromPosition + makePaymentFromPosition + closeRollingCreditFromPosition` | **8,175,173** |
-| Fixed lifecycle (`test_gas_FixedLifecycle`) | `LendingFacet.openFixedFromPosition + repayFixedFromPosition` | **8,382,849** |
+| Rolling lifecycle (`test_gas_RollingLifecycle`) | `LendingFacet.openRollingFromPosition + makePaymentFromPosition + closeRollingCreditFromPosition` | **8,263,385** |
+| Fixed lifecycle (`test_gas_FixedLifecycle`) | `LendingFacet.openFixedFromPosition + repayFixedFromPosition` | **8,457,579** |
 
 ### Direct Offers
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Post lender offer (`test_gas_DirectPostOfferOnly`) | `EqualLendDirectOfferFacet.postOffer` | **649,932** |
-| Accept lender offer (`test_gas_DirectAcceptOfferOnly`) | `EqualLendDirectAgreementFacet.acceptOffer` | **1,085,867** |
-| Post borrower offer (`test_gas_DirectPostBorrowerOfferOnly`) | `EqualLendDirectOfferFacet.postBorrowerOffer` | **630,246** |
-| Accept borrower offer (`test_gas_DirectAcceptBorrowerOfferOnly`) | `EqualLendDirectAgreementFacet.acceptBorrowerOffer` | **1,090,737** |
-| Direct offer repay flow (`test_gas_DirectOfferRepayFlow`) | `EqualLendDirectOfferFacet.postOffer + EqualLendDirectAgreementFacet.acceptOffer + EqualLendDirectLifecycleFacet.repay` | **45,645,161** |
+| Post lender offer (`test_gas_DirectPostOfferOnly`) | `EqualLendDirectOfferFacet.postOffer` | **700,734** |
+| Accept lender offer (`test_gas_DirectAcceptOfferOnly`) | `EqualLendDirectAgreementFacet.acceptOffer` | **1,136,535** |
+| Post borrower offer (`test_gas_DirectPostBorrowerOfferOnly`) | `EqualLendDirectOfferFacet.postBorrowerOffer` | **681,048** |
+| Accept borrower offer (`test_gas_DirectAcceptBorrowerOfferOnly`) | `EqualLendDirectAgreementFacet.acceptBorrowerOffer` | **1,141,405** |
+| Direct offer repay flow (`test_gas_DirectOfferRepayFlow`) | `EqualLendDirectOfferFacet.postOffer + EqualLendDirectAgreementFacet.acceptOffer + EqualLendDirectLifecycleFacet.repay` | **45,750,791** |
 
 ### Penalties
 | Scenario (Foundry test) | Entry point(s) | Gas |
@@ -74,15 +75,15 @@ _Sources of truth: `gas-report-scenarios.txt`, `gas-report-latest.txt`, `gas-rep
 ### Derivative swap harnesses (test/derivatives/*Gas.t.sol)
 | Scenario (Foundry test) | Entry point(s) | Gas (`swap_only`) |
 | --- | --- | --- |
-| AMM swap exact-in (`testGasSwapExactIn`) | `AmmAuctionFacet.swapExactIn` | **203,139** |
-| MAM curve swap (`testGasExecuteCurveSwap`) | `MamCurveFacet.executeCurveSwap` | **255,375** |
+| AMM swap exact-in (`testGasSwapExactIn`) | `AmmAuctionFacet.swapExactIn` | **251,854** |
+| MAM curve swap (`testGasExecuteCurveSwap`) | `MamCurveFacet.executeCurveSwap` | **306,062** |
 
 ### Options & Futures harnesses (test/derivatives/*Gas.t.sol)
 | Scenario (Foundry test) | Entry point(s) | Gas |
 | --- | --- | --- |
-| Options create series (`testGasCreateOptionSeries`) | `OptionsFacet.createOptionSeries` | **817,113** |
+| Options create series (`testGasCreateOptionSeries`) | `OptionsFacet.createOptionSeries` | **867,800** |
 | Options exercise (`testGasExerciseOptions`) | `OptionsFacet.exerciseOptions` | **200,272** |
-| Futures create series (`testGasCreateFuturesSeries`) | `FuturesFacet.createFuturesSeries` | **817,456** |
+| Futures create series (`testGasCreateFuturesSeries`) | `FuturesFacet.createFuturesSeries` | **868,143** |
 | Futures settle (`testGasSettleFutures`) | `FuturesFacet.settleFutures` | **196,839** |
 
 ## Function-Level Gas Tests (test/gas/*t.sol)
@@ -137,11 +138,11 @@ _Sources of truth: `gas-report-scenarios.txt`, `gas-report-latest.txt`, `gas-rep
 ### Rolling offers & lifecycle
 | Function | Gas |
 | --- | --- |
-| `postRollingOffer` | 693,648 |
-| `postBorrowerRollingOffer` | 700,509 |
-| `acceptRollingOffer` | 1,149,424 |
+| `postRollingOffer` | 744,363 |
+| `postBorrowerRollingOffer` | 751,224 |
+| `acceptRollingOffer` | 1,200,111 |
 | `cancelRollingOffer` | 92,094 |
-| `makeRollingPayment` | 234,615 |
+| `makeRollingPayment` | 268,202 |
 | `exerciseRolling` | 179,639 |
 | `repayRollingInFull` | 236,396 |
 | `recoverRolling` | 230,562 |
@@ -230,12 +231,12 @@ _Sources of truth: `gas-report-scenarios.txt`, `gas-report-latest.txt`, `gas-rep
 ### PositionManagementFacet
 | Function | Gas |
 | --- | --- |
-| `mintPositionWithDeposit` | 454,105 |
+| `mintPositionWithDeposit` | 504,936 |
 
 ### FlashLoanFacet (includes onFlashLoan callback)
 | Function | Gas |
 | --- | --- |
-| `flashLoan` | 187,284 |
+| `flashLoan` | 237,971 |
 
 ### FeeFacet (views)
 | Function | Gas |
