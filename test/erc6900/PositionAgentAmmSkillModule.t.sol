@@ -15,6 +15,7 @@ contract PositionAgentAmmSkillModuleTest is Test {
         bytes4(keccak256("AmmSkill_AuctionNotForThisPosition(uint256,uint256,uint256)"));
     bytes4 internal constant INVALID_DEPENDENCY = bytes4(keccak256("AmmSkill_InvalidDependency(address)"));
     bytes4 internal constant INVALID_POLICY = bytes4(keccak256("AmmSkill_InvalidPolicyConfig()"));
+    bytes4 internal constant POOL_NOT_ALLOWED = bytes4(keccak256("AmmSkill_PoolNotAllowed(uint256)"));
     bytes4 internal constant UNAUTHORIZED = bytes4(keccak256("AmmSkill_Unauthorized(address)"));
 
     address internal owner = address(0xA11CE);
@@ -181,6 +182,42 @@ contract PositionAgentAmmSkillModuleTest is Test {
         PositionAgentAmmSkillModule(address(account)).setRollPolicy(rollPolicy);
     }
 
+    function test_joinCommunityAuction_revertsWhenPoolAllowlistEnabledAndPoolNotAllowed() public {
+        uint256 auctionId = diamond.seedCommunityAuctionWithPools(11, 22);
+
+        LibAmmSkillStorage.AuctionPolicy memory policy = _defaultPolicy();
+        policy.enforcePoolAllowlist = true;
+        vm.prank(owner);
+        PositionAgentAmmSkillModule(address(account)).setAuctionPolicy(policy);
+
+        vm.prank(owner);
+        PositionAgentAmmSkillModule(address(account)).setAllowedPool(11, true);
+
+        vm.expectRevert(abi.encodeWithSelector(POOL_NOT_ALLOWED, uint256(22)));
+        PositionAgentAmmSkillModule(address(account)).joinCommunityAuction(auctionId, 1e18, 2e18);
+    }
+
+    function test_joinCommunityAuction_forwardsWhenPoolsAreAllowlisted() public {
+        uint256 auctionId = diamond.seedCommunityAuctionWithPools(11, 22);
+
+        LibAmmSkillStorage.AuctionPolicy memory policy = _defaultPolicy();
+        policy.enforcePoolAllowlist = true;
+        vm.prank(owner);
+        PositionAgentAmmSkillModule(address(account)).setAuctionPolicy(policy);
+
+        vm.startPrank(owner);
+        PositionAgentAmmSkillModule(address(account)).setAllowedPool(11, true);
+        PositionAgentAmmSkillModule(address(account)).setAllowedPool(22, true);
+        vm.stopPrank();
+
+        PositionAgentAmmSkillModule(address(account)).joinCommunityAuction(auctionId, 1e18, 2e18);
+
+        assertEq(diamond.lastCommunityJoinAuctionId(), auctionId);
+        assertEq(diamond.lastCommunityJoinPositionId(), 1);
+        assertEq(diamond.lastCommunityJoinAmountA(), 1e18);
+        assertEq(diamond.lastCommunityJoinAmountB(), 2e18);
+    }
+
     function _defaultAuctionParams() internal view returns (DerivativeTypes.CreateAuctionParams memory) {
         return DerivativeTypes.CreateAuctionParams({
             positionId: 1,
@@ -266,9 +303,14 @@ contract MockDiamond {
     uint256 public lastCancelledAuctionId;
     uint256 public lastRollTokenId;
     uint256 public lastRollPid;
+    uint256 public lastCommunityJoinAuctionId;
+    uint256 public lastCommunityJoinPositionId;
+    uint256 public lastCommunityJoinAmountA;
+    uint256 public lastCommunityJoinAmountB;
 
     DerivativeTypes.CreateAuctionParams internal _lastCreateParams;
     mapping(uint256 => DerivativeTypes.AmmAuction) internal _auctions;
+    mapping(uint256 => DerivativeTypes.CommunityAuction) internal _communityAuctions;
 
     function lastCreateParams() external view returns (DerivativeTypes.CreateAuctionParams memory) {
         return _lastCreateParams;
@@ -298,10 +340,30 @@ contract MockDiamond {
         lastRollPid = pid;
     }
 
+    function getCommunityAuction(uint256 auctionId) external view returns (DerivativeTypes.CommunityAuction memory) {
+        return _communityAuctions[auctionId];
+    }
+
+    function joinCommunityAuction(uint256 auctionId, uint256 positionId, uint256 amountA, uint256 amountB) external {
+        lastCommunityJoinAuctionId = auctionId;
+        lastCommunityJoinPositionId = positionId;
+        lastCommunityJoinAmountA = amountA;
+        lastCommunityJoinAmountB = amountB;
+    }
+
     function seedAuctionWithMakerPositionId(uint256 makerPositionId) external returns (uint256 auctionId) {
         auctionId = ++nextAuctionId;
         DerivativeTypes.AmmAuction storage a = _auctions[auctionId];
         a.makerPositionId = makerPositionId;
+        a.active = true;
+        a.finalized = false;
+    }
+
+    function seedCommunityAuctionWithPools(uint256 poolIdA, uint256 poolIdB) external returns (uint256 auctionId) {
+        auctionId = ++nextAuctionId;
+        DerivativeTypes.CommunityAuction storage a = _communityAuctions[auctionId];
+        a.poolIdA = poolIdA;
+        a.poolIdB = poolIdB;
         a.active = true;
         a.finalized = false;
     }

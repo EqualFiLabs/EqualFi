@@ -322,6 +322,16 @@ contract PositionAgentAmmSkillModule is IERC6900ExecutionModule {
         }
         uint256 expectedTokenId = _boundTokenId();
 
+        if (ds.auctionPolicy.enforcePoolAllowlist) {
+            DerivativeTypes.CommunityAuction memory auction = ICommunityAuctionFacet(diamond).getCommunityAuction(auctionId);
+            if (!ds.allowedPools[auction.poolIdA]) {
+                revert AmmSkill_PoolNotAllowed(auction.poolIdA);
+            }
+            if (!ds.allowedPools[auction.poolIdB]) {
+                revert AmmSkill_PoolNotAllowed(auction.poolIdB);
+            }
+        }
+
         ICommunityAuctionFacet(diamond).joinCommunityAuction(auctionId, expectedTokenId, amountA, amountB);
         emit AgentLiquidityAdded(address(this), auctionId, amountA, amountB, true);
     }

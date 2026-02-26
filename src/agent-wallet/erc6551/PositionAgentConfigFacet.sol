@@ -3,7 +3,11 @@ pragma solidity ^0.8.20;
 
 import {LibAccess} from "../../libraries/LibAccess.sol";
 import {LibPositionAgentStorage} from "../../libraries/LibPositionAgentStorage.sol";
-import {PositionAgent_InvalidConfigAddress, PositionAgent_NotAdmin} from "../../libraries/PositionAgentErrors.sol";
+import {
+    PositionAgent_ConfigLocked,
+    PositionAgent_InvalidConfigAddress,
+    PositionAgent_NotAdmin
+} from "../../libraries/PositionAgentErrors.sol";
 import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
 
 /// @title PositionAgentConfigFacet
@@ -15,6 +19,7 @@ contract PositionAgentConfigFacet {
 
     function setERC6551Registry(address newRegistry) external {
         _requireAdmin();
+        _requireMutableConfig();
         _requireContractAddress(newRegistry);
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
         address previous = ds.erc6551Registry;
@@ -25,6 +30,7 @@ contract PositionAgentConfigFacet {
     /// @notice Sets the ERC-6551 account implementation (beacon proxy implementation)
     function setERC6551Implementation(address newImplementation) external {
         _requireAdmin();
+        _requireMutableConfig();
         _requireContractAddress(newImplementation);
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
         address previous = ds.erc6551Implementation;
@@ -34,6 +40,7 @@ contract PositionAgentConfigFacet {
 
     function setIdentityRegistry(address newRegistry) external {
         _requireAdmin();
+        _requireMutableConfig();
         _requireContractAddress(newRegistry);
         LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
         address previous = ds.identityRegistry;
@@ -50,6 +57,12 @@ contract PositionAgentConfigFacet {
     function _requireContractAddress(address candidate) internal view {
         if (candidate == address(0) || candidate.code.length == 0) {
             revert PositionAgent_InvalidConfigAddress(candidate);
+        }
+    }
+
+    function _requireMutableConfig() internal view {
+        if (LibPositionAgentStorage.s().tbaConfigLocked) {
+            revert PositionAgent_ConfigLocked();
         }
     }
 }

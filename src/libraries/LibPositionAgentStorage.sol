@@ -29,6 +29,9 @@ library LibPositionAgentStorage {
 
         // Position NFT tokenId => TBA deployed flag
         mapping(uint256 => bool) tbaDeployed;
+
+        // Once true, canonical ERC-6551 config can no longer be mutated.
+        bool tbaConfigLocked;
     }
 
     function s() internal pure returns (AgentStorage storage ds) {
