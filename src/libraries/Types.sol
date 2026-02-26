@@ -148,6 +148,7 @@ library Types {
         
         // Operational state (always mutable)
         uint256 totalDeposits;
+        uint256 indexEncumberedTotal;      // Aggregate index encumbrance excluded from maintenance fee base
         uint256 feeIndex;
         uint256 maintenanceIndex;           // cumulative maintenance fee index (reduces principal)
         uint64 lastMaintenanceTimestamp;
