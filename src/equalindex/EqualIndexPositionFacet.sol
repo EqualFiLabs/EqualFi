@@ -13,6 +13,7 @@ import {LibPoolMembership} from "../libraries/LibPoolMembership.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
 import {LibPoints} from "../libraries/LibPoints.sol";
+import {LibEqualIndexLending} from "../libraries/LibEqualIndexLending.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {Types} from "../libraries/Types.sol";
 import "../libraries/Errors.sol";
@@ -57,7 +58,9 @@ contract EqualIndexPositionFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             if (totalSupply == 0) {
                 vaultIn = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
             } else {
-                vaultIn = Math.mulDiv(s().vaultBalances[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+                uint256 economicBal =
+                    LibEqualIndexLending.getEconomicBalance(indexId, asset, s().vaultBalances[indexId][asset]);
+                vaultIn = Math.mulDiv(economicBal, units, totalSupply, Math.Rounding.Ceil);
                 potBuyIn = Math.mulDiv(s().feePots[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
             }
             uint256 grossIn = vaultIn + potBuyIn;
