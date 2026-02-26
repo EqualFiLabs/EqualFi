@@ -144,6 +144,7 @@ contract EqualIndexEconomicBalanceActionsMintTest is Test {
 
     address internal constant USER_A = address(0xA11);
     address internal constant USER_B = address(0xB22);
+    address internal constant USER_C = address(0xC33);
 
     function setUp() public {
         asset = new MockERC20("Asset", "AST", 18, 0);
@@ -155,9 +156,12 @@ contract EqualIndexEconomicBalanceActionsMintTest is Test {
 
         asset.mint(USER_A, 10 ether);
         asset.mint(USER_B, 10 ether);
+        asset.mint(USER_C, 10 ether);
         vm.prank(USER_A);
         asset.approve(address(facet), type(uint256).max);
         vm.prank(USER_B);
+        asset.approve(address(facet), type(uint256).max);
+        vm.prank(USER_C);
         asset.approve(address(facet), type(uint256).max);
     }
 
@@ -180,6 +184,34 @@ contract EqualIndexEconomicBalanceActionsMintTest is Test {
 
         assertEq(spent, 2 ether);
         assertEq(facet.getVaultBalanceRaw(indexId, address(asset)), 3 ether);
+    }
+
+    function test_mint_costNormalizesAfterOutstandingPrincipalReturnsToZero() public {
+        (uint256 indexId,) = facet.createIndex(_singleAssetParams());
+
+        uint256[] memory maxInputs = new uint256[](1);
+        maxInputs[0] = 1 ether;
+        vm.prank(USER_A);
+        facet.mint(indexId, LibEqualIndex.INDEX_SCALE, USER_A, maxInputs);
+        assertEq(facet.getVaultBalanceRaw(indexId, address(asset)), 1 ether);
+
+        facet.setOutstandingPrincipal(indexId, address(asset), 1 ether);
+
+        maxInputs[0] = 2 ether;
+        vm.prank(USER_B);
+        facet.mint(indexId, LibEqualIndex.INDEX_SCALE, USER_B, maxInputs);
+        assertEq(facet.getVaultBalanceRaw(indexId, address(asset)), 3 ether);
+
+        facet.setOutstandingPrincipal(indexId, address(asset), 0);
+
+        uint256 balanceBefore = asset.balanceOf(USER_C);
+        maxInputs[0] = 1.5 ether;
+        vm.prank(USER_C);
+        facet.mint(indexId, LibEqualIndex.INDEX_SCALE, USER_C, maxInputs);
+        uint256 spent = balanceBefore - asset.balanceOf(USER_C);
+
+        assertEq(spent, 1.5 ether);
+        assertEq(facet.getVaultBalanceRaw(indexId, address(asset)), 4.5 ether);
     }
 
     function _singleAssetParams() internal view returns (EqualIndexBaseV3.CreateIndexParams memory p) {
@@ -210,6 +242,7 @@ contract EqualIndexEconomicBalancePositionMintTest is Test {
 
     address internal constant USER_A = address(0xA11);
     address internal constant USER_B = address(0xB22);
+    address internal constant USER_C = address(0xC33);
 
     function setUp() public {
         asset = new MockERC20("Asset", "AST", 18, 0);
@@ -249,6 +282,42 @@ contract EqualIndexEconomicBalancePositionMintTest is Test {
         facet.mintFromPosition(positionB, indexId, LibEqualIndex.INDEX_SCALE);
 
         assertEq(facet.getVaultBalanceRaw(indexId, address(asset)), 3 ether);
+    }
+
+    function test_mintFromPosition_costNormalizesAfterOutstandingPrincipalReturnsToZero() public {
+        (uint256 indexId,) = facet.createIndex(_singleAssetParams());
+
+        vm.prank(USER_A);
+        uint256 positionA = facet.mintPosition(USER_A, ASSET_POOL_ID);
+        vm.prank(USER_B);
+        uint256 positionB = facet.mintPosition(USER_B, ASSET_POOL_ID);
+        vm.prank(USER_C);
+        uint256 positionC = facet.mintPosition(USER_C, ASSET_POOL_ID);
+
+        bytes32 keyA = nft.getPositionKey(positionA);
+        bytes32 keyB = nft.getPositionKey(positionB);
+        bytes32 keyC = nft.getPositionKey(positionC);
+        facet.setUserPrincipal(ASSET_POOL_ID, keyA, 10 ether);
+        facet.setUserPrincipal(ASSET_POOL_ID, keyB, 10 ether);
+        facet.setUserPrincipal(ASSET_POOL_ID, keyC, 10 ether);
+        facet.joinPool(keyA, ASSET_POOL_ID);
+        facet.joinPool(keyB, ASSET_POOL_ID);
+        facet.joinPool(keyC, ASSET_POOL_ID);
+
+        vm.prank(USER_A);
+        facet.mintFromPosition(positionA, indexId, LibEqualIndex.INDEX_SCALE);
+        assertEq(facet.getVaultBalanceRaw(indexId, address(asset)), 1 ether);
+
+        facet.setOutstandingPrincipal(indexId, address(asset), 1 ether);
+        vm.prank(USER_B);
+        facet.mintFromPosition(positionB, indexId, LibEqualIndex.INDEX_SCALE);
+        assertEq(facet.getVaultBalanceRaw(indexId, address(asset)), 3 ether);
+
+        facet.setOutstandingPrincipal(indexId, address(asset), 0);
+        vm.prank(USER_C);
+        facet.mintFromPosition(positionC, indexId, LibEqualIndex.INDEX_SCALE);
+
+        assertEq(facet.getVaultBalanceRaw(indexId, address(asset)), 4.5 ether);
     }
 
     function _singleAssetParams() internal view returns (EqualIndexBaseV3.CreateIndexParams memory p) {
