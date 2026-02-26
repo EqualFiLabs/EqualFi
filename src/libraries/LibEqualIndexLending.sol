@@ -41,7 +41,7 @@ library LibEqualIndexLending {
     );
     event LoanRepaid(uint256 indexed loanId, uint256 indexed indexId, address borrowAsset, uint256 principal);
     event LoanExtended(uint256 indexed loanId, uint40 newMaturity, uint256 fee);
-    event LoanLiquidated(
+    event LoanRecovered(
         uint256 indexed loanId,
         uint256 indexed indexId,
         address borrowAsset,

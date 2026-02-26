@@ -102,14 +102,14 @@ contract LibEqualIndexLendingHarness {
         emit LibEqualIndexLending.LoanExtended(loanId, _toUint40(newMaturity), fee);
     }
 
-    function emitLoanLiquidated(
+    function emitLoanRecovered(
         uint256 loanId,
         uint256 indexId,
         address borrowAsset,
         uint256 collateralUnits,
         uint256 writtenOffPrincipal
     ) external {
-        emit LibEqualIndexLending.LoanLiquidated(loanId, indexId, borrowAsset, collateralUnits, writtenOffPrincipal);
+        emit LibEqualIndexLending.LoanRecovered(loanId, indexId, borrowAsset, collateralUnits, writtenOffPrincipal);
     }
 
     function emitLendingConfigured(
@@ -148,7 +148,7 @@ contract LibEqualIndexLendingTest is Test {
     );
     event LoanRepaid(uint256 indexed loanId, uint256 indexed indexId, address borrowAsset, uint256 principal);
     event LoanExtended(uint256 indexed loanId, uint40 newMaturity, uint256 fee);
-    event LoanLiquidated(
+    event LoanRecovered(
         uint256 indexed loanId,
         uint256 indexed indexId,
         address borrowAsset,
@@ -226,8 +226,8 @@ contract LibEqualIndexLendingTest is Test {
         h.emitLoanExtended(1, 456, 2);
 
         vm.expectEmit(true, true, false, true);
-        emit LoanLiquidated(1, 2, asset, 5, 4);
-        h.emitLoanLiquidated(1, 2, asset, 5, 4);
+        emit LoanRecovered(1, 2, asset, 5, 4);
+        h.emitLoanRecovered(1, 2, asset, 5, 4);
 
         vm.expectEmit(true, false, false, true);
         emit LendingConfigured(2, 9000, 50, 1 days, 30 days);
