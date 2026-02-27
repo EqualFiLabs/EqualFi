@@ -34,6 +34,7 @@ error AmmAuction_Expired(uint256 auctionId);
 error AmmAuction_Slippage(uint256 minOut, uint256 actualOut);
 error AmmAuction_NotMaker(address caller, uint256 positionId);
 error AmmAuction_InvalidRatio(uint256 expectedB, uint256 actualB);
+error AmmAuction_InvalidInvariantMode(uint8 mode);
 
 /// @notice AMM auction facet using Position NFT collateral
 contract AmmAuctionFacet is ReentrancyGuardModifiers {
@@ -116,6 +117,9 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
 
         if (ds.config.maxFeeBps != 0 && params.feeBps > ds.config.maxFeeBps) {
             revert AmmAuction_InvalidFee(params.feeBps, ds.config.maxFeeBps);
+        }
+        if (uint8(params.invariantMode) > uint8(DerivativeTypes.InvariantMode.Stable)) {
+            revert AmmAuction_InvalidInvariantMode(uint8(params.invariantMode));
         }
 
         (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
@@ -252,8 +256,16 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         uint256 reserveOut = inIsA ? auction.reserveB : auction.reserveA;
         TransientSwapCache.cacheReserves(reserveIn, reserveOut);
 
-        (uint256 rawOut, uint256 feeAmount, uint256 outputToRecipient) =
-            LibAuctionSwap.computeSwap(auction.feeAsset, reserveIn, reserveOut, actualIn, auction.feeBps);
+        (uint256 rawOut, uint256 feeAmount, uint256 outputToRecipient) = LibAuctionSwap.computeSwapByInvariant(
+            auction.invariantMode,
+            auction.feeAsset,
+            reserveIn,
+            reserveOut,
+            actualIn,
+            auction.feeBps,
+            LibCurrency.decimals(tokenIn),
+            LibCurrency.decimals(tokenOut)
+        );
         rawOut;
 
         amountOut = outputToRecipient;
@@ -425,6 +437,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         view
         returns (uint256 amountOut, uint256 feeAmount)
     {
+        if (amountIn == 0) return (0, 0);
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         DerivativeTypes.AmmAuction storage auction = ds.auctions[auctionId];
         if (!auction.active || auction.finalized) {
@@ -440,8 +453,16 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         }
         uint256 reserveIn = inIsA ? auction.reserveA : auction.reserveB;
         uint256 reserveOut = inIsA ? auction.reserveB : auction.reserveA;
-        (uint256 rawOut, uint256 fee, uint256 outToRecipient) =
-            LibAuctionSwap.computeSwap(auction.feeAsset, reserveIn, reserveOut, amountIn, auction.feeBps);
+        (uint256 rawOut, uint256 fee, uint256 outToRecipient) = LibAuctionSwap.computeSwapByInvariant(
+            auction.invariantMode,
+            auction.feeAsset,
+            reserveIn,
+            reserveOut,
+            amountIn,
+            auction.feeBps,
+            LibCurrency.decimals(tokenIn),
+            LibCurrency.decimals(inIsA ? auction.tokenB : auction.tokenA)
+        );
         rawOut;
         feeAmount = fee;
         amountOut = outToRecipient;

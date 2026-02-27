@@ -110,6 +110,96 @@ contract AmmAuctionFacetPropertyTest is Test {
         assertEq(uint8(auction.invariantMode), uint8(DerivativeTypes.InvariantMode.Stable), "mode persisted");
     }
 
+    function test_StableMode_PreviewSwapMatchesExecution() public {
+        MockERC20 usdc = new MockERC20("USDC", "USDC", 6, 0);
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18, 0);
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 reserveUsdc = 1_000_000e6;
+        uint256 reserveDai = 1_000_000e18;
+        harness.seedPool(1, address(usdc), positionKey, reserveUsdc + 100e6, reserveUsdc + 100e6);
+        harness.seedPool(2, address(dai), positionKey, reserveDai + 100e18, reserveDai + 100e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveUsdc,
+                reserveB: reserveDai,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 30,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+
+        uint256 amountIn = 50e6;
+        (uint256 previewOut, uint256 previewFee) = harness.previewSwap(auctionId, address(usdc), amountIn);
+        assertGt(previewOut, 0, "stable preview out");
+        assertEq(previewFee, Math.mulDiv(amountIn, 30, 10_000), "stable preview fee");
+
+        usdc.mint(taker, amountIn);
+        vm.prank(taker);
+        usdc.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        (uint256 amountOut,) = harness.swapExactInOrFinalize(auctionId, address(usdc), amountIn, amountIn, previewOut, taker);
+
+        assertEq(amountOut, previewOut, "stable preview/execution parity");
+    }
+
+    function test_VolatileMode_PreviewMatchesLegacyMathSnapshot() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 reserveA = 50e18;
+        uint256 reserveB = 100e18;
+        harness.seedPool(1, address(tokenA), positionKey, reserveA + 10e18, reserveA + 10e18);
+        harness.seedPool(2, address(tokenB), positionKey, reserveB + 10e18, reserveB + 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 25,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        uint256 amountIn = 10e18;
+        uint256 amountInWithFee = Math.mulDiv(amountIn, 10_000 - 25, 10_000);
+        uint256 expectedFee = amountIn - amountInWithFee;
+        uint256 expectedOut = Math.mulDiv(reserveB, amountInWithFee, reserveA + amountInWithFee);
+
+        (uint256 previewOut, uint256 previewFee) = harness.previewSwap(auctionId, address(tokenA), amountIn);
+        assertEq(previewOut, expectedOut, "volatile output snapshot");
+        assertEq(previewFee, expectedFee, "volatile fee snapshot");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        (uint256 amountOut,) = harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, expectedOut, taker);
+        assertEq(amountOut, expectedOut, "volatile preview/execution parity");
+    }
+
     function testProperty_InvariantPreservation(
         uint96 reserveA,
         uint96 reserveB,
