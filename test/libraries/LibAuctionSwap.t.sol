@@ -201,4 +201,26 @@ contract LibAuctionSwapTest is Test {
         assertEq(feeMode, feeLegacy, "fee amount");
         assertEq(outMode, outLegacy, "out to recipient");
     }
+
+    function testFuzz_stableDeterministicBoundedSolve(
+        uint96 reserveInSeed,
+        uint96 reserveOutSeed,
+        uint96 amountInSeed,
+        uint16 feeBpsSeed
+    ) public {
+        uint256 reserveIn = bound(uint256(reserveInSeed), 1e18, 10_000_000e18);
+        uint256 reserveOut = bound(uint256(reserveOutSeed), 1e18, 10_000_000e18);
+        uint256 amountIn = bound(uint256(amountInSeed), 1e12, reserveIn / 20);
+        uint16 feeBps = uint16(bound(uint256(feeBpsSeed), 0, 1000));
+
+        (uint256 rawOut1, uint256 feeAmount1, uint256 out1) =
+            h.computeStableSwap(DerivativeTypes.FeeAsset.TokenIn, reserveIn, reserveOut, amountIn, feeBps, 18, 18, 255);
+        (uint256 rawOut2, uint256 feeAmount2, uint256 out2) =
+            h.computeStableSwap(DerivativeTypes.FeeAsset.TokenIn, reserveIn, reserveOut, amountIn, feeBps, 18, 18, 255);
+
+        assertEq(rawOut1, rawOut2, "deterministic raw out");
+        assertEq(feeAmount1, feeAmount2, "deterministic fee");
+        assertEq(out1, out2, "deterministic out");
+        assertLe(out1, reserveOut, "bounded by reserve");
+    }
 }

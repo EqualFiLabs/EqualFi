@@ -146,6 +146,96 @@ contract CommunityAuctionFacetPropertyTest is Test {
         );
     }
 
+    function testProperty_CommunityPreviewExecutionParityBothModes(uint96 amountInSeed, bool stableMode) public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 makerKey = nft.getPositionKey(makerTokenId);
+
+        uint256 reserveA = stableMode ? 1_000_000e18 : 300e18;
+        uint256 reserveB = stableMode ? 1_000_000e18 : 600e18;
+        uint256 amountIn = bound(uint256(amountInSeed), 1e15, reserveA / 10);
+
+        harness.seedPool(1, address(tokenA), makerKey, reserveA + 10e18, reserveA + 10e18);
+        harness.seedPool(2, address(tokenB), makerKey, reserveB + 10e18, reserveB + 10e18);
+        harness.joinPool(makerKey, 1);
+        harness.joinPool(makerKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 30,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: stableMode ? DerivativeTypes.InvariantMode.Stable : DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        (uint256 previewOut,) = harness.previewCommunitySwap(auctionId, address(tokenA), amountIn);
+        assertGt(previewOut, 0, "preview out");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        uint256 amountOut = harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, previewOut, taker);
+        assertEq(amountOut, previewOut, "preview/execution parity");
+    }
+
+    function testProperty_CommunityFeeConservationBothModes(uint16 feeBpsSeed, bool stableMode) public {
+        uint16 feeBps = uint16(bound(uint256(feeBpsSeed), 1, 1000));
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 makerKey = nft.getPositionKey(makerTokenId);
+
+        // Keep totalShares at 1e18 so maker fee index distribution is exact for single-maker case.
+        uint256 reserveA = 1e18;
+        uint256 reserveB = 1e18;
+        uint256 amountIn = stableMode ? 1e16 : 5e15;
+
+        harness.seedPool(1, address(tokenA), makerKey, reserveA + 1e18, reserveA + 1e18);
+        harness.seedPool(2, address(tokenB), makerKey, reserveB + 1e18, reserveB + 1e18);
+        harness.joinPool(makerKey, 1);
+        harness.joinPool(makerKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: feeBps,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: stableMode ? DerivativeTypes.InvariantMode.Stable : DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        (, uint256 previewFee) = harness.previewCommunitySwap(auctionId, address(tokenA), amountIn);
+        assertGt(previewFee, 0, "preview fee");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
+
+        DerivativeTypes.CommunityAuction memory auction = harness.getCommunityAuction(auctionId);
+        (uint256 pendingMakerFeeA,) = harness.pendingCommunityFees(auctionId, makerKey);
+        uint256 conserved =
+            pendingMakerFeeA + auction.treasuryFeeAAccrued + auction.indexFeeAAccrued + auction.activeCreditFeeAAccrued;
+        assertEq(conserved, previewFee, "fee conservation");
+    }
+
     function _createAuction(uint96 reserveA, uint96 reserveB, uint64 startTime, uint64 endTime)
         internal
         returns (uint256 auctionId, uint256 makerTokenId, bytes32 makerKey)

@@ -230,6 +230,95 @@ contract AmmAuctionFacetPropertyTest is Test {
         assertEq(amountOut, expectedOut, "volatile preview/execution parity");
     }
 
+    function testProperty_PreviewExecutionParityBothModes(uint96 amountInSeed, bool stableMode) public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 reserveA = stableMode ? 1_000_000e18 : 250e18;
+        uint256 reserveB = stableMode ? 1_000_000e18 : 500e18;
+        uint256 amountIn = bound(uint256(amountInSeed), 1e15, reserveA / 10);
+
+        harness.seedPool(1, address(tokenA), positionKey, reserveA + 10e18, reserveA + 10e18);
+        harness.seedPool(2, address(tokenB), positionKey, reserveB + 10e18, reserveB + 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 30,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: stableMode ? DerivativeTypes.InvariantMode.Stable : DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        (uint256 previewOut,) = harness.previewSwap(auctionId, address(tokenA), amountIn);
+        assertGt(previewOut, 0, "preview out");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        (uint256 amountOut,) = harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, previewOut, taker);
+        assertEq(amountOut, previewOut, "preview/execution parity");
+    }
+
+    function testProperty_FeeConservationBothModes(uint16 feeBpsSeed, bool stableMode) public {
+        uint16 feeBps = uint16(bound(uint256(feeBpsSeed), 1, 1000));
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+        uint256 reserveA = stableMode ? 1_000_000e18 : 400e18;
+        uint256 reserveB = stableMode ? 1_000_000e18 : 800e18;
+        uint256 amountIn = stableMode ? 100e18 : 20e18;
+
+        harness.seedPool(1, address(tokenA), positionKey, reserveA + 50e18, reserveA + 50e18);
+        harness.seedPool(2, address(tokenB), positionKey, reserveB + 50e18, reserveB + 50e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: feeBps,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: stableMode ? DerivativeTypes.InvariantMode.Stable : DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        (, uint256 previewFee) = harness.previewSwap(auctionId, address(tokenA), amountIn);
+        assertGt(previewFee, 0, "preview fee");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
+
+        (uint256 makerFeeA,) = harness.getAuctionFees(auctionId);
+        DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
+        uint256 indexFeeA = harness.indexFeeAByAuction(auctionId);
+        uint256 activeFeeA = harness.activeFeeAByAuction(auctionId);
+        uint256 conserved = makerFeeA + auction.treasuryFeeAAccrued + indexFeeA + activeFeeA;
+        assertEq(conserved, previewFee, "fee conservation");
+    }
+
     function testProperty_InvariantPreservation(
         uint96 reserveA,
         uint96 reserveB,
@@ -948,6 +1037,14 @@ contract AmmAuctionHarness is AmmAuctionFacet {
 
     function getDirectLent(bytes32 positionKey, uint256 poolId) external view returns (uint256) {
         return LibEncumbrance.get(positionKey, poolId).directLent;
+    }
+
+    function indexFeeAByAuction(uint256 auctionId) external view returns (uint256) {
+        return LibDerivativeStorage.derivativeStorage().indexFeeAByAuction[auctionId];
+    }
+
+    function activeFeeAByAuction(uint256 auctionId) external view returns (uint256) {
+        return LibDerivativeStorage.derivativeStorage().activeCreditFeeAByAuction[auctionId];
     }
 
     function getAuctionsByPool(uint256 poolId, uint256 offset, uint256 limit)

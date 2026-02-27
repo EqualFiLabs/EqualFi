@@ -1,6 +1,6 @@
 # Community Auction System Design
 
-**Version:** 1.2 (Updated for router-based fee routing and current selector signatures)
+**Version:** 1.3 (Updated for stable/volatile invariant mode toggle and stable-mode governance gate)
 
 This document describes the Community Auction system, which extends the AMM Auction model to support multiple makers pooling liquidity into a shared auction. This enables smaller capital holders to participate in market making collectively, sharing maker fees proportionally based on their contribution.
 
@@ -30,11 +30,13 @@ The Community Auction system enables multiple Position NFT holders to pool their
 |---------|-------------|
 | **Multi-Maker** | Multiple positions can contribute liquidity to a single auction |
 | **Time-Bounded** | Auctions have explicit start and end times |
-| **Constant Product** | Uses x*y=k invariant for pricing |
+| **Invariant Modes** | Creator chooses `Volatile` or `Stable` pricing at creation |
 | **Position-Backed** | Reserves come from makers' deposited principal |
 | **Pro-Rata Fees** | Maker fees distributed proportionally via fee index |
 | **Share-Based** | Contributions tracked via price-neutral liquidity shares |
 | **Free Entry/Exit** | Makers can join before end and leave at any time |
+
+CL auctions are a separate system and are not modified by this design.
 
 ### System Participants
 
@@ -84,9 +86,16 @@ The Community Auction system enables multiple Position NFT holders to pool their
 
 ## How It Works
 
-### Constant Product AMM
+### Invariant Modes
 
-Like single-maker AMM Auctions, Community Auctions use the classic constant product formula:
+Each community auction stores an immutable `invariantMode` selected at creation:
+
+- `Volatile`: classic constant-product `x * y` behavior.
+- `Stable`: stable-swap style output solve with decimal normalization and bounded iteration.
+
+### Volatile Formula
+
+Volatile mode uses the classic constant product formula:
 
 ```
 x × y = k
@@ -181,6 +190,7 @@ struct CommunityAuction {
     // Fee configuration
     uint16 feeBps;                   // Fee in basis points
     FeeAsset feeAsset;               // Fee taken from TokenIn or TokenOut
+    InvariantMode invariantMode;     // Volatile or Stable (immutable per-auction)
     
     // Fee indexes (1e18 scale)
     uint256 feeIndexA;               // Accumulated fee index for token A
@@ -232,6 +242,7 @@ struct CreateCommunityAuctionParams {
     uint64 endTime;          // Auction end timestamp
     uint16 feeBps;           // Fee rate (e.g., 30 = 0.30%)
     FeeAsset feeAsset;       // Where to take fees from
+    InvariantMode invariantMode; // Volatile or Stable
 }
 ```
 
@@ -247,6 +258,7 @@ struct CreateCommunityAuctionParams {
 - Sufficient unlocked principal in both pools
 - `endTime > startTime`
 - `feeBps ≤ maxFeeBps` (if configured)
+- If `invariantMode == Stable`, `stableModeEnabled` must be true in derivative governance config
 
 **Function:**
 ```solidity
