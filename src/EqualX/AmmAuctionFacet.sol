@@ -52,7 +52,8 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         uint64 startTime,
         uint64 endTime,
         uint16 feeBps,
-        DerivativeTypes.FeeAsset feeAsset
+        DerivativeTypes.FeeAsset feeAsset,
+        DerivativeTypes.InvariantMode invariantMode
     );
 
     event AuctionSwapped(
@@ -153,6 +154,7 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         auction.endTime = params.endTime;
         auction.feeBps = params.feeBps;
         auction.feeAsset = params.feeAsset;
+        auction.invariantMode = params.invariantMode;
         auction.active = true;
         auction.finalized = false;
 
@@ -180,7 +182,8 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             params.startTime,
             params.endTime,
             params.feeBps,
-            params.feeAsset
+            params.feeAsset,
+            params.invariantMode
         );
     }
 

@@ -150,7 +150,8 @@ contract PositionAgentAmmSkillModuleRuntimeValidationIntegrationTest is Test {
             startTime: 10,
             endTime: 100,
             feeBps: 30,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(attacker);

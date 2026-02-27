@@ -52,7 +52,8 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         uint64 startTime,
         uint64 endTime,
         uint16 feeBps,
-        DerivativeTypes.FeeAsset feeAsset
+        DerivativeTypes.FeeAsset feeAsset,
+        DerivativeTypes.InvariantMode invariantMode
     );
 
     event MakerJoined(
@@ -145,6 +146,7 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         auction.reserveB = params.reserveB;
         auction.feeBps = params.feeBps;
         auction.feeAsset = params.feeAsset;
+        auction.invariantMode = params.invariantMode;
         auction.totalShares = Math.sqrt(Math.mulDiv(params.reserveA, params.reserveB, 1));
         auction.makerCount = 1;
         auction.startTime = params.startTime;
@@ -180,7 +182,8 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
             params.startTime,
             params.endTime,
             params.feeBps,
-            params.feeAsset
+            params.feeAsset,
+            params.invariantMode
         );
     }
 

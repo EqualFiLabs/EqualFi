@@ -151,7 +151,8 @@ contract PositionLifeCycleTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 30, // 0.3%
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         activeAmmId = IAmmAuctionFacet(sys.diamond).createAuction(params);

@@ -26,6 +26,23 @@ import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 /// @notice Validates: Requirements 4.1, 12.1
 /// forge-config: default.fuzz.runs = 100
 contract AmmAuctionFacetPropertyTest is Test {
+    event AuctionCreated(
+        uint256 indexed auctionId,
+        bytes32 indexed makerPositionKey,
+        uint256 indexed makerPositionId,
+        uint256 poolIdA,
+        uint256 poolIdB,
+        address tokenA,
+        address tokenB,
+        uint256 reserveA,
+        uint256 reserveB,
+        uint64 startTime,
+        uint64 endTime,
+        uint16 feeBps,
+        DerivativeTypes.FeeAsset feeAsset,
+        DerivativeTypes.InvariantMode invariantMode
+    );
+
     AmmAuctionHarness internal harness;
     PositionNFT internal nft;
     MockERC20 internal tokenA;
@@ -44,6 +61,53 @@ contract AmmAuctionFacetPropertyTest is Test {
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(treasury);
         harness.setMakerShareBps(7000);
+    }
+
+    function test_CreateAuctionPersistsInvariantModeAndEmitsEvent() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        DerivativeTypes.CreateAuctionParams memory params = DerivativeTypes.CreateAuctionParams({
+            positionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            reserveA: 1e18,
+            reserveB: 1e18,
+            startTime: uint64(block.timestamp),
+            endTime: uint64(block.timestamp + 1 days),
+            feeBps: 0,
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Stable
+        });
+
+        vm.expectEmit(true, true, true, true, address(harness));
+        emit AuctionCreated(
+            1,
+            positionKey,
+            makerTokenId,
+            1,
+            2,
+            address(tokenA),
+            address(tokenB),
+            1e18,
+            1e18,
+            uint64(block.timestamp),
+            uint64(block.timestamp + 1 days),
+            0,
+            DerivativeTypes.FeeAsset.TokenIn,
+            DerivativeTypes.InvariantMode.Stable
+        );
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(params);
+
+        DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
+        assertEq(uint8(auction.invariantMode), uint8(DerivativeTypes.InvariantMode.Stable), "mode persisted");
     }
 
     function testProperty_InvariantPreservation(
@@ -76,7 +140,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: feeBps,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -119,7 +184,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -158,7 +224,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: startTime,
             endTime: endTime,
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -201,7 +268,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 30,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -252,7 +320,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 100,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -316,7 +385,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: feeBps,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -360,7 +430,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         harness.seedPool(2, address(tokenB), positionKey, 2 ether, 2 ether);
@@ -401,7 +472,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -457,7 +529,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -509,7 +582,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -549,7 +623,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: startTime,
             endTime: endTime,
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -609,7 +684,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: startTime,
             endTime: endTime,
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
