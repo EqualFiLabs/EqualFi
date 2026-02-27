@@ -79,6 +79,7 @@ contract DerivativeAccessControlPropertyTest is Test {
             strikePrice: 2e18,
             expiry: uint64(block.timestamp + 1 days),
             totalSize: 1e18,
+            contractSize: 1,
             isCall: true,
             isAmerican: true,
             useCustomFees: false,
@@ -98,6 +99,7 @@ contract DerivativeAccessControlPropertyTest is Test {
             forwardPrice: 2e18,
             expiry: uint64(block.timestamp + 1 days),
             totalSize: 1e18,
+            contractSize: 1,
             isEuropean: false,
             useCustomFees: false,
             createFeeBps: 0,
@@ -145,6 +147,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -163,6 +166,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 forwardPrice: 2e18,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -208,6 +212,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -250,6 +255,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 forwardPrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -293,6 +299,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -322,6 +329,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 forwardPrice: 2e18,
                 expiry: futuresExpiry,
                 totalSize: 1e18,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -350,6 +358,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -379,6 +388,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 forwardPrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -426,6 +436,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -444,6 +455,7 @@ contract DerivativeAccessControlPropertyTest is Test {
                 forwardPrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -469,17 +481,13 @@ contract DerivativeAccessControlPropertyTest is Test {
 
         uint256 payment = optionsHarness.previewExercisePayment(optionSeriesId, 1e18);
 
-
         vm.prank(holder);
-
 
         optionsHarness.exerciseOptions(optionSeriesId, 1e18, holder, payment, 0);
 
         payment = futuresHarness.previewSettlePayment(futuresSeriesId, 1e18);
 
-
         vm.prank(holder);
-
 
         futuresHarness.settleFutures(futuresSeriesId, 1e18, holder, payment, 0);
 
@@ -534,13 +542,7 @@ contract OptionsAccessHarness is OptionsFacet {
         LibDerivativeStorage.derivativeStorage().config.europeanToleranceSeconds = tolerance;
     }
 
-    function seedPool(
-        uint256 pid,
-        address asset,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address asset, bytes32 positionKey, uint256 principal, uint256 tracked) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = asset;
         p.initialized = true;
@@ -603,13 +605,7 @@ contract FuturesAccessHarness is FuturesFacet {
         LibDerivativeStorage.derivativeStorage().config.defaultGracePeriodSeconds = gracePeriod;
     }
 
-    function seedPool(
-        uint256 pid,
-        address asset,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address asset, bytes32 positionKey, uint256 principal, uint256 tracked) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = asset;
         p.initialized = true;
@@ -660,13 +656,7 @@ contract AmmAccessHarness is AmmAuctionFacet {
         ns.nftModeEnabled = true;
     }
 
-    function seedPool(
-        uint256 pid,
-        address asset,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address asset, bytes32 positionKey, uint256 principal, uint256 tracked) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = asset;
         p.initialized = true;

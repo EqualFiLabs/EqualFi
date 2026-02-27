@@ -69,6 +69,7 @@ contract FuturesFacetPropertyTest is Test {
             forwardPrice: forwardPrice,
             expiry: expiry,
             totalSize: totalSize,
+            contractSize: 1,
             isEuropean: false,
             useCustomFees: false,
             createFeeBps: 0,
@@ -133,6 +134,7 @@ contract FuturesFacetPropertyTest is Test {
                 forwardPrice: forwardPrice,
                 expiry: expiry,
                 totalSize: totalSize,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -154,9 +156,7 @@ contract FuturesFacetPropertyTest is Test {
 
         uint256 payment = harness.previewSettlePayment(seriesId, settleAmount);
 
-
         vm.prank(holder);
-
 
         harness.settleFutures(seriesId, settleAmount, holder, payment, 0);
 
@@ -197,6 +197,7 @@ contract FuturesFacetPropertyTest is Test {
                 forwardPrice: forwardPrice,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: totalSize,
+                contractSize: 1,
                 isEuropean: true,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -222,7 +223,9 @@ contract FuturesFacetPropertyTest is Test {
         harness.settleFutures(seriesId, totalSize, holder, maxPayment, 0);
 
         assertEq(holderQuoteBefore - quote.balanceOf(holder), payment, "holder pays required amount only");
-        assertEq(harness.getPrincipal(positionKey, 2) - makerQuoteBefore, payment, "maker receives required amount only");
+        assertEq(
+            harness.getPrincipal(positionKey, 2) - makerQuoteBefore, payment, "maker receives required amount only"
+        );
     }
 
     function test_createFuturesSeries_supportsNativeUnderlyingFlatFee() public {
@@ -249,6 +252,7 @@ contract FuturesFacetPropertyTest is Test {
                 forwardPrice: 2e18,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -259,6 +263,70 @@ contract FuturesFacetPropertyTest is Test {
 
         assertGt(seriesId, 0, "series created");
         assertEq(harness.getPrincipal(positionKey, 1), principalBefore - flatFee, "native flat fee applied");
+    }
+
+    function test_createFuturesSeries_supportsFractionalNotionalPerContract() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 totalContracts = 20;
+        uint256 contractSize = 5e15; // 0.005 underlying per futures token.
+        uint256 underlyingNotional = totalContracts * contractSize;
+        uint256 forwardPrice = 2e18;
+        uint256 requiredQuote = _quoteAmount(underlyingNotional, forwardPrice);
+
+        harness.seedPool(1, address(underlying), positionKey, underlyingNotional + 1e6, underlyingNotional + 1e6);
+        harness.seedPool(2, address(quote), positionKey, requiredQuote + 1e6, requiredQuote + 1e6);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 seriesId = harness.createFuturesSeries(
+            DerivativeTypes.CreateFuturesSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                quotePoolId: 2,
+                forwardPrice: forwardPrice,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: totalContracts,
+                contractSize: contractSize,
+                isEuropean: false,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        DerivativeTypes.FuturesSeries memory series = harness.getFuturesSeries(seriesId);
+        assertEq(series.totalSize, totalContracts, "contract supply recorded");
+        assertEq(series.remaining, totalContracts, "remaining tracks contract units");
+        assertEq(harness.getFuturesContractSize(seriesId), contractSize, "contract size recorded");
+        assertEq(futuresToken.balanceOf(maker, seriesId), totalContracts, "minted contract-count claim supply");
+        assertEq(harness.getLocked(positionKey, 1), underlyingNotional, "underlying collateral locks full notional");
+
+        uint256 settleContracts = 4;
+        uint256 settledNotional = settleContracts * contractSize;
+        vm.prank(maker);
+        futuresToken.safeTransferFrom(maker, holder, seriesId, settleContracts, "");
+
+        uint256 payment = harness.previewSettlePayment(seriesId, settleContracts);
+        assertEq(payment, _quoteAmount(settledNotional, forwardPrice), "payment scales by contract size");
+        quote.mint(holder, payment);
+        vm.prank(holder);
+        quote.approve(address(harness), payment);
+
+        vm.prank(holder);
+        harness.settleFutures(seriesId, settleContracts, holder, payment, 0);
+
+        DerivativeTypes.FuturesSeries memory afterSettle = harness.getFuturesSeries(seriesId);
+        assertEq(afterSettle.remaining, totalContracts - settleContracts, "remaining decremented by contracts");
+        assertEq(
+            harness.getLocked(positionKey, 1),
+            (totalContracts - settleContracts) * contractSize,
+            "locked notional decremented"
+        );
+        assertEq(underlying.balanceOf(holder), settledNotional, "holder receives sized underlying");
     }
 
     function _quoteAmount(uint256 amount, uint256 forwardPrice) internal view returns (uint256) {
@@ -302,13 +370,9 @@ contract FuturesHarness is FuturesFacet {
         store.activeCreditShareConfigured = true;
     }
 
-    function seedPool(
-        uint256 pid,
-        address underlying,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address underlying, bytes32 positionKey, uint256 principal, uint256 tracked)
+        external
+    {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = underlying;
         p.initialized = true;

@@ -22,6 +22,7 @@ import {Types} from "../libraries/Types.sol";
 
 error Futures_Paused();
 error Futures_InvalidAmount(uint256 amount);
+error Futures_InvalidContractSize(uint256 contractSize);
 error Futures_InvalidPrice(uint256 forwardPrice);
 error Futures_InvalidExpiry(uint64 expiry);
 error Futures_InvalidPool(uint256 poolId);
@@ -64,10 +65,7 @@ contract FuturesFacet is ReentrancyGuardModifiers {
     );
 
     event Reclaimed(
-        uint256 indexed seriesId,
-        bytes32 indexed makerPositionKey,
-        uint256 remainingSize,
-        uint256 collateralUnlocked
+        uint256 indexed seriesId, bytes32 indexed makerPositionKey, uint256 remainingSize, uint256 collateralUnlocked
     );
     event ReclaimedClaimsBurned(uint256 indexed seriesId, address indexed holder, uint256 amount);
 
@@ -96,13 +94,15 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         DerivativeTypes.DerivativeConfig storage cfg = ds.config;
         if (ds.futuresPaused) revert Futures_Paused();
         if (params.totalSize == 0) revert Futures_InvalidAmount(params.totalSize);
+        if (params.contractSize == 0) revert Futures_InvalidContractSize(params.contractSize);
         if (params.forwardPrice == 0) revert Futures_InvalidPrice(params.forwardPrice);
         if (params.expiry <= block.timestamp) revert Futures_InvalidExpiry(params.expiry);
         if (params.underlyingPoolId == params.quotePoolId) {
             revert Futures_InvalidPool(params.underlyingPoolId);
         }
 
-        (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
+        (bytes32 positionKey, address makerOwner) =
+            LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
 
         Types.PoolData storage underlyingPool = LibDirectHelpers._pool(params.underlyingPoolId);
         Types.PoolData storage quotePool = LibDirectHelpers._pool(params.quotePoolId);
@@ -121,16 +121,13 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         LibFeeIndex.settle(params.quotePoolId, positionKey);
         LibActiveCreditIndex.settle(params.quotePoolId, positionKey);
 
+        uint256 underlyingNotional = _contractsToUnderlying(params.totalSize, params.contractSize);
         (uint16 createFeeBps, uint16 exerciseFeeBps, uint16 reclaimFeeBps) =
             _resolveFeeBps(cfg, params.useCustomFees, params.createFeeBps, params.exerciseFeeBps, params.reclaimFeeBps);
         _chargeCreateFee(
-            positionKey,
-            params.underlyingPoolId,
-            params.totalSize,
-            createFeeBps,
-            cfg.defaultCreateFeeFlatWad
+            positionKey, params.underlyingPoolId, underlyingNotional, createFeeBps, cfg.defaultCreateFeeFlatWad
         );
-        LibDerivativeHelpers._lockCollateral(positionKey, params.underlyingPoolId, params.totalSize);
+        LibDerivativeHelpers._lockCollateral(positionKey, params.underlyingPoolId, underlyingNotional);
 
         seriesId = ++ds.nextFuturesSeriesId;
         DerivativeTypes.FuturesSeries storage series = ds.futuresSeries[seriesId];
@@ -150,13 +147,14 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         series.expiry = params.expiry;
         series.totalSize = params.totalSize;
         series.remaining = params.totalSize;
-        series.underlyingLocked = params.totalSize;
+        series.underlyingLocked = underlyingNotional;
         series.createFeeBps = createFeeBps;
         series.exerciseFeeBps = exerciseFeeBps;
         series.reclaimFeeBps = reclaimFeeBps;
         series.graceUnlockTime = params.expiry + gracePeriod;
         series.isEuropean = params.isEuropean;
         series.reclaimed = false;
+        ds.futuresContractSize[seriesId] = params.contractSize;
 
         LibDerivativeStorage.addFuturesSeries(positionKey, seriesId);
 
@@ -174,19 +172,17 @@ contract FuturesFacet is ReentrancyGuardModifiers {
             params.forwardPrice,
             params.expiry,
             params.totalSize,
-            params.totalSize,
+            underlyingNotional,
             series.graceUnlockTime,
             params.isEuropean
         );
     }
 
-    function settleFutures(
-        uint256 seriesId,
-        uint256 amount,
-        address recipient,
-        uint256 maxPayment,
-        uint256 minReceived
-    ) external payable nonReentrant {
+    function settleFutures(uint256 seriesId, uint256 amount, address recipient, uint256 maxPayment, uint256 minReceived)
+        external
+        payable
+        nonReentrant
+    {
         _settleFutures(seriesId, amount, msg.sender, recipient, maxPayment, minReceived);
     }
 
@@ -206,7 +202,11 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         DerivativeTypes.FuturesSeries storage series = ds.futuresSeries[seriesId];
         if (series.makerPositionKey == bytes32(0)) revert Futures_InvalidSeries(seriesId);
-        payment = _normalizeQuoteAmount(amount, series.forwardPrice, series.underlyingAsset, series.quoteAsset);
+        uint256 contractSize = ds.futuresContractSize[seriesId];
+        if (contractSize == 0) revert Futures_InvalidContractSize(contractSize);
+        uint256 underlyingAmount = _contractsToUnderlying(amount, contractSize);
+        payment =
+            _normalizeQuoteAmount(underlyingAmount, series.forwardPrice, series.underlyingAsset, series.quoteAsset);
     }
 
     function _settleFutures(
@@ -226,6 +226,9 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         if (series.makerPositionKey == bytes32(0)) revert Futures_InvalidSeries(seriesId);
         if (series.reclaimed) revert Futures_Reclaimed(seriesId);
         if (amount > series.remaining) revert Futures_InvalidAmount(amount);
+        uint256 contractSize = ds.futuresContractSize[seriesId];
+        if (contractSize == 0) revert Futures_InvalidContractSize(contractSize);
+        uint256 underlyingAmount = _contractsToUnderlying(amount, contractSize);
 
         _validateSettlementWindow(seriesId, series, ds.config.europeanToleranceSeconds);
 
@@ -239,32 +242,27 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         LibFeeIndex.settle(series.quotePoolId, makerKey);
         LibActiveCreditIndex.settle(series.quotePoolId, makerKey);
 
-        uint256 quoteAmount = _normalizeQuoteAmount(
-            amount,
-            series.forwardPrice,
-            series.underlyingAsset,
-            series.quoteAsset
-        );
+        uint256 quoteAmount =
+            _normalizeQuoteAmount(underlyingAmount, series.forwardPrice, series.underlyingAsset, series.quoteAsset);
         if (quoteAmount == 0) revert Futures_InvalidAmount(quoteAmount);
 
-        LibDerivativeHelpers._unlockCollateral(makerKey, series.underlyingPoolId, amount);
+        LibDerivativeHelpers._unlockCollateral(makerKey, series.underlyingPoolId, underlyingAmount);
 
         Types.PoolData storage underlyingPool = LibAppStorage.s().pools[series.underlyingPoolId];
         Types.PoolData storage quotePool = LibAppStorage.s().pools[series.quotePoolId];
 
         uint256 makerUnderlying = underlyingPool.userPrincipal[makerKey];
-        if (makerUnderlying < amount) revert InsufficientPrincipal(amount, makerUnderlying);
-        if (underlyingPool.trackedBalance < amount) {
-            revert InsufficientPrincipal(amount, underlyingPool.trackedBalance);
+        if (makerUnderlying < underlyingAmount) revert InsufficientPrincipal(underlyingAmount, makerUnderlying);
+        if (underlyingPool.trackedBalance < underlyingAmount) {
+            revert InsufficientPrincipal(underlyingAmount, underlyingPool.trackedBalance);
         }
 
-        underlyingPool.userPrincipal[makerKey] = makerUnderlying - amount;
-        underlyingPool.totalDeposits = underlyingPool.totalDeposits >= amount
-            ? underlyingPool.totalDeposits - amount
-            : 0;
-        underlyingPool.trackedBalance -= amount;
+        underlyingPool.userPrincipal[makerKey] = makerUnderlying - underlyingAmount;
+        underlyingPool.totalDeposits =
+            underlyingPool.totalDeposits >= underlyingAmount ? underlyingPool.totalDeposits - underlyingAmount : 0;
+        underlyingPool.trackedBalance -= underlyingAmount;
         if (LibCurrency.isNative(underlyingPool.underlying)) {
-            LibAppStorage.s().nativeTrackedTotal -= amount;
+            LibAppStorage.s().nativeTrackedTotal -= underlyingAmount;
         }
 
         DerivativeTypes.DerivativeConfig storage cfg = LibDerivativeStorage.derivativeStorage().config;
@@ -282,10 +280,10 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         quotePool.userPrincipal[makerKey] += netQuote;
         quotePool.totalDeposits += netQuote;
 
-        LibCurrency.transferWithMin(series.underlyingAsset, recipient, amount, minReceived);
+        LibCurrency.transferWithMin(series.underlyingAsset, recipient, underlyingAmount, minReceived);
 
         series.remaining -= amount;
-        series.underlyingLocked -= amount;
+        series.underlyingLocked -= underlyingAmount;
 
         emit Settled(seriesId, holder, recipient, amount, quoteAmount, received);
     }
@@ -307,7 +305,9 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 remaining = series.remaining;
         uint256 collateralUnlocked;
         if (remaining > 0) {
-            collateralUnlocked = remaining;
+            uint256 contractSize = ds.futuresContractSize[seriesId];
+            if (contractSize == 0) revert Futures_InvalidContractSize(contractSize);
+            collateralUnlocked = _contractsToUnderlying(remaining, contractSize);
             LibDerivativeHelpers._unlockCollateral(positionKey, series.underlyingPoolId, collateralUnlocked);
             series.underlyingLocked -= collateralUnlocked;
             series.remaining = 0;
@@ -358,6 +358,10 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         return (series.underlyingLocked, series.remaining);
     }
 
+    function getFuturesContractSize(uint256 seriesId) external view returns (uint256) {
+        return LibDerivativeStorage.derivativeStorage().futuresContractSize[seriesId];
+    }
+
     function getGraceUnlockTime(uint256 seriesId) external view returns (uint64) {
         return LibDerivativeStorage.derivativeStorage().futuresSeries[seriesId].graceUnlockTime;
     }
@@ -368,12 +372,10 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         token = FuturesToken(tokenAddress);
     }
 
-    function _requireTokenHolderOrOperator(
-        FuturesToken token,
-        address holder,
-        uint256 seriesId,
-        uint256 amount
-    ) internal view {
+    function _requireTokenHolderOrOperator(FuturesToken token, address holder, uint256 seriesId, uint256 amount)
+        internal
+        view
+    {
         uint256 balance = token.balanceOf(holder, seriesId);
         if (balance < amount) {
             revert Futures_InsufficientBalance(holder, amount, balance);
@@ -383,22 +385,24 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         }
     }
 
-    function _normalizeQuoteAmount(
-        uint256 amount,
-        uint256 forwardPrice,
-        address underlying,
-        address quote
-    ) internal view returns (uint256) {
+    function _normalizeQuoteAmount(uint256 amount, uint256 forwardPrice, address underlying, address quote)
+        internal
+        view
+        returns (uint256)
+    {
         uint8 underlyingDecimals = LibCurrency.decimals(underlying);
         uint8 quoteDecimals = LibCurrency.decimals(quote);
         return LibDerivativeHelpers._normalizePrice(amount, forwardPrice, underlyingDecimals, quoteDecimals);
     }
 
-    function _validateSettlementWindow(
-        uint256 seriesId,
-        DerivativeTypes.FuturesSeries storage series,
-        uint64 tolerance
-    ) internal view {
+    function _contractsToUnderlying(uint256 contractsAmount, uint256 contractSize) internal pure returns (uint256) {
+        return contractsAmount * contractSize;
+    }
+
+    function _validateSettlementWindow(uint256 seriesId, DerivativeTypes.FuturesSeries storage series, uint64 tolerance)
+        internal
+        view
+    {
         if (!series.isEuropean) {
             if (block.timestamp > series.graceUnlockTime) revert Futures_SettlementWindowClosed(seriesId);
             return;

@@ -81,6 +81,7 @@ contract DerivativeCollateralUnlockPropertyTest is Test {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 2e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -129,6 +130,7 @@ contract DerivativeCollateralUnlockPropertyTest is Test {
                 forwardPrice: 2e18,
                 expiry: uint64(block.timestamp + 30 days),
                 totalSize: 2e18,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -216,13 +218,7 @@ contract OptionsUnlockHarness is OptionsFacet {
         LibDerivativeStorage.derivativeStorage().config.europeanToleranceSeconds = tolerance;
     }
 
-    function seedPool(
-        uint256 pid,
-        address asset,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address asset, bytes32 positionKey, uint256 principal, uint256 tracked) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = asset;
         p.initialized = true;
@@ -273,13 +269,7 @@ contract FuturesUnlockHarness is FuturesFacet {
         LibDerivativeStorage.derivativeStorage().config.defaultGracePeriodSeconds = gracePeriod;
     }
 
-    function seedPool(
-        uint256 pid,
-        address asset,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address asset, bytes32 positionKey, uint256 principal, uint256 tracked) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = asset;
         p.initialized = true;
@@ -318,13 +308,7 @@ contract AmmUnlockHarness is AmmAuctionFacet {
         ns.nftModeEnabled = true;
     }
 
-    function seedPool(
-        uint256 pid,
-        address asset,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address asset, bytes32 positionKey, uint256 principal, uint256 tracked) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = asset;
         p.initialized = true;

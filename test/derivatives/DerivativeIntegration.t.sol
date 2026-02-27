@@ -82,13 +82,9 @@ contract DerivativeTestHarnessFacet {
         store.treasuryShareConfigured = true;
     }
 
-    function seedPool(
-        uint256 pid,
-        address underlying,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address underlying, bytes32 positionKey, uint256 principal, uint256 tracked)
+        external
+    {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = underlying;
         p.initialized = true;
@@ -248,9 +244,7 @@ abstract contract DerivativeDiamondTestBase is Test {
 
     function _cut(address facet, bytes4[] memory selectors) internal pure returns (IDiamondCut.FacetCut memory) {
         return IDiamondCut.FacetCut({
-            facetAddress: facet,
-            action: IDiamondCut.FacetCutAction.Add,
-            functionSelectors: selectors
+            facetAddress: facet, action: IDiamondCut.FacetCutAction.Add, functionSelectors: selectors
         });
     }
 
@@ -572,7 +566,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         community.swapExactIn(auctionId, address(tokenA), 2e17, 2e17, 0, swapper);
 
         vm.prank(holder);
-        (, , uint256 feesA, uint256 feesB) = community.leaveCommunityAuction(auctionId, joinerTokenId);
+        (,, uint256 feesA, uint256 feesB) = community.leaveCommunityAuction(auctionId, joinerTokenId);
         assertTrue(feesA > 0 || feesB > 0, "fees accrued for leaver");
 
         DerivativeTypes.CommunityAuction memory auction = community.getCommunityAuction(auctionId);
@@ -685,6 +679,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 2e18,
+                contractSize: 1,
                 isCall: isCall,
                 isAmerican: true,
                 useCustomFees: false,
@@ -710,14 +705,14 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
 
         uint256 payment = options.previewExercisePayment(seriesId, 1e18);
 
-
         vm.prank(holder);
-
 
         options.exerciseOptions(seriesId, 1e18, holder, payment, 0);
 
         uint256 expectedLocked = isCall ? 1e18 : _strikeAmount(1e18, 2e18);
-        assertEq(harness.getDirectLocked(key, isCall ? poolUnderlying : poolStrike), expectedLocked, "locked after exercise");
+        assertEq(
+            harness.getDirectLocked(key, isCall ? poolUnderlying : poolStrike), expectedLocked, "locked after exercise"
+        );
 
         vm.warp(block.timestamp + 8 days);
         vm.prank(maker);
@@ -750,6 +745,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
                 forwardPrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 2e18,
+                contractSize: 1,
                 isEuropean: isEuropean,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -772,9 +768,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
 
         uint256 payment = futures.previewSettlePayment(seriesId, 1e18);
 
-
         vm.prank(holder);
-
 
         futures.settleFutures(seriesId, 1e18, holder, payment, 0);
 
@@ -818,6 +812,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -836,6 +831,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
                 forwardPrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isEuropean: false,
                 useCustomFees: false,
                 createFeeBps: 0,
@@ -896,6 +892,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,

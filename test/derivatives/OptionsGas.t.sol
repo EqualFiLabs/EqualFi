@@ -63,6 +63,7 @@ contract OptionsGasTest is Test {
             strikePrice: 2e18,
             expiry: uint64(block.timestamp + 1 days),
             totalSize: 1e18,
+            contractSize: 1,
             isCall: true,
             isAmerican: true,
             useCustomFees: false,
@@ -85,6 +86,7 @@ contract OptionsGasTest is Test {
             strikePrice: 2e18,
             expiry: uint64(block.timestamp + 1 days),
             totalSize: 1e18,
+            contractSize: 1,
             isCall: true,
             isAmerican: true,
             useCustomFees: false,
@@ -135,13 +137,9 @@ contract OptionsGasHarness is OptionsFacet {
         LibDerivativeStorage.derivativeStorage().optionToken = token;
     }
 
-    function seedPool(
-        uint256 pid,
-        address underlying,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address underlying, bytes32 positionKey, uint256 principal, uint256 tracked)
+        external
+    {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = underlying;
         p.initialized = true;
