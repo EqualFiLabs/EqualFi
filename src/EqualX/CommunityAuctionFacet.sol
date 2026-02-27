@@ -35,6 +35,7 @@ error CommunityAuction_AlreadyParticipant(bytes32 positionKey);
 error CommunityAuction_NotParticipant(bytes32 positionKey);
 error CommunityAuction_InvalidToken(address token);
 error CommunityAuction_Slippage(uint256 minOut, uint256 actualOut);
+error CommunityAuction_InvalidInvariantMode(uint8 mode);
 
 /// @notice Community auction facet allowing multiple makers to pool liquidity.
 contract CommunityAuctionFacet is ReentrancyGuardModifiers {
@@ -113,6 +114,9 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
 
         if (ds.config.maxFeeBps != 0 && params.feeBps > ds.config.maxFeeBps) {
             revert CommunityAuction_InvalidFee(params.feeBps, ds.config.maxFeeBps);
+        }
+        if (uint8(params.invariantMode) > uint8(DerivativeTypes.InvariantMode.Stable)) {
+            revert CommunityAuction_InvalidInvariantMode(uint8(params.invariantMode));
         }
 
         bytes32 positionKey = LibDerivativeHelpers._requirePositionOwnership(params.positionId);
@@ -407,8 +411,16 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         }
         uint256 reserveIn = inIsA ? auction.reserveA : auction.reserveB;
         uint256 reserveOut = inIsA ? auction.reserveB : auction.reserveA;
-        (uint256 rawOut, uint256 fee, uint256 outToRecipient) =
-            LibAuctionSwap.computeSwap(auction.feeAsset, reserveIn, reserveOut, amountIn, auction.feeBps);
+        (uint256 rawOut, uint256 fee, uint256 outToRecipient) = LibAuctionSwap.computeSwapByInvariant(
+            auction.invariantMode,
+            auction.feeAsset,
+            reserveIn,
+            reserveOut,
+            amountIn,
+            auction.feeBps,
+            LibCurrency.decimals(tokenIn),
+            LibCurrency.decimals(inIsA ? auction.tokenB : auction.tokenA)
+        );
         rawOut;
         feeAmount = fee;
         amountOut = outToRecipient;
@@ -538,8 +550,16 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         uint256 reserveOut = inIsA ? auction.reserveB : auction.reserveA;
         TransientSwapCache.cacheReserves(reserveIn, reserveOut);
 
-        (uint256 rawOut, uint256 feeAmount, uint256 outputToRecipient) =
-            LibAuctionSwap.computeSwap(auction.feeAsset, reserveIn, reserveOut, actualIn, auction.feeBps);
+        (uint256 rawOut, uint256 feeAmount, uint256 outputToRecipient) = LibAuctionSwap.computeSwapByInvariant(
+            auction.invariantMode,
+            auction.feeAsset,
+            reserveIn,
+            reserveOut,
+            actualIn,
+            auction.feeBps,
+            LibCurrency.decimals(tokenIn),
+            LibCurrency.decimals(tokenOut)
+        );
         rawOut;
 
         amountOut = outputToRecipient;
