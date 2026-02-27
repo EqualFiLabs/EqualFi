@@ -3,7 +3,10 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {CommunityAuctionFacet} from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {
+    CommunityAuctionFacet,
+    CommunityAuction_ZeroOutput
+} from "../../src/EqualX/CommunityAuctionFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
@@ -11,9 +14,12 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibAuctionSwap} from "../../src/libraries/LibAuctionSwap.sol";
+import {LibCurrency} from "../../src/libraries/LibCurrency.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {RevertingDecimalsERC20} from "../../src/mocks/RevertingDecimalsERC20.sol";
 
 contract CommunityAuctionInvariantModeTest is Test {
     struct RawCreateCommunityAuctionParams {
@@ -168,6 +174,133 @@ contract CommunityAuctionInvariantModeTest is Test {
         vm.prank(taker);
         uint256 amountOut = harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, expectedOut, taker);
         assertEq(amountOut, expectedOut, "volatile preview/execution parity");
+    }
+
+    function test_CreateCommunityAuctionStableModeSnapshotsTokenDecimals() public {
+        MockERC20 usdc = new MockERC20("USDC", "USDC", 6, 0);
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18, 0);
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 makerKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(usdc), makerKey, 3_000_000e6, 3_000_000e6);
+        harness.seedPool(2, address(dai), makerKey, 3_000_000e18, 3_000_000e18);
+        harness.joinPool(makerKey, 1);
+        harness.joinPool(makerKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1_000_000e6,
+                reserveB: 1_000_000e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+
+        DerivativeTypes.CommunityAuction memory auction = harness.getCommunityAuction(auctionId);
+        assertEq(auction.tokenADecimals, 6, "token A decimals");
+        assertEq(auction.tokenBDecimals, 18, "token B decimals");
+    }
+
+    function test_CreateCommunityAuctionStableModeRejectsUnsupportedDecimals() public {
+        MockERC20 badDecimals = new MockERC20("BAD", "BAD", 96, 0);
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 makerKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(badDecimals), makerKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), makerKey, 3e18, 3e18);
+        harness.joinPool(makerKey, 1);
+        harness.joinPool(makerKey, 2);
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(LibAuctionSwap.LibAuctionSwap_UnsupportedDecimals.selector, uint8(78)));
+        harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+    }
+
+    function test_CreateCommunityAuctionStableModeRevertsWhenDecimalsQueryFails() public {
+        RevertingDecimalsERC20 badDecimals = new RevertingDecimalsERC20("BAD", "BAD");
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 makerKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(badDecimals), makerKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), makerKey, 3e18, 3e18);
+        harness.joinPool(makerKey, 1);
+        harness.joinPool(makerKey, 2);
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(LibCurrency.LibCurrency_DecimalsQueryFailed.selector, address(badDecimals)));
+        harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+    }
+
+    function test_StableCommunityMode_SwapRevertsOnZeroOutput() public {
+        MockERC20 usdcA = new MockERC20("USDC-A", "USDA", 6, 0);
+        MockERC20 usdcB = new MockERC20("USDC-B", "USDB", 6, 0);
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 makerKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(usdcA), makerKey, 5_000_000e6, 5_000_000e6);
+        harness.seedPool(2, address(usdcB), makerKey, 5_000_000e6, 5_000_000e6);
+        harness.joinPool(makerKey, 1);
+        harness.joinPool(makerKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1_000_000,
+                reserveB: 1_000_000,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+
+        (uint256 previewOut,) = harness.previewCommunitySwap(auctionId, address(usdcA), 1);
+        assertEq(previewOut, 0, "preview must be zero");
+
+        usdcA.mint(taker, 1);
+        vm.prank(taker);
+        usdcA.approve(address(harness), 1);
+
+        vm.prank(taker);
+        vm.expectRevert(CommunityAuction_ZeroOutput.selector);
+        harness.swapExactIn(auctionId, address(usdcA), 1, 1, 0, taker);
     }
 }
 

@@ -18,6 +18,7 @@ import {AdminGovernanceFacet} from "../src/admin/AdminGovernanceFacet.sol";
 import {PoolManagementFacet} from "../src/equallend/PoolManagementFacet.sol";
 import {EqualIndexAdminFacetV3} from "../src/equalindex/EqualIndexAdminFacetV3.sol";
 import {EqualIndexActionsFacetV3} from "../src/equalindex/EqualIndexActionsFacetV3.sol";
+import {EqualIndexLendingFacet} from "../src/equalindex/EqualIndexLendingFacet.sol";
 import {EqualIndexPositionFacet} from "../src/equalindex/EqualIndexPositionFacet.sol";
 import {EqualIndexViewFacetV3} from "../src/views/EqualIndexViewFacetV3.sol";
 import {EqualIndexBaseV3} from "../src/equalindex/EqualIndexBaseV3.sol";
@@ -243,6 +244,7 @@ contract DeployDiamondScript is Script {
         PoolManagementFacet poolManagement = new PoolManagementFacet();
         EqualIndexAdminFacetV3 equalIndexAdmin = new EqualIndexAdminFacetV3();
         EqualIndexActionsFacetV3 equalIndexActions = new EqualIndexActionsFacetV3();
+        EqualIndexLendingFacet equalIndexLending = new EqualIndexLendingFacet();
         EqualIndexPositionFacet equalIndexPosition = new EqualIndexPositionFacet();
         EqualIndexViewFacetV3 equalIndexView = new EqualIndexViewFacetV3();
         LiquidityViewFacet liqView = new LiquidityViewFacet();
@@ -291,7 +293,7 @@ contract DeployDiamondScript is Script {
         ModuleViewFacet moduleView = new ModuleViewFacet();
 
         // Build facet cuts (core + admin + fee + index + base views)
-        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](14);
+        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](15);
         cuts[0] = _cut(address(cut), _selectors(cut));
         cuts[1] = _cut(address(loupe), _selectors(loupe));
         cuts[2] = _cut(address(own), _selectors(own));
@@ -303,9 +305,10 @@ contract DeployDiamondScript is Script {
         cuts[8] = _cut(address(poolManagement), _selectors(poolManagement));
         cuts[9] = _cut(address(equalIndexAdmin), _selectors(equalIndexAdmin));
         cuts[10] = _cut(address(equalIndexActions), _selectors(equalIndexActions));
-        cuts[11] = _cut(address(equalIndexPosition), _selectors(equalIndexPosition));
-        cuts[12] = _cut(address(equalIndexView), _selectors(equalIndexView));
-        cuts[13] = _cut(address(liqView), _selectors(liqView));
+        cuts[11] = _cut(address(equalIndexLending), _selectors(equalIndexLending));
+        cuts[12] = _cut(address(equalIndexPosition), _selectors(equalIndexPosition));
+        cuts[13] = _cut(address(equalIndexView), _selectors(equalIndexView));
+        cuts[14] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
         IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](44);
         more[0] = _cut(address(loanView), _selectors(loanView));
@@ -670,6 +673,22 @@ contract DeployDiamondScript is Script {
         s[0] = EqualIndexActionsFacetV3.mint.selector;
         s[1] = EqualIndexActionsFacetV3.burn.selector;
         s[2] = EqualIndexActionsFacetV3.flashLoan.selector;
+    }
+
+    function _selectors(EqualIndexLendingFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](12);
+        s[0] = EqualIndexLendingFacet.configureLending.selector;
+        s[1] = EqualIndexLendingFacet.borrowFromPosition.selector;
+        s[2] = EqualIndexLendingFacet.repayFromPosition.selector;
+        s[3] = EqualIndexLendingFacet.extendFromPosition.selector;
+        s[4] = EqualIndexLendingFacet.recoverExpired.selector;
+        s[5] = EqualIndexLendingFacet.getLoan.selector;
+        s[6] = EqualIndexLendingFacet.getOutstandingPrincipal.selector;
+        s[7] = EqualIndexLendingFacet.getLockedCollateralUnits.selector;
+        s[8] = EqualIndexLendingFacet.getLendingConfig.selector;
+        s[9] = EqualIndexLendingFacet.economicBalance.selector;
+        s[10] = EqualIndexLendingFacet.maxBorrowable.selector;
+        s[11] = EqualIndexLendingFacet.lendingModuleId.selector;
     }
 
     function _selectors(EqualIndexPositionFacet) internal pure returns (bytes4[] memory s) {

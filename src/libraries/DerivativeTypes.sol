@@ -36,6 +36,8 @@ library DerivativeTypes {
         uint256 treasuryFeeBAccrued;
         bool active;
         bool finalized;
+        uint8 tokenADecimals;
+        uint8 tokenBDecimals;
     }
 
     struct CommunityAuction {
@@ -66,6 +68,8 @@ library DerivativeTypes {
         uint64 endTime;
         bool active;
         bool finalized;
+        uint8 tokenADecimals;
+        uint8 tokenBDecimals;
     }
 
     struct MakerPosition {

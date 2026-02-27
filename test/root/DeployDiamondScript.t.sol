@@ -13,16 +13,42 @@ import {SettlementEscrowFacet} from "../../src/EqualX/SettlementEscrowFacet.sol"
 import {PositionAgentViewFacet} from "../../src/agent-wallet/erc6551/PositionAgentViewFacet.sol";
 import {FlashLoanFacet} from "../../src/equallend/FlashLoanFacet.sol";
 import {AdminGovernanceFacet} from "../../src/admin/AdminGovernanceFacet.sol";
+import {EqualIndexLendingFacet} from "../../src/equalindex/EqualIndexLendingFacet.sol";
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
 import {CommunityAuctionFacet} from "../../src/EqualX/CommunityAuctionFacet.sol";
 import {ModuleRegistryFacet} from "../../src/modules/ModuleRegistryFacet.sol";
 import {ModuleGatewayFacet} from "../../src/modules/ModuleGatewayFacet.sol";
 import {ModuleViewFacet} from "../../src/modules/ModuleViewFacet.sol";
 
+contract DeployDiamondScriptHarness is DeployDiamondScript {
+    function equalIndexLendingSelectors() external pure returns (bytes4[] memory s) {
+        s = _selectors(EqualIndexLendingFacet(address(0)));
+    }
+}
+
 contract DeployDiamondScriptTest is Test {
     uint256 internal constant DEPLOYER_PK = 0xA11CE;
     address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
     string internal constant ARBITRUM_SEPOLIA_RPC = "https://sepolia-rollup.arbitrum.io/rpc";
+
+    function testEqualIndexLendingSelectorHelper() public {
+        DeployDiamondScriptHarness harness = new DeployDiamondScriptHarness();
+        bytes4[] memory s = harness.equalIndexLendingSelectors();
+
+        assertEq(s.length, 12, "selector count");
+        assertEq(s[0], EqualIndexLendingFacet.configureLending.selector, "configureLending");
+        assertEq(s[1], EqualIndexLendingFacet.borrowFromPosition.selector, "borrowFromPosition");
+        assertEq(s[2], EqualIndexLendingFacet.repayFromPosition.selector, "repayFromPosition");
+        assertEq(s[3], EqualIndexLendingFacet.extendFromPosition.selector, "extendFromPosition");
+        assertEq(s[4], EqualIndexLendingFacet.recoverExpired.selector, "recoverExpired");
+        assertEq(s[5], EqualIndexLendingFacet.getLoan.selector, "getLoan");
+        assertEq(s[6], EqualIndexLendingFacet.getOutstandingPrincipal.selector, "getOutstandingPrincipal");
+        assertEq(s[7], EqualIndexLendingFacet.getLockedCollateralUnits.selector, "getLockedCollateralUnits");
+        assertEq(s[8], EqualIndexLendingFacet.getLendingConfig.selector, "getLendingConfig");
+        assertEq(s[9], EqualIndexLendingFacet.economicBalance.selector, "economicBalance");
+        assertEq(s[10], EqualIndexLendingFacet.maxBorrowable.selector, "maxBorrowable");
+        assertEq(s[11], EqualIndexLendingFacet.lendingModuleId.selector, "lendingModuleId");
+    }
 
     function testRunDeploysAndInitializesFullProtocol() public {
         // Fork Arbitrum Sepolia to test with canonical registries
@@ -104,6 +130,9 @@ contract DeployDiamondScriptTest is Test {
             AdminGovernanceFacet.setManagedPoolSystemShareBps.selector,
             "managed system share selector"
         );
+        _assertSelectorMapped(loupe, EqualIndexLendingFacet.configureLending.selector, "index lending config selector");
+        _assertSelectorMapped(loupe, EqualIndexLendingFacet.borrowFromPosition.selector, "index lending borrow selector");
+        _assertSelectorMapped(loupe, EqualIndexLendingFacet.getLendingConfig.selector, "index lending view selector");
         _assertSelectorMapped(loupe, AdminGovernanceFacet.setPositionNFT.selector, "set position nft selector");
         _assertSelectorMapped(loupe, AmmAuctionFacet.addLiquidity.selector, "amm add liquidity selector");
         _assertSelectorMapped(
@@ -163,6 +192,32 @@ contract DeployDiamondScriptTest is Test {
 
         uint256 repaymentPreview = FlashLoanFacet(diamond).previewFlashLoanRepayment(1, 1 ether);
         assertTrue(repaymentPreview >= 1 ether, "flash repayment preview");
+    }
+
+    function testRunWiresEqualIndexLendingFacetSelectorsLocal() public {
+        address owner = vm.addr(DEPLOYER_PK);
+        address timelock = address(0xBEEF);
+        address treasury = address(0xCAFE);
+        address entryPoint = address(0x1337);
+
+        vm.deal(owner, 1_000 ether);
+        vm.setEnv("OWNER", vm.toString(owner));
+        vm.setEnv("TIMELOCK", vm.toString(timelock));
+        vm.setEnv("TREASURY", vm.toString(treasury));
+        vm.setEnv("PRIVATE_KEY", vm.toString(DEPLOYER_PK));
+        vm.setEnv("ENTRYPOINT_ADDRESS", vm.toString(entryPoint));
+
+        DeployDiamondScript script = new DeployDiamondScript();
+        script.run();
+
+        address diamond = script.deployedDiamond();
+        assertTrue(diamond != address(0), "diamond not deployed");
+
+        IDiamondLoupe loupe = IDiamondLoupe(diamond);
+        _assertSelectorMapped(loupe, EqualIndexLendingFacet.configureLending.selector, "configure lending selector");
+        _assertSelectorMapped(loupe, EqualIndexLendingFacet.borrowFromPosition.selector, "borrow selector");
+        _assertSelectorMapped(loupe, EqualIndexLendingFacet.repayFromPosition.selector, "repay selector");
+        _assertSelectorMapped(loupe, EqualIndexLendingFacet.getLendingConfig.selector, "lending config selector");
     }
 
     function _assertSelectorMapped(IDiamondLoupe loupe, bytes4 selector, string memory message) internal {

@@ -37,6 +37,7 @@ error CommunityAuction_InvalidToken(address token);
 error CommunityAuction_Slippage(uint256 minOut, uint256 actualOut);
 error CommunityAuction_InvalidInvariantMode(uint8 mode);
 error CommunityAuction_StableModeDisabled();
+error CommunityAuction_ZeroOutput();
 
 /// @notice Community auction facet allowing multiple makers to pool liquidity.
 contract CommunityAuctionFacet is ReentrancyGuardModifiers {
@@ -126,6 +127,16 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         bytes32 positionKey = LibDerivativeHelpers._requirePositionOwnership(params.positionId);
         Types.PoolData storage poolA = LibDirectHelpers._pool(params.poolIdA);
         Types.PoolData storage poolB = LibDirectHelpers._pool(params.poolIdB);
+        uint8 tokenADecimals;
+        uint8 tokenBDecimals;
+        if (params.invariantMode == DerivativeTypes.InvariantMode.Stable) {
+            tokenADecimals = LibCurrency.decimalsOrRevert(poolA.underlying);
+            tokenBDecimals = LibCurrency.decimalsOrRevert(poolB.underlying);
+            LibAuctionSwap.validateStableDecimals(tokenADecimals, tokenBDecimals);
+        } else {
+            tokenADecimals = LibCurrency.decimals(poolA.underlying);
+            tokenBDecimals = LibCurrency.decimals(poolB.underlying);
+        }
 
         if (!LibPoolMembership.isMember(positionKey, params.poolIdA)) {
             revert PoolMembershipRequired(positionKey, params.poolIdA);
@@ -161,6 +172,8 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         auction.endTime = params.endTime;
         auction.active = true;
         auction.finalized = false;
+        auction.tokenADecimals = tokenADecimals;
+        auction.tokenBDecimals = tokenBDecimals;
 
         DerivativeTypes.MakerPosition storage maker = ds.communityAuctionMakers[auctionId][positionKey];
         maker.share = auction.totalShares;
@@ -415,6 +428,8 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         }
         uint256 reserveIn = inIsA ? auction.reserveA : auction.reserveB;
         uint256 reserveOut = inIsA ? auction.reserveB : auction.reserveA;
+        uint8 decimalsIn = inIsA ? auction.tokenADecimals : auction.tokenBDecimals;
+        uint8 decimalsOut = inIsA ? auction.tokenBDecimals : auction.tokenADecimals;
         (uint256 rawOut, uint256 fee, uint256 outToRecipient) = LibAuctionSwap.computeSwapByInvariant(
             auction.invariantMode,
             auction.feeAsset,
@@ -422,8 +437,8 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
             reserveOut,
             amountIn,
             auction.feeBps,
-            LibCurrency.decimals(tokenIn),
-            LibCurrency.decimals(inIsA ? auction.tokenB : auction.tokenA)
+            decimalsIn,
+            decimalsOut
         );
         rawOut;
         feeAmount = fee;
@@ -552,6 +567,8 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
 
         uint256 reserveIn = inIsA ? auction.reserveA : auction.reserveB;
         uint256 reserveOut = inIsA ? auction.reserveB : auction.reserveA;
+        uint8 decimalsIn = inIsA ? auction.tokenADecimals : auction.tokenBDecimals;
+        uint8 decimalsOut = inIsA ? auction.tokenBDecimals : auction.tokenADecimals;
         TransientSwapCache.cacheReserves(reserveIn, reserveOut);
 
         (uint256 rawOut, uint256 feeAmount, uint256 outputToRecipient) = LibAuctionSwap.computeSwapByInvariant(
@@ -561,10 +578,13 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
             reserveOut,
             actualIn,
             auction.feeBps,
-            LibCurrency.decimals(tokenIn),
-            LibCurrency.decimals(tokenOut)
+            decimalsIn,
+            decimalsOut
         );
         rawOut;
+        if (auction.invariantMode == DerivativeTypes.InvariantMode.Stable && outputToRecipient == 0) {
+            revert CommunityAuction_ZeroOutput();
+        }
 
         amountOut = outputToRecipient;
         if (amountOut < minOut) revert CommunityAuction_Slippage(minOut, amountOut);

@@ -65,6 +65,11 @@ library LibAuctionSwap {
         return _computeStableSwap(feeAsset, reserveIn, reserveOut, amountIn, feeBps, decimalsIn, decimalsOut, maxIterations);
     }
 
+    function validateStableDecimals(uint8 decimalsIn, uint8 decimalsOut) internal pure {
+        _validateStableDecimal(decimalsIn);
+        _validateStableDecimal(decimalsOut);
+    }
+
     function splitFee(uint256 feeAmount, uint16 makerBps, uint16 indexBps)
         internal
         pure
@@ -263,6 +268,13 @@ library LibAuctionSwap {
         value = 1;
         for (uint8 i; i < exp; ++i) {
             value *= 10;
+        }
+    }
+
+    function _validateStableDecimal(uint8 decimals) private pure {
+        uint8 exp = decimals > 18 ? decimals - 18 : 18 - decimals;
+        if (exp > 77) {
+            revert LibAuctionSwap_UnsupportedDecimals(exp);
         }
     }
 }
