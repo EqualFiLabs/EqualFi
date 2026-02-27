@@ -5,7 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {
     AmmAuctionFacet,
-    AmmAuction_NotActive
+    AmmAuction_NotActive,
+    AmmAuction_StableModeDisabled
 } from "../../src/EqualX/AmmAuctionFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
@@ -61,6 +62,7 @@ contract AmmAuctionFacetPropertyTest is Test {
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(treasury);
         harness.setMakerShareBps(7000);
+        harness.setStableModeEnabled(true);
     }
 
     function test_CreateAuctionPersistsInvariantModeAndEmitsEvent() public {
@@ -108,6 +110,34 @@ contract AmmAuctionFacetPropertyTest is Test {
 
         DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
         assertEq(uint8(auction.invariantMode), uint8(DerivativeTypes.InvariantMode.Stable), "mode persisted");
+    }
+
+    function test_CreateAuctionStableModeDisabledReverts() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setStableModeEnabled(false);
+
+        vm.prank(maker);
+        vm.expectRevert(AmmAuction_StableModeDisabled.selector);
+        harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
     }
 
     function test_StableMode_PreviewSwapMatchesExecution() public {
@@ -821,6 +851,10 @@ contract AmmAuctionHarness is AmmAuctionFacet {
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.ammMakerShareBps = shareBps;
+    }
+
+    function setStableModeEnabled(bool enabled) external {
+        LibDerivativeStorage.derivativeStorage().config.stableModeEnabled = enabled;
     }
 
     function setPointsPerAction(bytes32 actionType, uint256 amount) external {

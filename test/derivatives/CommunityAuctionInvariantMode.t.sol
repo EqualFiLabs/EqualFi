@@ -48,6 +48,7 @@ contract CommunityAuctionInvariantModeTest is Test {
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(treasury);
         harness.setMakerShareBps(7000);
+        harness.setStableModeEnabled(true);
     }
 
     function test_CreateCommunityAuctionRejectsInvalidInvariantMode() public {
@@ -183,6 +184,10 @@ contract CommunityAuctionInvariantHarness is CommunityAuctionFacet {
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.communityMakerShareBps = shareBps;
+    }
+
+    function setStableModeEnabled(bool enabled) external {
+        LibDerivativeStorage.derivativeStorage().config.stableModeEnabled = enabled;
     }
 
     function seedPool(

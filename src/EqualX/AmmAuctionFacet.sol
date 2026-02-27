@@ -35,6 +35,7 @@ error AmmAuction_Slippage(uint256 minOut, uint256 actualOut);
 error AmmAuction_NotMaker(address caller, uint256 positionId);
 error AmmAuction_InvalidRatio(uint256 expectedB, uint256 actualB);
 error AmmAuction_InvalidInvariantMode(uint8 mode);
+error AmmAuction_StableModeDisabled();
 
 /// @notice AMM auction facet using Position NFT collateral
 contract AmmAuctionFacet is ReentrancyGuardModifiers {
@@ -120,6 +121,9 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
         }
         if (uint8(params.invariantMode) > uint8(DerivativeTypes.InvariantMode.Stable)) {
             revert AmmAuction_InvalidInvariantMode(uint8(params.invariantMode));
+        }
+        if (params.invariantMode == DerivativeTypes.InvariantMode.Stable && !ds.config.stableModeEnabled) {
+            revert AmmAuction_StableModeDisabled();
         }
 
         (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);

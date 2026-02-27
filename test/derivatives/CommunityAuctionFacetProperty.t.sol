@@ -8,7 +8,8 @@ import {
     CommunityAuction_InvalidRatio,
     CommunityAuction_NotCreator,
     CommunityAuction_AlreadyStarted,
-    CommunityAuction_InvalidAmount
+    CommunityAuction_InvalidAmount,
+    CommunityAuction_StableModeDisabled
 } from "../../src/EqualX/CommunityAuctionFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibCommunityAuctionFeeIndex} from "../../src/libraries/LibCommunityAuctionFeeIndex.sol";
@@ -66,6 +67,7 @@ contract CommunityAuctionFacetPropertyTest is Test {
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(treasury);
         harness.setMakerShareBps(7000);
+        harness.setStableModeEnabled(true);
         vm.label(swapper, "swapper");
     }
 
@@ -114,6 +116,34 @@ contract CommunityAuctionFacetPropertyTest is Test {
 
         DerivativeTypes.CommunityAuction memory auction = harness.getCommunityAuction(auctionId);
         assertEq(uint8(auction.invariantMode), uint8(DerivativeTypes.InvariantMode.Stable), "mode persisted");
+    }
+
+    function test_CreateCommunityAuctionStableModeDisabledReverts() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setStableModeEnabled(false);
+
+        vm.prank(maker);
+        vm.expectRevert(CommunityAuction_StableModeDisabled.selector);
+        harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
     }
 
     function _createAuction(uint96 reserveA, uint96 reserveB, uint64 startTime, uint64 endTime)
@@ -1007,6 +1037,10 @@ contract CommunityAuctionHarness is CommunityAuctionFacet {
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.communityMakerShareBps = shareBps;
+    }
+
+    function setStableModeEnabled(bool enabled) external {
+        LibDerivativeStorage.derivativeStorage().config.stableModeEnabled = enabled;
     }
 
     function setPointsPerAction(bytes32 actionType, uint256 amount) external {

@@ -132,6 +132,7 @@ library DerivativeTypes {
         uint128 defaultExerciseFeeFlatWad;
         uint128 defaultReclaimFeeFlatWad;
         bool requirePositionNFT;
+        bool stableModeEnabled;
     }
 
     struct CreateAuctionParams {

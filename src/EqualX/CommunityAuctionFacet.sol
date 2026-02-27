@@ -36,6 +36,7 @@ error CommunityAuction_NotParticipant(bytes32 positionKey);
 error CommunityAuction_InvalidToken(address token);
 error CommunityAuction_Slippage(uint256 minOut, uint256 actualOut);
 error CommunityAuction_InvalidInvariantMode(uint8 mode);
+error CommunityAuction_StableModeDisabled();
 
 /// @notice Community auction facet allowing multiple makers to pool liquidity.
 contract CommunityAuctionFacet is ReentrancyGuardModifiers {
@@ -117,6 +118,9 @@ contract CommunityAuctionFacet is ReentrancyGuardModifiers {
         }
         if (uint8(params.invariantMode) > uint8(DerivativeTypes.InvariantMode.Stable)) {
             revert CommunityAuction_InvalidInvariantMode(uint8(params.invariantMode));
+        }
+        if (params.invariantMode == DerivativeTypes.InvariantMode.Stable && !ds.config.stableModeEnabled) {
+            revert CommunityAuction_StableModeDisabled();
         }
 
         bytes32 positionKey = LibDerivativeHelpers._requirePositionOwnership(params.positionId);

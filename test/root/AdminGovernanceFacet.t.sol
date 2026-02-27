@@ -8,6 +8,7 @@ import {PoolManagementFacet} from "../../src/equallend/PoolManagementFacet.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
+import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
 import "../../src/libraries/Errors.sol";
 
 contract AdminGovernanceHarness is PoolManagementFacet, AdminGovernanceFacet {
@@ -34,6 +35,10 @@ contract AdminGovernanceHarness is PoolManagementFacet, AdminGovernanceFacet {
 
     function foundationReceiver() external view returns (address) {
         return s().foundationReceiver;
+    }
+
+    function stableModeEnabled() external view returns (bool) {
+        return LibDerivativeStorage.derivativeStorage().config.stableModeEnabled;
     }
     
     function getPoolUnderlying(uint256 pid) external view returns (address) {
@@ -189,6 +194,27 @@ contract AdminGovernanceFacetTest is Test {
         vm.prank(TIMELOCK);
         vm.expectRevert("EqualFi: fee out of bounds");
         facet.setActionFeeConfig(PID, ACTION, 101, true);
+    }
+
+    function testSetStableModeEnabled() public {
+        assertFalse(facet.stableModeEnabled(), "stable mode default");
+
+        vm.prank(TIMELOCK);
+        vm.expectEmit(false, false, false, true);
+        emit AdminGovernanceFacet.StableModeEnabledUpdated(true);
+        facet.setStableModeEnabled(true);
+        assertTrue(facet.stableModeEnabled(), "stable mode enabled");
+
+        vm.prank(TIMELOCK);
+        vm.expectEmit(false, false, false, true);
+        emit AdminGovernanceFacet.StableModeEnabledUpdated(false);
+        facet.setStableModeEnabled(false);
+        assertFalse(facet.stableModeEnabled(), "stable mode disabled");
+    }
+
+    function testSetStableModeEnabledAccessControl() public {
+        vm.expectRevert("LibAccess: not owner or timelock");
+        facet.setStableModeEnabled(true);
     }
 
     function testDiamondCutAccessControl() public {
