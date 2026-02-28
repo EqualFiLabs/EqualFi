@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
-import {LibIlmSharesMath} from "../../src/ilm-isolated/libraries/LibIlmSharesMath.sol";
 import {LibIlmInterestMath} from "../../src/ilm-isolated/libraries/LibIlmInterestMath.sol";
 import {IIlmIsolatedIrmAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedIrmAdapter.sol";
 
@@ -25,7 +24,6 @@ contract MockIlmIsolatedIrmAdapter is IIlmIsolatedIrmAdapter {
 contract LibIlmInterestMathHarness {
     IlmIsolatedTypes.IlmIsolatedMarketParams internal _params;
     IlmIsolatedTypes.IlmIsolatedMarket internal _market;
-    mapping(bytes32 => IlmIsolatedTypes.IlmIsolatedPosition) internal _positions;
 
     function setParams(IlmIsolatedTypes.IlmIsolatedMarketParams calldata params_) external {
         _params = params_;
@@ -39,16 +37,8 @@ contract LibIlmInterestMathHarness {
         return _market;
     }
 
-    function setPositionSupplyShares(bytes32 positionKey, uint256 supplyShares) external {
-        _positions[positionKey].supplyShares = supplyShares;
-    }
-
-    function getPosition(bytes32 positionKey) external view returns (IlmIsolatedTypes.IlmIsolatedPosition memory) {
-        return _positions[positionKey];
-    }
-
-    function accrue(bytes32 feeRecipientPositionKey, uint256 fee) external returns (uint256 interest, uint256 feeShares) {
-        return LibIlmInterestMath.accrueInterest(_market, _params, feeRecipientPositionKey, fee, _positions);
+    function accrue(uint256 fee) external returns (uint256 interest, uint256 protocolFeeAccrued) {
+        return LibIlmInterestMath.accrueInterest(_market, _params, fee);
     }
 
     function wTaylorCompounded(uint256 ratePerSecond, uint256 elapsedSeconds) external pure returns (uint256) {
@@ -105,8 +95,7 @@ contract LibIlmInterestMathTest is Test {
         uint128 totalSupplySharesRaw,
         uint64 ratePerSecondRaw,
         uint32 elapsedRaw,
-        uint64 feeRaw,
-        uint8 recipientSeed
+        uint64 feeRaw
     ) public {
         uint256 totalBorrowAssets = _clamp(uint256(totalBorrowAssetsRaw), 1, 1e18);
         uint256 totalSupplyAssets = totalBorrowAssets + _clamp(uint256(totalSupplyAssetsRaw), 0, 1e18);
@@ -115,21 +104,13 @@ contract LibIlmInterestMathTest is Test {
         uint256 elapsed = _clamp(uint256(elapsedRaw), 1, 30 days);
         uint256 fee = _clamp(uint256(feeRaw), 0, IlmIsolatedTypes.MAX_FEE);
 
-        bytes32 recipient = (recipientSeed & 1 == 0) ? bytes32(0) : keccak256("feeRecipient");
-
         uint256 factor = h.wTaylorCompounded(ratePerSecond, elapsed);
-        uint256 interestExpected = totalBorrowAssets * factor / WAD;
-        uint256 newBorrowExpected = totalBorrowAssets + interestExpected;
-        uint256 newSupplyExpected = totalSupplyAssets + interestExpected;
+        uint256 grossInterestExpected = totalBorrowAssets * factor / WAD;
+        uint256 protocolFeeExpected = grossInterestExpected * fee / WAD;
+        uint256 newBorrowExpected = totalBorrowAssets + grossInterestExpected;
+        uint256 newSupplyExpected = totalSupplyAssets + grossInterestExpected - protocolFeeExpected;
         vm.assume(newBorrowExpected <= type(uint128).max);
         vm.assume(newSupplyExpected <= type(uint128).max);
-
-        uint256 feeSharesExpected;
-        if (fee > 0 && recipient != bytes32(0)) {
-            uint256 feeAmount = interestExpected * fee / WAD;
-            feeSharesExpected = LibIlmSharesMath.toSharesDown(feeAmount, newSupplyExpected - feeAmount, totalSupplyShares);
-            vm.assume(totalSupplyShares + feeSharesExpected <= type(uint128).max);
-        }
 
         IlmIsolatedTypes.IlmIsolatedMarketParams memory params = IlmIsolatedTypes.IlmIsolatedMarketParams({
             loanPoolId: 1,
@@ -151,23 +132,21 @@ contract LibIlmInterestMathTest is Test {
         h.setMarket(market);
 
         irm.setRate(ratePerSecond);
-        (uint256 interestActual, uint256 feeSharesActual) = h.accrue(recipient, fee);
+        (uint256 grossInterestActual, uint256 protocolFeeActual) = h.accrue(fee);
 
-        assertEq(interestActual, interestExpected);
-        assertEq(feeSharesActual, feeSharesExpected);
+        assertEq(grossInterestActual, grossInterestExpected);
+        assertEq(protocolFeeActual, protocolFeeExpected);
+        assertEq(
+            uint256(newSupplyExpected) - totalSupplyAssets + protocolFeeExpected,
+            grossInterestExpected,
+            "net supply growth plus protocol fee must equal gross interest"
+        );
 
         IlmIsolatedTypes.IlmIsolatedMarket memory gotMarket = h.getMarket();
         assertEq(gotMarket.totalBorrowAssets, uint128(newBorrowExpected));
         assertEq(gotMarket.totalSupplyAssets, uint128(newSupplyExpected));
         assertEq(gotMarket.lastUpdate, uint128(block.timestamp));
-
-        if (fee > 0 && recipient != bytes32(0)) {
-            assertEq(gotMarket.totalSupplyShares, uint128(totalSupplyShares + feeSharesExpected));
-            assertEq(h.getPosition(recipient).supplyShares, feeSharesExpected);
-        } else {
-            assertEq(gotMarket.totalSupplyShares, uint128(totalSupplyShares));
-            assertEq(h.getPosition(recipient).supplyShares, 0);
-        }
+        assertEq(gotMarket.totalSupplyShares, uint128(totalSupplyShares));
     }
 
     function test_accrueInterest_zeroElapsed_makesNoStateChanges() public {
@@ -191,9 +170,9 @@ contract LibIlmInterestMathTest is Test {
         h.setMarket(market);
 
         irm.setRate(1e14);
-        (uint256 interestActual, uint256 feeSharesActual) = h.accrue(keccak256("feeRecipient"), 1e17);
+        (uint256 interestActual, uint256 protocolFeeActual) = h.accrue(1e17);
         assertEq(interestActual, 0);
-        assertEq(feeSharesActual, 0);
+        assertEq(protocolFeeActual, 0);
 
         IlmIsolatedTypes.IlmIsolatedMarket memory gotMarket = h.getMarket();
         assertEq(gotMarket.totalSupplyAssets, market.totalSupplyAssets);

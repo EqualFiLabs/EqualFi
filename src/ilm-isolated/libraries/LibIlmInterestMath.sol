@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {IlmIsolatedTypes} from "../types/IlmIsolatedTypes.sol";
 import {IIlmIsolatedIrmAdapter} from "../interfaces/IIlmIsolatedIrmAdapter.sol";
-import {LibIlmSharesMath} from "./LibIlmSharesMath.sol";
 import {IlmIsolatedInvalidInput} from "../errors/IlmIsolatedErrors.sol";
 
 /// @notice Interest accrual helpers for ILM isolated markets.
@@ -19,14 +18,12 @@ library LibIlmInterestMath {
         return x + (x2 / 2) + (x3 / 6);
     }
 
-    /// @notice Accrue interest for a market and mint fee shares when configured.
+    /// @notice Accrue gross borrow interest and compute protocol-fee accrual.
     function accrueInterest(
         IlmIsolatedTypes.IlmIsolatedMarket storage market,
         IlmIsolatedTypes.IlmIsolatedMarketParams storage params,
-        bytes32 feeRecipientPositionKey,
-        uint256 fee,
-        mapping(bytes32 => IlmIsolatedTypes.IlmIsolatedPosition) storage positions
-    ) internal returns (uint256 interest, uint256 feeShares) {
+        uint256 fee
+    ) internal returns (uint256 grossInterest, uint256 protocolFeeAccrued) {
         uint256 elapsed = block.timestamp - uint256(market.lastUpdate);
         if (elapsed == 0) {
             return (0, 0);
@@ -37,10 +34,11 @@ library LibIlmInterestMath {
         uint256 ratePerSecond = IIlmIsolatedIrmAdapter(params.irm).borrowRate(paramsMem, marketMem);
 
         uint256 interestFactor = wTaylorCompounded(ratePerSecond, elapsed);
-        interest = uint256(market.totalBorrowAssets) * interestFactor / WAD;
+        grossInterest = uint256(market.totalBorrowAssets) * interestFactor / WAD;
+        protocolFeeAccrued = grossInterest * fee / WAD;
 
-        uint256 newTotalBorrowAssets = uint256(market.totalBorrowAssets) + interest;
-        uint256 newTotalSupplyAssets = uint256(market.totalSupplyAssets) + interest;
+        uint256 newTotalBorrowAssets = uint256(market.totalBorrowAssets) + grossInterest;
+        uint256 newTotalSupplyAssets = uint256(market.totalSupplyAssets) + grossInterest - protocolFeeAccrued;
 
         if (newTotalBorrowAssets > type(uint128).max || newTotalSupplyAssets > type(uint128).max) {
             revert IlmIsolatedInvalidInput();
@@ -49,24 +47,9 @@ library LibIlmInterestMath {
         market.totalBorrowAssets = uint128(newTotalBorrowAssets);
         market.totalSupplyAssets = uint128(newTotalSupplyAssets);
 
-        if (fee > 0 && feeRecipientPositionKey != bytes32(0)) {
-            uint256 feeAmount = interest * fee / WAD;
-            feeShares = LibIlmSharesMath.toSharesDown(
-                feeAmount, uint256(market.totalSupplyAssets) - feeAmount, uint256(market.totalSupplyShares)
-            );
-
-            uint256 newTotalSupplyShares = uint256(market.totalSupplyShares) + feeShares;
-            if (newTotalSupplyShares > type(uint128).max) {
-                revert IlmIsolatedInvalidInput();
-            }
-            market.totalSupplyShares = uint128(newTotalSupplyShares);
-            positions[feeRecipientPositionKey].supplyShares += feeShares;
-        }
-
         if (block.timestamp > type(uint128).max) {
             revert IlmIsolatedInvalidInput();
         }
         market.lastUpdate = uint128(block.timestamp);
     }
 }
-

@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {PositionNFT} from "../../nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
+import {LibAppStorage} from "../../libraries/LibAppStorage.sol";
 import {IlmIsolatedTypes} from "../types/IlmIsolatedTypes.sol";
 import {LibIlmInterestMath} from "../libraries/LibIlmInterestMath.sol";
 import {LibIlmIsolatedStorage} from "../libraries/LibIlmIsolatedStorage.sol";
@@ -14,7 +15,10 @@ import {
     IlmIsolatedUnauthorized,
     IlmIsolatedIrmNotEnabled,
     IlmIsolatedLltvNotEnabled,
-    IlmIsolatedFeeTooHigh
+    IlmIsolatedFeeTooHigh,
+    IlmIsolatedManagedLoanPoolRequired,
+    IlmIsolatedManagedMarketCreatorUnauthorized,
+    IlmIsolatedInvalidFeeBps
 } from "../errors/IlmIsolatedErrors.sol";
 
 /// @notice Admin facet for ILM isolated profile governance and market creation.
@@ -29,6 +33,8 @@ contract ILMIsolatedAdminFacet {
     event IlmIsolatedSetMaxStaleness(uint256 maxStaleness);
     event IlmIsolatedSetOwner(address indexed owner);
     event IlmIsolatedSetAuthorization(bytes32 indexed positionKey, address indexed operator, bool authorized);
+    event IlmIsolatedSetIrmManagedOnly(address indexed irm, bool managedOnly);
+    event IlmIsolatedSetMarketLiquidationFeeBps(bytes32 indexed marketId, uint16 bps);
 
     function createIlmIsolatedMarket(IlmIsolatedTypes.IlmIsolatedMarketParams calldata params, uint256 moduleId)
         external
@@ -40,6 +46,16 @@ contract ILMIsolatedAdminFacet {
         }
         if (params.lltv >= IlmIsolatedTypes.WAD || !state.isLltvEnabled[params.lltv]) {
             revert IlmIsolatedLltvNotEnabled(params.lltv);
+        }
+        if (state.isIrmManagedOnly[params.irm]) {
+            LibAppStorage.AppStorage storage app = LibAppStorage.s();
+            if (!app.pools[params.loanPoolId].initialized || !app.pools[params.loanPoolId].isManagedPool) {
+                revert IlmIsolatedManagedLoanPoolRequired(params.loanPoolId);
+            }
+            address manager = app.pools[params.loanPoolId].manager;
+            if (msg.sender != manager && msg.sender != state.owner) {
+                revert IlmIsolatedManagedMarketCreatorUnauthorized(params.loanPoolId, msg.sender, manager);
+            }
         }
 
         marketId = LibIlmIsolatedStorage.deriveMarketId(params);
@@ -64,6 +80,12 @@ contract ILMIsolatedAdminFacet {
         emit IlmIsolatedEnableIrm(irm);
     }
 
+    function setIrmManagedOnly(address irm, bool managedOnly) external {
+        _onlyOwner();
+        ds().isIrmManagedOnly[irm] = managedOnly;
+        emit IlmIsolatedSetIrmManagedOnly(irm, managedOnly);
+    }
+
     function enableLltv(uint256 lltv) external {
         _onlyOwner();
         if (lltv >= IlmIsolatedTypes.WAD) {
@@ -85,18 +107,31 @@ contract ILMIsolatedAdminFacet {
             revert IlmIsolatedMarketNotCreated(marketId);
         }
 
-        LibIlmInterestMath.accrueInterest(
-            market, _ds.marketParams[marketId], _ds.feeRecipientPositionKey, market.fee, _ds.position[marketId]
-        );
+        (, uint256 protocolFeeAccrued) = LibIlmInterestMath.accrueInterest(market, _ds.marketParams[marketId], market.fee);
+        _ds.marketProtocolFeeAssets[marketId] += protocolFeeAccrued;
         market.fee = uint128(fee);
 
         emit IlmIsolatedSetFee(marketId, fee);
     }
 
+    /// @notice Deprecated for interest fee routing; retained for compatibility.
     function setFeeRecipientPositionKey(bytes32 positionKey) external {
         _onlyOwner();
         ds().feeRecipientPositionKey = positionKey;
         emit IlmIsolatedSetFeeRecipientPositionKey(positionKey);
+    }
+
+    function setMarketLiquidationFeeBps(bytes32 marketId, uint16 bps) external {
+        _onlyOwner();
+        if (bps > 10_000) {
+            revert IlmIsolatedInvalidFeeBps(bps);
+        }
+        LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage _ds = ds();
+        if (_ds.market[marketId].lastUpdate == 0) {
+            revert IlmIsolatedMarketNotCreated(marketId);
+        }
+        _ds.marketLiquidationFeeBps[marketId] = bps;
+        emit IlmIsolatedSetMarketLiquidationFeeBps(marketId, bps);
     }
 
     function setMaxStaleness(uint256 maxStaleness) external {

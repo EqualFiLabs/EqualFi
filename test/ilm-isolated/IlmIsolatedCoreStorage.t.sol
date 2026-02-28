@@ -27,6 +27,14 @@ contract LibIlmIsolatedStorageHarness {
         return LibIlmIsolatedStorage.s().isIrmEnabled[irm];
     }
 
+    function setIrmManagedOnly(address irm, bool managedOnly) external {
+        LibIlmIsolatedStorage.s().isIrmManagedOnly[irm] = managedOnly;
+    }
+
+    function getIrmManagedOnly(address irm) external view returns (bool) {
+        return LibIlmIsolatedStorage.s().isIrmManagedOnly[irm];
+    }
+
     function setLltvEnabled(uint256 lltv, bool enabled) external {
         LibIlmIsolatedStorage.s().isLltvEnabled[lltv] = enabled;
     }
@@ -81,6 +89,22 @@ contract LibIlmIsolatedStorageHarness {
 
     function getMarketModuleId(bytes32 marketId) external view returns (uint256) {
         return LibIlmIsolatedStorage.s().marketModuleId[marketId];
+    }
+
+    function setMarketLiquidationFeeBps(bytes32 marketId, uint16 bps) external {
+        LibIlmIsolatedStorage.s().marketLiquidationFeeBps[marketId] = bps;
+    }
+
+    function getMarketLiquidationFeeBps(bytes32 marketId) external view returns (uint16) {
+        return LibIlmIsolatedStorage.s().marketLiquidationFeeBps[marketId];
+    }
+
+    function setMarketProtocolFeeAssets(bytes32 marketId, uint256 assets) external {
+        LibIlmIsolatedStorage.s().marketProtocolFeeAssets[marketId] = assets;
+    }
+
+    function getMarketProtocolFeeAssets(bytes32 marketId) external view returns (uint256) {
+        return LibIlmIsolatedStorage.s().marketProtocolFeeAssets[marketId];
     }
 
     function deriveMarketIdFromCalldata(IlmIsolatedTypes.IlmIsolatedMarketParams calldata params)
@@ -141,6 +165,7 @@ contract IlmIsolatedCoreStorageTest is Test {
 
         h.setGlobals(address(0xABCD), bytes32(uint256(77)), 2 days);
         h.setIrmEnabled(address(0xBEEF), true);
+        h.setIrmManagedOnly(address(0xBEEF), true);
         h.setLltvEnabled(9e17, true);
 
         IlmIsolatedTypes.IlmIsolatedMarketParams memory params = IlmIsolatedTypes.IlmIsolatedMarketParams({
@@ -171,6 +196,8 @@ contract IlmIsolatedCoreStorageTest is Test {
 
         h.setAuthorization(positionKey, address(0xCAFE), true);
         h.setMarketModuleId(marketId, 42);
+        h.setMarketLiquidationFeeBps(marketId, 250);
+        h.setMarketProtocolFeeAssets(marketId, 12_345);
 
         (address owner, bytes32 feeRecipientPositionKey, uint256 maxStaleness) = h.getGlobals();
         assertEq(owner, address(0xABCD));
@@ -178,6 +205,7 @@ contract IlmIsolatedCoreStorageTest is Test {
         assertEq(maxStaleness, 2 days);
 
         assertTrue(h.getIrmEnabled(address(0xBEEF)));
+        assertTrue(h.getIrmManagedOnly(address(0xBEEF)));
         assertTrue(h.getLltvEnabled(9e17));
 
         IlmIsolatedTypes.IlmIsolatedMarketParams memory gotParams = h.getMarketParams(marketId);
@@ -202,6 +230,8 @@ contract IlmIsolatedCoreStorageTest is Test {
 
         assertTrue(h.getAuthorization(positionKey, address(0xCAFE)));
         assertEq(h.getMarketModuleId(marketId), 42);
+        assertEq(h.getMarketLiquidationFeeBps(marketId), 250);
+        assertEq(h.getMarketProtocolFeeAssets(marketId), 12_345);
     }
 
     function test_errorSelectors_matchDeclaredSignatures() public {
@@ -223,6 +253,17 @@ contract IlmIsolatedCoreStorageTest is Test {
         assertEq(IlmIsolatedIrmNotEnabled.selector, bytes4(keccak256("IlmIsolatedIrmNotEnabled(address)")));
         assertEq(IlmIsolatedLltvNotEnabled.selector, bytes4(keccak256("IlmIsolatedLltvNotEnabled(uint256)")));
         assertEq(IlmIsolatedFeeTooHigh.selector, bytes4(keccak256("IlmIsolatedFeeTooHigh(uint256,uint256)")));
+        assertEq(
+            IlmIsolatedManagedLoanPoolRequired.selector,
+            bytes4(keccak256("IlmIsolatedManagedLoanPoolRequired(uint256)"))
+        );
+        assertEq(
+            IlmIsolatedManagedMarketCreatorUnauthorized.selector,
+            bytes4(
+                keccak256("IlmIsolatedManagedMarketCreatorUnauthorized(uint256,address,address)")
+            )
+        );
+        assertEq(IlmIsolatedInvalidFeeBps.selector, bytes4(keccak256("IlmIsolatedInvalidFeeBps(uint256)")));
         assertEq(IlmIsolatedOracleStale.selector, bytes4(keccak256("IlmIsolatedOracleStale(uint256,uint256)")));
     }
 }

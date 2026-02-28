@@ -40,6 +40,20 @@ contract ILMIsolatedViewFacet {
         position = ds().position[marketId][positionKey];
     }
 
+    function getIsolatedMarketLiquidationFeeBps(bytes32 marketId) external view returns (uint16 bps) {
+        _requireMarket(marketId);
+        bps = ds().marketLiquidationFeeBps[marketId];
+    }
+
+    function getIsolatedMarketProtocolFeeAssets(bytes32 marketId) external view returns (uint256 feeAssets) {
+        _requireMarket(marketId);
+        feeAssets = ds().marketProtocolFeeAssets[marketId];
+    }
+
+    function isIlmIrmManagedOnly(address irm) external view returns (bool) {
+        return ds().isIrmManagedOnly[irm];
+    }
+
     function isIsolatedHealthy(bytes32 marketId, uint256 positionId) external view returns (bool) {
         _requireMarket(marketId);
         LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage _ds = ds();

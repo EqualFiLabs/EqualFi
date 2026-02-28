@@ -7,6 +7,7 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
+import {Types} from "../../src/libraries/Types.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmSharesMath} from "../../src/ilm-isolated/libraries/LibIlmSharesMath.sol";
 import {LibIlmLiquidationMath} from "../../src/ilm-isolated/libraries/LibIlmLiquidationMath.sol";
@@ -96,6 +97,24 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
         LibAppStorage.s().pools[poolId].totalDeposits = totalDeposits;
     }
 
+    function setPoolTrackedBalance(uint256 poolId, uint256 trackedBalance) external {
+        LibAppStorage.s().pools[poolId].initialized = true;
+        LibAppStorage.s().pools[poolId].trackedBalance = trackedBalance;
+    }
+
+    function setPoolActionFee(uint256 poolId, bytes32 action, uint128 amount, bool enabled) external {
+        LibAppStorage.s().pools[poolId].initialized = true;
+        LibAppStorage.s().pools[poolId].actionFees[action] = Types.ActionFeeConfig({amount: amount, enabled: enabled});
+    }
+
+    function setGlobalFeeSplits(uint16 treasuryBps, uint16 activeCreditBps) external {
+        LibAppStorage.AppStorage storage app = LibAppStorage.s();
+        app.treasuryShareConfigured = true;
+        app.treasuryShareBps = treasuryBps;
+        app.activeCreditShareConfigured = true;
+        app.activeCreditShareBps = activeCreditBps;
+    }
+
     function setPoolFeeIndex(uint256 poolId, uint256 feeIndex) external {
         LibAppStorage.s().pools[poolId].initialized = true;
         LibAppStorage.s().pools[poolId].feeIndex = feeIndex;
@@ -133,6 +152,10 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
         return LibAppStorage.s().pools[poolId].totalDeposits;
     }
 
+    function getPoolFeeIndex(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].feeIndex;
+    }
+
     function getPoolUserFeeIndex(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
         return LibAppStorage.s().pools[poolId].userFeeIndex[positionKey];
     }
@@ -144,10 +167,20 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
     function pendingFeeYield(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
         return LibFeeIndex.pendingYield(poolId, positionKey);
     }
+
+    function setMarketProtocolFeeAssets(bytes32 marketId, uint256 feeAssets) external {
+        LibIlmIsolatedStorage.s().marketProtocolFeeAssets[marketId] = feeAssets;
+    }
+
+    function getMarketProtocolFeeAssets(bytes32 marketId) external view returns (uint256) {
+        return LibIlmIsolatedStorage.s().marketProtocolFeeAssets[marketId];
+    }
 }
 
 contract ILMIsolatedFacetTest is Test {
     bytes32 internal constant MARKET_ID = keccak256("ilm.isolated.market");
+    bytes32 internal constant ACTION_BORROW = keccak256("ACTION_BORROW");
+    bytes32 internal constant ACTION_REPAY = keccak256("ACTION_REPAY");
     uint256 internal constant LOAN_POOL_ID = 101;
     uint256 internal constant MODULE_ID = 77;
     address internal constant POSITION_OWNER = address(0xA11CE);
@@ -504,6 +537,32 @@ contract ILMIsolatedFacetTest is Test {
         assertEq(h.pendingFeeYield(LOAN_POOL_ID, positionKey), 0);
     }
 
+    function test_borrow_chargesBorrowActionFeeAfterPrincipalCredit() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1_000_000,
+            totalSupplyShares: 1_000_000,
+            totalBorrowAssets: 1000,
+            totalBorrowShares: 1000,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPositionBorrowAndCollateral(MARKET_ID, positionKey, 0, 100_000);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 500);
+        h.setPoolTotals(LOAN_POOL_ID, 1_000_000);
+        h.setPoolTrackedBalance(LOAN_POOL_ID, 10_000_000);
+        h.setGlobalFeeSplits(0, 0);
+        h.setPoolActionFee(LOAN_POOL_ID, ACTION_BORROW, 25, true);
+
+        vm.prank(POSITION_OWNER);
+        (uint256 assetsOut,) = h.isolatedBorrow(MARKET_ID, 100, 0, positionId);
+        assertEq(assetsOut, 100);
+
+        assertEq(h.getPoolPrincipal(LOAN_POOL_ID, positionKey), 575);
+        assertEq(h.getPoolTotalDeposits(LOAN_POOL_ID), 1_000_075);
+        assertGt(h.getPoolFeeIndex(LOAN_POOL_ID), 0);
+    }
+
     /// @dev Property 10: Repay State Consistency
     /// Validates: Requirements 7.1, 17.6
     function testFuzz_property10_repayStateConsistency(
@@ -549,6 +608,57 @@ contract ILMIsolatedFacetTest is Test {
         assertEq(gotMarket.totalBorrowShares, totalBorrowShares - expectedShares);
 
         assertEq(h.getPoolPrincipal(LOAN_POOL_ID, positionKey), principalStart - repayAssets);
+    }
+
+    function test_repay_chargesRepayActionFeeOnTop() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 2_000_000,
+            totalSupplyShares: 2_000_000,
+            totalBorrowAssets: 1_000_000,
+            totalBorrowShares: 1_000_000,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPositionBorrowAndCollateral(MARKET_ID, positionKey, 1_000_000, 1_000_000);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 500);
+        h.setPoolTotals(LOAN_POOL_ID, 1_000_000);
+        h.setPoolTrackedBalance(LOAN_POOL_ID, 10_000_000);
+        h.setGlobalFeeSplits(0, 0);
+        h.setPoolActionFee(LOAN_POOL_ID, ACTION_REPAY, 15, true);
+
+        vm.prank(POSITION_OWNER);
+        (uint256 assetsOut, uint256 sharesOut) = h.isolatedRepay(MARKET_ID, 100, 0, positionId);
+        assertEq(assetsOut, 100);
+        assertGt(sharesOut, 0);
+
+        assertEq(h.getPoolPrincipal(LOAN_POOL_ID, positionKey), 385);
+        assertEq(h.getPoolTotalDeposits(LOAN_POOL_ID), 999_885);
+        assertGt(h.getPoolFeeIndex(LOAN_POOL_ID), 0);
+    }
+
+    function test_repay_realizesDeferredProtocolInterestFeeClaim() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 2_000_000,
+            totalSupplyShares: 2_000_000,
+            totalBorrowAssets: 1_000_000,
+            totalBorrowShares: 1_000_000,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPositionBorrowAndCollateral(MARKET_ID, positionKey, 1_000_000, 1_000_000);
+        h.setMarketProtocolFeeAssets(MARKET_ID, 2_000);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 1_000_000);
+        h.setPoolTotals(LOAN_POOL_ID, 1_500_000);
+        h.setPoolTrackedBalance(LOAN_POOL_ID, 10_000_000);
+        h.setGlobalFeeSplits(0, 0);
+
+        vm.prank(POSITION_OWNER);
+        h.isolatedRepay(MARKET_ID, 250_000, 0, positionId);
+
+        uint256 expectedClaimAfter = 2_000 - ((2_000 * 250_000) / 1_000_000);
+        assertEq(h.getMarketProtocolFeeAssets(MARKET_ID), expectedClaimAfter);
     }
 
     /// @dev Property 12: Health Gate Enforcement

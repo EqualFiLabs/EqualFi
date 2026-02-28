@@ -23,7 +23,9 @@ error IlmIsolatedHealthyPosition();
 error IlmIsolatedIrmNotEnabled(address irm);
 error IlmIsolatedLltvNotEnabled(uint256 lltv);
 error IlmIsolatedFeeTooHigh(uint256 fee, uint256 maxFee);
+error IlmIsolatedManagedLoanPoolRequired(uint256 loanPoolId);
+error IlmIsolatedManagedMarketCreatorUnauthorized(uint256 loanPoolId, address caller, address manager);
+error IlmIsolatedInvalidFeeBps(uint256 bps);
 
 // Oracle errors
 error IlmIsolatedOracleStale(uint256 updatedAt, uint256 maxStaleness);
-

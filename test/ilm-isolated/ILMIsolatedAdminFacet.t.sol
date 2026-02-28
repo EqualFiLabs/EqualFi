@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
+import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {ILMIsolatedAdminFacet} from "../../src/ilm-isolated/facets/ILMIsolatedAdminFacet.sol";
 import {LibIlmIsolatedStorage} from "../../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
@@ -60,6 +61,10 @@ contract ILMIsolatedAdminFacetHarness is ILMIsolatedAdminFacet {
         return LibIlmIsolatedStorage.s().isLltvEnabled[lltv];
     }
 
+    function getIrmManagedOnly(address irm) external view returns (bool) {
+        return LibIlmIsolatedStorage.s().isIrmManagedOnly[irm];
+    }
+
     function getMarket(bytes32 marketId) external view returns (IlmIsolatedTypes.IlmIsolatedMarket memory) {
         return LibIlmIsolatedStorage.s().market[marketId];
     }
@@ -72,8 +77,23 @@ contract ILMIsolatedAdminFacetHarness is ILMIsolatedAdminFacet {
         return LibIlmIsolatedStorage.s().marketModuleId[marketId];
     }
 
+    function getMarketLiquidationFeeBps(bytes32 marketId) external view returns (uint16) {
+        return LibIlmIsolatedStorage.s().marketLiquidationFeeBps[marketId];
+    }
+
+    function getMarketProtocolFeeAssets(bytes32 marketId) external view returns (uint256) {
+        return LibIlmIsolatedStorage.s().marketProtocolFeeAssets[marketId];
+    }
+
     function getAuthorization(bytes32 positionKey, address operator) external view returns (bool) {
         return LibIlmIsolatedStorage.s().isAuthorizedOperator[positionKey][operator];
+    }
+
+    function setLoanPoolManaged(uint256 poolId, bool initialized, bool isManaged, address manager) external {
+        LibAppStorage.AppStorage storage app = LibAppStorage.s();
+        app.pools[poolId].initialized = initialized;
+        app.pools[poolId].isManagedPool = isManaged;
+        app.pools[poolId].manager = manager;
     }
 }
 
@@ -81,6 +101,7 @@ contract ILMIsolatedAdminFacetTest is Test {
     address internal constant OWNER = address(0xA11CE);
     address internal constant OTHER = address(0xB0B);
     address internal constant OPERATOR = address(0xCAFE);
+    address internal constant MANAGER = address(0xD00D);
 
     ILMIsolatedAdminFacetHarness internal h;
     MockIlmIsolatedIrmAdapterAdmin internal irm;
@@ -196,9 +217,13 @@ contract ILMIsolatedAdminFacetTest is Test {
         vm.startPrank(OWNER);
         h.enableIrm(address(irm));
         h.enableLltv(lltv);
+        h.setIrmManagedOnly(address(irm), true);
         vm.stopPrank();
         assertTrue(h.getIrmEnabled(address(irm)));
         assertTrue(h.getLltvEnabled(lltv));
+        assertTrue(h.getIrmManagedOnly(address(irm)));
+
+        h.setLoanPoolManaged(111, true, true, OWNER);
 
         IlmIsolatedTypes.IlmIsolatedMarketParams memory params = IlmIsolatedTypes.IlmIsolatedMarketParams({
             loanPoolId: 111,
@@ -207,6 +232,7 @@ contract ILMIsolatedAdminFacetTest is Test {
             irm: address(irm),
             lltv: lltv
         });
+        vm.prank(OWNER);
         bytes32 marketId = h.createIlmIsolatedMarket(params, 7);
 
         vm.warp(2 days + 1000);
@@ -218,7 +244,7 @@ contract ILMIsolatedAdminFacetTest is Test {
                 totalBorrowAssets: 500_000,
                 totalBorrowShares: 250_000,
                 lastUpdate: uint128(block.timestamp - 1 days),
-                fee: 0
+                fee: uint128(5e16)
             })
         );
         irm.setRate(1e12);
@@ -231,6 +257,7 @@ contract ILMIsolatedAdminFacetTest is Test {
         assertGt(market.totalBorrowAssets, 500_000);
         assertGt(market.totalSupplyAssets, 1_000_000);
         assertEq(market.lastUpdate, uint128(block.timestamp));
+        assertGt(h.getMarketProtocolFeeAssets(marketId), 0);
 
         bytes32 feeRecipient = keccak256("treasury");
         vm.prank(OWNER);
@@ -271,7 +298,13 @@ contract ILMIsolatedAdminFacetTest is Test {
         h.setFee(marketId, 1e16);
 
         vm.expectRevert(IlmIsolatedUnauthorized.selector);
+        h.setIrmManagedOnly(address(irm), true);
+
+        vm.expectRevert(IlmIsolatedUnauthorized.selector);
         h.setFeeRecipientPositionKey(keccak256("x"));
+
+        vm.expectRevert(IlmIsolatedUnauthorized.selector);
+        h.setMarketLiquidationFeeBps(marketId, 100);
 
         vm.expectRevert(IlmIsolatedUnauthorized.selector);
         h.setMaxStaleness(1 days);
@@ -306,6 +339,91 @@ contract ILMIsolatedAdminFacetTest is Test {
         h.createIlmIsolatedMarket(params, 999);
 
         assertEq(h.getMarketModuleId(marketId), moduleId);
+    }
+
+    function test_managedOnlyIrm_creationGatesByManagedPoolAndCreator() public {
+        uint256 lltv = 8e17;
+        vm.startPrank(OWNER);
+        h.enableIrm(address(irm));
+        h.enableLltv(lltv);
+        h.setIrmManagedOnly(address(irm), true);
+        vm.stopPrank();
+
+        IlmIsolatedTypes.IlmIsolatedMarketParams memory params = IlmIsolatedTypes.IlmIsolatedMarketParams({
+            loanPoolId: 55,
+            collateralPoolId: 22,
+            oracle: address(0x1234),
+            irm: address(irm),
+            lltv: lltv
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(IlmIsolatedManagedLoanPoolRequired.selector, 55));
+        h.createIlmIsolatedMarket(params, 1);
+
+        h.setLoanPoolManaged(55, true, false, MANAGER);
+        vm.expectRevert(abi.encodeWithSelector(IlmIsolatedManagedLoanPoolRequired.selector, 55));
+        h.createIlmIsolatedMarket(params, 1);
+
+        h.setLoanPoolManaged(55, true, true, MANAGER);
+        vm.prank(OTHER);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IlmIsolatedManagedMarketCreatorUnauthorized.selector,
+                55,
+                OTHER,
+                MANAGER
+            )
+        );
+        h.createIlmIsolatedMarket(params, 1);
+
+        vm.prank(MANAGER);
+        h.createIlmIsolatedMarket(params, 1);
+
+        params.loanPoolId = 56;
+        params.oracle = address(0x9999);
+        h.setLoanPoolManaged(56, true, true, MANAGER);
+        vm.prank(OWNER);
+        h.createIlmIsolatedMarket(params, 2);
+    }
+
+    function test_nonManagedOnlyIrm_marketCreationRemainsPermissionless() public {
+        uint256 lltv = 8e17;
+        vm.startPrank(OWNER);
+        h.enableIrm(address(irm));
+        h.enableLltv(lltv);
+        vm.stopPrank();
+
+        IlmIsolatedTypes.IlmIsolatedMarketParams memory params = IlmIsolatedTypes.IlmIsolatedMarketParams({
+            loanPoolId: 1001,
+            collateralPoolId: 2002,
+            oracle: address(0x1234),
+            irm: address(irm),
+            lltv: lltv
+        });
+
+        vm.prank(OTHER);
+        h.createIlmIsolatedMarket(params, 7);
+    }
+
+    function test_setMarketLiquidationFeeBps_boundsAndAccessControl() public {
+        IlmIsolatedTypes.IlmIsolatedMarketParams memory params = _createEnabledParams();
+        bytes32 marketId = h.createIlmIsolatedMarket(params, 1);
+
+        vm.prank(OTHER);
+        vm.expectRevert(IlmIsolatedUnauthorized.selector);
+        h.setMarketLiquidationFeeBps(marketId, 50);
+
+        vm.prank(OWNER);
+        h.setMarketLiquidationFeeBps(marketId, 250);
+        assertEq(h.getMarketLiquidationFeeBps(marketId), 250);
+
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(IlmIsolatedInvalidFeeBps.selector, uint256(10_001)));
+        h.setMarketLiquidationFeeBps(marketId, 10_001);
+
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(IlmIsolatedMarketNotCreated.selector, bytes32(uint256(12345))));
+        h.setMarketLiquidationFeeBps(bytes32(uint256(12345)), 100);
     }
 
     function test_setAuthorization_positionOwnerOnly() public {

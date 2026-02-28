@@ -66,6 +66,18 @@ contract ILMIsolatedViewFacetHarness is ILMIsolatedViewFacet {
         p.borrowShares = borrowShares;
         p.collateralAssets = collateralAssets;
     }
+
+    function setIrmManagedOnly(address irm_, bool managedOnly) external {
+        LibIlmIsolatedStorage.s().isIrmManagedOnly[irm_] = managedOnly;
+    }
+
+    function setMarketLiquidationFeeBps(bytes32 marketId, uint16 bps) external {
+        LibIlmIsolatedStorage.s().marketLiquidationFeeBps[marketId] = bps;
+    }
+
+    function setMarketProtocolFeeAssets(bytes32 marketId, uint256 assets) external {
+        LibIlmIsolatedStorage.s().marketProtocolFeeAssets[marketId] = assets;
+    }
 }
 
 contract ILMIsolatedViewFacetTest is Test {
@@ -142,13 +154,24 @@ contract ILMIsolatedViewFacetTest is Test {
 
     function test_isIsolatedHealthy_revertsOnStaleOracle() public {
         vm.warp(3 days);
-        oracle.setPrice(IlmIsolatedTypes.ORACLE_PRICE_SCALE, block.timestamp - 2 days);
-        vm.expectRevert(abi.encodeWithSelector(IlmIsolatedOracleStale.selector, 1 days, 1 days));
+        uint256 updatedAt = block.timestamp - 2 days;
+        oracle.setPrice(IlmIsolatedTypes.ORACLE_PRICE_SCALE, updatedAt);
+        vm.expectRevert(abi.encodeWithSelector(IlmIsolatedOracleStale.selector, updatedAt, 1 days));
         h.isIsolatedHealthy(MARKET_ID, positionId);
     }
 
     function test_isIsolatedHealthy_roundTrip() public {
         bool healthy = h.isIsolatedHealthy(MARKET_ID, positionId);
         assertTrue(healthy);
+    }
+
+    function test_views_roundTripManagedOnlyLiquidationFeeAndProtocolClaim() public {
+        h.setIrmManagedOnly(address(irm), true);
+        h.setMarketLiquidationFeeBps(MARKET_ID, 125);
+        h.setMarketProtocolFeeAssets(MARKET_ID, 42_000);
+
+        assertTrue(h.isIlmIrmManagedOnly(address(irm)));
+        assertEq(h.getIsolatedMarketLiquidationFeeBps(MARKET_ID), 125);
+        assertEq(h.getIsolatedMarketProtocolFeeAssets(MARKET_ID), 42_000);
     }
 }

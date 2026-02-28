@@ -6,6 +6,8 @@ import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../../libraries/LibActiveCreditIndex.sol";
+import {LibFeeRouter} from "../../libraries/LibFeeRouter.sol";
+import {LibActionFees} from "../../libraries/LibActionFees.sol";
 import {LibModuleEncumbrance} from "../../libraries/LibModuleEncumbrance.sol";
 import {LibSolvencyChecks} from "../../libraries/LibSolvencyChecks.sol";
 import {ReentrancyGuardModifiers} from "../../libraries/LibReentrancyGuard.sol";
@@ -27,7 +29,9 @@ import {
 
 /// @notice Supply/withdraw core facet for ILM isolated profile.
 contract ILMIsolatedFacet is ReentrancyGuardModifiers {
-    event IlmIsolatedAccrueInterest(bytes32 indexed marketId, uint256 interest, uint256 feeShares);
+    bytes32 internal constant ILM_INTEREST_FEE_SOURCE = keccak256("ILM_INTEREST_FEE");
+
+    event IlmIsolatedAccrueInterest(bytes32 indexed marketId, uint256 interest, uint256 protocolFeeAccrued);
     event IlmIsolatedSupply(bytes32 indexed marketId, bytes32 indexed positionKey, uint256 assets, uint256 shares);
     event IlmIsolatedWithdraw(bytes32 indexed marketId, bytes32 indexed positionKey, uint256 assets, uint256 shares);
     event IlmIsolatedSupplyCollateral(bytes32 indexed marketId, bytes32 indexed positionKey, uint256 assets);
@@ -250,6 +254,11 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         market.totalBorrowShares = uint128(newTotalBorrowShares);
 
         _creditPrincipal(params.loanPoolId, positionKey, assetsOut);
+        if (assetsOut > 0) {
+            LibActionFees.chargeFromUser(
+                LibAppStorage.s().pools[params.loanPoolId], params.loanPoolId, LibActionFees.ACTION_BORROW, positionKey
+            );
+        }
         emit IlmIsolatedBorrow(marketId, positionKey, assetsOut, sharesOut);
     }
 
@@ -293,11 +302,17 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         }
 
         if (sharesOut > 0 || assetsOut > 0) {
-            _debitPrincipal(_ds.marketParams[marketId].loanPoolId, positionKey, assetsOut);
+            uint256 loanPoolId = _ds.marketParams[marketId].loanPoolId;
+            uint256 borrowAssetsBefore = market.totalBorrowAssets;
+            _debitPrincipal(loanPoolId, positionKey, assetsOut);
 
             position.borrowShares = uint128(uint256(position.borrowShares) - sharesOut);
             market.totalBorrowShares = uint128(uint256(market.totalBorrowShares) - sharesOut);
             market.totalBorrowAssets = uint128(uint256(market.totalBorrowAssets) - assetsOut);
+            _realizeProtocolInterestFee(marketId, loanPoolId, assetsOut, borrowAssetsBefore, _ds);
+            LibActionFees.chargeFromUser(
+                LibAppStorage.s().pools[loanPoolId], loanPoolId, LibActionFees.ACTION_REPAY, positionKey
+            );
         }
 
         emit IlmIsolatedRepay(marketId, positionKey, assetsOut, sharesOut);
@@ -308,10 +323,10 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         IlmIsolatedTypes.IlmIsolatedMarket storage market,
         LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage _ds
     ) internal {
-        (uint256 interest, uint256 feeShares) = LibIlmInterestMath.accrueInterest(
-            market, _ds.marketParams[marketId], _ds.feeRecipientPositionKey, market.fee, _ds.position[marketId]
-        );
-        emit IlmIsolatedAccrueInterest(marketId, interest, feeShares);
+        (uint256 interest, uint256 protocolFeeAccrued) =
+            LibIlmInterestMath.accrueInterest(market, _ds.marketParams[marketId], market.fee);
+        _ds.marketProtocolFeeAssets[marketId] += protocolFeeAccrued;
+        emit IlmIsolatedAccrueInterest(marketId, interest, protocolFeeAccrued);
     }
 
     function _requireExactlyOneInput(uint256 assets, uint256 shares) internal pure {
@@ -386,6 +401,39 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         }
         app.pools[poolId].userPrincipal[positionKey] -= assets;
         app.pools[poolId].totalDeposits -= assets;
+    }
+
+    function _realizeProtocolInterestFee(
+        bytes32 marketId,
+        uint256 loanPoolId,
+        uint256 debtReductionAssets,
+        uint256 borrowAssetsBefore,
+        LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage _ds
+    ) internal {
+        if (debtReductionAssets == 0 || borrowAssetsBefore == 0) {
+            if (_ds.market[marketId].totalBorrowAssets == 0) {
+                _ds.marketProtocolFeeAssets[marketId] = 0;
+            }
+            return;
+        }
+
+        uint256 claim = _ds.marketProtocolFeeAssets[marketId];
+        if (claim == 0) {
+            return;
+        }
+
+        uint256 realized = claim * debtReductionAssets / borrowAssetsBefore;
+        if (realized > claim) {
+            realized = claim;
+        }
+        if (realized > 0) {
+            _ds.marketProtocolFeeAssets[marketId] = claim - realized;
+            LibFeeRouter.routeManagedShare(loanPoolId, realized, ILM_INTEREST_FEE_SOURCE, false, 0);
+        }
+
+        if (_ds.market[marketId].totalBorrowAssets == 0) {
+            _ds.marketProtocolFeeAssets[marketId] = 0;
+        }
     }
 
     function ds() internal pure returns (LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage) {

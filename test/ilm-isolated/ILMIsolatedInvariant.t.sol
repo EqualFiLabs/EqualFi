@@ -7,7 +7,10 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
+import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
+import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
+import {LibFeeRouter} from "../../src/libraries/LibFeeRouter.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmIsolatedStorage} from "../../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
 import {LibIlmSharesMath} from "../../src/ilm-isolated/libraries/LibIlmSharesMath.sol";
@@ -16,6 +19,7 @@ import {LibIlmLiquidationMath} from "../../src/ilm-isolated/libraries/LibIlmLiqu
 import {IIlmIsolatedIrmAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedIrmAdapter.sol";
 import {IIlmIsolatedOracleAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedOracleAdapter.sol";
 import {ILMIsolatedFacet} from "../../src/ilm-isolated/facets/ILMIsolatedFacet.sol";
+import {InsufficientPrincipal} from "../../src/libraries/Errors.sol";
 import "../../src/ilm-isolated/errors/IlmIsolatedErrors.sol";
 
 contract MockIlmIsolatedIrmAdapterInvariant is IIlmIsolatedIrmAdapter {
@@ -48,6 +52,13 @@ contract MockIlmIsolatedOracleAdapterInvariant is IIlmIsolatedOracleAdapter {
 }
 
 contract ILMIsolatedInvariantHarness is ILMIsolatedFacet {
+    bytes32 internal constant ILM_LIQUIDATION_FEE_SOURCE = keccak256("ILM_LIQUIDATION_FEE");
+    uint256 internal constant BPS_DENOMINATOR = 10_000;
+
+    uint256 internal _cumulativeGrossSeized;
+    uint256 internal _cumulativeNetSeized;
+    uint256 internal _cumulativeProtocolFeeCollateral;
+
     event IlmIsolatedLiquidate(
         bytes32 indexed marketId,
         bytes32 indexed borrowerKey,
@@ -110,17 +121,23 @@ contract ILMIsolatedInvariantHarness is ILMIsolatedFacet {
         }
 
         repaidAssetsOut = LibIlmSharesMath.toAssetsUp(repaidShares, market.totalBorrowAssets, market.totalBorrowShares);
-        seizedOut = seizedAssets;
+        uint256 grossSeizedAssets = seizedAssets;
+        uint256 protocolFeeCollateral =
+            (grossSeizedAssets * _ds.marketLiquidationFeeBps[marketId]) / BPS_DENOMINATOR;
+        uint256 netSeizedAssets = grossSeizedAssets - protocolFeeCollateral;
+        seizedOut = netSeizedAssets;
 
+        uint256 borrowAssetsBeforeRepay = market.totalBorrowAssets;
         borrowerPosition.borrowShares -= uint128(repaidShares);
         market.totalBorrowShares -= uint128(repaidShares);
         market.totalBorrowAssets = uint128(_zeroFloorSub(market.totalBorrowAssets, repaidAssetsOut));
 
-        borrowerPosition.collateralAssets -= uint128(seizedAssets);
+        borrowerPosition.collateralAssets -= uint128(grossSeizedAssets);
 
         uint256 badDebtShares;
         uint256 badDebtAssets;
         if (borrowerPosition.collateralAssets == 0 && borrowerPosition.borrowShares > 0) {
+            uint256 borrowAssetsBeforeWriteDown = market.totalBorrowAssets;
             badDebtShares = borrowerPosition.borrowShares;
             badDebtAssets = _min(
                 market.totalBorrowAssets,
@@ -131,14 +148,40 @@ contract ILMIsolatedInvariantHarness is ILMIsolatedFacet {
             market.totalSupplyAssets -= uint128(badDebtAssets);
             market.totalBorrowShares -= uint128(badDebtShares);
             borrowerPosition.borrowShares = 0;
+
+            _writeDownProtocolFeeClaim(marketId, badDebtAssets, borrowAssetsBeforeWriteDown, _ds);
         }
 
+        _realizeProtocolInterestFee(marketId, params.loanPoolId, repaidAssetsOut, borrowAssetsBeforeRepay, _ds);
         _debitPrincipal(params.loanPoolId, liquidatorKey, repaidAssetsOut);
-        _creditPrincipal(params.collateralPoolId, liquidatorKey, seizedAssets);
-        LibModuleEncumbrance.unencumber(borrowerKey, params.collateralPoolId, _ds.marketModuleId[marketId], seizedAssets);
+        _debitPrincipalIgnoringEncumbrance(params.collateralPoolId, borrowerKey, grossSeizedAssets);
+        _creditPrincipal(params.collateralPoolId, liquidatorKey, netSeizedAssets);
+        if (protocolFeeCollateral > 0) {
+            LibFeeRouter.routeManagedShare(
+                params.collateralPoolId, protocolFeeCollateral, ILM_LIQUIDATION_FEE_SOURCE, false, 0
+            );
+        }
+        LibModuleEncumbrance.unencumber(
+            borrowerKey, params.collateralPoolId, _ds.marketModuleId[marketId], grossSeizedAssets
+        );
+
+        _cumulativeGrossSeized += grossSeizedAssets;
+        _cumulativeNetSeized += netSeizedAssets;
+        _cumulativeProtocolFeeCollateral += protocolFeeCollateral;
+
+        if (market.totalBorrowAssets == 0) {
+            _ds.marketProtocolFeeAssets[marketId] = 0;
+        }
 
         emit IlmIsolatedLiquidate(
-            marketId, borrowerKey, liquidatorKey, repaidAssetsOut, repaidShares, seizedAssets, badDebtAssets, badDebtShares
+            marketId,
+            borrowerKey,
+            liquidatorKey,
+            repaidAssetsOut,
+            repaidShares,
+            netSeizedAssets,
+            badDebtAssets,
+            badDebtShares
         );
     }
 
@@ -194,6 +237,37 @@ contract ILMIsolatedInvariantHarness is ILMIsolatedFacet {
         LibAppStorage.s().pools[poolId].totalDeposits = totalDeposits;
     }
 
+    function setPoolTrackedBalance(uint256 poolId, uint256 trackedBalance) external {
+        LibAppStorage.s().pools[poolId].initialized = true;
+        LibAppStorage.s().pools[poolId].trackedBalance = trackedBalance;
+    }
+
+    function setGlobalFeeSplits(uint16 treasuryBps, uint16 activeCreditBps) external {
+        LibAppStorage.AppStorage storage app = LibAppStorage.s();
+        app.treasuryShareConfigured = true;
+        app.treasuryShareBps = treasuryBps;
+        app.activeCreditShareConfigured = true;
+        app.activeCreditShareBps = activeCreditBps;
+    }
+
+    function setMarketLiquidationFeeBps(bytes32 marketId, uint16 bps) external {
+        LibIlmIsolatedStorage.s().marketLiquidationFeeBps[marketId] = bps;
+    }
+
+    function getMarketProtocolFeeAssets(bytes32 marketId) external view returns (uint256) {
+        return LibIlmIsolatedStorage.s().marketProtocolFeeAssets[marketId];
+    }
+
+    function getCumulativeLiquidationSplit()
+        external
+        view
+        returns (uint256 grossSeized, uint256 netSeized, uint256 protocolFeeCollateral)
+    {
+        grossSeized = _cumulativeGrossSeized;
+        netSeized = _cumulativeNetSeized;
+        protocolFeeCollateral = _cumulativeProtocolFeeCollateral;
+    }
+
     function seedModuleEncumbrance(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) external {
         LibModuleEncumbrance.encumber(positionKey, poolId, moduleId, amount);
     }
@@ -208,6 +282,44 @@ contract ILMIsolatedInvariantHarness is ILMIsolatedFacet {
 
     function getModuleEncumbered(bytes32 positionKey, uint256 poolId) external view returns (uint256) {
         return LibModuleEncumbrance.getEncumbered(positionKey, poolId);
+    }
+
+    function _debitPrincipalIgnoringEncumbrance(uint256 poolId, bytes32 positionKey, uint256 assets) internal {
+        if (assets == 0) {
+            return;
+        }
+        LibFeeIndex.settle(poolId, positionKey);
+        LibActiveCreditIndex.settle(poolId, positionKey);
+
+        LibAppStorage.AppStorage storage app = LibAppStorage.s();
+        uint256 principal = app.pools[poolId].userPrincipal[positionKey];
+        if (assets > principal) {
+            revert InsufficientPrincipal(assets, principal);
+        }
+        app.pools[poolId].userPrincipal[positionKey] = principal - assets;
+        app.pools[poolId].totalDeposits -= assets;
+    }
+
+    function _writeDownProtocolFeeClaim(
+        bytes32 marketId,
+        uint256 writeDownAssets,
+        uint256 borrowAssetsBeforeWriteDown,
+        LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage _ds
+    ) internal {
+        if (writeDownAssets == 0 || borrowAssetsBeforeWriteDown == 0) {
+            return;
+        }
+
+        uint256 claim = _ds.marketProtocolFeeAssets[marketId];
+        if (claim == 0) {
+            return;
+        }
+
+        uint256 writeDown = claim * writeDownAssets / borrowAssetsBeforeWriteDown;
+        if (writeDown > claim) {
+            writeDown = claim;
+        }
+        _ds.marketProtocolFeeAssets[marketId] = claim - writeDown;
     }
 
     function _positionKeyUnchecked(uint256 positionId) internal view returns (bytes32) {
@@ -432,11 +544,15 @@ contract ILMIsolatedInvariantTest is StdInvariant, Test {
         h.setPoolPrincipal(LOAN_POOL_ID, borrowerKey, 500_000);
         h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 1_000_000);
         h.setPoolTotalDeposits(LOAN_POOL_ID, 4_500_000);
+        h.setPoolTrackedBalance(LOAN_POOL_ID, 20_000_000);
 
         h.setPoolPrincipal(COLLATERAL_POOL_ID, supplierKey, 200_000);
         h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 2_000_000);
         h.setPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey, 200_000);
         h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 2_400_000);
+        h.setPoolTrackedBalance(COLLATERAL_POOL_ID, 20_000_000);
+        h.setGlobalFeeSplits(0, 0);
+        h.setMarketLiquidationFeeBps(MARKET_ID, 250);
 
         h.seedModuleEncumbrance(supplierKey, LOAN_POOL_ID, MODULE_ID, 2_000_000);
         h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 1_200_000);
@@ -484,6 +600,21 @@ contract ILMIsolatedInvariantTest is StdInvariant, Test {
         _assertEncumbranceBound(borrowerKey, COLLATERAL_POOL_ID);
         _assertEncumbranceBound(liquidatorKey, LOAN_POOL_ID);
         _assertEncumbranceBound(liquidatorKey, COLLATERAL_POOL_ID);
+    }
+
+    /// @dev Property 27: Deferred protocol claim never exceeds market borrow assets.
+    /// Validates: Requirement 19.1 extension
+    function invariant_property27_protocolClaimBoundedByBorrowAssets() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = h.getMarket(MARKET_ID);
+        uint256 claim = h.getMarketProtocolFeeAssets(MARKET_ID);
+        assertLe(claim, market.totalBorrowAssets);
+    }
+
+    /// @dev Property 28: Liquidation gross/net conservation with protocol fee split.
+    /// Validates: Requirement 19.2 extension
+    function invariant_property28_liquidationSplitConservation() public {
+        (uint256 grossSeized, uint256 netSeized, uint256 protocolFeeCollateral) = h.getCumulativeLiquidationSplit();
+        assertEq(grossSeized, netSeized + protocolFeeCollateral);
     }
 
     function _assertEncumbranceBound(bytes32 positionKey, uint256 poolId) internal {
