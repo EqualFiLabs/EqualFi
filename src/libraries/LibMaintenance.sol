@@ -85,7 +85,13 @@ library LibMaintenance {
             return (0, epochs);
         }
 
-        amountAccrued = (tvl * rateBps * epochs) / (365 * 10_000);
+        uint256 indexEncumbered = p.indexEncumberedTotal;
+        if (indexEncumbered >= tvl) {
+            return (0, epochs);
+        }
+        uint256 chargeableTvl = tvl - indexEncumbered;
+
+        amountAccrued = (chargeableTvl * rateBps * epochs) / (365 * 10_000);
         if (amountAccrued == 0) {
             return (0, epochs);
         }

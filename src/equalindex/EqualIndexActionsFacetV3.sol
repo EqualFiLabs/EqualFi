@@ -10,6 +10,7 @@ import {LibFeeIndex} from "../libraries/LibFeeIndex.sol";
 import {LibPoints} from "../libraries/LibPoints.sol";
 import {Types} from "../libraries/Types.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
+import {LibEqualIndexLending} from "../libraries/LibEqualIndexLending.sol";
 import {EqualIndexBaseV3, IEqualIndexFlashReceiver} from "./EqualIndexBaseV3.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import "../libraries/Errors.sol";
@@ -50,7 +51,9 @@ contract EqualIndexActionsFacetV3 is EqualIndexBaseV3, ReentrancyGuardModifiers 
             if (totalSupply == 0) {
                 need = Math.mulDiv(idx.bundleAmounts[i], units, LibEqualIndex.INDEX_SCALE);
             } else {
-                need = Math.mulDiv(s().vaultBalances[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
+                uint256 economicBal =
+                    LibEqualIndexLending.getEconomicBalance(indexId, asset, s().vaultBalances[indexId][asset]);
+                need = Math.mulDiv(economicBal, units, totalSupply, Math.Rounding.Ceil);
                 potBuyIn = Math.mulDiv(s().feePots[indexId][asset], units, totalSupply, Math.Rounding.Ceil);
             }
             uint256 grossIn = need + potBuyIn;

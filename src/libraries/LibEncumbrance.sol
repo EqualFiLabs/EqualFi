@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {EncumbranceUnderflow} from "./Errors.sol";
+import {LibAppStorage} from "./LibAppStorage.sol";
 
 /// @notice Central storage and helpers for all encumbrance components per position and pool.
 library LibEncumbrance {
@@ -110,6 +111,7 @@ library LibEncumbrance {
         enc.indexEncumbered = newTotal;
         uint256 newIndexTotal = es.encumberedByIndex[positionKey][poolId][indexId] + amount;
         es.encumberedByIndex[positionKey][poolId][indexId] = newIndexTotal;
+        LibAppStorage.s().pools[poolId].indexEncumberedTotal += amount;
         emit EncumbranceIncreased(positionKey, poolId, indexId, amount, newTotal, newIndexTotal);
     }
 
@@ -124,10 +126,15 @@ library LibEncumbrance {
         if (amount > currentTotal) {
             revert EncumbranceUnderflow(amount, currentTotal);
         }
+        uint256 currentPool = LibAppStorage.s().pools[poolId].indexEncumberedTotal;
+        if (amount > currentPool) {
+            revert EncumbranceUnderflow(amount, currentPool);
+        }
         uint256 newTotal = currentTotal - amount;
         uint256 newIndexTotal = currentIndex - amount;
         enc.indexEncumbered = newTotal;
         es.encumberedByIndex[positionKey][poolId][indexId] = newIndexTotal;
+        LibAppStorage.s().pools[poolId].indexEncumberedTotal = currentPool - amount;
         emit EncumbranceDecreased(positionKey, poolId, indexId, amount, newTotal, newIndexTotal);
     }
 

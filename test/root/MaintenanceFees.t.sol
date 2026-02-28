@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
+import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {LibMaintenance} from "../../src/libraries/LibMaintenance.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
@@ -40,6 +41,10 @@ contract MaintenanceFeesHarness {
         s().pools[pid].lastMaintenanceTimestamp = timestamp;
     }
 
+    function encumberIndex(bytes32 positionKey, uint256 pid, uint256 indexId, uint256 amount) external {
+        LibEncumbrance.encumberIndex(positionKey, pid, indexId, amount);
+    }
+
     function enforce(uint256 pid) external {
         LibMaintenance.enforce(pid);
     }
@@ -62,6 +67,10 @@ contract MaintenanceFeesHarness {
 
     function getMaintenanceIndex(uint256 pid) external view returns (uint256) {
         return s().pools[pid].maintenanceIndex;
+    }
+
+    function getPoolIndexEncumbered(uint256 pid) external view returns (uint256) {
+        return s().pools[pid].indexEncumberedTotal;
     }
 
     function getMaintenanceIndexRemainder() external view returns (uint256) {
@@ -279,6 +288,41 @@ contract MaintenanceFeesTest is Test {
         harness.enforce(PID);
 
         assertEq(harness.getPendingMaintenance(PID), 0);
+    }
+
+    function testMaintenanceFees_ExcludesIndexEncumberedFromMaintenanceBase() public {
+        harness.setTotalDeposits(PID, 1_000 ether);
+        harness.setMaintenanceRate(PID, 100);
+        harness.encumberIndex(bytes32(uint256(0xA11CE)), PID, 77, 400 ether);
+        assertEq(harness.getPoolIndexEncumbered(PID), 400 ether);
+        token.mint(address(harness), 10 ether);
+
+        harness.enforce(PID);
+        uint64 startTime = harness.getLastMaintenanceTimestamp(PID);
+        vm.warp(startTime + 365 days);
+        uint256 receiverBefore = token.balanceOf(RECEIVER);
+        harness.enforce(PID);
+
+        uint256 expectedFee = ((1_000 ether - 400 ether) * 100 * 365) / (365 * 10_000);
+        assertEq(token.balanceOf(RECEIVER) - receiverBefore, expectedFee);
+        assertEq(harness.getTotalDeposits(PID), 1_000 ether - expectedFee);
+        assertEq(harness.getPendingMaintenance(PID), 0);
+    }
+
+    function testMaintenanceFees_NoAccrualWhenFullyIndexEncumbered() public {
+        harness.setTotalDeposits(PID, 1_000 ether);
+        harness.setMaintenanceRate(PID, 100);
+        harness.encumberIndex(bytes32(uint256(0xB22)), PID, 88, 1_000 ether);
+        token.mint(address(harness), 10 ether);
+
+        harness.enforce(PID);
+        uint64 startTime = harness.getLastMaintenanceTimestamp(PID);
+        vm.warp(startTime + 365 days);
+        harness.enforce(PID);
+
+        assertEq(token.balanceOf(RECEIVER), 0);
+        assertEq(harness.getPendingMaintenance(PID), 0);
+        assertEq(harness.getTotalDeposits(PID), 1_000 ether);
     }
 
     function testMaintenanceFees_NoPaymentWhenReceiverNotSet() public {

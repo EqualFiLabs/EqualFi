@@ -33,11 +33,13 @@ contract PositionAgentTBAFacet {
         tbaAddress = computeTBAAddress(positionTokenId);
 
         if (ds.tbaDeployed[positionTokenId]) {
+            ds.tbaConfigLocked = true;
             return tbaAddress;
         }
 
         if (tbaAddress.code.length > 0) {
             ds.tbaDeployed[positionTokenId] = true;
+            ds.tbaConfigLocked = true;
             return tbaAddress;
         }
 
@@ -61,6 +63,7 @@ contract PositionAgentTBAFacet {
         }
 
         ds.tbaDeployed[positionTokenId] = true;
+        ds.tbaConfigLocked = true;
         emit TBADeployed(positionTokenId, deployed);
         return deployed;
     }
