@@ -22,6 +22,7 @@ import {Types} from "../libraries/Types.sol";
 
 error Options_Paused();
 error Options_InvalidAmount(uint256 amount);
+error Options_InvalidContractSize(uint256 contractSize);
 error Options_InvalidPrice(uint256 strikePrice);
 error Options_InvalidExpiry(uint64 expiry);
 error Options_InvalidPool(uint256 poolId);
@@ -64,10 +65,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
     );
 
     event Reclaimed(
-        uint256 indexed seriesId,
-        bytes32 indexed makerPositionKey,
-        uint256 remainingSize,
-        uint256 collateralUnlocked
+        uint256 indexed seriesId, bytes32 indexed makerPositionKey, uint256 remainingSize, uint256 collateralUnlocked
     );
     event ReclaimedClaimsBurned(uint256 indexed seriesId, address indexed holder, uint256 amount);
 
@@ -106,13 +104,15 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         DerivativeTypes.DerivativeConfig storage cfg = ds.config;
         if (ds.optionsPaused) revert Options_Paused();
         if (params.totalSize == 0) revert Options_InvalidAmount(params.totalSize);
+        if (params.contractSize == 0) revert Options_InvalidContractSize(params.contractSize);
         if (params.strikePrice == 0) revert Options_InvalidPrice(params.strikePrice);
         if (params.expiry <= block.timestamp) revert Options_InvalidExpiry(params.expiry);
         if (params.underlyingPoolId == params.strikePoolId) {
             revert Options_InvalidPool(params.underlyingPoolId);
         }
 
-        (bytes32 positionKey, address makerOwner) = LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
+        (bytes32 positionKey, address makerOwner) =
+            LibDerivativeHelpers._requirePositionOwnershipAndOwner(params.positionId);
 
         Types.PoolData storage underlyingPool = LibDirectHelpers._pool(params.underlyingPoolId);
         Types.PoolData storage strikePool = LibDirectHelpers._pool(params.strikePoolId);
@@ -131,17 +131,15 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         LibFeeIndex.settle(params.strikePoolId, positionKey);
         LibActiveCreditIndex.settle(params.strikePoolId, positionKey);
 
+        uint256 underlyingNotional = _contractsToUnderlying(params.totalSize, params.contractSize);
         uint256 collateralLocked;
         uint256 collateralPoolId;
         if (params.isCall) {
-            collateralLocked = params.totalSize;
+            collateralLocked = underlyingNotional;
             collateralPoolId = params.underlyingPoolId;
         } else {
             collateralLocked = _normalizeStrikeAmount(
-                params.totalSize,
-                params.strikePrice,
-                underlyingPool.underlying,
-                strikePool.underlying
+                underlyingNotional, params.strikePrice, underlyingPool.underlying, strikePool.underlying
             );
             if (collateralLocked == 0) revert Options_InvalidAmount(collateralLocked);
             collateralPoolId = params.strikePoolId;
@@ -171,6 +169,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         series.isCall = params.isCall;
         series.isAmerican = params.isAmerican;
         series.reclaimed = false;
+        ds.optionContractSize[seriesId] = params.contractSize;
 
         LibDerivativeStorage.addOptionSeries(positionKey, seriesId);
 
@@ -220,10 +219,15 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         DerivativeTypes.OptionSeries storage series = ds.optionSeries[seriesId];
         if (series.makerPositionKey == bytes32(0)) revert Options_InvalidSeries(seriesId);
+        uint256 contractSize = ds.optionContractSize[seriesId];
+        if (contractSize == 0) revert Options_InvalidContractSize(contractSize);
+        uint256 underlyingAmount = _contractsToUnderlying(amount, contractSize);
         if (series.isCall) {
-            payment = _normalizeStrikeAmount(amount, series.strikePrice, series.underlyingAsset, series.strikeAsset);
+            payment = _normalizeStrikeAmount(
+                underlyingAmount, series.strikePrice, series.underlyingAsset, series.strikeAsset
+            );
         } else {
-            payment = amount;
+            payment = underlyingAmount;
         }
     }
 
@@ -244,6 +248,9 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         if (series.makerPositionKey == bytes32(0)) revert Options_InvalidSeries(seriesId);
         if (series.reclaimed) revert Options_Reclaimed(seriesId);
         if (amount > series.remaining) revert Options_InvalidAmount(amount);
+        uint256 contractSize = ds.optionContractSize[seriesId];
+        if (contractSize == 0) revert Options_InvalidContractSize(contractSize);
+        uint256 underlyingAmount = _contractsToUnderlying(amount, contractSize);
 
         _validateExerciseWindow(seriesId, series, ds.config.europeanToleranceSeconds);
 
@@ -257,24 +264,24 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         LibFeeIndex.settle(series.strikePoolId, makerKey);
         LibActiveCreditIndex.settle(series.strikePoolId, makerKey);
 
-        uint256 strikeAmount = _normalizeStrikeAmount(
-            amount,
-            series.strikePrice,
-            series.underlyingAsset,
-            series.strikeAsset
-        );
+        uint256 strikeAmount =
+            _normalizeStrikeAmount(underlyingAmount, series.strikePrice, series.underlyingAsset, series.strikeAsset);
         if (strikeAmount == 0) revert Options_InvalidAmount(strikeAmount);
 
         uint256 paymentReceived;
         if (series.isCall) {
-            paymentReceived = _exerciseCall(series, makerKey, holder, amount, strikeAmount, recipient, maxPayment, minReceived);
+            paymentReceived = _exerciseCall(
+                series, makerKey, holder, underlyingAmount, strikeAmount, recipient, maxPayment, minReceived
+            );
         } else {
-            paymentReceived = _exercisePut(series, makerKey, holder, amount, strikeAmount, recipient, maxPayment, minReceived);
+            paymentReceived = _exercisePut(
+                series, makerKey, holder, underlyingAmount, strikeAmount, recipient, maxPayment, minReceived
+            );
         }
 
         series.remaining -= amount;
         if (series.isCall) {
-            series.collateralLocked -= amount;
+            series.collateralLocked -= underlyingAmount;
         } else {
             series.collateralLocked -= strikeAmount;
         }
@@ -297,13 +304,13 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         uint256 remaining = series.remaining;
         uint256 collateralUnlocked;
         if (remaining > 0) {
+            uint256 contractSize = ds.optionContractSize[seriesId];
+            if (contractSize == 0) revert Options_InvalidContractSize(contractSize);
+            uint256 underlyingAmount = _contractsToUnderlying(remaining, contractSize);
             collateralUnlocked = series.isCall
-                ? remaining
+                ? underlyingAmount
                 : _normalizeStrikeAmount(
-                    remaining,
-                    series.strikePrice,
-                    series.underlyingAsset,
-                    series.strikeAsset
+                    underlyingAmount, series.strikePrice, series.underlyingAsset, series.strikeAsset
                 );
 
             if (collateralUnlocked == 0) revert Options_InvalidAmount(collateralUnlocked);
@@ -358,18 +365,20 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         return (series.collateralLocked, series.remaining);
     }
 
+    function getOptionContractSize(uint256 seriesId) external view returns (uint256) {
+        return LibDerivativeStorage.derivativeStorage().optionContractSize[seriesId];
+    }
+
     function _optionToken() internal view returns (OptionToken token) {
         address tokenAddress = LibDerivativeStorage.derivativeStorage().optionToken;
         if (tokenAddress == address(0)) revert Options_TokenNotSet();
         token = OptionToken(tokenAddress);
     }
 
-    function _requireTokenHolderOrOperator(
-        OptionToken token,
-        address holder,
-        uint256 seriesId,
-        uint256 amount
-    ) internal view {
+    function _requireTokenHolderOrOperator(OptionToken token, address holder, uint256 seriesId, uint256 amount)
+        internal
+        view
+    {
         uint256 balance = token.balanceOf(holder, seriesId);
         if (balance < amount) {
             revert Options_InsufficientBalance(holder, amount, balance);
@@ -379,22 +388,24 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         }
     }
 
-    function _normalizeStrikeAmount(
-        uint256 amount,
-        uint256 strikePrice,
-        address underlying,
-        address strike
-    ) internal view returns (uint256) {
+    function _normalizeStrikeAmount(uint256 amount, uint256 strikePrice, address underlying, address strike)
+        internal
+        view
+        returns (uint256)
+    {
         uint8 underlyingDecimals = LibCurrency.decimals(underlying);
         uint8 strikeDecimals = LibCurrency.decimals(strike);
         return LibDerivativeHelpers._normalizePrice(amount, strikePrice, underlyingDecimals, strikeDecimals);
     }
 
-    function _validateExerciseWindow(
-        uint256 seriesId,
-        DerivativeTypes.OptionSeries storage series,
-        uint64 tolerance
-    ) internal view {
+    function _contractsToUnderlying(uint256 contractsAmount, uint256 contractSize) internal pure returns (uint256) {
+        return contractsAmount * contractSize;
+    }
+
+    function _validateExerciseWindow(uint256 seriesId, DerivativeTypes.OptionSeries storage series, uint64 tolerance)
+        internal
+        view
+    {
         if (series.isAmerican) {
             if (block.timestamp >= series.expiry) revert Options_ExerciseWindowClosed(seriesId);
             return;
@@ -411,30 +422,29 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         DerivativeTypes.OptionSeries storage series,
         bytes32 makerKey,
         address holder,
-        uint256 amount,
+        uint256 underlyingAmount,
         uint256 strikeAmount,
         address recipient,
         uint256 maxPayment,
         uint256 minReceived
     ) internal returns (uint256 paymentReceived) {
-        LibDerivativeHelpers._unlockCollateral(makerKey, series.underlyingPoolId, amount);
+        LibDerivativeHelpers._unlockCollateral(makerKey, series.underlyingPoolId, underlyingAmount);
 
         Types.PoolData storage underlyingPool = LibAppStorage.s().pools[series.underlyingPoolId];
         Types.PoolData storage strikePool = LibAppStorage.s().pools[series.strikePoolId];
 
         uint256 makerUnderlying = underlyingPool.userPrincipal[makerKey];
-        if (makerUnderlying < amount) revert InsufficientPrincipal(amount, makerUnderlying);
-        if (underlyingPool.trackedBalance < amount) {
-            revert InsufficientPrincipal(amount, underlyingPool.trackedBalance);
+        if (makerUnderlying < underlyingAmount) revert InsufficientPrincipal(underlyingAmount, makerUnderlying);
+        if (underlyingPool.trackedBalance < underlyingAmount) {
+            revert InsufficientPrincipal(underlyingAmount, underlyingPool.trackedBalance);
         }
 
-        underlyingPool.userPrincipal[makerKey] = makerUnderlying - amount;
-        underlyingPool.totalDeposits = underlyingPool.totalDeposits >= amount
-            ? underlyingPool.totalDeposits - amount
-            : 0;
-        underlyingPool.trackedBalance -= amount;
+        underlyingPool.userPrincipal[makerKey] = makerUnderlying - underlyingAmount;
+        underlyingPool.totalDeposits =
+            underlyingPool.totalDeposits >= underlyingAmount ? underlyingPool.totalDeposits - underlyingAmount : 0;
+        underlyingPool.trackedBalance -= underlyingAmount;
         if (LibCurrency.isNative(underlyingPool.underlying)) {
-            LibAppStorage.s().nativeTrackedTotal -= amount;
+            LibAppStorage.s().nativeTrackedTotal -= underlyingAmount;
         }
 
         DerivativeTypes.DerivativeConfig storage cfg = LibDerivativeStorage.derivativeStorage().config;
@@ -452,7 +462,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         strikePool.userPrincipal[makerKey] += netStrike;
         strikePool.totalDeposits += netStrike;
 
-        LibCurrency.transferWithMin(series.underlyingAsset, recipient, amount, minReceived);
+        LibCurrency.transferWithMin(series.underlyingAsset, recipient, underlyingAmount, minReceived);
         return received;
     }
 
@@ -460,7 +470,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         DerivativeTypes.OptionSeries storage series,
         bytes32 makerKey,
         address holder,
-        uint256 amount,
+        uint256 underlyingAmount,
         uint256 strikeAmount,
         address recipient,
         uint256 maxPayment,
@@ -477,7 +487,7 @@ contract OptionsFacet is ReentrancyGuardModifiers {
             underlyingPool,
             series.underlyingPoolId,
             series.underlyingAsset,
-            amount,
+            underlyingAmount,
             maxPayment,
             series.exerciseFeeBps,
             cfg.defaultExerciseFeeFlatWad
@@ -493,9 +503,8 @@ contract OptionsFacet is ReentrancyGuardModifiers {
         }
 
         strikePool.userPrincipal[makerKey] = makerStrike - strikeAmount;
-        strikePool.totalDeposits = strikePool.totalDeposits >= strikeAmount
-            ? strikePool.totalDeposits - strikeAmount
-            : 0;
+        strikePool.totalDeposits =
+            strikePool.totalDeposits >= strikeAmount ? strikePool.totalDeposits - strikeAmount : 0;
         strikePool.trackedBalance -= strikeAmount;
         if (LibCurrency.isNative(strikePool.underlying)) {
             LibAppStorage.s().nativeTrackedTotal -= strikeAmount;

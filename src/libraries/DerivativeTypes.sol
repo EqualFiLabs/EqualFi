@@ -158,6 +158,7 @@ library DerivativeTypes {
         uint256 strikePrice;
         uint64 expiry;
         uint256 totalSize;
+        uint256 contractSize;
         bool isCall;
         bool isAmerican;
         bool useCustomFees;
@@ -173,6 +174,7 @@ library DerivativeTypes {
         uint256 forwardPrice;
         uint64 expiry;
         uint256 totalSize;
+        uint256 contractSize;
         bool isEuropean;
         bool useCustomFees;
         uint16 createFeeBps;

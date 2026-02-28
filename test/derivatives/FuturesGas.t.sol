@@ -63,6 +63,7 @@ contract FuturesGasTest is Test {
             forwardPrice: 2e18,
             expiry: uint64(block.timestamp + 1 days),
             totalSize: 1e18,
+            contractSize: 1,
             isEuropean: false,
             useCustomFees: false,
             createFeeBps: 0,
@@ -84,6 +85,7 @@ contract FuturesGasTest is Test {
             forwardPrice: 2e18,
             expiry: uint64(block.timestamp + 1 days),
             totalSize: 1e18,
+            contractSize: 1,
             isEuropean: false,
             useCustomFees: false,
             createFeeBps: 0,
@@ -133,13 +135,9 @@ contract FuturesGasHarness is FuturesFacet {
         LibDerivativeStorage.derivativeStorage().futuresToken = token;
     }
 
-    function seedPool(
-        uint256 pid,
-        address underlying,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address underlying, bytes32 positionKey, uint256 principal, uint256 tracked)
+        external
+    {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = underlying;
         p.initialized = true;

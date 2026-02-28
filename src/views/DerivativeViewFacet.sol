@@ -31,6 +31,10 @@ contract DerivativeViewFacet {
         return (series.collateralLocked, series.remaining);
     }
 
+    function getOptionContractSize(uint256 seriesId) external view returns (uint256) {
+        return LibDerivativeStorage.derivativeStorage().optionContractSize[seriesId];
+    }
+
     function getFuturesSeries(uint256 seriesId) external view returns (DerivativeTypes.FuturesSeries memory) {
         return LibDerivativeStorage.derivativeStorage().futuresSeries[seriesId];
     }
@@ -42,6 +46,10 @@ contract DerivativeViewFacet {
     {
         DerivativeTypes.FuturesSeries storage series = LibDerivativeStorage.derivativeStorage().futuresSeries[seriesId];
         return (series.underlyingLocked, series.remaining);
+    }
+
+    function getFuturesContractSize(uint256 seriesId) external view returns (uint256) {
+        return LibDerivativeStorage.derivativeStorage().futuresContractSize[seriesId];
     }
 
     function getGraceUnlockTime(uint256 seriesId) external view returns (uint64) {
@@ -133,12 +141,11 @@ contract DerivativeViewFacet {
         }
     }
 
-    function previewSwapWithSlippage(
-        uint256 auctionId,
-        address tokenIn,
-        uint256 amountIn,
-        uint16 slippageBps
-    ) external view returns (uint256 amountOut, uint256 feeAmount, uint256 minOut) {
+    function previewSwapWithSlippage(uint256 auctionId, address tokenIn, uint256 amountIn, uint16 slippageBps)
+        external
+        view
+        returns (uint256 amountOut, uint256 feeAmount, uint256 minOut)
+    {
         (amountOut, feeAmount) = _previewAuctionSwap(auctionId, tokenIn, amountIn);
         if (amountOut == 0) {
             return (0, feeAmount, 0);
@@ -149,19 +156,13 @@ contract DerivativeViewFacet {
         minOut = Math.mulDiv(amountOut, 10_000 - slippageBps, 10_000);
     }
 
-    function findBestAuctionExactIn(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 offset,
-        uint256 limit
-    ) external view returns (uint256 bestAuctionId, uint256 bestAmountOut, uint256 checked) {
-        (uint256[] memory ids, uint256 total) = LibDerivativeStorage.auctionsByPairPage(
-            tokenIn,
-            tokenOut,
-            offset,
-            limit
-        );
+    function findBestAuctionExactIn(address tokenIn, address tokenOut, uint256 amountIn, uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256 bestAuctionId, uint256 bestAmountOut, uint256 checked)
+    {
+        (uint256[] memory ids, uint256 total) =
+            LibDerivativeStorage.auctionsByPairPage(tokenIn, tokenOut, offset, limit);
         uint256 count = ids.length;
         checked = count;
         if (count == 0 || total == 0) {
@@ -210,27 +211,29 @@ contract DerivativeViewFacet {
     }
 
     function selectors() external pure returns (bytes4[] memory selectorsArr) {
-        selectorsArr = new bytes4[](20);
+        selectorsArr = new bytes4[](22);
         selectorsArr[0] = DerivativeViewFacet.getAmmAuction.selector;
         selectorsArr[1] = DerivativeViewFacet.getAuctionFees.selector;
         selectorsArr[2] = DerivativeViewFacet.getOptionSeries.selector;
         selectorsArr[3] = DerivativeViewFacet.getOptionSeriesCollateral.selector;
-        selectorsArr[4] = DerivativeViewFacet.getFuturesSeries.selector;
-        selectorsArr[5] = DerivativeViewFacet.getFuturesCollateral.selector;
-        selectorsArr[6] = DerivativeViewFacet.getGraceUnlockTime.selector;
-        selectorsArr[7] = DerivativeViewFacet.getAuctionsByPosition.selector;
-        selectorsArr[8] = DerivativeViewFacet.getAuctionsByPositionId.selector;
-        selectorsArr[9] = DerivativeViewFacet.getActiveAuctions.selector;
-        selectorsArr[10] = DerivativeViewFacet.getAuctionsByPool.selector;
-        selectorsArr[11] = DerivativeViewFacet.getAuctionsByToken.selector;
-        selectorsArr[12] = DerivativeViewFacet.getAuctionsByPair.selector;
-        selectorsArr[13] = DerivativeViewFacet.getAuctionMeta.selector;
-        selectorsArr[14] = DerivativeViewFacet.previewSwapWithSlippage.selector;
-        selectorsArr[15] = DerivativeViewFacet.findBestAuctionExactIn.selector;
-        selectorsArr[16] = DerivativeViewFacet.getOptionSeriesByPosition.selector;
-        selectorsArr[17] = DerivativeViewFacet.getOptionSeriesByPositionId.selector;
-        selectorsArr[18] = DerivativeViewFacet.getFuturesSeriesByPosition.selector;
-        selectorsArr[19] = DerivativeViewFacet.getFuturesSeriesByPositionId.selector;
+        selectorsArr[4] = DerivativeViewFacet.getOptionContractSize.selector;
+        selectorsArr[5] = DerivativeViewFacet.getFuturesSeries.selector;
+        selectorsArr[6] = DerivativeViewFacet.getFuturesCollateral.selector;
+        selectorsArr[7] = DerivativeViewFacet.getFuturesContractSize.selector;
+        selectorsArr[8] = DerivativeViewFacet.getGraceUnlockTime.selector;
+        selectorsArr[9] = DerivativeViewFacet.getAuctionsByPosition.selector;
+        selectorsArr[10] = DerivativeViewFacet.getAuctionsByPositionId.selector;
+        selectorsArr[11] = DerivativeViewFacet.getActiveAuctions.selector;
+        selectorsArr[12] = DerivativeViewFacet.getAuctionsByPool.selector;
+        selectorsArr[13] = DerivativeViewFacet.getAuctionsByToken.selector;
+        selectorsArr[14] = DerivativeViewFacet.getAuctionsByPair.selector;
+        selectorsArr[15] = DerivativeViewFacet.getAuctionMeta.selector;
+        selectorsArr[16] = DerivativeViewFacet.previewSwapWithSlippage.selector;
+        selectorsArr[17] = DerivativeViewFacet.findBestAuctionExactIn.selector;
+        selectorsArr[18] = DerivativeViewFacet.getOptionSeriesByPosition.selector;
+        selectorsArr[19] = DerivativeViewFacet.getOptionSeriesByPositionId.selector;
+        selectorsArr[20] = DerivativeViewFacet.getFuturesSeriesByPosition.selector;
+        selectorsArr[21] = DerivativeViewFacet.getFuturesSeriesByPositionId.selector;
     }
 
     function _positionKey(uint256 positionId) private view returns (bytes32) {

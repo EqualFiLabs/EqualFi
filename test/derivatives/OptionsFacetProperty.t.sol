@@ -4,11 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {OptionToken} from "../../src/derivatives/OptionToken.sol";
-import {
-    OptionsFacet,
-    Options_ExerciseWindowClosed,
-    Options_NotReclaimed
-} from "../../src/derivatives/OptionsFacet.sol";
+import {OptionsFacet, Options_ExerciseWindowClosed, Options_NotReclaimed} from "../../src/derivatives/OptionsFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
@@ -48,11 +44,7 @@ contract OptionsFacetPropertyTest is Test {
         strike = new MockERC20("Strike", "STK", 6, 0);
     }
 
-    function testProperty_FullCollateralizationInvariant(
-        uint96 totalSize,
-        uint96 exerciseAmount,
-        bool isCall
-    ) public {
+    function testProperty_FullCollateralizationInvariant(uint96 totalSize, uint96 exerciseAmount, bool isCall) public {
         totalSize = uint96(bound(totalSize, 1e12, 1e24));
         exerciseAmount = uint96(bound(exerciseAmount, 0, totalSize));
 
@@ -76,6 +68,7 @@ contract OptionsFacetPropertyTest is Test {
             strikePrice: strikePrice,
             expiry: uint64(block.timestamp + 7 days),
             totalSize: totalSize,
+            contractSize: 1,
             isCall: isCall,
             isAmerican: true,
             useCustomFees: false,
@@ -96,7 +89,8 @@ contract OptionsFacetPropertyTest is Test {
             optionToken.safeTransferFrom(maker, holder, seriesId, exerciseAmount, "");
 
             if (isCall) {
-                uint256 strikeAmount = harness.previewExercisePayment(seriesId, exerciseAmount); if (strikeAmount == 0) strikeAmount = 1;
+                uint256 strikeAmount = harness.previewExercisePayment(seriesId, exerciseAmount);
+                if (strikeAmount == 0) strikeAmount = 1;
                 strike.mint(holder, strikeAmount);
                 vm.prank(holder);
                 strike.approve(address(harness), strikeAmount);
@@ -108,9 +102,7 @@ contract OptionsFacetPropertyTest is Test {
 
             uint256 payment = harness.previewExercisePayment(seriesId, exerciseAmount);
 
-
             vm.prank(holder);
-
 
             harness.exerciseOptions(seriesId, exerciseAmount, holder, payment, 0);
         }
@@ -153,6 +145,7 @@ contract OptionsFacetPropertyTest is Test {
             strikePrice: strikePrice,
             expiry: expiry,
             totalSize: totalSize,
+            contractSize: 1,
             isCall: true,
             isAmerican: false,
             useCustomFees: false,
@@ -200,6 +193,7 @@ contract OptionsFacetPropertyTest is Test {
                 strikePrice: strikePrice,
                 expiry: expiryLate,
                 totalSize: totalSize,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: false,
                 useCustomFees: false,
@@ -245,6 +239,7 @@ contract OptionsFacetPropertyTest is Test {
             strikePrice: strikePrice,
             expiry: expiry,
             totalSize: totalSize,
+            contractSize: 1,
             isCall: false,
             isAmerican: true,
             useCustomFees: false,
@@ -265,9 +260,7 @@ contract OptionsFacetPropertyTest is Test {
 
         uint256 payment = harness.previewExercisePayment(seriesId, totalSize);
 
-
         vm.prank(holder);
-
 
         harness.exerciseOptions(seriesId, totalSize, holder, payment, 0);
 
@@ -288,6 +281,7 @@ contract OptionsFacetPropertyTest is Test {
                 strikePrice: strikePrice,
                 expiry: expiryLate,
                 totalSize: totalSize,
+                contractSize: 1,
                 isCall: false,
                 isAmerican: true,
                 useCustomFees: false,
@@ -335,6 +329,7 @@ contract OptionsFacetPropertyTest is Test {
                 strikePrice: strikePrice,
                 expiry: uint64(block.timestamp + 7 days),
                 totalSize: totalSize,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -351,7 +346,8 @@ contract OptionsFacetPropertyTest is Test {
         if (exerciseAmount > 0) {
             vm.prank(maker);
             optionToken.safeTransferFrom(maker, holder, seriesId, exerciseAmount, "");
-            uint256 strikeAmount = harness.previewExercisePayment(seriesId, exerciseAmount); if (strikeAmount == 0) strikeAmount = 1;
+            uint256 strikeAmount = harness.previewExercisePayment(seriesId, exerciseAmount);
+            if (strikeAmount == 0) strikeAmount = 1;
             strike.mint(holder, strikeAmount);
             vm.prank(holder);
             strike.approve(address(harness), strikeAmount);
@@ -391,6 +387,7 @@ contract OptionsFacetPropertyTest is Test {
                 strikePrice: strikePrice,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: totalSize,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -423,6 +420,71 @@ contract OptionsFacetPropertyTest is Test {
         assertEq(optionToken.balanceOf(holder, seriesId), holderBalanceBefore / 2, "post-reclaim claims burnable");
     }
 
+    function test_createOptionSeries_supportsFractionalNotionalPerContract() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 totalContracts = 20;
+        uint256 contractSize = 5e15; // 0.005 underlying per option token.
+        uint256 underlyingNotional = totalContracts * contractSize;
+        uint256 strikePrice = 2e18;
+        uint256 requiredStrike = _strikeAmount(underlyingNotional, strikePrice);
+
+        harness.seedPool(1, address(underlying), positionKey, underlyingNotional + 1e6, underlyingNotional + 1e6);
+        harness.seedPool(2, address(strike), positionKey, requiredStrike + 1e6, requiredStrike + 1e6);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 seriesId = harness.createOptionSeries(
+            DerivativeTypes.CreateOptionSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                strikePoolId: 2,
+                strikePrice: strikePrice,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: totalContracts,
+                contractSize: contractSize,
+                isCall: true,
+                isAmerican: true,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        DerivativeTypes.OptionSeries memory series = harness.getOptionSeries(seriesId);
+        assertEq(series.totalSize, totalContracts, "contract supply recorded");
+        assertEq(series.remaining, totalContracts, "remaining tracks contract units");
+        assertEq(harness.getOptionContractSize(seriesId), contractSize, "contract size recorded");
+        assertEq(optionToken.balanceOf(maker, seriesId), totalContracts, "minted contract-count claim supply");
+        assertEq(harness.getLocked(positionKey, 1), underlyingNotional, "call collateral locks full notional");
+
+        uint256 exerciseContracts = 5;
+        uint256 exercisedNotional = exerciseContracts * contractSize;
+        vm.prank(maker);
+        optionToken.safeTransferFrom(maker, holder, seriesId, exerciseContracts, "");
+
+        uint256 payment = harness.previewExercisePayment(seriesId, exerciseContracts);
+        assertEq(payment, _strikeAmount(exercisedNotional, strikePrice), "payment scales by contract size");
+        strike.mint(holder, payment);
+        vm.prank(holder);
+        strike.approve(address(harness), payment);
+
+        vm.prank(holder);
+        harness.exerciseOptions(seriesId, exerciseContracts, holder, payment, 0);
+
+        DerivativeTypes.OptionSeries memory afterExercise = harness.getOptionSeries(seriesId);
+        assertEq(afterExercise.remaining, totalContracts - exerciseContracts, "remaining decremented by contracts");
+        assertEq(
+            harness.getLocked(positionKey, 1),
+            (totalContracts - exerciseContracts) * contractSize,
+            "locked notional decremented"
+        );
+        assertEq(underlying.balanceOf(holder), exercisedNotional, "holder receives sized underlying");
+    }
+
     function _strikeAmount(uint256 amount, uint256 strikePrice) internal view returns (uint256) {
         uint256 underlyingScale = 10 ** uint256(underlying.decimals());
         uint256 strikeScale = 10 ** uint256(strike.decimals());
@@ -452,6 +514,7 @@ contract OptionsFacetPropertyTest is Test {
                 strikePrice: strikePrice,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: totalSize,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -477,7 +540,9 @@ contract OptionsFacetPropertyTest is Test {
         harness.exerciseOptions(seriesId, totalSize, holder, maxPayment, 0);
 
         assertEq(holderStrikeBefore - strike.balanceOf(holder), payment, "holder pays required amount only");
-        assertEq(harness.getPrincipal(positionKey, 2) - makerStrikeBefore, payment, "maker receives required amount only");
+        assertEq(
+            harness.getPrincipal(positionKey, 2) - makerStrikeBefore, payment, "maker receives required amount only"
+        );
     }
 
     function test_createOptionSeries_supportsNativeCollateralFlatFee() public {
@@ -504,6 +569,7 @@ contract OptionsFacetPropertyTest is Test {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -547,13 +613,9 @@ contract OptionsHarness is OptionsFacet {
         store.activeCreditShareConfigured = true;
     }
 
-    function seedPool(
-        uint256 pid,
-        address underlying,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address underlying, bytes32 positionKey, uint256 principal, uint256 tracked)
+        external
+    {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = underlying;
         p.initialized = true;

@@ -66,6 +66,9 @@ library LibDerivativeStorage {
 
         address optionToken;
         address futuresToken;
+
+        mapping(uint256 => uint256) optionContractSize;
+        mapping(uint256 => uint256) futuresContractSize;
     }
 
     struct CurveData {

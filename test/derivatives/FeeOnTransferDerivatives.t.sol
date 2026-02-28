@@ -31,13 +31,9 @@ contract OptionsFoTHarness is OptionsFacet {
         LibDerivativeStorage.derivativeStorage().optionToken = token;
     }
 
-    function seedPool(
-        uint256 pid,
-        address underlying,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address underlying, bytes32 positionKey, uint256 principal, uint256 tracked)
+        external
+    {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = underlying;
         p.initialized = true;
@@ -80,13 +76,9 @@ contract FuturesFoTHarness is FuturesFacet {
         LibDerivativeStorage.derivativeStorage().futuresToken = token;
     }
 
-    function seedPool(
-        uint256 pid,
-        address underlying,
-        bytes32 positionKey,
-        uint256 principal,
-        uint256 tracked
-    ) external {
+    function seedPool(uint256 pid, address underlying, bytes32 positionKey, uint256 principal, uint256 tracked)
+        external
+    {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
         p.underlying = underlying;
         p.initialized = true;
@@ -154,6 +146,7 @@ contract FeeOnTransferDerivativesTest is Test {
             strikePrice: 2e18,
             expiry: uint64(block.timestamp + 1 days),
             totalSize: 1e18,
+            contractSize: 1,
             isCall: true,
             isAmerican: true,
             useCustomFees: false,
@@ -211,6 +204,7 @@ contract FeeOnTransferDerivativesTest is Test {
                 strikePrice: 2e18,
                 expiry: uint64(block.timestamp + 1 days),
                 totalSize: 1e18,
+                contractSize: 1,
                 isCall: true,
                 isAmerican: true,
                 useCustomFees: false,
@@ -264,6 +258,7 @@ contract FeeOnTransferDerivativesTest is Test {
             forwardPrice: 2e18,
             expiry: expiry,
             totalSize: 1e18,
+            contractSize: 1,
             isEuropean: true,
             useCustomFees: false,
             createFeeBps: 0,
@@ -322,6 +317,7 @@ contract FeeOnTransferDerivativesTest is Test {
                 forwardPrice: 2e18,
                 expiry: expiry,
                 totalSize: 1e18,
+                contractSize: 1,
                 isEuropean: true,
                 useCustomFees: false,
                 createFeeBps: 0,
