@@ -7,11 +7,13 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmIsolatedStorage} from "../../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
 import {IIlmIsolatedIrmAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedIrmAdapter.sol";
 import {IIlmIsolatedOracleAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedOracleAdapter.sol";
 import {ILMIsolatedLiquidationFacet} from "../../src/ilm-isolated/facets/ILMIsolatedLiquidationFacet.sol";
+import {ModulePausedError} from "../../src/libraries/Errors.sol";
 import "../../src/ilm-isolated/errors/IlmIsolatedErrors.sol";
 
 contract MockIlmIsolatedIrmAdapterLiquidation is IIlmIsolatedIrmAdapter {
@@ -64,6 +66,22 @@ contract ILMIsolatedLiquidationFacetHarness is ILMIsolatedLiquidationFacet {
         ds_.marketParams[marketId] = params;
         ds_.market[marketId] = market;
         ds_.marketModuleId[marketId] = moduleId;
+
+        LibModuleRegistry.ModuleStorage storage ms = LibModuleRegistry.s();
+        if (ms.nextModuleId <= moduleId) {
+            ms.nextModuleId = moduleId + 1;
+        }
+        ms.modules[moduleId].paused = false;
+        ms.modules[moduleId].inactive = false;
+    }
+
+    function setModuleStateRaw(uint256 moduleId, bool paused, bool inactive) external {
+        LibModuleRegistry.ModuleStorage storage ms = LibModuleRegistry.s();
+        if (ms.nextModuleId <= moduleId) {
+            ms.nextModuleId = moduleId + 1;
+        }
+        ms.modules[moduleId].paused = paused;
+        ms.modules[moduleId].inactive = inactive;
     }
 
     function setPositionBorrowAndCollateral(
@@ -439,6 +457,51 @@ contract ILMIsolatedLiquidationFacetTest is Test {
         h.setAuthorizationRaw(liquidatorKey, unauthorized, true);
         vm.prank(unauthorized);
         h.isolatedLiquidate(MARKET_A, borrowerPositionId, 0, 100, liquidatorPositionId);
+    }
+
+    function test_liquidation_revertsWhenBoundModulePaused() public {
+        _setMarketA(
+            IlmIsolatedTypes.IlmIsolatedMarket({
+                totalSupplyAssets: 2_000_000,
+                totalSupplyShares: 2_000_000,
+                totalBorrowAssets: 1_000_000,
+                totalBorrowShares: 1_000_000,
+                lastUpdate: uint128(block.timestamp),
+                fee: 0
+            })
+        );
+        h.setModuleStateRaw(MODULE_ID, true, false);
+
+        vm.prank(LIQUIDATOR_OWNER);
+        vm.expectRevert(abi.encodeWithSelector(ModulePausedError.selector, MODULE_ID));
+        h.isolatedLiquidate(MARKET_A, borrowerPositionId, 0, 100, liquidatorPositionId);
+    }
+
+    function test_liquidation_allowsExecutionWhenModuleInactiveButNotPaused() public {
+        _setMarketA(
+            IlmIsolatedTypes.IlmIsolatedMarket({
+                totalSupplyAssets: 2_000_000,
+                totalSupplyShares: 2_000_000,
+                totalBorrowAssets: 1_000_000,
+                totalBorrowShares: 1_000_000,
+                lastUpdate: uint128(block.timestamp),
+                fee: 0
+            })
+        );
+        h.setModuleStateRaw(MODULE_ID, false, true);
+        h.setPositionBorrowAndCollateral(MARKET_A, borrowerKey, 800_000, 300);
+        h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 300);
+        h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 50_000);
+        h.setPoolTotalDeposits(LOAN_POOL_ID, 50_000);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 300);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey, 0);
+        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 300);
+
+        vm.prank(LIQUIDATOR_OWNER);
+        (uint256 seizedOut, uint256 repaidAssetsOut) =
+            h.isolatedLiquidate(MARKET_A, borrowerPositionId, 0, 100, liquidatorPositionId);
+        assertGt(seizedOut, 0);
+        assertGt(repaidAssetsOut, 0);
     }
 
     function test_liquidation_withProtocolFeeBps_returnsNetAndRoutesFee() public {

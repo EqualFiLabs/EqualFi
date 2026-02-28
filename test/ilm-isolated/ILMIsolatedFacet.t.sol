@@ -7,6 +7,7 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmSharesMath} from "../../src/ilm-isolated/libraries/LibIlmSharesMath.sol";
@@ -15,6 +16,7 @@ import {LibIlmIsolatedStorage} from "../../src/ilm-isolated/libraries/LibIlmIsol
 import {IIlmIsolatedIrmAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedIrmAdapter.sol";
 import {IIlmIsolatedOracleAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedOracleAdapter.sol";
 import {ILMIsolatedFacet} from "../../src/ilm-isolated/facets/ILMIsolatedFacet.sol";
+import {ModulePausedError} from "../../src/libraries/Errors.sol";
 import "../../src/ilm-isolated/errors/IlmIsolatedErrors.sol";
 
 contract MockIlmIsolatedIrmAdapterFacet is IIlmIsolatedIrmAdapter {
@@ -63,6 +65,22 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
         ds_.marketParams[marketId] = params;
         ds_.market[marketId] = market;
         ds_.marketModuleId[marketId] = moduleId;
+
+        LibModuleRegistry.ModuleStorage storage ms = LibModuleRegistry.s();
+        if (ms.nextModuleId <= moduleId) {
+            ms.nextModuleId = moduleId + 1;
+        }
+        ms.modules[moduleId].paused = false;
+        ms.modules[moduleId].inactive = false;
+    }
+
+    function setModuleStateRaw(uint256 moduleId, bool paused, bool inactive) external {
+        LibModuleRegistry.ModuleStorage storage ms = LibModuleRegistry.s();
+        if (ms.nextModuleId <= moduleId) {
+            ms.nextModuleId = moduleId + 1;
+        }
+        ms.modules[moduleId].paused = paused;
+        ms.modules[moduleId].inactive = inactive;
     }
 
     function setPositionSupplyShares(bytes32 marketId, bytes32 positionKey, uint256 shares) external {
@@ -375,6 +393,44 @@ contract ILMIsolatedFacetTest is Test {
         h.setAuthorizationRaw(positionKey, OPERATOR, true);
         vm.prank(OPERATOR);
         h.isolatedSupply(MARKET_ID, 10, 0, positionId);
+    }
+
+    function test_supply_revertsWhenBoundModulePaused() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1000,
+            totalSupplyShares: 1000,
+            totalBorrowAssets: 0,
+            totalBorrowShares: 0,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 1000);
+        h.setModuleStateRaw(MODULE_ID, true, false);
+
+        vm.prank(POSITION_OWNER);
+        vm.expectRevert(abi.encodeWithSelector(ModulePausedError.selector, MODULE_ID));
+        h.isolatedSupply(MARKET_ID, 10, 0, positionId);
+    }
+
+    function test_supply_allowsExecutionWhenModuleInactiveButNotPaused() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1000,
+            totalSupplyShares: 1000,
+            totalBorrowAssets: 0,
+            totalBorrowShares: 0,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 1000);
+        h.setModuleStateRaw(MODULE_ID, false, true);
+
+        vm.prank(POSITION_OWNER);
+        (uint256 assetsOut, uint256 sharesOut) = h.isolatedSupply(MARKET_ID, 10, 0, positionId);
+        uint256 expectedShares = LibIlmSharesMath.toSharesDown(10, market.totalSupplyAssets, market.totalSupplyShares);
+        assertEq(assetsOut, 10);
+        assertEq(sharesOut, expectedShares);
     }
 
     /// @dev Property 24: Authorization Enforcement (core facet path)

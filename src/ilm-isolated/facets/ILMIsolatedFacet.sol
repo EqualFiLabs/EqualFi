@@ -9,9 +9,10 @@ import {LibActiveCreditIndex} from "../../libraries/LibActiveCreditIndex.sol";
 import {LibFeeRouter} from "../../libraries/LibFeeRouter.sol";
 import {LibActionFees} from "../../libraries/LibActionFees.sol";
 import {LibModuleEncumbrance} from "../../libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../../libraries/LibModuleRegistry.sol";
 import {LibSolvencyChecks} from "../../libraries/LibSolvencyChecks.sol";
 import {ReentrancyGuardModifiers} from "../../libraries/LibReentrancyGuard.sol";
-import {InsufficientUnencumberedPrincipal} from "../../libraries/Errors.sol";
+import {InsufficientUnencumberedPrincipal, ModuleNotFound, ModulePausedError} from "../../libraries/Errors.sol";
 import {IlmIsolatedTypes} from "../types/IlmIsolatedTypes.sol";
 import {LibIlmIsolatedStorage} from "../libraries/LibIlmIsolatedStorage.sol";
 import {LibIlmSharesMath} from "../libraries/LibIlmSharesMath.sol";
@@ -52,6 +53,8 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
             revert IlmIsolatedMarketNotCreated(marketId);
         }
 
+        uint256 moduleId = _ds.marketModuleId[marketId];
+        _requireModuleNotPaused(moduleId);
         bytes32 positionKey = _checkAuthorized(positionId);
         _accrueInterest(marketId, market, _ds);
 
@@ -64,7 +67,6 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         }
 
         IlmIsolatedTypes.IlmIsolatedMarketParams storage params = _ds.marketParams[marketId];
-        uint256 moduleId = _ds.marketModuleId[marketId];
         _enforceAvailablePrincipal(positionKey, params.loanPoolId, assetsOut);
         LibModuleEncumbrance.encumber(positionKey, params.loanPoolId, moduleId, assetsOut);
 
@@ -95,6 +97,8 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
             revert IlmIsolatedMarketNotCreated(marketId);
         }
 
+        uint256 moduleId = _ds.marketModuleId[marketId];
+        _requireModuleNotPaused(moduleId);
         bytes32 positionKey = _checkAuthorized(positionId);
         _accrueInterest(marketId, market, _ds);
 
@@ -127,7 +131,6 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         market.totalSupplyShares = uint128(newTotalSupplyShares);
 
         IlmIsolatedTypes.IlmIsolatedMarketParams storage params = _ds.marketParams[marketId];
-        uint256 moduleId = _ds.marketModuleId[marketId];
         LibModuleEncumbrance.unencumber(positionKey, params.loanPoolId, moduleId, assetsOut);
 
         emit IlmIsolatedWithdraw(marketId, positionKey, assetsOut, sharesOut);
@@ -144,9 +147,10 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
             revert IlmIsolatedMarketNotCreated(marketId);
         }
 
+        uint256 moduleId = _ds.marketModuleId[marketId];
+        _requireModuleNotPaused(moduleId);
         bytes32 positionKey = _checkAuthorized(positionId);
         IlmIsolatedTypes.IlmIsolatedMarketParams storage params = _ds.marketParams[marketId];
-        uint256 moduleId = _ds.marketModuleId[marketId];
         _enforceAvailablePrincipal(positionKey, params.collateralPoolId, assets);
 
         IlmIsolatedTypes.IlmIsolatedPosition storage position = _ds.position[marketId][positionKey];
@@ -171,6 +175,8 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
             revert IlmIsolatedMarketNotCreated(marketId);
         }
 
+        uint256 moduleId = _ds.marketModuleId[marketId];
+        _requireModuleNotPaused(moduleId);
         bytes32 positionKey = _checkAuthorized(positionId);
         _accrueInterest(marketId, market, _ds);
 
@@ -196,7 +202,7 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         }
 
         position.collateralAssets = uint128(newCollateralAssets);
-        LibModuleEncumbrance.unencumber(positionKey, params.collateralPoolId, _ds.marketModuleId[marketId], assets);
+        LibModuleEncumbrance.unencumber(positionKey, params.collateralPoolId, moduleId, assets);
 
         emit IlmIsolatedWithdrawCollateral(marketId, positionKey, assets);
     }
@@ -214,6 +220,7 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
             revert IlmIsolatedMarketNotCreated(marketId);
         }
 
+        _requireModuleNotPaused(_ds.marketModuleId[marketId]);
         bytes32 positionKey = _checkAuthorized(positionId);
         _accrueInterest(marketId, market, _ds);
 
@@ -275,6 +282,7 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
             revert IlmIsolatedMarketNotCreated(marketId);
         }
 
+        _requireModuleNotPaused(_ds.marketModuleId[marketId]);
         bytes32 positionKey = _checkAuthorized(positionId);
         _accrueInterest(marketId, market, _ds);
 
@@ -433,6 +441,17 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
 
         if (_ds.market[marketId].totalBorrowAssets == 0) {
             _ds.marketProtocolFeeAssets[marketId] = 0;
+        }
+    }
+
+    function _requireModuleNotPaused(uint256 moduleId) internal view {
+        LibModuleRegistry.ModuleStorage storage ms = LibModuleRegistry.s();
+        uint256 next = ms.nextModuleId;
+        if (moduleId == 0 || next == 0 || moduleId >= next) {
+            revert ModuleNotFound(moduleId);
+        }
+        if (ms.modules[moduleId].paused) {
+            revert ModulePausedError(moduleId);
         }
     }
 

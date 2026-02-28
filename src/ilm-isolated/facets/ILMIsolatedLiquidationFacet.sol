@@ -9,9 +9,15 @@ import {LibFeeIndex} from "../../libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../../libraries/LibActiveCreditIndex.sol";
 import {LibFeeRouter} from "../../libraries/LibFeeRouter.sol";
 import {LibModuleEncumbrance} from "../../libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../../libraries/LibModuleRegistry.sol";
 import {LibSolvencyChecks} from "../../libraries/LibSolvencyChecks.sol";
 import {ReentrancyGuardModifiers} from "../../libraries/LibReentrancyGuard.sol";
-import {InsufficientPrincipal, InsufficientUnencumberedPrincipal} from "../../libraries/Errors.sol";
+import {
+    InsufficientPrincipal,
+    InsufficientUnencumberedPrincipal,
+    ModuleNotFound,
+    ModulePausedError
+} from "../../libraries/Errors.sol";
 import {IlmIsolatedTypes} from "../types/IlmIsolatedTypes.sol";
 import {LibIlmIsolatedStorage} from "../libraries/LibIlmIsolatedStorage.sol";
 import {LibIlmSharesMath} from "../libraries/LibIlmSharesMath.sol";
@@ -66,6 +72,8 @@ contract ILMIsolatedLiquidationFacet is ReentrancyGuardModifiers {
         if (market.lastUpdate == 0) {
             revert IlmIsolatedMarketNotCreated(marketId);
         }
+        uint256 moduleId = _ds.marketModuleId[marketId];
+        _requireModuleNotPaused(moduleId);
 
         _accrueInterest(marketId, market, _ds);
 
@@ -144,9 +152,7 @@ contract ILMIsolatedLiquidationFacet is ReentrancyGuardModifiers {
                 params.collateralPoolId, protocolFeeCollateral, ILM_LIQUIDATION_FEE_SOURCE, false, 0
             );
         }
-        LibModuleEncumbrance.unencumber(
-            borrowerKey, params.collateralPoolId, _ds.marketModuleId[marketId], grossSeizedAssets
-        );
+        LibModuleEncumbrance.unencumber(borrowerKey, params.collateralPoolId, moduleId, grossSeizedAssets);
 
         if (market.totalBorrowAssets == 0) {
             _ds.marketProtocolFeeAssets[marketId] = 0;
@@ -316,6 +322,17 @@ contract ILMIsolatedLiquidationFacet is ReentrancyGuardModifiers {
 
     function _divUp(uint256 a, uint256 b) internal pure returns (uint256) {
         return a == 0 ? 0 : (a - 1) / b + 1;
+    }
+
+    function _requireModuleNotPaused(uint256 moduleId) internal view {
+        LibModuleRegistry.ModuleStorage storage ms = LibModuleRegistry.s();
+        uint256 next = ms.nextModuleId;
+        if (moduleId == 0 || next == 0 || moduleId >= next) {
+            revert ModuleNotFound(moduleId);
+        }
+        if (ms.modules[moduleId].paused) {
+            revert ModulePausedError(moduleId);
+        }
     }
 
     function ds() internal pure returns (LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage) {
