@@ -228,7 +228,8 @@ contract PositionAgentAmmSkillModuleTest is Test {
             startTime: 100,
             endTime: 200,
             feeBps: 30,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
     }
 

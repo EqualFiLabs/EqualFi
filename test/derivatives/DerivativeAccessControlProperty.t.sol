@@ -120,7 +120,8 @@ contract DerivativeAccessControlPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 30,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(attacker);
@@ -186,7 +187,8 @@ contract DerivativeAccessControlPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 30,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -419,7 +421,8 @@ contract DerivativeAccessControlPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 30,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -475,7 +478,8 @@ contract DerivativeAccessControlPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 30,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 

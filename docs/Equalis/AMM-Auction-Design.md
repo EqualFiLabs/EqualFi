@@ -1,6 +1,6 @@
 # AMM Auction System Design
 
-**Version:** 1.2 (Updated for router-based fee routing and current selector signatures)
+**Version:** 1.3 (Updated for stable/volatile invariant mode toggle and stable-mode governance gate)
 
 This document describes the AMM Auction system, which allows Position NFT holders to create time-bounded automated market maker (AMM) pools using their deposited liquidity. These auctions enable trustless token swaps with constant-product pricing.
 
@@ -25,11 +25,13 @@ The AMM Auction system enables liquidity providers to create temporary AMM pools
 | Feature | Description |
 |---------|-------------|
 | **Time-Bounded** | Auctions have explicit start and end times |
-| **Constant Product** | Uses x*y=k invariant for pricing |
+| **Invariant Modes** | Maker chooses `Volatile` (constant-product) or `Stable` pricing at creation |
 | **Position-Backed** | Reserves come from maker's deposited principal |
 | **Fee Earning** | Makers earn fees on every swap |
 | **Cancelable** | Makers can cancel before expiry |
 | **Multi-Indexed** | Discoverable by pool, token, or pair |
+
+CL auctions are a separate system and are not modified by this design.
 
 ### System Participants
 
@@ -69,9 +71,16 @@ The AMM Auction system enables liquidity providers to create temporary AMM pools
 
 ## How It Works
 
-### Constant Product AMM
+### Invariant Modes
 
-The auction uses the classic constant product formula:
+Each auction stores an immutable `invariantMode` selected at creation:
+
+- `Volatile`: classic constant-product `x * y` behavior (existing path).
+- `Stable`: stable-swap style output solve with decimal normalization and bounded iteration.
+
+### Volatile Formula
+
+Volatile mode uses the classic constant product formula:
 
 ```
 x × y = k
@@ -82,12 +91,12 @@ Where:
 - `y` = reserve of token B  
 - `k` = invariant (product of reserves)
 
-When a swap occurs:
+When a volatile-mode swap occurs:
 ```
 newReserveIn × newReserveOut ≥ k
 ```
 
-The invariant is preserved or increased (due to fees).
+The volatile invariant is preserved or increased (due to fees).
 
 ### Reserve Locking
 
@@ -166,6 +175,7 @@ struct AmmAuction {
     uint64 endTime;              // When swaps stop
     uint16 feeBps;               // Fee in basis points
     FeeAsset feeAsset;           // Fee taken from TokenIn or TokenOut
+    InvariantMode invariantMode; // Volatile or Stable (immutable per-auction)
     uint256 makerFeeAAccrued;    // Accumulated fees in token A
     uint256 makerFeeBAccrued;    // Accumulated fees in token B
     uint256 treasuryFeeAAccrued; // Routed treasury fees in token A
@@ -177,6 +187,11 @@ struct AmmAuction {
 enum FeeAsset {
     TokenIn,   // Fee deducted from input amount
     TokenOut   // Fee deducted from output amount
+}
+
+enum InvariantMode {
+    Volatile,  // x*y style
+    Stable     // stable-swap style solve
 }
 ```
 
@@ -193,6 +208,7 @@ struct CreateAuctionParams {
     uint64 endTime;          // Auction end timestamp
     uint16 feeBps;           // Fee rate (e.g., 30 = 0.30%)
     FeeAsset feeAsset;       // Where to take fees from
+    InvariantMode invariantMode; // Volatile or Stable
 }
 ```
 
@@ -208,6 +224,7 @@ struct CreateAuctionParams {
 - Sufficient unlocked principal in both pools
 - `endTime > startTime`
 - `feeBps ≤ maxFeeBps` (if configured)
+- If `invariantMode == Stable`, `stableModeEnabled` must be true in derivative governance config
 
 **Function:**
 ```solidity

@@ -121,33 +121,47 @@ forge script script/DeployDiamond.s.sol --rpc-url http://127.0.0.1:8545 --broadc
 
 ## What is The Equalis Protocol
 
-I am building something different at EqualFi. For a decade Decentralized Finance has been growing and evolving. Great progress has been made but a "status quo" has come to exist that seems to have become accepted. The idea that liquidation based lending is the only safe way to do decentralized credit on chain and that venues need to be separated to contain risk has become the accepted state of things. No single platform offers a full financial stack OS and almost every platform subscribes to the status quo that I am describing. There are some out there who are building against the grain and we salute them because like us they believe that there are other ways.
+EqualFi is building a unified financial infrastructure layer for on-chain finance. For a decade, DeFi has been growing and evolving. Great progress has been made, but the ecosystem has settled into a pattern: lending lives on one protocol, trading on another, derivatives on a third, and users shuttle capital between them, losing yield and composability at every hop. No single platform offers a full financial stack, and liquidity stays fragmented across dozens of isolated venues.
 
-The goal of this project is to explore the idea that not only are other ways possible, but that they scale better and arguably provide an overall better and more stable user experience for both retail and professional users.
+The goal of this project is to change that. Equalis is a single Diamond proxy contract that unifies lending, trading, derivatives, index products, and extensible modules under one shared custody and accounting layer. You deposit once. Your capital works across every venue simultaneously. Every fee generated anywhere in the system flows back through a single per-token fee rail.
 
 ## A Deterministic Core
 
-Current systems are mostly reactive. They act when markets shift and they force users to be constantly vigilant when maintaining any sort of leveraged position. If a user wants to utilize their capital by borrowing against it they are in a constant battle with the market, forever forced to monitor a health factor, because if they do not they risk getting liquidated through no fault of their own. This makes long term position planning stressful and completely hands on.
+The foundation of Equalis is deterministic. Most on-chain lending today uses oracle-driven health factors and liquidation markets to maintain solvency. That model works and has been battle-tested, but it comes with tradeoffs: users who want to utilize their capital by borrowing against it are in a constant relationship with the market, monitoring health factors and managing the risk of forced unwinds triggered by price volatility rather than by any action they took.
 
-What if you could borrow without worrying about a health factor? What if you could borrow at 95% LTV? What if I told you that any asset with an Equalis pool can be supported permissionlessly?
+Equalis starts from a different premise. What if you could borrow without worrying about a health factor? What if you could borrow at 95% LTV? What if any asset with an Equalis pool could be supported permissionlessly?
 
-All of that is possible if you are willing to rethink how things are currently done. The way to do this boils down to one thing: User Agency.
+All of that is possible when you rethink the base layer. The way to do this boils down to one thing: User Agency.
 
-The Equalis Protocol core is deterministic and offers **0% interest** self-secured borrowing. This is comparable to Aave’s E-Mode where you borrow like assets that correlate in price, like stablecoin for stablecoin. Here you can draw credit from your own deposit, but the true value of the protocol is that active credit is **rewarded**. We can allow 0% interest loans at a 95% LTV because they are self secured. No oracles, no liquidation markets required for solvency, and because active credit earns, you can treat it like an additional yield source while deploying your capital elsewhere (or within Equalis).
+The Equalis Protocol core offers **0% interest** self-secured borrowing. This is comparable to borrowing like-for-like assets that correlate in price. Here you draw credit from your own deposit, but the true value is that active credit is **rewarded**. We can allow 0% interest loans at a 95% LTV because they are self secured. No oracles, no liquidation markets required for solvency, and because active credit earns, you can treat it like an additional yield source while deploying your capital elsewhere or within Equalis.
 
-What if you want to borrow an asset you do not own? This is where we introduce true peer to peer lending. Institutions are coming on-chain at an increasingly fast rate. This is not speculation, this is reality. The Equalis peer to peer system is designed for this type of activity but is open to anyone. You can service revolving credit for users and have steady monthly income, you can service term loans that pay interest up front and are collateralized to a ratio that you decide. As a borrower you can post an offer and wait for a lender to pick it up to be filled.
+What if you want to borrow an asset you do not own? This is where we introduce true peer-to-peer lending. Institutions are coming on-chain at an increasingly fast rate. This is not speculation, this is reality. The Equalis peer-to-peer system is designed for this type of activity but is open to anyone. You can service revolving credit for users and have steady monthly income, you can service term loans that pay interest up front and are collateralized to a ratio that you decide. As a borrower you can post an offer and wait for a lender to pick it up to be filled.
 
-Is it more hands on? Yes. But the whole issue with Traditional Finance in the first place is using the guise of safety to extract. I am not trying to call any one project out but a spade is a spade. An intermediary is an intermediary. It is time users took their sovereignty.
+Is it more hands on? Yes. But the whole point of decentralized finance is giving users real choices about how their capital is managed, not abstracting those choices away behind intermediaries.
+
+## Two Models, One Infrastructure
+
+Here is where Equalis does something nobody else is doing.
+
+We believe the deterministic P2P model is a better foundation for long-term position management. Perpetual leverage without oracle-triggered liquidation, explicit risk between counterparties, and credit that survives volatility because both sides agreed to the terms. We built it and we stand behind it.
+
+But we also recognize that oracle-based lending models serve real needs. They offer familiar UX, passive participation, and instant liquidity for cross-asset borrowing. Millions of users and billions in TVL validate that these models work. Dismissing them would be ideology over pragmatism.
+
+So Equalis runs both. The deterministic core handles self-secured credit and P2P lending. The module system supports isolated lending markets with health-factor liquidation, share-based accounting, and other reactive models as opt-in venues. Both models run on the same custody layer, the same Position NFTs, the same encumbrance system, and the same fee rail.
+
+This is a deliberate design choice. When deterministic and reactive lending coexist on the same infrastructure, users can compare them directly. Same liquidity source, same fee structure, same accounting. The only variable is the model itself. We think that is a comparison worth running, and we think the deterministic model holds up. But rather than argue about it, we built the infrastructure to let the market decide.
+
+The result is that Equalis is not locked into one thesis. It is a platform where any financial primitive can be built, and where every primitive strengthens every other through shared liquidity and unified fee distribution.
 
 ## The Fee Index and Encumbrance System - Attacking Liquidity Fragmentation
 
-Liquidity fragmentation and idle collateral are major hurdles in DeFi today. The Equalis protocol aims to attack this head on. It does this by enforcing one pool per asset globally and by directing revenue back to that single source of liquidity.
+Liquidity fragmentation and idle collateral are major hurdles in DeFi today. Equalis attacks this head on by enforcing one pool per asset globally and by directing revenue back to that single source of liquidity.
 
-EqualFi’s core is deterministic but it allows opt-in modules that can contain classical reactive systems. The system is perfectly capable of maintaining deterministic solvency while supporting any module or venue built on top not only by the protocol but by builders themselves. The protocol is designed to be built upon while socializing liquidity and revenue for the whole system.
-
-Socialize the gains, not the risk.
+Every fee generated anywhere in the protocol — lending interest, swap fees, option premiums, auction fills, module charges — flows into a single per-token fee index. Your USDC earns from everyone else's USDC activity across every venue. Not just the pool you are in. Not just the product you are using. Everything.
 
 How do you achieve this while keeping risk contained? The answer is the Equalis **encumbrance** system. When capital is deployed on a venue your funds never actually leave the liquidity pool. They are simply marked as encumbered. You can also think of this as internal accounting, because most token transactions on platform are internal ledger moves and not token transfers. This not only saves on gas but allows us to keep liquidity unified for things such as flash loans.
+
+The module system extends this to any financial primitive. External modules reserve capital through encumbrance, pay AUM fees for the privilege, and feed revenue back into the same fee rail. Modules that cannot sustain their AUM payments are permanently deactivated. No free rides, no risk contagion.
 
 <img
 src="./hs.png"
@@ -178,7 +192,7 @@ All of this is contained inside a single account container represented by a Posi
 
 That opens up secondary market possibilities that are hard to do cleanly today: distressed credit positions, engineered leverage loops, or even fully packaged market-making books that can be transferred as a single object.
 
-A useful mental model is an apartment building. The building is the shared multi-asset system. Your Position NFT is your key. Your “unit” is your position, with its own assets and obligations. Residents share the building’s utilities, and the protocol routes value back to participants through the same fee rails.
+A useful mental model is an apartment building. The building is the shared multi-asset system. Your Position NFT is your key. Your "unit" is your position, with its own assets and obligations. Residents share the building's utilities, and the protocol routes value back to participants through the same fee rails.
 
 ## EqualIndex
 
@@ -194,7 +208,7 @@ EqualIndex tracks two balances per underlying asset: vault backing and a fee pot
 
 The fee system is intentionally simple. Every mint, burn, and flash loan fee is split into two parts. One part is routed back into the system through the fee router, where it is split between Treasury, Active Credit Index, and the Fee Index for the underlying asset pool. The rest goes into the fee pot for that asset and accumulates for index holders. Mint and burn fees use a higher pool-share by default, while flash loans use a smaller one. EqualIndex also supports minting and burning using Position collateral through the encumbrance system, and those Position-based flows route fees slightly differently to keep accounting tight and avoid accidental double routing.
 
-Here is a concrete example. Imagine an index that contains stETH and WETH. You mint 1.0 index unit and, for simple numbers, the mint fee collected for stETH is 1.00 stETH. If the pool-share is 40%, then 0.40 stETH is routed through the fee router into Treasury, ACI, and the stETH pool Fee Index, and 0.60 stETH goes into the index’s stETH fee pot. Over time, those fee pots accumulate, and when you burn your index tokens you receive your pro-rata share of the pot alongside your share of the backing vault.
+Here is a concrete example. Imagine an index that contains stETH and WETH. You mint 1.0 index unit and, for simple numbers, the mint fee collected for stETH is 1.00 stETH. If the pool-share is 40%, then 0.40 stETH is routed through the fee router into Treasury, ACI, and the stETH pool Fee Index, and 0.60 stETH goes into the index's stETH fee pot. Over time, those fee pots accumulate, and when you burn your index tokens you receive your pro-rata share of the pot alongside your share of the backing vault.
 
 EqualIndex also supports basket flash loans. Instead of borrowing a single asset, a borrower can atomically borrow the proportional amounts of every underlying asset that make up a chosen number of index units, use that inventory for arbitrage or multi-leg execution, and return the full basket in the same transaction plus fees. This turns an index into more than a passive basket. It becomes a deterministic liquidity primitive for bundling and unbundling exposure on demand. Basket flash loan fees follow the same routing model as other index fees: a configured share is routed through the fee router into Treasury, Active Credit Index, and the relevant pool Fee Index, while the remainder accrues to the index fee pots for redeemers.
 
@@ -208,12 +222,21 @@ It starts with Self Secured Credit. This is the deterministic core. You can borr
 
 When you want to borrow an asset you do not already own, EqualLend shifts from deterministic to explicit. This is where peer-to-peer lending comes in. Instead of pooled credit with hidden parameters, Equalis Direct lets lenders and borrowers define the deal: collateral ratios, terms, maturities, payment schedules, and pricing. Borrowers can post offers and wait to be filled. Lenders can run strategies that look like real credit desks: revolving credit, term loans, structured repayment, or managed pools offering standardized products. This is open to anyone, and it also supports professional workflows without requiring privileged access.
 
-The most interesting consequence of P2P lending is that it enables perpetual leverage in the literal sense: continuous leverage on a position over time. In most DeFi systems, leverage is maintained by reactive liquidation thresholds. A wick happens, an oracle blips, and the position is force-closed at the worst moment. Equalis Direct does not need to work that way. Because credit is expressed as a contract, leverage can be maintained through rolling agreements and payment terms rather than oracle-triggered liquidations. If both parties are willing to hold through volatility, there is no automatic forced selling just because the market temporarily moved against you. Your position can survive the drawdown, stay alive, and recover. Time in market becomes a strategy variable again.
+One of the most interesting consequences of P2P lending is what it enables for leverage. In most DeFi systems, leverage is maintained by oracle-driven liquidation thresholds. A wick happens, a price feed updates, and the position is force-closed. That model enforces solvency effectively, but it also means that temporary volatility can destroy a position that would have recovered given time. Equalis Direct offers an alternative. Because credit is expressed as a contract between counterparties, leverage can be maintained through rolling agreements and payment terms rather than automated liquidation triggers. If both parties are willing to hold through volatility, the position can survive the drawdown, stay alive, and recover. Time in market becomes a strategy variable again.
 
 This is not a promise of safety. It is a different enforcement model. Risk does not disappear, it becomes legible. Lenders decide whether they want strict collateralization, softer terms, covenants, callable structures, or even undercollateralized credit for vetted clients where real-world underwriting exists above the protocol. Borrowers choose the deal they are willing to live with. Defaults are handled as defaults, not as third-party liquidation opportunities.
 
-EqualLend is designed to serve both ends of the spectrum. It gives ordinary users a predictable way to unlock liquidity without being hunted by liquidation bots, and it gives professional lenders and market makers a credit framework that can support real structured products. And because active credit is rewarded through the Active Credit Index, the system aligns incentives around the work that actually expands what the protocol can do.
+EqualLend is designed to serve both ends of the spectrum. It gives ordinary users a predictable way to unlock liquidity, and it gives professional lenders and market makers a credit framework that can support real structured products. And because active credit is rewarded through the Active Credit Index, the system aligns incentives around the work that actually expands what the protocol can do.
 
+## Isolated Lending Markets - Familiar Models, Unified Infrastructure
+
+Equalis also supports isolated lending markets as opt-in modules. These bring health-factor-based cross-asset lending to the platform using models that will be familiar to users of existing lending protocols.
+
+The key difference is infrastructure. On other platforms, these lending markets exist in isolation. On Equalis, they plug into the same Position NFTs, the same encumbrance system, and the same fee rail as everything else. Capital reserved by a lending module still earns from protocol-wide activity. Fees generated by the module flow back to all depositors of that token. The module pays AUM fees for the capital it reserves, creating a steady revenue floor.
+
+Three profiles are planned, each targeting different market mechanics: health-factor reactive liquidation, share-based accounting with LLTV gating, and MAM-curve-based liquidation auctions. All three are clean-room implementations built on Equalis-native custody. They are not forks. They are purpose-built modules that happen to reproduce proven economic behavior while benefiting from unified liquidity.
+
+We believe the deterministic P2P model is the stronger long-term primitive for position management. We also believe that offering both models on the same infrastructure — same liquidity, same fees, same accounting — lets users compare them directly and choose what works for them. That is a more honest approach than picking a side and pretending the other does not exist.
 
 ## Perpetual Leverage Loop
 
@@ -250,7 +273,7 @@ This is achieved using P2P rolling (revolving) loans, AMM Auction swaps, and red
 
 ## Road to Immutability
 
-Equalis is being built with a constraint that most protocols only talk about: the walkaway test. The system should be able to keep running even if the team disappears, the social layer collapses, or nobody is left to “manage” it. That does not happen by writing a manifesto. It happens by removing knobs over time.
+Equalis is being built with a constraint that most protocols only talk about: the walkaway test. The system should be able to keep running even if the team disappears, the social layer collapses, or nobody is left to "manage" it. That does not happen by writing a manifesto. It happens by removing knobs over time.
 
 We are launching in phases because reality exists. Early-stage protocols need the ability to patch bugs, harden invariants, and respond to unexpected edge cases. The difference is that Equalis treats upgradeability as a temporary scaffolding, not a permanent control surface.
 
@@ -258,18 +281,20 @@ Equalis uses a modular diamond architecture. In the early phases, modules ship a
 
 This happens module by module, not all at once. The core accounting, pool logic, and critical invariants get frozen first. Higher-risk or more experimental modules freeze later, after they have survived real usage and adversarial testing. Eventually the only parameters that remain adjustable are fee-related, and even those will have hard-coded bounds. If something can be abused, it should not be a knob. If something must be a knob, it should be bounded.
 
-The end state is simple: the protocol becomes boring. Not “stagnant,” but predictable. Users should be able to build on Equalis knowing that rules will not change under their feet, and that no governance vote or admin key can rewrite the ground truth. Upgrades become the exception, not the expectation.
+The end state is simple: the protocol becomes boring. Not "stagnant," but predictable. Users should be able to build on Equalis knowing that rules will not change under their feet, and that no governance vote or admin key can rewrite the ground truth. Upgrades become the exception, not the expectation.
 
 That is the path: ship in phases, prove stability in production, and progressively remove ourselves from the trust model until Equalis is infrastructure you can rely on, not a product you are renting.
 
 ## The Mission Statement
 
-I’m not building Equalis to play the usual game.
+I'm not building Equalis to play the usual game.
 
-Across DeFi, “safety” often means forced unwinds, opaque risk, and value extraction disguised as protection. When users get hurt, they get told they should have known better. That story might be convenient, but it’s not good enough.
+DeFi has made real progress, but it has also settled into patterns that limit what users can do with their capital. Liquidity stays fragmented. Leverage stays fragile. And users are told to accept the tradeoffs because that is how things work.
 
 Equalis exists because trustlessness has to be real. Not a brand. Not a vibe. A system that can survive without intermediaries, without permission, and without permanent babysitting. A protocol that can pass the walkaway test, not just talk about it.
 
-If you’re a builder, a user, or someone who wants to see onchain finance done differently, welcome. If you’re tired of hearing that the way things are is the way they have to be, you’re in the right place.
+We are building a platform where deterministic and reactive models coexist, where every financial primitive feeds the same liquidity and fee infrastructure, and where users choose their own risk posture instead of having one chosen for them. We think the deterministic model is the better long-term answer. We also think the way to prove that is to build both and let the results speak.
+
+If you're a builder, a user, or someone who wants to see on-chain finance done differently, welcome. If you're tired of being told that the way things are is the way they have to be, you're in the right place.
 
 Discord: [https://discord.gg/brsMNDux4T](https://discord.gg/brsMNDux4T)

@@ -127,7 +127,8 @@ contract DirectAmmTrancheLoopIntegrationTest is DirectDiamondTestBase {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 7 days),
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(userC);

@@ -59,6 +59,7 @@ contract AdminGovernanceFacet {
         uint16 defaultPenaltyBps,
         uint16 minPaymentBps
     );
+    event StableModeEnabledUpdated(bool enabled);
 
     function s() internal pure returns (LibAppStorage.AppStorage storage) {
         return LibAppStorage.s();
@@ -412,6 +413,13 @@ contract AdminGovernanceFacet {
             exerciseFeeFlatWad,
             reclaimFeeFlatWad
         );
+    }
+
+    /// @notice Enable or disable stable invariant mode for new non-CL auction creation.
+    function setStableModeEnabled(bool enabled) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibDerivativeStorage.derivativeStorage().config.stableModeEnabled = enabled;
+        emit StableModeEnabledUpdated(enabled);
     }
 
     /// @notice Update the protocol fee receiver for EqualIndex flows.

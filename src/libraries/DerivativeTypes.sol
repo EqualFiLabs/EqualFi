@@ -8,6 +8,11 @@ library DerivativeTypes {
         TokenOut
     }
 
+    enum InvariantMode {
+        Volatile,
+        Stable
+    }
+
     struct AmmAuction {
         bytes32 makerPositionKey;
         uint256 makerPositionId;
@@ -24,12 +29,15 @@ library DerivativeTypes {
         uint64 endTime;
         uint16 feeBps;
         FeeAsset feeAsset;
+        InvariantMode invariantMode;
         uint256 makerFeeAAccrued;
         uint256 makerFeeBAccrued;
         uint256 treasuryFeeAAccrued;
         uint256 treasuryFeeBAccrued;
         bool active;
         bool finalized;
+        uint8 tokenADecimals;
+        uint8 tokenBDecimals;
     }
 
     struct CommunityAuction {
@@ -43,6 +51,7 @@ library DerivativeTypes {
         uint256 reserveB;
         uint16 feeBps;
         FeeAsset feeAsset;
+        InvariantMode invariantMode;
         uint256 feeIndexA;
         uint256 feeIndexB;
         uint256 feeIndexRemainderA;
@@ -59,6 +68,8 @@ library DerivativeTypes {
         uint64 endTime;
         bool active;
         bool finalized;
+        uint8 tokenADecimals;
+        uint8 tokenBDecimals;
     }
 
     struct MakerPosition {
@@ -125,6 +136,7 @@ library DerivativeTypes {
         uint128 defaultExerciseFeeFlatWad;
         uint128 defaultReclaimFeeFlatWad;
         bool requirePositionNFT;
+        bool stableModeEnabled;
     }
 
     struct CreateAuctionParams {
@@ -137,6 +149,7 @@ library DerivativeTypes {
         uint64 endTime;
         uint16 feeBps;
         FeeAsset feeAsset;
+        InvariantMode invariantMode;
     }
 
     struct CreateCommunityAuctionParams {
@@ -149,6 +162,7 @@ library DerivativeTypes {
         uint64 endTime;
         uint16 feeBps;
         FeeAsset feeAsset;
+        InvariantMode invariantMode;
     }
 
     struct CreateOptionSeriesParams {

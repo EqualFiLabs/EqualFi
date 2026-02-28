@@ -75,7 +75,8 @@ contract CommunityAuctionGasTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 100,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
     }

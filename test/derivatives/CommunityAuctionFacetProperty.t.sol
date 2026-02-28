@@ -8,7 +8,8 @@ import {
     CommunityAuction_InvalidRatio,
     CommunityAuction_NotCreator,
     CommunityAuction_AlreadyStarted,
-    CommunityAuction_InvalidAmount
+    CommunityAuction_InvalidAmount,
+    CommunityAuction_StableModeDisabled
 } from "../../src/EqualX/CommunityAuctionFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibCommunityAuctionFeeIndex} from "../../src/libraries/LibCommunityAuctionFeeIndex.sol";
@@ -29,6 +30,23 @@ import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 /// @notice Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.8
 /// forge-config: default.fuzz.runs = 100
 contract CommunityAuctionFacetPropertyTest is Test {
+    event CommunityAuctionCreated(
+        uint256 indexed auctionId,
+        bytes32 indexed creatorPositionKey,
+        uint256 indexed creatorPositionId,
+        uint256 poolIdA,
+        uint256 poolIdB,
+        address tokenA,
+        address tokenB,
+        uint256 reserveA,
+        uint256 reserveB,
+        uint64 startTime,
+        uint64 endTime,
+        uint16 feeBps,
+        DerivativeTypes.FeeAsset feeAsset,
+        DerivativeTypes.InvariantMode invariantMode
+    );
+
     CommunityAuctionHarness internal harness;
     PositionNFT internal nft;
     MockERC20 internal tokenA;
@@ -49,7 +67,173 @@ contract CommunityAuctionFacetPropertyTest is Test {
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(treasury);
         harness.setMakerShareBps(7000);
+        harness.setStableModeEnabled(true);
         vm.label(swapper, "swapper");
+    }
+
+    function test_CreateCommunityAuctionPersistsInvariantModeAndEmitsEvent() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        DerivativeTypes.CreateCommunityAuctionParams memory params = DerivativeTypes.CreateCommunityAuctionParams({
+            positionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            reserveA: 1e18,
+            reserveB: 1e18,
+            startTime: uint64(block.timestamp),
+            endTime: uint64(block.timestamp + 1 days),
+            feeBps: 0,
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Stable
+        });
+
+        vm.expectEmit(true, true, true, true, address(harness));
+        emit CommunityAuctionCreated(
+            1,
+            positionKey,
+            makerTokenId,
+            1,
+            2,
+            address(tokenA),
+            address(tokenB),
+            1e18,
+            1e18,
+            uint64(block.timestamp),
+            uint64(block.timestamp + 1 days),
+            0,
+            DerivativeTypes.FeeAsset.TokenIn,
+            DerivativeTypes.InvariantMode.Stable
+        );
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createCommunityAuction(params);
+
+        DerivativeTypes.CommunityAuction memory auction = harness.getCommunityAuction(auctionId);
+        assertEq(uint8(auction.invariantMode), uint8(DerivativeTypes.InvariantMode.Stable), "mode persisted");
+    }
+
+    function test_CreateCommunityAuctionStableModeDisabledReverts() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setStableModeEnabled(false);
+
+        vm.prank(maker);
+        vm.expectRevert(CommunityAuction_StableModeDisabled.selector);
+        harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+    }
+
+    function testProperty_CommunityPreviewExecutionParityBothModes(uint96 amountInSeed, bool stableMode) public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 makerKey = nft.getPositionKey(makerTokenId);
+
+        uint256 reserveA = stableMode ? 1_000_000e18 : 300e18;
+        uint256 reserveB = stableMode ? 1_000_000e18 : 600e18;
+        uint256 amountIn = bound(uint256(amountInSeed), 1e15, reserveA / 10);
+
+        harness.seedPool(1, address(tokenA), makerKey, reserveA + 10e18, reserveA + 10e18);
+        harness.seedPool(2, address(tokenB), makerKey, reserveB + 10e18, reserveB + 10e18);
+        harness.joinPool(makerKey, 1);
+        harness.joinPool(makerKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 30,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: stableMode ? DerivativeTypes.InvariantMode.Stable : DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        (uint256 previewOut,) = harness.previewCommunitySwap(auctionId, address(tokenA), amountIn);
+        assertGt(previewOut, 0, "preview out");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        uint256 amountOut = harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, previewOut, taker);
+        assertEq(amountOut, previewOut, "preview/execution parity");
+    }
+
+    function testProperty_CommunityFeeConservationBothModes(uint16 feeBpsSeed, bool stableMode) public {
+        uint16 feeBps = uint16(bound(uint256(feeBpsSeed), 1, 1000));
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 makerKey = nft.getPositionKey(makerTokenId);
+
+        // Keep totalShares at 1e18 so maker fee index distribution is exact for single-maker case.
+        uint256 reserveA = 1e18;
+        uint256 reserveB = 1e18;
+        uint256 amountIn = stableMode ? 1e16 : 5e15;
+
+        harness.seedPool(1, address(tokenA), makerKey, reserveA + 1e18, reserveA + 1e18);
+        harness.seedPool(2, address(tokenB), makerKey, reserveB + 1e18, reserveB + 1e18);
+        harness.joinPool(makerKey, 1);
+        harness.joinPool(makerKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createCommunityAuction(
+            DerivativeTypes.CreateCommunityAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: feeBps,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: stableMode ? DerivativeTypes.InvariantMode.Stable : DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        (, uint256 previewFee) = harness.previewCommunitySwap(auctionId, address(tokenA), amountIn);
+        assertGt(previewFee, 0, "preview fee");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        harness.swapExactIn(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
+
+        DerivativeTypes.CommunityAuction memory auction = harness.getCommunityAuction(auctionId);
+        (uint256 pendingMakerFeeA,) = harness.pendingCommunityFees(auctionId, makerKey);
+        uint256 conserved =
+            pendingMakerFeeA + auction.treasuryFeeAAccrued + auction.indexFeeAAccrued + auction.activeCreditFeeAAccrued;
+        assertEq(conserved, previewFee, "fee conservation");
     }
 
     function _createAuction(uint96 reserveA, uint96 reserveB, uint64 startTime, uint64 endTime)
@@ -75,7 +259,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
             startTime: startTime,
             endTime: endTime,
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -105,7 +290,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -163,7 +349,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -229,7 +416,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -286,7 +474,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -375,7 +564,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -422,7 +612,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 100,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -477,7 +668,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -591,7 +783,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 30,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -725,7 +918,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: feeBps,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -773,7 +967,8 @@ contract CommunityAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -932,6 +1127,10 @@ contract CommunityAuctionHarness is CommunityAuctionFacet {
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.communityMakerShareBps = shareBps;
+    }
+
+    function setStableModeEnabled(bool enabled) external {
+        LibDerivativeStorage.derivativeStorage().config.stableModeEnabled = enabled;
     }
 
     function setPointsPerAction(bytes32 actionType, uint256 amount) external {

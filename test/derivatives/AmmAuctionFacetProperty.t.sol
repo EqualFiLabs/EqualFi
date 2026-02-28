@@ -5,7 +5,9 @@ import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {
     AmmAuctionFacet,
-    AmmAuction_NotActive
+    AmmAuction_NotActive,
+    AmmAuction_StableModeDisabled,
+    AmmAuction_ZeroOutput
 } from "../../src/EqualX/AmmAuctionFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
@@ -13,6 +15,8 @@ import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibAuctionSwap} from "../../src/libraries/LibAuctionSwap.sol";
+import {LibCurrency} from "../../src/libraries/LibCurrency.sol";
 import {LibPoints} from "../../src/libraries/LibPoints.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
@@ -20,12 +24,30 @@ import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {FeeOnTransferERC20} from "../../src/mocks/FeeOnTransferERC20.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {RevertingDecimalsERC20} from "../../src/mocks/RevertingDecimalsERC20.sol";
 import {LibEncumbrance} from "../../src/libraries/LibEncumbrance.sol";
 
 /// @notice Feature: position-nft-derivatives, Property 1: AMM invariant preservation
 /// @notice Validates: Requirements 4.1, 12.1
 /// forge-config: default.fuzz.runs = 100
 contract AmmAuctionFacetPropertyTest is Test {
+    event AuctionCreated(
+        uint256 indexed auctionId,
+        bytes32 indexed makerPositionKey,
+        uint256 indexed makerPositionId,
+        uint256 poolIdA,
+        uint256 poolIdB,
+        address tokenA,
+        address tokenB,
+        uint256 reserveA,
+        uint256 reserveB,
+        uint64 startTime,
+        uint64 endTime,
+        uint16 feeBps,
+        DerivativeTypes.FeeAsset feeAsset,
+        DerivativeTypes.InvariantMode invariantMode
+    );
+
     AmmAuctionHarness internal harness;
     PositionNFT internal nft;
     MockERC20 internal tokenA;
@@ -44,6 +66,388 @@ contract AmmAuctionFacetPropertyTest is Test {
         harness.configurePositionNFT(address(nft));
         harness.setTreasury(treasury);
         harness.setMakerShareBps(7000);
+        harness.setStableModeEnabled(true);
+    }
+
+    function test_CreateAuctionPersistsInvariantModeAndEmitsEvent() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        DerivativeTypes.CreateAuctionParams memory params = DerivativeTypes.CreateAuctionParams({
+            positionId: makerTokenId,
+            poolIdA: 1,
+            poolIdB: 2,
+            reserveA: 1e18,
+            reserveB: 1e18,
+            startTime: uint64(block.timestamp),
+            endTime: uint64(block.timestamp + 1 days),
+            feeBps: 0,
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Stable
+        });
+
+        vm.expectEmit(true, true, true, true, address(harness));
+        emit AuctionCreated(
+            1,
+            positionKey,
+            makerTokenId,
+            1,
+            2,
+            address(tokenA),
+            address(tokenB),
+            1e18,
+            1e18,
+            uint64(block.timestamp),
+            uint64(block.timestamp + 1 days),
+            0,
+            DerivativeTypes.FeeAsset.TokenIn,
+            DerivativeTypes.InvariantMode.Stable
+        );
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(params);
+
+        DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
+        assertEq(uint8(auction.invariantMode), uint8(DerivativeTypes.InvariantMode.Stable), "mode persisted");
+    }
+
+    function test_CreateAuctionStableModeDisabledReverts() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(tokenA), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setStableModeEnabled(false);
+
+        vm.prank(maker);
+        vm.expectRevert(AmmAuction_StableModeDisabled.selector);
+        harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+    }
+
+    function test_CreateAuctionStableModeSnapshotsTokenDecimals() public {
+        MockERC20 usdc = new MockERC20("USDC", "USDC", 6, 0);
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18, 0);
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(usdc), positionKey, 3_000_000e6, 3_000_000e6);
+        harness.seedPool(2, address(dai), positionKey, 3_000_000e18, 3_000_000e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1_000_000e6,
+                reserveB: 1_000_000e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+
+        DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
+        assertEq(auction.tokenADecimals, 6, "token A decimals");
+        assertEq(auction.tokenBDecimals, 18, "token B decimals");
+    }
+
+    function test_CreateAuctionStableModeRejectsUnsupportedDecimals() public {
+        MockERC20 badDecimals = new MockERC20("BAD", "BAD", 96, 0);
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(badDecimals), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(LibAuctionSwap.LibAuctionSwap_UnsupportedDecimals.selector, uint8(78)));
+        harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+    }
+
+    function test_CreateAuctionStableModeRevertsWhenDecimalsQueryFails() public {
+        RevertingDecimalsERC20 badDecimals = new RevertingDecimalsERC20("BAD", "BAD");
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(badDecimals), positionKey, 3e18, 3e18);
+        harness.seedPool(2, address(tokenB), positionKey, 3e18, 3e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(LibCurrency.LibCurrency_DecimalsQueryFailed.selector, address(badDecimals)));
+        harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1e18,
+                reserveB: 1e18,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+    }
+
+    function test_StableMode_SwapRevertsOnZeroOutput() public {
+        MockERC20 usdcA = new MockERC20("USDC-A", "USDA", 6, 0);
+        MockERC20 usdcB = new MockERC20("USDC-B", "USDB", 6, 0);
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        harness.seedPool(1, address(usdcA), positionKey, 5_000_000e6, 5_000_000e6);
+        harness.seedPool(2, address(usdcB), positionKey, 5_000_000e6, 5_000_000e6);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: 1_000_000,
+                reserveB: 1_000_000,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 0,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+
+        (uint256 previewOut,) = harness.previewSwap(auctionId, address(usdcA), 1);
+        assertEq(previewOut, 0, "preview must be zero");
+
+        usdcA.mint(taker, 1);
+        vm.prank(taker);
+        usdcA.approve(address(harness), 1);
+
+        vm.prank(taker);
+        vm.expectRevert(AmmAuction_ZeroOutput.selector);
+        harness.swapExactInOrFinalize(auctionId, address(usdcA), 1, 1, 0, taker);
+    }
+
+    function test_StableMode_PreviewSwapMatchesExecution() public {
+        MockERC20 usdc = new MockERC20("USDC", "USDC", 6, 0);
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18, 0);
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 reserveUsdc = 1_000_000e6;
+        uint256 reserveDai = 1_000_000e18;
+        harness.seedPool(1, address(usdc), positionKey, reserveUsdc + 100e6, reserveUsdc + 100e6);
+        harness.seedPool(2, address(dai), positionKey, reserveDai + 100e18, reserveDai + 100e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveUsdc,
+                reserveB: reserveDai,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 30,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Stable
+            })
+        );
+
+        uint256 amountIn = 50e6;
+        (uint256 previewOut, uint256 previewFee) = harness.previewSwap(auctionId, address(usdc), amountIn);
+        assertGt(previewOut, 0, "stable preview out");
+        assertEq(previewFee, Math.mulDiv(amountIn, 30, 10_000), "stable preview fee");
+
+        usdc.mint(taker, amountIn);
+        vm.prank(taker);
+        usdc.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        (uint256 amountOut,) = harness.swapExactInOrFinalize(auctionId, address(usdc), amountIn, amountIn, previewOut, taker);
+
+        assertEq(amountOut, previewOut, "stable preview/execution parity");
+    }
+
+    function test_VolatileMode_PreviewMatchesLegacyMathSnapshot() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 reserveA = 50e18;
+        uint256 reserveB = 100e18;
+        harness.seedPool(1, address(tokenA), positionKey, reserveA + 10e18, reserveA + 10e18);
+        harness.seedPool(2, address(tokenB), positionKey, reserveB + 10e18, reserveB + 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 25,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        uint256 amountIn = 10e18;
+        uint256 amountInWithFee = Math.mulDiv(amountIn, 10_000 - 25, 10_000);
+        uint256 expectedFee = amountIn - amountInWithFee;
+        uint256 expectedOut = Math.mulDiv(reserveB, amountInWithFee, reserveA + amountInWithFee);
+
+        (uint256 previewOut, uint256 previewFee) = harness.previewSwap(auctionId, address(tokenA), amountIn);
+        assertEq(previewOut, expectedOut, "volatile output snapshot");
+        assertEq(previewFee, expectedFee, "volatile fee snapshot");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        (uint256 amountOut,) = harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, expectedOut, taker);
+        assertEq(amountOut, expectedOut, "volatile preview/execution parity");
+    }
+
+    function testProperty_PreviewExecutionParityBothModes(uint96 amountInSeed, bool stableMode) public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 reserveA = stableMode ? 1_000_000e18 : 250e18;
+        uint256 reserveB = stableMode ? 1_000_000e18 : 500e18;
+        uint256 amountIn = bound(uint256(amountInSeed), 1e15, reserveA / 10);
+
+        harness.seedPool(1, address(tokenA), positionKey, reserveA + 10e18, reserveA + 10e18);
+        harness.seedPool(2, address(tokenB), positionKey, reserveB + 10e18, reserveB + 10e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: 30,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: stableMode ? DerivativeTypes.InvariantMode.Stable : DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        (uint256 previewOut,) = harness.previewSwap(auctionId, address(tokenA), amountIn);
+        assertGt(previewOut, 0, "preview out");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        (uint256 amountOut,) = harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, previewOut, taker);
+        assertEq(amountOut, previewOut, "preview/execution parity");
+    }
+
+    function testProperty_FeeConservationBothModes(uint16 feeBpsSeed, bool stableMode) public {
+        uint16 feeBps = uint16(bound(uint256(feeBpsSeed), 1, 1000));
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+        uint256 reserveA = stableMode ? 1_000_000e18 : 400e18;
+        uint256 reserveB = stableMode ? 1_000_000e18 : 800e18;
+        uint256 amountIn = stableMode ? 100e18 : 20e18;
+
+        harness.seedPool(1, address(tokenA), positionKey, reserveA + 50e18, reserveA + 50e18);
+        harness.seedPool(2, address(tokenB), positionKey, reserveB + 50e18, reserveB + 50e18);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+
+        vm.prank(maker);
+        uint256 auctionId = harness.createAuction(
+            DerivativeTypes.CreateAuctionParams({
+                positionId: makerTokenId,
+                poolIdA: 1,
+                poolIdB: 2,
+                reserveA: reserveA,
+                reserveB: reserveB,
+                startTime: uint64(block.timestamp),
+                endTime: uint64(block.timestamp + 1 days),
+                feeBps: feeBps,
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: stableMode ? DerivativeTypes.InvariantMode.Stable : DerivativeTypes.InvariantMode.Volatile
+            })
+        );
+
+        (, uint256 previewFee) = harness.previewSwap(auctionId, address(tokenA), amountIn);
+        assertGt(previewFee, 0, "preview fee");
+
+        tokenA.mint(taker, amountIn);
+        vm.prank(taker);
+        tokenA.approve(address(harness), amountIn);
+
+        vm.prank(taker);
+        harness.swapExactInOrFinalize(auctionId, address(tokenA), amountIn, amountIn, 0, taker);
+
+        (uint256 makerFeeA,) = harness.getAuctionFees(auctionId);
+        DerivativeTypes.AmmAuction memory auction = harness.getAuction(auctionId);
+        uint256 indexFeeA = harness.indexFeeAByAuction(auctionId);
+        uint256 activeFeeA = harness.activeFeeAByAuction(auctionId);
+        uint256 conserved = makerFeeA + auction.treasuryFeeAAccrued + indexFeeA + activeFeeA;
+        assertEq(conserved, previewFee, "fee conservation");
     }
 
     function testProperty_InvariantPreservation(
@@ -76,7 +480,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: feeBps,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -119,7 +524,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -158,7 +564,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: startTime,
             endTime: endTime,
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -201,7 +608,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 30,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -252,7 +660,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 100,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -316,7 +725,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: feeBps,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -360,7 +770,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: uint64(block.timestamp),
             endTime: uint64(block.timestamp + 1 days),
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         harness.seedPool(2, address(tokenB), positionKey, 2 ether, 2 ether);
@@ -401,7 +812,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -457,7 +869,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -509,7 +922,8 @@ contract AmmAuctionFacetPropertyTest is Test {
                 startTime: uint64(block.timestamp),
                 endTime: uint64(block.timestamp + 1 days),
                 feeBps: 0,
-                feeAsset: DerivativeTypes.FeeAsset.TokenIn
+                feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+                invariantMode: DerivativeTypes.InvariantMode.Volatile
             })
         );
 
@@ -549,7 +963,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: startTime,
             endTime: endTime,
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -609,7 +1024,8 @@ contract AmmAuctionFacetPropertyTest is Test {
             startTime: startTime,
             endTime: endTime,
             feeBps: 0,
-            feeAsset: DerivativeTypes.FeeAsset.TokenIn
+            feeAsset: DerivativeTypes.FeeAsset.TokenIn,
+            invariantMode: DerivativeTypes.InvariantMode.Volatile
         });
 
         vm.prank(maker);
@@ -655,6 +1071,10 @@ contract AmmAuctionHarness is AmmAuctionFacet {
 
     function setMakerShareBps(uint16 shareBps) external {
         LibDerivativeStorage.derivativeStorage().config.ammMakerShareBps = shareBps;
+    }
+
+    function setStableModeEnabled(bool enabled) external {
+        LibDerivativeStorage.derivativeStorage().config.stableModeEnabled = enabled;
     }
 
     function setPointsPerAction(bytes32 actionType, uint256 amount) external {
@@ -748,6 +1168,14 @@ contract AmmAuctionHarness is AmmAuctionFacet {
 
     function getDirectLent(bytes32 positionKey, uint256 poolId) external view returns (uint256) {
         return LibEncumbrance.get(positionKey, poolId).directLent;
+    }
+
+    function indexFeeAByAuction(uint256 auctionId) external view returns (uint256) {
+        return LibDerivativeStorage.derivativeStorage().indexFeeAByAuction[auctionId];
+    }
+
+    function activeFeeAByAuction(uint256 auctionId) external view returns (uint256) {
+        return LibDerivativeStorage.derivativeStorage().activeCreditFeeAByAuction[auctionId];
     }
 
     function getAuctionsByPool(uint256 poolId, uint256 offset, uint256 limit)

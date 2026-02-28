@@ -13,6 +13,7 @@ library LibCurrency {
 
     error LibCurrency_InvalidMax(uint256 maxAmount, uint256 minAmount);
     error LibCurrency_InsufficientReceived(uint256 received, uint256 required);
+    error LibCurrency_DecimalsQueryFailed(address token);
 
     function isNative(address token) internal pure returns (bool) {
         return token == address(0);
@@ -44,6 +45,17 @@ library LibCurrency {
             return dec;
         } catch {
             return 18;
+        }
+    }
+
+    function decimalsOrRevert(address token) internal view returns (uint8) {
+        if (isNative(token)) {
+            return 18;
+        }
+        try IERC20Metadata(token).decimals() returns (uint8 dec) {
+            return dec;
+        } catch {
+            revert LibCurrency_DecimalsQueryFailed(token);
         }
     }
 
