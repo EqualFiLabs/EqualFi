@@ -8,8 +8,10 @@ import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmSharesMath} from "../../src/ilm-isolated/libraries/LibIlmSharesMath.sol";
+import {LibIlmLiquidationMath} from "../../src/ilm-isolated/libraries/LibIlmLiquidationMath.sol";
 import {LibIlmIsolatedStorage} from "../../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
 import {IIlmIsolatedIrmAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedIrmAdapter.sol";
+import {IIlmIsolatedOracleAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedOracleAdapter.sol";
 import {ILMIsolatedFacet} from "../../src/ilm-isolated/facets/ILMIsolatedFacet.sol";
 import "../../src/ilm-isolated/errors/IlmIsolatedErrors.sol";
 
@@ -25,6 +27,20 @@ contract MockIlmIsolatedIrmAdapterFacet is IIlmIsolatedIrmAdapter {
         IlmIsolatedTypes.IlmIsolatedMarket calldata
     ) external view returns (uint256 ratePerSecond) {
         return _ratePerSecond;
+    }
+}
+
+contract MockIlmIsolatedOracleAdapterFacet is IIlmIsolatedOracleAdapter {
+    uint256 internal _price;
+    uint256 internal _updatedAt;
+
+    function setPrice(uint256 price, uint256 updatedAt) external {
+        _price = price;
+        _updatedAt = updatedAt;
+    }
+
+    function getIsolatedPrice(address) external view returns (uint256 price, uint256 updatedAt) {
+        return (_price, _updatedAt);
     }
 }
 
@@ -51,6 +67,20 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
         LibIlmIsolatedStorage.s().position[marketId][positionKey].supplyShares = shares;
     }
 
+    function setPositionBorrowAndCollateral(
+        bytes32 marketId,
+        bytes32 positionKey,
+        uint128 borrowShares,
+        uint128 collateralAssets
+    ) external {
+        LibIlmIsolatedStorage.s().position[marketId][positionKey].borrowShares = borrowShares;
+        LibIlmIsolatedStorage.s().position[marketId][positionKey].collateralAssets = collateralAssets;
+    }
+
+    function setMaxStalenessRaw(uint256 maxStaleness) external {
+        LibIlmIsolatedStorage.s().maxStaleness = maxStaleness;
+    }
+
     function setAuthorizationRaw(bytes32 positionKey, address operator, bool authorized) external {
         LibIlmIsolatedStorage.s().isAuthorizedOperator[positionKey][operator] = authorized;
     }
@@ -58,6 +88,11 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
     function setPoolPrincipal(uint256 poolId, bytes32 positionKey, uint256 principal) external {
         LibAppStorage.s().pools[poolId].initialized = true;
         LibAppStorage.s().pools[poolId].userPrincipal[positionKey] = principal;
+    }
+
+    function setPoolTotals(uint256 poolId, uint256 totalDeposits) external {
+        LibAppStorage.s().pools[poolId].initialized = true;
+        LibAppStorage.s().pools[poolId].totalDeposits = totalDeposits;
     }
 
     function seedModuleEncumbrance(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) external {
@@ -79,6 +114,14 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
     function getEncumberedForModule(bytes32 positionKey, uint256 poolId, uint256 moduleId) external view returns (uint256) {
         return LibModuleEncumbrance.getEncumberedForModule(positionKey, poolId, moduleId);
     }
+
+    function getPoolPrincipal(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].userPrincipal[positionKey];
+    }
+
+    function getPoolTotalDeposits(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].totalDeposits;
+    }
 }
 
 contract ILMIsolatedFacetTest is Test {
@@ -91,6 +134,7 @@ contract ILMIsolatedFacetTest is Test {
 
     ILMIsolatedFacetHarness internal h;
     MockIlmIsolatedIrmAdapterFacet internal irm;
+    MockIlmIsolatedOracleAdapterFacet internal oracle;
     PositionNFT internal nft;
     uint256 internal positionId;
     bytes32 internal positionKey;
@@ -98,12 +142,15 @@ contract ILMIsolatedFacetTest is Test {
     function setUp() public {
         h = new ILMIsolatedFacetHarness();
         irm = new MockIlmIsolatedIrmAdapterFacet();
+        oracle = new MockIlmIsolatedOracleAdapterFacet();
         nft = new PositionNFT();
         nft.setMinter(address(this));
 
         h.setPositionNftRaw(address(nft), true);
+        h.setMaxStalenessRaw(1 days);
         positionId = nft.mint(POSITION_OWNER, LOAN_POOL_ID);
         positionKey = nft.getPositionKey(positionId);
+        oracle.setPrice(IlmIsolatedTypes.ORACLE_PRICE_SCALE, block.timestamp);
     }
 
     /// @dev Property 6: Supply State Consistency
@@ -275,11 +322,192 @@ contract ILMIsolatedFacetTest is Test {
         h.isolatedSupply(MARKET_ID, 10, 0, positionId);
     }
 
+    /// @dev Property 8: Collateral Supply State Consistency
+    /// Validates: Requirements 4.1, 4.3, 17.3
+    function testFuzz_property8_collateralSupplyStateConsistency(
+        uint128 collateralStartRaw,
+        uint128 assetsRaw,
+        uint64 marketLastUpdateRaw
+    ) public {
+        uint256 collateralStart = bound(uint256(collateralStartRaw), 0, type(uint128).max - 1e24);
+        uint256 assets = bound(uint256(assetsRaw), 1, 1e24);
+        uint256 lastUpdate = bound(uint256(marketLastUpdateRaw), 1, type(uint64).max);
+
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 10_000_000,
+            totalSupplyShares: 10_000_000,
+            totalBorrowAssets: 1_000_000,
+            totalBorrowShares: 1_000_000,
+            lastUpdate: uint128(lastUpdate),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPositionBorrowAndCollateral(MARKET_ID, positionKey, 0, uint128(collateralStart));
+        h.setPoolPrincipal(202, positionKey, assets + 1000);
+
+        vm.prank(POSITION_OWNER);
+        h.isolatedSupplyCollateral(MARKET_ID, assets, positionId);
+
+        IlmIsolatedTypes.IlmIsolatedPosition memory position = h.getPosition(MARKET_ID, positionKey);
+        assertEq(position.collateralAssets, collateralStart + assets);
+
+        uint256 encumbered = h.getEncumberedForModule(positionKey, 202, MODULE_ID);
+        assertEq(encumbered, assets);
+
+        IlmIsolatedTypes.IlmIsolatedMarket memory gotMarket = h.getMarket(MARKET_ID);
+        assertEq(gotMarket.lastUpdate, uint128(lastUpdate));
+    }
+
+    /// @dev Property 9: Borrow State Consistency with Health Gate
+    /// Validates: Requirements 6.1, 6.4, 17.5
+    function testFuzz_property9_borrowStateConsistencyWithHealthGate(
+        uint128 totalSupplyAssetsRaw,
+        uint128 totalBorrowAssetsRaw,
+        uint128 totalBorrowSharesRaw,
+        uint128 collateralAssetsRaw,
+        uint128 borrowAssetsRaw,
+        uint128 principalStartRaw
+    ) public {
+        uint256 totalSupplyAssets = bound(uint256(totalSupplyAssetsRaw), 1e6, 1e24);
+        uint256 totalBorrowAssets = bound(uint256(totalBorrowAssetsRaw), 0, totalSupplyAssets - 1);
+        uint256 totalBorrowShares = bound(uint256(totalBorrowSharesRaw), 1, 1e24);
+        uint256 collateralAssets = bound(uint256(collateralAssetsRaw), 1e6, 1e24);
+        uint256 borrowAssets = bound(uint256(borrowAssetsRaw), 1, totalSupplyAssets - totalBorrowAssets);
+        uint256 principalStart = bound(uint256(principalStartRaw), 0, 1e24);
+
+        uint256 price = IlmIsolatedTypes.ORACLE_PRICE_SCALE;
+        oracle.setPrice(price, block.timestamp);
+
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: uint128(totalSupplyAssets),
+            totalSupplyShares: 1_000_000,
+            totalBorrowAssets: uint128(totalBorrowAssets),
+            totalBorrowShares: uint128(totalBorrowShares),
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPositionBorrowAndCollateral(MARKET_ID, positionKey, 0, uint128(collateralAssets));
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, principalStart);
+        h.setPoolTotals(LOAN_POOL_ID, principalStart);
+
+        uint256 expectedShares = LibIlmSharesMath.toSharesUp(borrowAssets, totalBorrowAssets, totalBorrowShares);
+        uint256 newBorrowAssets = totalBorrowAssets + borrowAssets;
+        uint256 newBorrowShares = totalBorrowShares + expectedShares;
+        bool healthy = LibIlmLiquidationMath.isHealthy(
+            collateralAssets, expectedShares, newBorrowAssets, newBorrowShares, price, 8e17
+        );
+        vm.assume(healthy);
+        vm.assume(newBorrowAssets <= type(uint128).max);
+        vm.assume(newBorrowShares <= type(uint128).max);
+        vm.assume(expectedShares <= type(uint128).max);
+
+        vm.prank(POSITION_OWNER);
+        (uint256 assetsOut, uint256 sharesOut) = h.isolatedBorrow(MARKET_ID, borrowAssets, 0, positionId);
+        assertEq(assetsOut, borrowAssets);
+        assertEq(sharesOut, expectedShares);
+
+        IlmIsolatedTypes.IlmIsolatedPosition memory position = h.getPosition(MARKET_ID, positionKey);
+        assertEq(position.borrowShares, expectedShares);
+
+        IlmIsolatedTypes.IlmIsolatedMarket memory gotMarket = h.getMarket(MARKET_ID);
+        assertEq(gotMarket.totalBorrowAssets, newBorrowAssets);
+        assertEq(gotMarket.totalBorrowShares, newBorrowShares);
+
+        assertEq(h.getPoolPrincipal(LOAN_POOL_ID, positionKey), principalStart + borrowAssets);
+
+        bool postHealthy = LibIlmLiquidationMath.isHealthy(
+            position.collateralAssets,
+            position.borrowShares,
+            gotMarket.totalBorrowAssets,
+            gotMarket.totalBorrowShares,
+            price,
+            8e17
+        );
+        assertTrue(postHealthy);
+    }
+
+    /// @dev Property 10: Repay State Consistency
+    /// Validates: Requirements 7.1, 17.6
+    function testFuzz_property10_repayStateConsistency(
+        uint128 totalBorrowAssetsRaw,
+        uint128 totalBorrowSharesRaw,
+        uint128 positionBorrowSharesRaw,
+        uint128 repayAssetsRaw,
+        uint128 principalRaw
+    ) public {
+        uint256 totalBorrowAssets = bound(uint256(totalBorrowAssetsRaw), 1, 1e24);
+        uint256 totalBorrowShares = bound(uint256(totalBorrowSharesRaw), 1, 1e24);
+        uint256 positionBorrowShares = bound(uint256(positionBorrowSharesRaw), 1, totalBorrowShares);
+        uint256 repayAssets = bound(uint256(repayAssetsRaw), 1, totalBorrowAssets);
+        uint256 principalStart = bound(uint256(principalRaw), repayAssets, repayAssets + 1e24);
+
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: uint128(totalBorrowAssets + 1e6),
+            totalSupplyShares: 1_000_000,
+            totalBorrowAssets: uint128(totalBorrowAssets),
+            totalBorrowShares: uint128(totalBorrowShares),
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPositionBorrowAndCollateral(MARKET_ID, positionKey, uint128(positionBorrowShares), 0);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, principalStart);
+        h.setPoolTotals(LOAN_POOL_ID, principalStart);
+
+        uint256 expectedShares = LibIlmSharesMath.toSharesDown(repayAssets, totalBorrowAssets, totalBorrowShares);
+        vm.assume(expectedShares > 0);
+        vm.assume(expectedShares <= positionBorrowShares);
+
+        vm.prank(POSITION_OWNER);
+        (uint256 assetsOut, uint256 sharesOut) = h.isolatedRepay(MARKET_ID, repayAssets, 0, positionId);
+        assertEq(assetsOut, repayAssets);
+        assertEq(sharesOut, expectedShares);
+
+        IlmIsolatedTypes.IlmIsolatedPosition memory position = h.getPosition(MARKET_ID, positionKey);
+        assertEq(position.borrowShares, positionBorrowShares - expectedShares);
+
+        IlmIsolatedTypes.IlmIsolatedMarket memory gotMarket = h.getMarket(MARKET_ID);
+        assertEq(gotMarket.totalBorrowAssets, totalBorrowAssets - repayAssets);
+        assertEq(gotMarket.totalBorrowShares, totalBorrowShares - expectedShares);
+
+        assertEq(h.getPoolPrincipal(LOAN_POOL_ID, positionKey), principalStart - repayAssets);
+    }
+
+    /// @dev Property 12: Health Gate Enforcement
+    /// Validates: Requirements 5.3, 6.4
+    function test_property12_healthGateEnforcement() public {
+        uint256 price = IlmIsolatedTypes.ORACLE_PRICE_SCALE;
+        oracle.setPrice(price, block.timestamp);
+
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1_000_000,
+            totalSupplyShares: 1_000_000,
+            totalBorrowAssets: 400_000,
+            totalBorrowShares: 400_000,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPositionBorrowAndCollateral(MARKET_ID, positionKey, 400_000, 500_000);
+        h.seedModuleEncumbrance(positionKey, 202, MODULE_ID, 500_000);
+
+        // Collateral withdraw would make position unhealthy.
+        vm.expectRevert(IlmIsolatedInsufficientCollateral.selector);
+        vm.prank(POSITION_OWNER);
+        h.isolatedWithdrawCollateral(MARKET_ID, 400_001, positionId);
+
+        // Borrow would also make position unhealthy.
+        vm.expectRevert(IlmIsolatedInsufficientCollateral.selector);
+        vm.prank(POSITION_OWNER);
+        h.isolatedBorrow(MARKET_ID, 600_000, 0, positionId);
+    }
+
     function _setDefaultMarket(IlmIsolatedTypes.IlmIsolatedMarket memory market) internal {
         IlmIsolatedTypes.IlmIsolatedMarketParams memory params = IlmIsolatedTypes.IlmIsolatedMarketParams({
             loanPoolId: LOAN_POOL_ID,
             collateralPoolId: 202,
-            oracle: address(0x1234),
+            oracle: address(oracle),
             irm: address(irm),
             lltv: 8e17
         });
