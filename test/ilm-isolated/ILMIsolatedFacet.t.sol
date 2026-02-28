@@ -83,6 +83,10 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
         ms.modules[moduleId].inactive = inactive;
     }
 
+    function setModuleAciPausedRaw(bool paused) external {
+        LibModuleRegistry.s().moduleAciPaused = paused;
+    }
+
     function setPositionSupplyShares(bytes32 marketId, bytes32 positionKey, uint256 shares) external {
         LibIlmIsolatedStorage.s().position[marketId][positionKey].supplyShares = shares;
     }
@@ -168,6 +172,18 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
 
     function getPoolTotalDeposits(uint256 poolId) external view returns (uint256) {
         return LibAppStorage.s().pools[poolId].totalDeposits;
+    }
+
+    function getPoolActiveCreditPrincipalTotal(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].activeCreditPrincipalTotal;
+    }
+
+    function getPoolUserActiveCreditEncumbrancePrincipal(uint256 poolId, bytes32 positionKey)
+        external
+        view
+        returns (uint256)
+    {
+        return LibAppStorage.s().pools[poolId].userActiveCreditStateEncumbrance[positionKey].principal;
     }
 
     function getPoolFeeIndex(uint256 poolId) external view returns (uint256) {
@@ -496,6 +512,105 @@ contract ILMIsolatedFacetTest is Test {
 
         IlmIsolatedTypes.IlmIsolatedMarket memory gotMarket = h.getMarket(MARKET_ID);
         assertEq(gotMarket.lastUpdate, uint128(lastUpdate));
+    }
+
+    /// @dev Property 27: Supply increases Active Credit base when module ACI is enabled.
+    function test_property27_supplyIncreasesAciWhenNotPaused() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1_000_000,
+            totalSupplyShares: 1_000_000,
+            totalBorrowAssets: 0,
+            totalBorrowShares: 0,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setModuleAciPausedRaw(false);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 10_000);
+
+        vm.prank(POSITION_OWNER);
+        h.isolatedSupply(MARKET_ID, 250, 0, positionId);
+
+        assertEq(h.getPoolActiveCreditPrincipalTotal(LOAN_POOL_ID), 250);
+        assertEq(h.getPoolUserActiveCreditEncumbrancePrincipal(LOAN_POOL_ID, positionKey), 250);
+    }
+
+    /// @dev Property 28: Collateral supply increases Active Credit base when module ACI is enabled.
+    function test_property28_collateralSupplyIncreasesAciWhenNotPaused() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1_000_000,
+            totalSupplyShares: 1_000_000,
+            totalBorrowAssets: 0,
+            totalBorrowShares: 0,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setModuleAciPausedRaw(false);
+        h.setPoolPrincipal(202, positionKey, 10_000);
+
+        vm.prank(POSITION_OWNER);
+        h.isolatedSupplyCollateral(MARKET_ID, 400, positionId);
+
+        assertEq(h.getPoolActiveCreditPrincipalTotal(202), 400);
+        assertEq(h.getPoolUserActiveCreditEncumbrancePrincipal(202, positionKey), 400);
+    }
+
+    /// @dev Property 29: moduleAciPaused gates increases but not decreases.
+    function test_property29_moduleAciPausedGatesIncreaseOnly() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1_000_000,
+            totalSupplyShares: 1_000_000,
+            totalBorrowAssets: 0,
+            totalBorrowShares: 0,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 10_000);
+
+        h.setModuleAciPausedRaw(false);
+        vm.prank(POSITION_OWNER);
+        h.isolatedSupply(MARKET_ID, 100, 0, positionId);
+        assertEq(h.getPoolActiveCreditPrincipalTotal(LOAN_POOL_ID), 100);
+
+        h.setModuleAciPausedRaw(true);
+        vm.prank(POSITION_OWNER);
+        h.isolatedSupply(MARKET_ID, 40, 0, positionId);
+        assertEq(h.getPoolActiveCreditPrincipalTotal(LOAN_POOL_ID), 100);
+
+        vm.prank(POSITION_OWNER);
+        h.isolatedWithdraw(MARKET_ID, 30, 0, positionId);
+        assertEq(h.getPoolActiveCreditPrincipalTotal(LOAN_POOL_ID), 70);
+        assertEq(h.getPoolUserActiveCreditEncumbrancePrincipal(LOAN_POOL_ID, positionKey), 70);
+    }
+
+    /// @dev Property 30: Withdraw and collateral-withdraw both decrease Active Credit base.
+    function test_property30_withdrawAndWithdrawCollateralDecreaseAci() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 2_000_000,
+            totalSupplyShares: 2_000_000,
+            totalBorrowAssets: 0,
+            totalBorrowShares: 0,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setModuleAciPausedRaw(false);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 10_000);
+        h.setPoolPrincipal(202, positionKey, 10_000);
+
+        vm.startPrank(POSITION_OWNER);
+        h.isolatedSupply(MARKET_ID, 120, 0, positionId);
+        h.isolatedSupplyCollateral(MARKET_ID, 80, positionId);
+        h.isolatedWithdraw(MARKET_ID, 20, 0, positionId);
+        h.isolatedWithdrawCollateral(MARKET_ID, 30, positionId);
+        vm.stopPrank();
+
+        assertEq(h.getPoolActiveCreditPrincipalTotal(LOAN_POOL_ID), 100);
+        assertEq(h.getPoolUserActiveCreditEncumbrancePrincipal(LOAN_POOL_ID, positionKey), 100);
+        assertEq(h.getPoolActiveCreditPrincipalTotal(202), 50);
+        assertEq(h.getPoolUserActiveCreditEncumbrancePrincipal(202, positionKey), 50);
     }
 
     /// @dev Property 9: Borrow State Consistency with Health Gate

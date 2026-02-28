@@ -152,7 +152,7 @@ contract ILMIsolatedLiquidationFacet is ReentrancyGuardModifiers {
                 params.collateralPoolId, protocolFeeCollateral, ILM_LIQUIDATION_FEE_SOURCE, false, 0
             );
         }
-        LibModuleEncumbrance.unencumber(borrowerKey, params.collateralPoolId, moduleId, grossSeizedAssets);
+        _unencumberWithAci(borrowerKey, params.collateralPoolId, moduleId, grossSeizedAssets);
 
         if (market.totalBorrowAssets == 0) {
             _ds.marketProtocolFeeAssets[marketId] = 0;
@@ -333,6 +333,11 @@ contract ILMIsolatedLiquidationFacet is ReentrancyGuardModifiers {
         if (ms.modules[moduleId].paused) {
             revert ModulePausedError(moduleId);
         }
+    }
+
+    function _unencumberWithAci(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) internal {
+        LibModuleEncumbrance.unencumber(positionKey, poolId, moduleId, amount);
+        LibActiveCreditIndex.applyEncumbranceDecrease(LibAppStorage.s().pools[poolId], poolId, positionKey, amount);
     }
 
     function ds() internal pure returns (LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage) {

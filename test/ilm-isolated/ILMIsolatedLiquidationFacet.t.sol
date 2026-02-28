@@ -8,6 +8,7 @@ import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
 import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
+import {Types} from "../../src/libraries/Types.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmIsolatedStorage} from "../../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
 import {IIlmIsolatedIrmAdapter} from "../../src/ilm-isolated/interfaces/IIlmIsolatedIrmAdapter.sol";
@@ -84,6 +85,10 @@ contract ILMIsolatedLiquidationFacetHarness is ILMIsolatedLiquidationFacet {
         ms.modules[moduleId].inactive = inactive;
     }
 
+    function setModuleAciPausedRaw(bool paused) external {
+        LibModuleRegistry.s().moduleAciPaused = paused;
+    }
+
     function setPositionBorrowAndCollateral(
         bytes32 marketId,
         bytes32 positionKey,
@@ -111,6 +116,18 @@ contract ILMIsolatedLiquidationFacetHarness is ILMIsolatedLiquidationFacet {
     function setPoolTrackedBalance(uint256 poolId, uint256 trackedBalance) external {
         LibAppStorage.s().pools[poolId].initialized = true;
         LibAppStorage.s().pools[poolId].trackedBalance = trackedBalance;
+    }
+
+    function setPoolActiveCreditStateEncumbrance(uint256 poolId, bytes32 positionKey, uint256 principal) external {
+        Types.PoolData storage pool = LibAppStorage.s().pools[poolId];
+        Types.ActiveCreditState storage state = pool.userActiveCreditStateEncumbrance[positionKey];
+        state.principal = principal;
+        state.startTime = principal == 0 ? 0 : uint40(block.timestamp);
+        state.indexSnapshot = pool.activeCreditIndex;
+    }
+
+    function setPoolActiveCreditPrincipalTotal(uint256 poolId, uint256 principalTotal) external {
+        LibAppStorage.s().pools[poolId].activeCreditPrincipalTotal = principalTotal;
     }
 
     function setGlobalFeeSplits(uint16 treasuryBps, uint16 activeCreditBps) external {
@@ -152,6 +169,18 @@ contract ILMIsolatedLiquidationFacetHarness is ILMIsolatedLiquidationFacet {
 
     function getPoolTotalDeposits(uint256 poolId) external view returns (uint256) {
         return LibAppStorage.s().pools[poolId].totalDeposits;
+    }
+
+    function getPoolActiveCreditPrincipalTotal(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].activeCreditPrincipalTotal;
+    }
+
+    function getPoolUserActiveCreditEncumbrancePrincipal(uint256 poolId, bytes32 positionKey)
+        external
+        view
+        returns (uint256)
+    {
+        return LibAppStorage.s().pools[poolId].userActiveCreditStateEncumbrance[positionKey].principal;
     }
 
     function getPoolFeeIndex(uint256 poolId) external view returns (uint256) {
@@ -341,6 +370,68 @@ contract ILMIsolatedLiquidationFacetTest is Test {
         );
         assertEq(h.getPoolTotalDeposits(COLLATERAL_POOL_ID), collateralPoolDepositsBefore - protocolFeeCollateral);
         assertEq(h.getEncumberedForModule(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID), borrowerEncBefore - grossSeized);
+    }
+
+    /// @dev Property 31: Liquidation decreases collateral-pool Active Credit by gross seized collateral.
+    function test_property31_liquidationDecreasesCollateralAciByGrossSeized() public {
+        _setMarketA(
+            IlmIsolatedTypes.IlmIsolatedMarket({
+                totalSupplyAssets: 2_000_000,
+                totalSupplyShares: 2_000_000,
+                totalBorrowAssets: 1_000_000,
+                totalBorrowShares: 1_000_000,
+                lastUpdate: uint128(block.timestamp),
+                fee: 0
+            })
+        );
+        h.setPositionBorrowAndCollateral(MARKET_A, borrowerKey, 800_000, 300);
+        h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 300);
+        h.setPoolActiveCreditStateEncumbrance(COLLATERAL_POOL_ID, borrowerKey, 300);
+        h.setPoolActiveCreditPrincipalTotal(COLLATERAL_POOL_ID, 300);
+
+        h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 50_000);
+        h.setPoolTotalDeposits(LOAN_POOL_ID, 50_000);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 300);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey, 0);
+        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 300);
+
+        vm.prank(LIQUIDATOR_OWNER);
+        (uint256 seizedOut,) = h.isolatedLiquidate(MARKET_A, borrowerPositionId, 100, 0, liquidatorPositionId);
+        assertEq(seizedOut, 100);
+
+        assertEq(h.getPoolActiveCreditPrincipalTotal(COLLATERAL_POOL_ID), 200);
+        assertEq(h.getPoolUserActiveCreditEncumbrancePrincipal(COLLATERAL_POOL_ID, borrowerKey), 200);
+    }
+
+    /// @dev Property 32: Liquidation Active Credit decrease is not gated by moduleAciPaused.
+    function test_property32_liquidationDecreaseUnaffectedByModuleAciPaused() public {
+        _setMarketA(
+            IlmIsolatedTypes.IlmIsolatedMarket({
+                totalSupplyAssets: 2_000_000,
+                totalSupplyShares: 2_000_000,
+                totalBorrowAssets: 1_000_000,
+                totalBorrowShares: 1_000_000,
+                lastUpdate: uint128(block.timestamp),
+                fee: 0
+            })
+        );
+        h.setModuleAciPausedRaw(true);
+        h.setPositionBorrowAndCollateral(MARKET_A, borrowerKey, 800_000, 300);
+        h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 300);
+        h.setPoolActiveCreditStateEncumbrance(COLLATERAL_POOL_ID, borrowerKey, 300);
+        h.setPoolActiveCreditPrincipalTotal(COLLATERAL_POOL_ID, 300);
+
+        h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 50_000);
+        h.setPoolTotalDeposits(LOAN_POOL_ID, 50_000);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 300);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey, 0);
+        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 300);
+
+        vm.prank(LIQUIDATOR_OWNER);
+        h.isolatedLiquidate(MARKET_A, borrowerPositionId, 100, 0, liquidatorPositionId);
+
+        assertEq(h.getPoolActiveCreditPrincipalTotal(COLLATERAL_POOL_ID), 200);
+        assertEq(h.getPoolUserActiveCreditEncumbrancePrincipal(COLLATERAL_POOL_ID, borrowerKey), 200);
     }
 
     /// @dev Property 17: Bad Debt Realization

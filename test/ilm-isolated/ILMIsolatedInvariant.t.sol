@@ -11,6 +11,7 @@ import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
 import {LibFeeRouter} from "../../src/libraries/LibFeeRouter.sol";
+import {Types} from "../../src/libraries/Types.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmIsolatedStorage} from "../../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
 import {LibIlmSharesMath} from "../../src/ilm-isolated/libraries/LibIlmSharesMath.sol";
@@ -161,9 +162,7 @@ contract ILMIsolatedInvariantHarness is ILMIsolatedFacet {
                 params.collateralPoolId, protocolFeeCollateral, ILM_LIQUIDATION_FEE_SOURCE, false, 0
             );
         }
-        LibModuleEncumbrance.unencumber(
-            borrowerKey, params.collateralPoolId, _ds.marketModuleId[marketId], grossSeizedAssets
-        );
+        _unencumberWithAci(borrowerKey, params.collateralPoolId, _ds.marketModuleId[marketId], grossSeizedAssets);
 
         _cumulativeGrossSeized += grossSeizedAssets;
         _cumulativeNetSeized += netSeizedAssets;
@@ -272,6 +271,18 @@ contract ILMIsolatedInvariantHarness is ILMIsolatedFacet {
         LibModuleEncumbrance.encumber(positionKey, poolId, moduleId, amount);
     }
 
+    function setPoolActiveCreditStateEncumbrance(uint256 poolId, bytes32 positionKey, uint256 principal) external {
+        Types.PoolData storage pool = LibAppStorage.s().pools[poolId];
+        Types.ActiveCreditState storage state = pool.userActiveCreditStateEncumbrance[positionKey];
+        state.principal = principal;
+        state.startTime = principal == 0 ? 0 : uint40(block.timestamp);
+        state.indexSnapshot = pool.activeCreditIndex;
+    }
+
+    function setPoolActiveCreditPrincipalTotal(uint256 poolId, uint256 principalTotal) external {
+        LibAppStorage.s().pools[poolId].activeCreditPrincipalTotal = principalTotal;
+    }
+
     function getMarket(bytes32 marketId) external view returns (IlmIsolatedTypes.IlmIsolatedMarket memory) {
         return LibIlmIsolatedStorage.s().market[marketId];
     }
@@ -282,6 +293,18 @@ contract ILMIsolatedInvariantHarness is ILMIsolatedFacet {
 
     function getModuleEncumbered(bytes32 positionKey, uint256 poolId) external view returns (uint256) {
         return LibModuleEncumbrance.getEncumbered(positionKey, poolId);
+    }
+
+    function getPoolActiveCreditPrincipalTotal(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].activeCreditPrincipalTotal;
+    }
+
+    function getPoolUserActiveCreditEncumbrancePrincipal(uint256 poolId, bytes32 positionKey)
+        external
+        view
+        returns (uint256)
+    {
+        return LibAppStorage.s().pools[poolId].userActiveCreditStateEncumbrance[positionKey].principal;
     }
 
     function _debitPrincipalIgnoringEncumbrance(uint256 poolId, bytes32 positionKey, uint256 assets) internal {
@@ -556,6 +579,10 @@ contract ILMIsolatedInvariantTest is StdInvariant, Test {
 
         h.seedModuleEncumbrance(supplierKey, LOAN_POOL_ID, MODULE_ID, 2_000_000);
         h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 1_200_000);
+        h.setPoolActiveCreditStateEncumbrance(LOAN_POOL_ID, supplierKey, 2_000_000);
+        h.setPoolActiveCreditStateEncumbrance(COLLATERAL_POOL_ID, borrowerKey, 1_200_000);
+        h.setPoolActiveCreditPrincipalTotal(LOAN_POOL_ID, 2_000_000);
+        h.setPoolActiveCreditPrincipalTotal(COLLATERAL_POOL_ID, 1_200_000);
 
         uint256[] memory positionIds = new uint256[](3);
         positionIds[0] = supplierPositionId;
@@ -617,9 +644,36 @@ contract ILMIsolatedInvariantTest is StdInvariant, Test {
         assertEq(grossSeized, netSeized + protocolFeeCollateral);
     }
 
+    /// @dev Property 29: Active Credit principal total equals tracked encumbrance state totals.
+    function invariant_property29_activeCreditStateConsistency() public {
+        _assertActiveCreditStateConsistency(LOAN_POOL_ID);
+        _assertActiveCreditStateConsistency(COLLATERAL_POOL_ID);
+    }
+
+    /// @dev Property 30: ILM module encumbrance totals match Active Credit principal totals per pool.
+    function invariant_property30_moduleEncumbranceTracksActiveCreditTotals() public {
+        _assertModuleEncumbranceMatchesAci(LOAN_POOL_ID);
+        _assertModuleEncumbranceMatchesAci(COLLATERAL_POOL_ID);
+    }
+
     function _assertEncumbranceBound(bytes32 positionKey, uint256 poolId) internal {
         uint256 principal = h.getPoolPrincipal(poolId, positionKey);
         uint256 moduleEncumbered = h.getModuleEncumbered(positionKey, poolId);
         assertLe(moduleEncumbered, principal);
+    }
+
+    function _assertActiveCreditStateConsistency(uint256 poolId) internal {
+        uint256 total = h.getPoolActiveCreditPrincipalTotal(poolId);
+        uint256 stateSum = h.getPoolUserActiveCreditEncumbrancePrincipal(poolId, supplierKey)
+            + h.getPoolUserActiveCreditEncumbrancePrincipal(poolId, borrowerKey)
+            + h.getPoolUserActiveCreditEncumbrancePrincipal(poolId, liquidatorKey);
+        assertEq(total, stateSum);
+    }
+
+    function _assertModuleEncumbranceMatchesAci(uint256 poolId) internal {
+        uint256 moduleEncumberedSum =
+            h.getModuleEncumbered(supplierKey, poolId) + h.getModuleEncumbered(borrowerKey, poolId)
+                + h.getModuleEncumbered(liquidatorKey, poolId);
+        assertEq(h.getPoolActiveCreditPrincipalTotal(poolId), moduleEncumberedSum);
     }
 }

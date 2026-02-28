@@ -382,16 +382,17 @@ contract LeanDeployScript is Script {
     }
 
     function _resolveIdentityRegistry() internal view returns (address) {
-        if (block.chainid == 1) {
-            return ERC8004_MAINNET;
-        }
-        if (block.chainid == 11155111) {
-            return ERC8004_SEPOLIA;
-        }
+        string memory chainEnvKey = string.concat("IDENTITY_REGISTRY_", vm.toString(block.chainid));
+        address chainConfigured = vm.envOr(chainEnvKey, address(0));
+        if (chainConfigured != address(0)) return chainConfigured;
+
         address configured = vm.envOr("IDENTITY_REGISTRY", address(0));
-        if (configured != address(0) && configured.code.length > 0) {
-            return configured;
-        }
+        if (configured != address(0)) return configured;
+
+        if (block.chainid == 1) return ERC8004_MAINNET;
+        if (block.chainid == 11155111) return ERC8004_SEPOLIA;
+
+        if (ERC8004_SEPOLIA.code.length > 0) return ERC8004_SEPOLIA;
         return address(0);
     }
 

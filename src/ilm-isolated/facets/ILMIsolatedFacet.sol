@@ -68,7 +68,7 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
 
         IlmIsolatedTypes.IlmIsolatedMarketParams storage params = _ds.marketParams[marketId];
         _enforceAvailablePrincipal(positionKey, params.loanPoolId, assetsOut);
-        LibModuleEncumbrance.encumber(positionKey, params.loanPoolId, moduleId, assetsOut);
+        _encumberWithAci(positionKey, params.loanPoolId, moduleId, assetsOut);
 
         IlmIsolatedTypes.IlmIsolatedPosition storage position = _ds.position[marketId][positionKey];
         position.supplyShares += sharesOut;
@@ -131,7 +131,7 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         market.totalSupplyShares = uint128(newTotalSupplyShares);
 
         IlmIsolatedTypes.IlmIsolatedMarketParams storage params = _ds.marketParams[marketId];
-        LibModuleEncumbrance.unencumber(positionKey, params.loanPoolId, moduleId, assetsOut);
+        _unencumberWithAci(positionKey, params.loanPoolId, moduleId, assetsOut);
 
         emit IlmIsolatedWithdraw(marketId, positionKey, assetsOut, sharesOut);
     }
@@ -160,7 +160,7 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         }
         position.collateralAssets = uint128(newCollateralAssets);
 
-        LibModuleEncumbrance.encumber(positionKey, params.collateralPoolId, moduleId, assets);
+        _encumberWithAci(positionKey, params.collateralPoolId, moduleId, assets);
         emit IlmIsolatedSupplyCollateral(marketId, positionKey, assets);
     }
 
@@ -202,7 +202,7 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         }
 
         position.collateralAssets = uint128(newCollateralAssets);
-        LibModuleEncumbrance.unencumber(positionKey, params.collateralPoolId, moduleId, assets);
+        _unencumberWithAci(positionKey, params.collateralPoolId, moduleId, assets);
 
         emit IlmIsolatedWithdrawCollateral(marketId, positionKey, assets);
     }
@@ -453,6 +453,19 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         if (ms.modules[moduleId].paused) {
             revert ModulePausedError(moduleId);
         }
+    }
+
+    function _encumberWithAci(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) internal {
+        LibModuleEncumbrance.encumber(positionKey, poolId, moduleId, amount);
+        if (amount == 0 || LibModuleRegistry.s().moduleAciPaused) {
+            return;
+        }
+        LibActiveCreditIndex.applyEncumbranceIncrease(LibAppStorage.s().pools[poolId], poolId, positionKey, amount);
+    }
+
+    function _unencumberWithAci(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) internal {
+        LibModuleEncumbrance.unencumber(positionKey, poolId, moduleId, amount);
+        LibActiveCreditIndex.applyEncumbranceDecrease(LibAppStorage.s().pools[poolId], poolId, positionKey, amount);
     }
 
     function ds() internal pure returns (LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage) {

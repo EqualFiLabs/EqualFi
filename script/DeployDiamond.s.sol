@@ -76,6 +76,11 @@ import {PositionAgentConfigFacet} from "../src/agent-wallet/erc6551/PositionAgen
 import {ModuleRegistryFacet} from "../src/modules/ModuleRegistryFacet.sol";
 import {ModuleGatewayFacet} from "../src/modules/ModuleGatewayFacet.sol";
 import {ModuleViewFacet} from "../src/modules/ModuleViewFacet.sol";
+import {ILMIsolatedAdminFacet} from "../src/ilm-isolated/facets/ILMIsolatedAdminFacet.sol";
+import {ILMIsolatedFacet} from "../src/ilm-isolated/facets/ILMIsolatedFacet.sol";
+import {ILMIsolatedLiquidationFacet} from "../src/ilm-isolated/facets/ILMIsolatedLiquidationFacet.sol";
+import {ILMIsolatedViewFacet} from "../src/ilm-isolated/facets/ILMIsolatedViewFacet.sol";
+import {LibIlmIsolatedStorage} from "../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
@@ -163,6 +168,14 @@ contract LocalERC6551Registry is IERC6551Registry {
     }
 }
 
+contract IlmIsolatedInit {
+    function init(address owner_, uint256 maxStaleness_) external {
+        LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage ds = LibIlmIsolatedStorage.s();
+        ds.owner = owner_;
+        ds.maxStaleness = maxStaleness_;
+    }
+}
+
 /// @notice Example deployment script assembling the Diamond with default pool config.
 contract DeployDiamondScript is Script {
     address internal owner;
@@ -184,6 +197,7 @@ contract DeployDiamondScript is Script {
     uint8 internal constant DEFAULT_ROLLING_DELINQUENCY_EPOCHS = 2;
     uint8 internal constant DEFAULT_ROLLING_PENALTY_EPOCHS = 3;
     uint16 internal constant DEFAULT_ROLLING_MIN_PAYMENT_BPS = 0;
+    uint256 internal constant DEFAULT_ILM_MAX_STALENESS = 1 days;
     bytes32 internal constant ACTION_BORROW = keccak256("ACTION_BORROW");
     bytes32 internal constant ACTION_REPAY = keccak256("ACTION_REPAY");
     bytes32 internal constant ACTION_FLASH = keccak256("ACTION_FLASH");
@@ -295,6 +309,10 @@ contract DeployDiamondScript is Script {
         ModuleRegistryFacet moduleRegistry = new ModuleRegistryFacet();
         ModuleGatewayFacet moduleGateway = new ModuleGatewayFacet();
         ModuleViewFacet moduleView = new ModuleViewFacet();
+        ILMIsolatedAdminFacet ilmIsolatedAdmin = new ILMIsolatedAdminFacet();
+        ILMIsolatedFacet ilmIsolated = new ILMIsolatedFacet();
+        ILMIsolatedLiquidationFacet ilmIsolatedLiquidation = new ILMIsolatedLiquidationFacet();
+        ILMIsolatedViewFacet ilmIsolatedView = new ILMIsolatedViewFacet();
 
         // Build facet cuts (core + admin + fee + index + base views)
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](15);
@@ -314,7 +332,7 @@ contract DeployDiamondScript is Script {
         cuts[13] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[14] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](46);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](50);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -361,6 +379,10 @@ contract DeployDiamondScript is Script {
         more[43] = _cut(address(pointsRedemption), _selectors(pointsRedemption));
         more[44] = _cut(address(ammAuctionView), _selectors(ammAuctionView));
         more[45] = _cut(address(communityAuctionView), _selectors(communityAuctionView));
+        more[46] = _cut(address(ilmIsolatedAdmin), _selectors(ilmIsolatedAdmin));
+        more[47] = _cut(address(ilmIsolated), _selectors(ilmIsolated));
+        more[48] = _cut(address(ilmIsolatedLiquidation), _selectors(ilmIsolatedLiquidation));
+        more[49] = _cut(address(ilmIsolatedView), _selectors(ilmIsolatedView));
 
         // Deploy diamond
         // Use broadcaster as temporary owner so subsequent diamondCut in this script is authorized.
@@ -396,6 +418,15 @@ contract DeployDiamondScript is Script {
         DiamondInit initializer = new DiamondInit();
         IDiamondCut(address(diamond))
             .diamondCut(more, address(initializer), abi.encodeWithSelector(DiamondInit.init.selector, timelock, address(nftContract)));
+
+        // Bootstrap ILM isolated admin ownership + oracle freshness policy.
+        IlmIsolatedInit ilmInit = new IlmIsolatedInit();
+        IDiamondCut.FacetCut[] memory noCuts = new IDiamondCut.FacetCut[](0);
+        IDiamondCut(address(diamond)).diamondCut(
+            noCuts,
+            address(ilmInit),
+            abi.encodeWithSelector(IlmIsolatedInit.init.selector, owner, DEFAULT_ILM_MAX_STALENESS)
+        );
 
         address erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(beaconProxy));
         address erc6551Registry = _resolveERC6551Registry();
@@ -508,15 +539,20 @@ contract DeployDiamondScript is Script {
     }
 
     function _resolveIdentityRegistry() internal view returns (address) {
-        // Check env var for testing
+        string memory chainEnvKey = string.concat("IDENTITY_REGISTRY_", vm.toString(block.chainid));
+        address chainConfigured = vm.envOr(chainEnvKey, address(0));
+        if (chainConfigured != address(0)) return chainConfigured;
+
         address configured = vm.envOr("IDENTITY_REGISTRY", address(0));
-        if (configured != address(0)) {
-            return configured;
-        }
-        
-        // Always use canonical ERC-8004 testnet address
-        // This address has the registry deployed on local anvil chains
-        return ERC8004_TESTNET;
+        if (configured != address(0)) return configured;
+
+        if (block.chainid == 1) return ERC8004_MAINNET;
+        if (block.chainid == 11155111) return ERC8004_TESTNET;
+
+        // For custom testnets/devnets, allow canonical testnet vanity fallback only if deployed.
+        if (ERC8004_TESTNET.code.length > 0) return ERC8004_TESTNET;
+
+        return address(0);
     }
 
     function _resolveERC6551Registry() internal returns (address) {
@@ -1068,6 +1104,46 @@ contract DeployDiamondScript is Script {
         s[3] = ModuleViewFacet.getModuleAumState.selector;
         s[4] = ModuleViewFacet.getModuleAumConfig.selector;
         s[5] = ModuleViewFacet.isModuleAciPaused.selector;
+    }
+
+    function _selectors(ILMIsolatedAdminFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](10);
+        s[0] = ILMIsolatedAdminFacet.createIlmIsolatedMarket.selector;
+        s[1] = ILMIsolatedAdminFacet.enableIrm.selector;
+        s[2] = ILMIsolatedAdminFacet.setIrmManagedOnly.selector;
+        s[3] = ILMIsolatedAdminFacet.enableLltv.selector;
+        s[4] = ILMIsolatedAdminFacet.setFee.selector;
+        s[5] = ILMIsolatedAdminFacet.setFeeRecipientPositionKey.selector;
+        s[6] = ILMIsolatedAdminFacet.setMarketLiquidationFeeBps.selector;
+        s[7] = ILMIsolatedAdminFacet.setMaxStaleness.selector;
+        s[8] = ILMIsolatedAdminFacet.setOwner.selector;
+        s[9] = ILMIsolatedAdminFacet.setAuthorization.selector;
+    }
+
+    function _selectors(ILMIsolatedFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = ILMIsolatedFacet.isolatedSupply.selector;
+        s[1] = ILMIsolatedFacet.isolatedWithdraw.selector;
+        s[2] = ILMIsolatedFacet.isolatedSupplyCollateral.selector;
+        s[3] = ILMIsolatedFacet.isolatedWithdrawCollateral.selector;
+        s[4] = ILMIsolatedFacet.isolatedBorrow.selector;
+        s[5] = ILMIsolatedFacet.isolatedRepay.selector;
+    }
+
+    function _selectors(ILMIsolatedLiquidationFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](1);
+        s[0] = ILMIsolatedLiquidationFacet.isolatedLiquidate.selector;
+    }
+
+    function _selectors(ILMIsolatedViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](7);
+        s[0] = ILMIsolatedViewFacet.getIsolatedMarket.selector;
+        s[1] = ILMIsolatedViewFacet.getIsolatedMarketParams.selector;
+        s[2] = ILMIsolatedViewFacet.getIsolatedPosition.selector;
+        s[3] = ILMIsolatedViewFacet.getIsolatedMarketLiquidationFeeBps.selector;
+        s[4] = ILMIsolatedViewFacet.getIsolatedMarketProtocolFeeAssets.selector;
+        s[5] = ILMIsolatedViewFacet.isIlmIrmManagedOnly.selector;
+        s[6] = ILMIsolatedViewFacet.isIsolatedHealthy.selector;
     }
 
     function _deployTokensAndPools(
