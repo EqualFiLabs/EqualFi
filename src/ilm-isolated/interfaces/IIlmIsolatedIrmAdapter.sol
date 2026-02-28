@@ -9,6 +9,5 @@ interface IIlmIsolatedIrmAdapter {
     function borrowRate(
         IlmIsolatedTypes.IlmIsolatedMarketParams calldata params,
         IlmIsolatedTypes.IlmIsolatedMarket calldata market
-    ) external view returns (uint256 ratePerSecond);
+    ) external returns (uint256 ratePerSecond);
 }
-
