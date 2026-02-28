@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {PositionNFT} from "../../nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../libraries/LibAppStorage.sol";
+import {LibFeeIndex} from "../../libraries/LibFeeIndex.sol";
+import {LibActiveCreditIndex} from "../../libraries/LibActiveCreditIndex.sol";
 import {LibModuleEncumbrance} from "../../libraries/LibModuleEncumbrance.sol";
 import {LibSolvencyChecks} from "../../libraries/LibSolvencyChecks.sol";
 import {ReentrancyGuardModifiers} from "../../libraries/LibReentrancyGuard.sol";
@@ -360,6 +362,9 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         if (assets == 0) {
             return;
         }
+        LibFeeIndex.settle(poolId, positionKey);
+        LibActiveCreditIndex.settle(poolId, positionKey);
+
         LibAppStorage.AppStorage storage app = LibAppStorage.s();
         uint256 newPrincipal = app.pools[poolId].userPrincipal[positionKey] + assets;
         uint256 newTotalDeposits = app.pools[poolId].totalDeposits + assets;
@@ -371,6 +376,9 @@ contract ILMIsolatedFacet is ReentrancyGuardModifiers {
         if (assets == 0) {
             return;
         }
+        LibFeeIndex.settle(poolId, positionKey);
+        LibActiveCreditIndex.settle(poolId, positionKey);
+
         LibAppStorage.AppStorage storage app = LibAppStorage.s();
         uint256 available = LibSolvencyChecks.calculateAvailablePrincipal(app.pools[poolId], positionKey, poolId);
         if (assets > available) {

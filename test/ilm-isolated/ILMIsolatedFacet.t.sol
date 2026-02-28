@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
+import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmSharesMath} from "../../src/ilm-isolated/libraries/LibIlmSharesMath.sol";
@@ -95,6 +96,15 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
         LibAppStorage.s().pools[poolId].totalDeposits = totalDeposits;
     }
 
+    function setPoolFeeIndex(uint256 poolId, uint256 feeIndex) external {
+        LibAppStorage.s().pools[poolId].initialized = true;
+        LibAppStorage.s().pools[poolId].feeIndex = feeIndex;
+    }
+
+    function setPoolUserFeeIndex(uint256 poolId, bytes32 positionKey, uint256 feeIndex) external {
+        LibAppStorage.s().pools[poolId].userFeeIndex[positionKey] = feeIndex;
+    }
+
     function seedModuleEncumbrance(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) external {
         LibModuleEncumbrance.encumber(positionKey, poolId, moduleId, amount);
     }
@@ -121,6 +131,18 @@ contract ILMIsolatedFacetHarness is ILMIsolatedFacet {
 
     function getPoolTotalDeposits(uint256 poolId) external view returns (uint256) {
         return LibAppStorage.s().pools[poolId].totalDeposits;
+    }
+
+    function getPoolUserFeeIndex(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].userFeeIndex[positionKey];
+    }
+
+    function getPoolUserAccruedYield(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].userAccruedYield[positionKey];
+    }
+
+    function pendingFeeYield(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
+        return LibFeeIndex.pendingYield(poolId, positionKey);
     }
 }
 
@@ -322,6 +344,35 @@ contract ILMIsolatedFacetTest is Test {
         h.isolatedSupply(MARKET_ID, 10, 0, positionId);
     }
 
+    /// @dev Property 24: Authorization Enforcement (core facet path)
+    /// Validates: Requirements 16.2, 16.3
+    function test_property24_authorizationEnforcement_coreFacet() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1000,
+            totalSupplyShares: 1000,
+            totalBorrowAssets: 0,
+            totalBorrowShares: 0,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 1000);
+        h.setPoolPrincipal(202, positionKey, 1000);
+
+        vm.prank(ATTACKER);
+        vm.expectRevert(IlmIsolatedUnauthorized.selector);
+        h.isolatedSupplyCollateral(MARKET_ID, 10, positionId);
+
+        h.setAuthorizationRaw(positionKey, OPERATOR, true);
+        vm.prank(OPERATOR);
+        h.isolatedSupplyCollateral(MARKET_ID, 10, positionId);
+
+        h.setAuthorizationRaw(positionKey, OPERATOR, false);
+        vm.prank(OPERATOR);
+        vm.expectRevert(IlmIsolatedUnauthorized.selector);
+        h.isolatedSupply(MARKET_ID, 1, 0, positionId);
+    }
+
     /// @dev Property 8: Collateral Supply State Consistency
     /// Validates: Requirements 4.1, 4.3, 17.3
     function testFuzz_property8_collateralSupplyStateConsistency(
@@ -425,6 +476,32 @@ contract ILMIsolatedFacetTest is Test {
             8e17
         );
         assertTrue(postHealthy);
+    }
+
+    function test_borrowCreditPrincipal_checkpointsFeeIndex() public {
+        IlmIsolatedTypes.IlmIsolatedMarket memory market = IlmIsolatedTypes.IlmIsolatedMarket({
+            totalSupplyAssets: 1_000_000,
+            totalSupplyShares: 1_000_000,
+            totalBorrowAssets: 1000,
+            totalBorrowShares: 1000,
+            lastUpdate: uint128(block.timestamp),
+            fee: 0
+        });
+        _setDefaultMarket(market);
+        h.setPositionBorrowAndCollateral(MARKET_ID, positionKey, 0, 100_000);
+        h.setPoolPrincipal(LOAN_POOL_ID, positionKey, 0);
+        h.setPoolTotals(LOAN_POOL_ID, 1_000_000);
+
+        uint256 feeIndex = 3e18;
+        h.setPoolFeeIndex(LOAN_POOL_ID, feeIndex);
+        h.setPoolUserFeeIndex(LOAN_POOL_ID, positionKey, 0);
+
+        vm.prank(POSITION_OWNER);
+        h.isolatedBorrow(MARKET_ID, 1000, 0, positionId);
+
+        assertEq(h.getPoolUserFeeIndex(LOAN_POOL_ID, positionKey), feeIndex);
+        assertEq(h.getPoolUserAccruedYield(LOAN_POOL_ID, positionKey), 0);
+        assertEq(h.pendingFeeYield(LOAN_POOL_ID, positionKey), 0);
     }
 
     /// @dev Property 10: Repay State Consistency

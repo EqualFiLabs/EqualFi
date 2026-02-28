@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
+import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
 import {IlmIsolatedTypes} from "../../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {LibIlmIsolatedStorage} from "../../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
@@ -89,6 +90,15 @@ contract ILMIsolatedLiquidationFacetHarness is ILMIsolatedLiquidationFacet {
         LibAppStorage.s().pools[poolId].totalDeposits = totalDeposits;
     }
 
+    function setPoolFeeIndex(uint256 poolId, uint256 feeIndex) external {
+        LibAppStorage.s().pools[poolId].initialized = true;
+        LibAppStorage.s().pools[poolId].feeIndex = feeIndex;
+    }
+
+    function setPoolUserFeeIndex(uint256 poolId, bytes32 positionKey, uint256 feeIndex) external {
+        LibAppStorage.s().pools[poolId].userFeeIndex[positionKey] = feeIndex;
+    }
+
     function seedModuleEncumbrance(bytes32 positionKey, uint256 poolId, uint256 moduleId, uint256 amount) external {
         LibModuleEncumbrance.encumber(positionKey, poolId, moduleId, amount);
     }
@@ -107,6 +117,22 @@ contract ILMIsolatedLiquidationFacetHarness is ILMIsolatedLiquidationFacet {
 
     function getPoolPrincipal(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
         return LibAppStorage.s().pools[poolId].userPrincipal[positionKey];
+    }
+
+    function getPoolTotalDeposits(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].totalDeposits;
+    }
+
+    function getPoolUserFeeIndex(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].userFeeIndex[positionKey];
+    }
+
+    function getPoolUserAccruedYield(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].userAccruedYield[positionKey];
+    }
+
+    function pendingFeeYield(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
+        return LibFeeIndex.pendingYield(poolId, positionKey);
     }
 
     function getEncumberedForModule(bytes32 positionKey, uint256 poolId, uint256 moduleId) external view returns (uint256) {
@@ -234,14 +260,17 @@ contract ILMIsolatedLiquidationFacetTest is Test {
         h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 300);
         h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 2_000_000);
         h.setPoolTotalDeposits(LOAN_POOL_ID, 2_000_000);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 300);
         h.setPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey, 50);
-        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 50);
+        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 350);
 
         uint256 borrowerBorrowSharesBefore = h.getPosition(MARKET_A, borrowerKey).borrowShares;
         uint256 borrowerCollateralBefore = h.getPosition(MARKET_A, borrowerKey).collateralAssets;
         IlmIsolatedTypes.IlmIsolatedMarket memory marketBefore = h.getMarket(MARKET_A);
         uint256 liquidatorLoanPrincipalBefore = h.getPoolPrincipal(LOAN_POOL_ID, liquidatorKey);
+        uint256 borrowerCollateralPrincipalBefore = h.getPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey);
         uint256 liquidatorCollateralPrincipalBefore = h.getPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey);
+        uint256 collateralPoolDepositsBefore = h.getPoolTotalDeposits(COLLATERAL_POOL_ID);
         uint256 borrowerEncBefore = h.getEncumberedForModule(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID);
 
         vm.prank(LIQUIDATOR_OWNER);
@@ -257,9 +286,11 @@ contract ILMIsolatedLiquidationFacetTest is Test {
         assertEq(marketAfter.totalBorrowShares, marketBefore.totalBorrowShares - repaidSharesUsed);
         assertEq(borrowerAfter.collateralAssets, borrowerCollateralBefore - seizedOut);
         assertEq(h.getPoolPrincipal(LOAN_POOL_ID, liquidatorKey), liquidatorLoanPrincipalBefore - repaidAssetsOut);
+        assertEq(h.getPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey), borrowerCollateralPrincipalBefore - seizedOut);
         assertEq(
             h.getPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey), liquidatorCollateralPrincipalBefore + seizedOut
         );
+        assertEq(h.getPoolTotalDeposits(COLLATERAL_POOL_ID), collateralPoolDepositsBefore);
         assertEq(h.getEncumberedForModule(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID), borrowerEncBefore - seizedOut);
     }
 
@@ -280,6 +311,8 @@ contract ILMIsolatedLiquidationFacetTest is Test {
         h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 100);
         h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 5000);
         h.setPoolTotalDeposits(LOAN_POOL_ID, 5000);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 100);
+        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 100);
 
         IlmIsolatedTypes.IlmIsolatedMarket memory beforeMarket = h.getMarket(MARKET_A);
 
@@ -327,6 +360,8 @@ contract ILMIsolatedLiquidationFacetTest is Test {
         h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 100);
         h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 5000);
         h.setPoolTotalDeposits(LOAN_POOL_ID, 5000);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 100);
+        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 100);
 
         IlmIsolatedTypes.IlmIsolatedMarket memory beforeB = h.getMarket(MARKET_B);
 
@@ -340,6 +375,70 @@ contract ILMIsolatedLiquidationFacetTest is Test {
         assertEq(afterB.totalBorrowShares, beforeB.totalBorrowShares);
         assertEq(afterB.lastUpdate, beforeB.lastUpdate);
         assertEq(afterB.fee, beforeB.fee);
+    }
+
+    /// @dev Property 24: Authorization Enforcement (liquidation path)
+    /// Validates: Requirements 16.2, 16.3, 16.4
+    function test_property24_authorizationEnforcement_liquidationFacet() public {
+        _setMarketA(
+            IlmIsolatedTypes.IlmIsolatedMarket({
+                totalSupplyAssets: 2_000_000,
+                totalSupplyShares: 2_000_000,
+                totalBorrowAssets: 1_000_000,
+                totalBorrowShares: 1_000_000,
+                lastUpdate: uint128(block.timestamp),
+                fee: 0
+            })
+        );
+        // Unhealthy borrower for liquidation path.
+        h.setPositionBorrowAndCollateral(MARKET_A, borrowerKey, 800_000, 300);
+        h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 300);
+        h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 50_000);
+        h.setPoolTotalDeposits(LOAN_POOL_ID, 50_000);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 300);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey, 0);
+        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 300);
+
+        address unauthorized = address(0xDEAD);
+        vm.prank(unauthorized);
+        vm.expectRevert(IlmIsolatedUnauthorized.selector);
+        h.isolatedLiquidate(MARKET_A, borrowerPositionId, 0, 100, liquidatorPositionId);
+
+        // Borrower side remains permissionless once liquidator position auth is valid.
+        h.setAuthorizationRaw(liquidatorKey, unauthorized, true);
+        vm.prank(unauthorized);
+        h.isolatedLiquidate(MARKET_A, borrowerPositionId, 0, 100, liquidatorPositionId);
+    }
+
+    function test_liquidationCollateralCredit_checkpointsFeeIndex() public {
+        _setMarketA(
+            IlmIsolatedTypes.IlmIsolatedMarket({
+                totalSupplyAssets: 2_000_000,
+                totalSupplyShares: 2_000_000,
+                totalBorrowAssets: 1_000_000,
+                totalBorrowShares: 1_000_000,
+                lastUpdate: uint128(block.timestamp),
+                fee: 0
+            })
+        );
+        h.setPositionBorrowAndCollateral(MARKET_A, borrowerKey, 800_000, 300);
+        h.seedModuleEncumbrance(borrowerKey, COLLATERAL_POOL_ID, MODULE_ID, 300);
+        h.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey, 50_000);
+        h.setPoolTotalDeposits(LOAN_POOL_ID, 50_000);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey, 300);
+        h.setPoolPrincipal(COLLATERAL_POOL_ID, liquidatorKey, 0);
+        h.setPoolTotalDeposits(COLLATERAL_POOL_ID, 300);
+
+        uint256 feeIndex = 4e18;
+        h.setPoolFeeIndex(COLLATERAL_POOL_ID, feeIndex);
+        h.setPoolUserFeeIndex(COLLATERAL_POOL_ID, liquidatorKey, 0);
+
+        vm.prank(LIQUIDATOR_OWNER);
+        h.isolatedLiquidate(MARKET_A, borrowerPositionId, 0, 100, liquidatorPositionId);
+
+        assertEq(h.getPoolUserFeeIndex(COLLATERAL_POOL_ID, liquidatorKey), feeIndex);
+        assertEq(h.getPoolUserAccruedYield(COLLATERAL_POOL_ID, liquidatorKey), 0);
+        assertEq(h.pendingFeeYield(COLLATERAL_POOL_ID, liquidatorKey), 0);
     }
 
     function _setMarketA(IlmIsolatedTypes.IlmIsolatedMarket memory market) internal {
@@ -415,5 +514,7 @@ contract ILMIsolatedLiquidationFacetTest is Test {
         h_.seedModuleEncumbrance(borrowerKey_, COLLATERAL_POOL_ID, MODULE_ID, 300);
         h_.setPoolPrincipal(LOAN_POOL_ID, liquidatorKey_, 5000);
         h_.setPoolTotalDeposits(LOAN_POOL_ID, 5000);
+        h_.setPoolPrincipal(COLLATERAL_POOL_ID, borrowerKey_, 300);
+        h_.setPoolTotalDeposits(COLLATERAL_POOL_ID, 300);
     }
 }

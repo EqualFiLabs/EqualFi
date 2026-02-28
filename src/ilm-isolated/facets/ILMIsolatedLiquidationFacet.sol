@@ -5,10 +5,12 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {PositionNFT} from "../../nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../libraries/LibAppStorage.sol";
+import {LibFeeIndex} from "../../libraries/LibFeeIndex.sol";
+import {LibActiveCreditIndex} from "../../libraries/LibActiveCreditIndex.sol";
 import {LibModuleEncumbrance} from "../../libraries/LibModuleEncumbrance.sol";
 import {LibSolvencyChecks} from "../../libraries/LibSolvencyChecks.sol";
 import {ReentrancyGuardModifiers} from "../../libraries/LibReentrancyGuard.sol";
-import {InsufficientUnencumberedPrincipal} from "../../libraries/Errors.sol";
+import {InsufficientPrincipal, InsufficientUnencumberedPrincipal} from "../../libraries/Errors.sol";
 import {IlmIsolatedTypes} from "../types/IlmIsolatedTypes.sol";
 import {LibIlmIsolatedStorage} from "../libraries/LibIlmIsolatedStorage.sol";
 import {LibIlmSharesMath} from "../libraries/LibIlmSharesMath.sol";
@@ -113,6 +115,7 @@ contract ILMIsolatedLiquidationFacet is ReentrancyGuardModifiers {
         }
 
         _debitPrincipal(params.loanPoolId, liquidatorKey, repaidAssetsOut);
+        _debitPrincipalIgnoringEncumbrance(params.collateralPoolId, borrowerKey, seizedAssets);
         _creditPrincipal(params.collateralPoolId, liquidatorKey, seizedAssets);
         LibModuleEncumbrance.unencumber(borrowerKey, params.collateralPoolId, _ds.marketModuleId[marketId], seizedAssets);
 
@@ -179,6 +182,9 @@ contract ILMIsolatedLiquidationFacet is ReentrancyGuardModifiers {
         if (assets == 0) {
             return;
         }
+        LibFeeIndex.settle(poolId, positionKey);
+        LibActiveCreditIndex.settle(poolId, positionKey);
+
         LibAppStorage.AppStorage storage app = LibAppStorage.s();
         app.pools[poolId].userPrincipal[positionKey] += assets;
         app.pools[poolId].totalDeposits += assets;
@@ -188,12 +194,31 @@ contract ILMIsolatedLiquidationFacet is ReentrancyGuardModifiers {
         if (assets == 0) {
             return;
         }
+        LibFeeIndex.settle(poolId, positionKey);
+        LibActiveCreditIndex.settle(poolId, positionKey);
+
         LibAppStorage.AppStorage storage app = LibAppStorage.s();
         uint256 available = LibSolvencyChecks.calculateAvailablePrincipal(app.pools[poolId], positionKey, poolId);
         if (assets > available) {
             revert InsufficientUnencumberedPrincipal(assets, available);
         }
         app.pools[poolId].userPrincipal[positionKey] -= assets;
+        app.pools[poolId].totalDeposits -= assets;
+    }
+
+    function _debitPrincipalIgnoringEncumbrance(uint256 poolId, bytes32 positionKey, uint256 assets) internal {
+        if (assets == 0) {
+            return;
+        }
+        LibFeeIndex.settle(poolId, positionKey);
+        LibActiveCreditIndex.settle(poolId, positionKey);
+
+        LibAppStorage.AppStorage storage app = LibAppStorage.s();
+        uint256 principal = app.pools[poolId].userPrincipal[positionKey];
+        if (assets > principal) {
+            revert InsufficientPrincipal(assets, principal);
+        }
+        app.pools[poolId].userPrincipal[positionKey] = principal - assets;
         app.pools[poolId].totalDeposits -= assets;
     }
 
