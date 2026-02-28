@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 
 import {CommunityAuctionFacet} from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../../src/views/CommunityAuctionViewFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
@@ -169,7 +170,7 @@ contract CommunityAuctionGasTest is Test {
     }
 }
 
-contract CommunityAuctionGasHarness is CommunityAuctionFacet {
+contract CommunityAuctionGasHarness is CommunityAuctionFacet, CommunityAuctionViewFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

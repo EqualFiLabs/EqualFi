@@ -9,6 +9,7 @@ import {
     AmmAuction_StableModeDisabled,
     AmmAuction_ZeroOutput
 } from "../../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../../src/views/AmmAuctionViewFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
@@ -1058,7 +1059,7 @@ contract AmmAuctionFacetPropertyTest is Test {
     }
 }
 
-contract AmmAuctionHarness is AmmAuctionFacet {
+contract AmmAuctionHarness is AmmAuctionFacet, AmmAuctionViewFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

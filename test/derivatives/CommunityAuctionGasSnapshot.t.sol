@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {CommunityAuctionFacet} from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../../src/views/CommunityAuctionViewFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
@@ -87,7 +88,7 @@ contract CommunityAuctionGasSnapshot is Test {
     }
 }
 
-contract CommunityAuctionGasHarness is CommunityAuctionFacet {
+contract CommunityAuctionGasHarness is CommunityAuctionFacet, CommunityAuctionViewFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

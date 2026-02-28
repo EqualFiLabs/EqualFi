@@ -13,11 +13,13 @@ import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {OptionToken} from "../../src/derivatives/OptionToken.sol";
 import {FuturesToken} from "../../src/derivatives/FuturesToken.sol";
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../../src/views/AmmAuctionViewFacet.sol";
 import {MamCurveCreationFacet} from "../../src/EqualX/MamCurveCreationFacet.sol";
 import {MamCurveManagementFacet} from "../../src/EqualX/MamCurveManagementFacet.sol";
 import {MamCurveExecutionFacet} from "../../src/EqualX/MamCurveExecutionFacet.sol";
 import {MamCurveFacet} from "../../src/EqualX/MamCurveFacet.sol";
 import {CommunityAuctionFacet} from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../../src/views/CommunityAuctionViewFacet.sol";
 import {OptionsFacet} from "../../src/derivatives/OptionsFacet.sol";
 import {FuturesFacet} from "../../src/derivatives/FuturesFacet.sol";
 import {DerivativeViewFacet} from "../../src/views/DerivativeViewFacet.sol";
@@ -182,10 +184,12 @@ abstract contract DerivativeDiamondTestBase is Test {
         OwnershipFacet ownershipFacet = new OwnershipFacet();
 
         AmmAuctionFacet ammFacet = new AmmAuctionFacet();
+        AmmAuctionViewFacet ammViewFacet = new AmmAuctionViewFacet();
         MamCurveCreationFacet mamCreateFacet = new MamCurveCreationFacet();
         MamCurveManagementFacet mamManageFacet = new MamCurveManagementFacet();
         MamCurveExecutionFacet mamExecFacet = new MamCurveExecutionFacet();
         CommunityAuctionFacet communityFacet = new CommunityAuctionFacet();
+        CommunityAuctionViewFacet communityViewFacet = new CommunityAuctionViewFacet();
         OptionsFacet optionsFacet = new OptionsFacet();
         FuturesFacet futuresFacet = new FuturesFacet();
         DerivativeViewFacet viewFacet = new DerivativeViewFacet();
@@ -199,17 +203,19 @@ abstract contract DerivativeDiamondTestBase is Test {
 
         diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: address(this)}));
 
-        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](10);
+        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](12);
         addCuts[0] = _cut(address(harnessFacet), _selectorsHarness());
         addCuts[1] = _cut(address(ammFacet), _selectorsAmm());
-        addCuts[2] = _cut(address(mamCreateFacet), _selectorsMamCreate());
-        addCuts[3] = _cut(address(mamManageFacet), _selectorsMamManage());
-        addCuts[4] = _cut(address(mamExecFacet), _selectorsMamExec());
-        addCuts[5] = _cut(address(communityFacet), _selectorsCommunity());
-        addCuts[6] = _cut(address(optionsFacet), _selectorsOptions());
-        addCuts[7] = _cut(address(futuresFacet), _selectorsFutures());
-        addCuts[8] = _cut(address(viewFacet), _selectorsView(viewFacet));
-        addCuts[9] = _cut(address(mamViewFacet), _selectorsMamView(mamViewFacet));
+        addCuts[2] = _cut(address(ammViewFacet), _selectorsAmmView());
+        addCuts[3] = _cut(address(mamCreateFacet), _selectorsMamCreate());
+        addCuts[4] = _cut(address(mamManageFacet), _selectorsMamManage());
+        addCuts[5] = _cut(address(mamExecFacet), _selectorsMamExec());
+        addCuts[6] = _cut(address(communityFacet), _selectorsCommunity());
+        addCuts[7] = _cut(address(communityViewFacet), _selectorsCommunityView());
+        addCuts[8] = _cut(address(optionsFacet), _selectorsOptions());
+        addCuts[9] = _cut(address(futuresFacet), _selectorsFutures());
+        addCuts[10] = _cut(address(viewFacet), _selectorsView(viewFacet));
+        addCuts[11] = _cut(address(mamViewFacet), _selectorsMamView(mamViewFacet));
         IDiamondCut(address(diamond)).diamondCut(addCuts, address(0), "");
 
         harness = IDerivativeTestHarness(address(diamond));
@@ -287,13 +293,17 @@ abstract contract DerivativeDiamondTestBase is Test {
     }
 
     function _selectorsAmm() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](6);
+        s = new bytes4[](4);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
         s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
         s[3] = AmmAuctionFacet.cancelAuction.selector;
-        s[4] = AmmAuctionFacet.getAuction.selector;
-        s[5] = AmmAuctionFacet.previewSwap.selector;
+    }
+
+    function _selectorsAmmView() internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = AmmAuctionViewFacet.getAuction.selector;
+        s[1] = AmmAuctionViewFacet.previewSwap.selector;
     }
 
     function _selectorsMamCreate() internal pure returns (bytes4[] memory s) {
@@ -321,7 +331,7 @@ abstract contract DerivativeDiamondTestBase is Test {
     }
 
     function _selectorsCommunity() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](12);
+        s = new bytes4[](7);
         s[0] = CommunityAuctionFacet.createCommunityAuction.selector;
         s[1] = CommunityAuctionFacet.joinCommunityAuction.selector;
         s[2] = CommunityAuctionFacet.leaveCommunityAuction.selector;
@@ -329,11 +339,16 @@ abstract contract DerivativeDiamondTestBase is Test {
         s[4] = CommunityAuctionFacet.swapExactIn.selector;
         s[5] = CommunityAuctionFacet.finalizeAuction.selector;
         s[6] = CommunityAuctionFacet.cancelCommunityAuction.selector;
-        s[7] = CommunityAuctionFacet.getCommunityAuction.selector;
-        s[8] = CommunityAuctionFacet.getMakerShare.selector;
-        s[9] = CommunityAuctionFacet.previewJoin.selector;
-        s[10] = CommunityAuctionFacet.previewLeave.selector;
-        s[11] = CommunityAuctionFacet.getTotalMakers.selector;
+    }
+
+    function _selectorsCommunityView() internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = CommunityAuctionViewFacet.getCommunityAuction.selector;
+        s[1] = CommunityAuctionViewFacet.getMakerShare.selector;
+        s[2] = CommunityAuctionViewFacet.previewJoin.selector;
+        s[3] = CommunityAuctionViewFacet.previewLeave.selector;
+        s[4] = CommunityAuctionViewFacet.getTotalMakers.selector;
+        s[5] = CommunityAuctionViewFacet.previewCommunitySwap.selector;
     }
 
     function _selectorsMamView(MamCurveViewFacet viewFacet) internal pure returns (bytes4[] memory s) {
@@ -440,8 +455,8 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         assertTrue(amountOutB > 0, "amm swap out B");
         assertFalse(finalizedB, "amm not finalized");
 
-        DerivativeTypes.AmmAuction memory auction = amm.getAuction(auctionId);
-        (uint256 makerFeeA, uint256 makerFeeB) = amm.getAuctionFees(auctionId);
+        DerivativeTypes.AmmAuction memory auction = AmmAuctionViewFacet(address(diamond)).getAuction(auctionId);
+        (uint256 makerFeeA, uint256 makerFeeB) = derivativeView.getAuctionFees(auctionId);
         assertTrue(makerFeeA + makerFeeB > 0, "maker fees accrued");
 
         uint256 principalA = harness.getPrincipal(1, key);
@@ -571,7 +586,8 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         (,, uint256 feesA, uint256 feesB) = community.leaveCommunityAuction(auctionId, joinerTokenId);
         assertTrue(feesA > 0 || feesB > 0, "fees accrued for leaver");
 
-        DerivativeTypes.CommunityAuction memory auction = community.getCommunityAuction(auctionId);
+        DerivativeTypes.CommunityAuction memory auction =
+            CommunityAuctionViewFacet(address(diamond)).getCommunityAuction(auctionId);
         assertTrue(auction.active, "auction stays active");
         assertFalse(auction.finalized, "auction not finalized");
         assertEq(auction.makerCount, 2, "maker count after leave");
@@ -612,11 +628,12 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         vm.prank(maker);
         community.leaveCommunityAuction(auctionId, makerTokenId);
 
-        DerivativeTypes.CommunityAuction memory auction = community.getCommunityAuction(auctionId);
+        DerivativeTypes.CommunityAuction memory auction =
+            CommunityAuctionViewFacet(address(diamond)).getCommunityAuction(auctionId);
         assertTrue(auction.active, "auction still active");
         assertFalse(auction.finalized, "auction not finalized");
         assertEq(auction.makerCount, 1, "single maker remains");
-        (uint256 joinerShare,,) = community.getMakerShare(auctionId, joinerKey);
+        (uint256 joinerShare,,) = CommunityAuctionViewFacet(address(diamond)).getMakerShare(auctionId, joinerKey);
         assertTrue(joinerShare > 0, "joiner retains share");
     }
 
@@ -648,13 +665,13 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         tokenA.approve(address(diamond), swapAmount * 20);
 
         uint256 pendingBefore;
-        (, pendingBefore,) = community.getMakerShare(auctionId, makerKey);
+        (, pendingBefore,) = CommunityAuctionViewFacet(address(diamond)).getMakerShare(auctionId, makerKey);
         for (uint256 i = 0; i < 20; i++) {
             vm.prank(swapper);
             community.swapExactIn(auctionId, address(tokenA), swapAmount, swapAmount, 0, swapper);
         }
         uint256 pendingAfter;
-        (, pendingAfter,) = community.getMakerShare(auctionId, makerKey);
+        (, pendingAfter,) = CommunityAuctionViewFacet(address(diamond)).getMakerShare(auctionId, makerKey);
         assertTrue(pendingAfter > pendingBefore, "fees increase after swaps");
     }
 

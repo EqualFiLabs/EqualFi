@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../../src/views/AmmAuctionViewFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {EqualIndexBaseV3} from "../../src/equalindex/EqualIndexBaseV3.sol";
 import {IndexToken} from "../../src/equalindex/IndexToken.sol";
@@ -17,6 +18,7 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
     IAdminGovernance internal admin;
     IPoolMap internal poolMap;
     AmmAuctionFacet internal amm;
+    AmmAuctionViewFacet internal ammView;
 
     MockERC20 internal tokenA;
     MockERC20 internal tokenB;
@@ -47,6 +49,7 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
         admin = IAdminGovernance(address(diamond));
         poolMap = IPoolMap(address(diamond));
         amm = AmmAuctionFacet(address(diamond));
+        ammView = AmmAuctionViewFacet(address(diamond));
 
         finalizePositionNFT();
 
@@ -63,7 +66,7 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
         uint256 auctionId = _createAmmAuction();
 
         (uint256 navInB, uint256 requiredA, uint256 requiredB) = _navInTokenB();
-        (uint256 previewOut,) = amm.previewSwap(auctionId, address(tokenB), AMM_AMOUNT_IN);
+        (uint256 previewOut,) = ammView.previewSwap(auctionId, address(tokenB), AMM_AMOUNT_IN);
         assertGe(previewOut, requiredA, "amm discount on tokenA");
 
         uint256 totalCostInB = AMM_AMOUNT_IN + requiredB;
@@ -167,6 +170,7 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
 
     function _addAmmFacet() internal {
         _diamondCutSingle(address(new AmmAuctionFacet()), _selectorsAmm());
+        _diamondCutSingle(address(new AmmAuctionViewFacet()), _selectorsAmmView());
     }
 
     function _addIndexViewFacet() internal {
@@ -174,14 +178,18 @@ contract EqualIndexAmmArbitrageIntegrationTest is EqualIndexDiamondBase {
     }
 
     function _selectorsAmm() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](7);
+        s = new bytes4[](5);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
         s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
         s[3] = AmmAuctionFacet.finalizeAuction.selector;
         s[4] = AmmAuctionFacet.cancelAuction.selector;
-        s[5] = AmmAuctionFacet.getAuction.selector;
-        s[6] = AmmAuctionFacet.previewSwap.selector;
+    }
+
+    function _selectorsAmmView() internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = AmmAuctionViewFacet.getAuction.selector;
+        s[1] = AmmAuctionViewFacet.previewSwap.selector;
     }
 
     function _selectorsIndexView() internal pure returns (bytes4[] memory s) {

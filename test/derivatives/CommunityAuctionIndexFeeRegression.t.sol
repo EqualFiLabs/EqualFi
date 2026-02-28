@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {CommunityAuctionFacet} from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../../src/views/CommunityAuctionViewFacet.sol";
 import {PositionManagementFacet} from "../../src/equallend/PositionManagementFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
@@ -256,7 +257,7 @@ contract CommunityAuctionIndexFeeRegressionTest is Test {
 }
 
 /// @notice Harness combining CommunityAuctionFacet with PositionManagementFacet for testing.
-contract CommunityAuctionIndexFeeHarness is CommunityAuctionFacet, PositionManagementFacet {
+contract CommunityAuctionIndexFeeHarness is CommunityAuctionFacet, CommunityAuctionViewFacet, PositionManagementFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

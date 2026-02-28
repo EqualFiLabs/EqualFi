@@ -29,10 +29,12 @@ import {ActiveCreditViewFacet} from "../src/views/ActiveCreditViewFacet.sol";
 import {LendingFacet} from "../src/equallend/LendingFacet.sol";
 import {PenaltyFacet} from "../src/equallend/PenaltyFacet.sol";
 import {AmmAuctionFacet} from "../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../src/views/AmmAuctionViewFacet.sol";
 import {MamCurveCreationFacet} from "../src/EqualX/MamCurveCreationFacet.sol";
 import {MamCurveManagementFacet} from "../src/EqualX/MamCurveManagementFacet.sol";
 import {MamCurveExecutionFacet} from "../src/EqualX/MamCurveExecutionFacet.sol";
 import {CommunityAuctionFacet} from "../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../src/views/CommunityAuctionViewFacet.sol";
 import {MamCurveViewFacet} from "../src/views/MamCurveViewFacet.sol";
 import {AuctionManagementViewFacet} from "../src/views/AuctionManagementViewFacet.sol";
 import {PositionNFT} from "../src/nft/PositionNFT.sol";
@@ -233,10 +235,12 @@ contract LeanDeployScript is Script {
         LendingFacet lending = new LendingFacet();
         PenaltyFacet penalty = new PenaltyFacet();
         AmmAuctionFacet ammAuction = new AmmAuctionFacet();
+        AmmAuctionViewFacet ammAuctionView = new AmmAuctionViewFacet();
         MamCurveCreationFacet mamCurveCreate = new MamCurveCreationFacet();
         MamCurveManagementFacet mamCurveManage = new MamCurveManagementFacet();
         MamCurveExecutionFacet mamCurveExec = new MamCurveExecutionFacet();
         CommunityAuctionFacet communityAuction = new CommunityAuctionFacet();
+        CommunityAuctionViewFacet communityAuctionView = new CommunityAuctionViewFacet();
         MamCurveViewFacet mamCurveView = new MamCurveViewFacet();
         ActiveCreditViewFacet activeCreditView = new ActiveCreditViewFacet();
         EqualLendDirectOfferFacet directOffers = new EqualLendDirectOfferFacet();
@@ -246,7 +250,7 @@ contract LeanDeployScript is Script {
         PositionAgentConfigFacet positionAgentConfig = new PositionAgentConfigFacet();
         PointsRedemptionFacet pointsRedemption = new PointsRedemptionFacet();
 
-        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](33);
+        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](35);
         cuts[0] = _cut(address(cut), _selectors(cut));
         cuts[1] = _cut(address(loupe), _selectors(loupe));
         cuts[2] = _cut(address(own), _selectors(own));
@@ -280,6 +284,8 @@ contract LeanDeployScript is Script {
         cuts[30] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
         cuts[31] = _cut(address(pointsView), _selectors(pointsView));
         cuts[32] = _cut(address(pointsRedemption), _selectors(pointsRedemption));
+        cuts[33] = _cut(address(ammAuctionView), _selectors(ammAuctionView));
+        cuts[34] = _cut(address(communityAuctionView), _selectors(communityAuctionView));
 
         Diamond diamond = new Diamond(cuts, Diamond.DiamondArgs({owner: owner}));
         diamondAddress = address(diamond);
@@ -601,18 +607,21 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(AmmAuctionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](7);
+        s = new bytes4[](4);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
         s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
         s[3] = AmmAuctionFacet.cancelAuction.selector;
-        s[4] = AmmAuctionFacet.getAuction.selector;
-        s[5] = AmmAuctionFacet.previewSwap.selector;
-        s[6] = AmmAuctionFacet.getAuctionFees.selector;
+    }
+
+    function _selectors(AmmAuctionViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = AmmAuctionViewFacet.getAuction.selector;
+        s[1] = AmmAuctionViewFacet.previewSwap.selector;
     }
 
     function _selectors(CommunityAuctionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](12);
+        s = new bytes4[](7);
         s[0] = CommunityAuctionFacet.createCommunityAuction.selector;
         s[1] = CommunityAuctionFacet.joinCommunityAuction.selector;
         s[2] = CommunityAuctionFacet.leaveCommunityAuction.selector;
@@ -620,11 +629,16 @@ contract LeanDeployScript is Script {
         s[4] = CommunityAuctionFacet.swapExactIn.selector;
         s[5] = CommunityAuctionFacet.finalizeAuction.selector;
         s[6] = CommunityAuctionFacet.cancelCommunityAuction.selector;
-        s[7] = CommunityAuctionFacet.getCommunityAuction.selector;
-        s[8] = CommunityAuctionFacet.getMakerShare.selector;
-        s[9] = CommunityAuctionFacet.previewJoin.selector;
-        s[10] = CommunityAuctionFacet.previewLeave.selector;
-        s[11] = CommunityAuctionFacet.getTotalMakers.selector;
+    }
+
+    function _selectors(CommunityAuctionViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = CommunityAuctionViewFacet.getCommunityAuction.selector;
+        s[1] = CommunityAuctionViewFacet.getMakerShare.selector;
+        s[2] = CommunityAuctionViewFacet.previewJoin.selector;
+        s[3] = CommunityAuctionViewFacet.previewLeave.selector;
+        s[4] = CommunityAuctionViewFacet.getTotalMakers.selector;
+        s[5] = CommunityAuctionViewFacet.previewCommunitySwap.selector;
     }
 
     function _selectors(MamCurveCreationFacet) internal pure returns (bytes4[] memory s) {

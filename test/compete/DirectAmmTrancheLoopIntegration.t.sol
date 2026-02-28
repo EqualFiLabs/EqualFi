@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../../src/views/AmmAuctionViewFacet.sol";
 import {PositionManagementFacet} from "../../src/equallend/PositionManagementFacet.sol";
 import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
@@ -169,8 +170,10 @@ contract DirectAmmTrancheLoopIntegrationTest is DirectDiamondTestBase {
 
     function _addAmmFacet() internal {
         AmmAuctionFacet ammFacet = new AmmAuctionFacet();
-        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](1);
+        AmmAuctionViewFacet ammViewFacet = new AmmAuctionViewFacet();
+        IDiamondCut.FacetCut[] memory addCuts = new IDiamondCut.FacetCut[](2);
         addCuts[0] = _cut(address(ammFacet), _selectorsAmm());
+        addCuts[1] = _cut(address(ammViewFacet), _selectorsAmmView());
         IDiamondCut(address(diamond)).diamondCut(addCuts, address(0), "");
     }
 
@@ -181,13 +184,17 @@ contract DirectAmmTrancheLoopIntegrationTest is DirectDiamondTestBase {
     }
 
     function _selectorsAmm() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](7);
+        s = new bytes4[](5);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
         s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
         s[3] = AmmAuctionFacet.finalizeAuction.selector;
         s[4] = AmmAuctionFacet.cancelAuction.selector;
-        s[5] = AmmAuctionFacet.getAuction.selector;
-        s[6] = AmmAuctionFacet.previewSwap.selector;
+    }
+
+    function _selectorsAmmView() internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = AmmAuctionViewFacet.getAuction.selector;
+        s[1] = AmmAuctionViewFacet.previewSwap.selector;
     }
 }

@@ -261,9 +261,6 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             revert AmmAuction_InvalidToken(tokenIn);
         }
 
-        Types.PoolData storage poolA = LibAppStorage.s().pools[poolIdA];
-        Types.PoolData storage poolB = LibAppStorage.s().pools[poolIdB];
-
         LibCurrency.assertMsgValue(tokenIn, amountIn);
         address tokenOut = inIsA ? tokenB : tokenA;
         uint256 actualIn = LibCurrency.pullAtLeast(tokenIn, msg.sender, amountIn, maxIn);
@@ -448,48 +445,6 @@ contract AmmAuctionFacet is ReentrancyGuardModifiers {
             auction.reserveA,
             auction.reserveB
         );
-    }
-
-    function getAuction(uint256 auctionId) external view returns (DerivativeTypes.AmmAuction memory) {
-        return LibDerivativeStorage.derivativeStorage().auctions[auctionId];
-    }
-
-    function previewSwap(uint256 auctionId, address tokenIn, uint256 amountIn)
-        external
-        view
-        returns (uint256 amountOut, uint256 feeAmount)
-    {
-        if (amountIn == 0) return (0, 0);
-        LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
-        DerivativeTypes.AmmAuction storage auction = ds.auctions[auctionId];
-        if (!auction.active || auction.finalized) {
-            return (0, 0);
-        }
-        bool inIsA;
-        if (tokenIn == auction.tokenA) {
-            inIsA = true;
-        } else if (tokenIn == auction.tokenB) {
-            inIsA = false;
-        } else {
-            return (0, 0);
-        }
-        uint256 reserveIn = inIsA ? auction.reserveA : auction.reserveB;
-        uint256 reserveOut = inIsA ? auction.reserveB : auction.reserveA;
-        uint8 decimalsIn = inIsA ? auction.tokenADecimals : auction.tokenBDecimals;
-        uint8 decimalsOut = inIsA ? auction.tokenBDecimals : auction.tokenADecimals;
-        (uint256 rawOut, uint256 fee, uint256 outToRecipient) = LibAuctionSwap.computeSwapByInvariant(
-            auction.invariantMode,
-            auction.feeAsset,
-            reserveIn,
-            reserveOut,
-            amountIn,
-            auction.feeBps,
-            decimalsIn,
-            decimalsOut
-        );
-        rawOut;
-        feeAmount = fee;
-        amountOut = outToRecipient;
     }
 
     function getAuctionFees(uint256 auctionId) external view returns (uint256 makerFeeA, uint256 makerFeeB) {
