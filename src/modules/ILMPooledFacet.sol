@@ -6,23 +6,31 @@ import {PositionNFT} from "../nft/PositionNFT.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibActiveCreditIndex} from "../libraries/LibActiveCreditIndex.sol";
+import {LibFeeIndex} from "../libraries/LibFeeIndex.sol";
+import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
+import {LibActionFees} from "../libraries/LibActionFees.sol";
 import {LibModuleEncumbrance} from "../libraries/LibModuleEncumbrance.sol";
 import {LibModuleRegistry} from "../libraries/LibModuleRegistry.sol";
 import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
-import {IlmTypes, IlmMarketNotFound, IlmReserveInactive, IlmReservePaused, IlmReserveFrozen, IlmSupplyCapExceeded, IlmInsufficientLiquidity, IlmUnsafePosition, IlmInvalidRiskParams, IlmUnauthorized} from "../libraries/IlmTypes.sol";
+import {IlmTypes, IlmMarketNotFound, IlmReserveInactive, IlmReservePaused, IlmReserveFrozen, IlmSupplyCapExceeded, IlmBorrowCapExceeded, IlmInsufficientLiquidity, IlmUnsafePosition, IlmInvalidRiskParams, IlmUnauthorized, IlmSentinelBlocked} from "../libraries/IlmTypes.sol";
 import {LibIlmStorage} from "../libraries/LibIlmStorage.sol";
 import {LibIlmIndexing} from "../libraries/LibIlmIndexing.sol";
 import {IILMPooledFacet} from "../interfaces/IILMPooledFacet.sol";
 import {IIlmOracleAdapter} from "../interfaces/IIlmOracleAdapter.sol";
+import {IIlmSentinelAdapter} from "../interfaces/IIlmSentinelAdapter.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {InsufficientUnencumberedPrincipal, ModuleNotFound, ModulePausedError} from "../libraries/Errors.sol";
 
 /// @notice Core ILM pooled operations (supply/withdraw/collateral; borrow/repay in later task).
 contract ILMPooledFacet is IILMPooledFacet, ReentrancyGuardModifiers {
+    bytes32 internal constant ILM_INTEREST_FEE_SOURCE = keccak256("ILM_INTEREST_FEE");
+
     event IlmSupply(uint256 indexed marketId, bytes32 indexed positionKey, uint256 amount, uint256 scaledMinted);
     event IlmWithdraw(uint256 indexed marketId, bytes32 indexed positionKey, uint256 amount, uint256 scaledBurned);
     event IlmAddCollateral(uint256 indexed marketId, bytes32 indexed positionKey, uint256 amount);
     event IlmRemoveCollateral(uint256 indexed marketId, bytes32 indexed positionKey, uint256 amount);
+    event IlmBorrow(uint256 indexed marketId, bytes32 indexed positionKey, uint256 amount, uint256 scaledDebtMinted);
+    event IlmRepay(uint256 indexed marketId, bytes32 indexed positionKey, uint256 amount, uint256 scaledDebtBurned);
 
     function pooledSupply(uint256 positionId, uint256 marketId, uint256 amount) external nonReentrant {
         if (amount == 0) {
@@ -154,12 +162,114 @@ contract ILMPooledFacet is IILMPooledFacet, ReentrancyGuardModifiers {
         emit IlmRemoveCollateral(marketId, positionKey, amount);
     }
 
-    function pooledBorrow(uint256, uint256, uint256) external pure {
-        revert IlmInvalidRiskParams();
+    function pooledBorrow(uint256 positionId, uint256 marketId, uint256 amount) external nonReentrant {
+        if (amount == 0) {
+            revert IlmInvalidRiskParams();
+        }
+
+        LibIlmStorage.IlmStorage storage ds = LibIlmStorage.s();
+        IlmTypes.IlmMarket storage market = _requireMarket(marketId, ds);
+        _requireSupplyAllowed(marketId, market);
+        _requireBorrowSentinel(ds);
+        uint256 moduleId = _requireModuleNotPaused(ds.marketModuleId[marketId]);
+        bytes32 positionKey = _checkAuthorized(positionId, ds);
+
+        LibIlmIndexing.accrueMarketState(ds, marketId);
+
+        if (amount > market.availableLiquidity) {
+            revert IlmInsufficientLiquidity(amount, market.availableLiquidity);
+        }
+
+        IlmTypes.IlmPosition storage position = ds.positions[marketId][positionKey];
+        uint256 scaledDebtMinted = LibIlmIndexing.toScaledDebt(amount, market.variableBorrowIndexRay);
+        uint256 newPositionScaledDebt = position.scaledDebt + scaledDebtMinted;
+        uint256 newScaledVariableDebtTotal = market.scaledVariableDebtTotal + scaledDebtMinted;
+
+        uint256 postBorrowAssets = LibIlmIndexing.fromScaledDebt(newScaledVariableDebtTotal, market.variableBorrowIndexRay);
+        if (market.borrowCap != 0 && postBorrowAssets > market.borrowCap) {
+            revert IlmBorrowCapExceeded(market.borrowCap, postBorrowAssets);
+        }
+
+        _requireHealthyPostOperation(
+            market, positionKey, moduleId, position.scaledSupply, newPositionScaledDebt, position.useAsCollateral
+        );
+
+        position.scaledDebt = newPositionScaledDebt;
+        market.scaledVariableDebtTotal = newScaledVariableDebtTotal;
+        market.availableLiquidity -= amount;
+
+        _creditPrincipal(market.loanPoolId, positionKey, amount);
+        if (amount > 0) {
+            LibActionFees.chargeFromUser(
+                LibAppStorage.s().pools[market.loanPoolId], market.loanPoolId, LibActionFees.ACTION_BORROW, positionKey
+            );
+        }
+
+        emit IlmBorrow(marketId, positionKey, amount, scaledDebtMinted);
     }
 
-    function pooledRepay(uint256, uint256, uint256) external pure returns (uint256) {
-        revert IlmInvalidRiskParams();
+    function pooledRepay(uint256 positionId, uint256 marketId, uint256 amount)
+        external
+        nonReentrant
+        returns (uint256 repaid)
+    {
+        if (amount == 0) {
+            revert IlmInvalidRiskParams();
+        }
+
+        LibIlmStorage.IlmStorage storage ds = LibIlmStorage.s();
+        IlmTypes.IlmMarket storage market = _requireMarket(marketId, ds);
+        _requireWithdrawAllowed(marketId, market);
+        _requireModuleNotPaused(ds.marketModuleId[marketId]);
+        bytes32 positionKey = _checkAuthorized(positionId, ds);
+
+        LibIlmIndexing.accrueMarketState(ds, marketId);
+
+        IlmTypes.IlmPosition storage position = ds.positions[marketId][positionKey];
+        uint256 currentDebt = LibIlmIndexing.fromScaledDebt(position.scaledDebt, market.variableBorrowIndexRay);
+        uint256 requestedRepay = amount < currentDebt ? amount : currentDebt;
+        if (requestedRepay == 0) {
+            emit IlmRepay(marketId, positionKey, 0, 0);
+            return 0;
+        }
+
+        uint256 scaledDebtBurned = LibIlmIndexing.toScaledRepay(requestedRepay, market.variableBorrowIndexRay);
+        if (scaledDebtBurned > position.scaledDebt) {
+            scaledDebtBurned = position.scaledDebt;
+        }
+        if (scaledDebtBurned > market.scaledVariableDebtTotal) {
+            scaledDebtBurned = market.scaledVariableDebtTotal;
+        }
+        if (scaledDebtBurned == 0) {
+            emit IlmRepay(marketId, positionKey, 0, 0);
+            return 0;
+        }
+
+        repaid = LibIlmIndexing.fromScaledDebt(scaledDebtBurned, market.variableBorrowIndexRay);
+        if (repaid > currentDebt) {
+            repaid = currentDebt;
+        }
+
+        uint256 borrowAssetsBefore = LibIlmIndexing.fromScaledDebt(market.scaledVariableDebtTotal, market.variableBorrowIndexRay);
+
+        _debitPrincipal(market.loanPoolId, positionKey, repaid);
+        position.scaledDebt -= scaledDebtBurned;
+        if (position.scaledDebt == 0 && position.scaledSupply == 0) {
+            position.useAsCollateral = false;
+        }
+        market.scaledVariableDebtTotal -= scaledDebtBurned;
+        market.availableLiquidity += repaid;
+
+        _realizeProtocolInterestFee(marketId, market.loanPoolId, repaid, borrowAssetsBefore, ds);
+
+        if (repaid > 0) {
+            LibActionFees.chargeFromUser(
+                LibAppStorage.s().pools[market.loanPoolId], market.loanPoolId, LibActionFees.ACTION_REPAY, positionKey
+            );
+        }
+
+        emit IlmRepay(marketId, positionKey, repaid, scaledDebtBurned);
+        return repaid;
     }
 
     function _requireHealthyPostOperation(
@@ -216,6 +326,98 @@ contract ILMPooledFacet is IILMPooledFacet, ReentrancyGuardModifiers {
         if (priceRay == 0) {
             revert IlmInvalidRiskParams();
         }
+    }
+
+    function _requireBorrowSentinel(LibIlmStorage.IlmStorage storage ds) internal view {
+        address sentinel = ds.sentinelAdapter;
+        if (sentinel == address(0)) {
+            return;
+        }
+        if (!IIlmSentinelAdapter(sentinel).isBorrowAllowed()) {
+            revert IlmSentinelBlocked();
+        }
+    }
+
+    function _creditPrincipal(uint256 poolId, bytes32 positionKey, uint256 assets) internal {
+        if (assets == 0) {
+            return;
+        }
+        LibFeeIndex.settle(poolId, positionKey);
+        LibActiveCreditIndex.settle(poolId, positionKey);
+
+        LibAppStorage.AppStorage storage app = LibAppStorage.s();
+        app.pools[poolId].userPrincipal[positionKey] += assets;
+        app.pools[poolId].totalDeposits += assets;
+    }
+
+    function _debitPrincipal(uint256 poolId, bytes32 positionKey, uint256 assets) internal {
+        if (assets == 0) {
+            return;
+        }
+        LibFeeIndex.settle(poolId, positionKey);
+        LibActiveCreditIndex.settle(poolId, positionKey);
+
+        LibAppStorage.AppStorage storage app = LibAppStorage.s();
+        uint256 available = LibSolvencyChecks.calculateAvailablePrincipal(app.pools[poolId], positionKey, poolId);
+        if (assets > available) {
+            revert InsufficientUnencumberedPrincipal(assets, available);
+        }
+        app.pools[poolId].userPrincipal[positionKey] -= assets;
+        app.pools[poolId].totalDeposits -= assets;
+    }
+
+    function _realizeProtocolInterestFee(
+        uint256 marketId,
+        uint256 loanPoolId,
+        uint256 debtReductionAssets,
+        uint256 borrowAssetsBefore,
+        LibIlmStorage.IlmStorage storage ds
+    ) internal {
+        if (debtReductionAssets == 0 || borrowAssetsBefore == 0) {
+            if (LibIlmIndexing.fromScaledDebt(ds.markets[marketId].scaledVariableDebtTotal, ds.markets[marketId].variableBorrowIndexRay) == 0) {
+                ds.marketProtocolFeeAssets[marketId] = 0;
+            }
+            return;
+        }
+
+        uint256 claim = ds.marketProtocolFeeAssets[marketId];
+        if (claim == 0) {
+            return;
+        }
+
+        uint256 realized = claim * debtReductionAssets / borrowAssetsBefore;
+        if (realized > claim) {
+            realized = claim;
+        }
+        if (realized > 0) {
+            ds.marketProtocolFeeAssets[marketId] = claim - realized;
+            LibFeeRouter.routeManagedShare(loanPoolId, realized, ILM_INTEREST_FEE_SOURCE, false, 0);
+        }
+
+        if (LibIlmIndexing.fromScaledDebt(ds.markets[marketId].scaledVariableDebtTotal, ds.markets[marketId].variableBorrowIndexRay) == 0) {
+            ds.marketProtocolFeeAssets[marketId] = 0;
+        }
+    }
+
+    function _writeDownProtocolFeeClaim(
+        uint256 marketId,
+        uint256 debtWriteDownAssets,
+        uint256 borrowAssetsBefore,
+        LibIlmStorage.IlmStorage storage ds
+    ) internal {
+        if (debtWriteDownAssets == 0 || borrowAssetsBefore == 0) {
+            return;
+        }
+        uint256 claim = ds.marketProtocolFeeAssets[marketId];
+        if (claim == 0) {
+            return;
+        }
+
+        uint256 writeDown = claim * debtWriteDownAssets / borrowAssetsBefore;
+        if (writeDown > claim) {
+            writeDown = claim;
+        }
+        ds.marketProtocolFeeAssets[marketId] = claim - writeDown;
     }
 
     function _enforceAvailablePrincipal(bytes32 positionKey, uint256 poolId, uint256 amount) internal view {
