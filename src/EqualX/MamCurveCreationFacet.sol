@@ -38,11 +38,29 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
 
     event CurvesBatchCreated(bytes32 indexed makerPositionKey, uint256 indexed firstCurveId, uint256 count);
     event MamPausedUpdated(bool paused);
+    event CurveProfileApproved(address indexed profile);
+    event CurveProfileRevoked(address indexed profile);
 
     function setMamPaused(bool paused) external {
         LibAccess.enforceOwnerOrTimelock();
         LibDerivativeStorage.derivativeStorage().mamPaused = paused;
         emit MamPausedUpdated(paused);
+    }
+
+    function approveCurveProfile(address profile) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibDerivativeStorage.derivativeStorage().approvedProfiles[profile] = true;
+        emit CurveProfileApproved(profile);
+    }
+
+    function revokeCurveProfile(address profile) external {
+        LibAccess.enforceOwnerOrTimelock();
+        LibDerivativeStorage.derivativeStorage().approvedProfiles[profile] = false;
+        emit CurveProfileRevoked(profile);
+    }
+
+    function isCurveProfileApproved(address profile) external view returns (bool) {
+        return LibDerivativeStorage.derivativeStorage().approvedProfiles[profile];
     }
 
     function createCurve(MamTypes.CurveDescriptor calldata desc)
