@@ -515,7 +515,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
 
         vm.prank(maker);
         uint256 curveId = mam.createCurve(desc);
-        (MamTypes.StoredCurve memory stored,,,,) = mamView.getCurve(curveId);
+        (MamTypes.StoredCurve memory stored,,,,,) = mamView.getCurve(curveId);
         assertTrue(stored.active, "curve active");
         assertEq(harness.getDirectLocked(key, 1), 1e18, "base locked");
 

@@ -16,6 +16,7 @@ contract MamCurveViewFacet {
             MamTypes.StoredCurve memory curve,
             LibDerivativeStorage.CurveData memory data,
             LibDerivativeStorage.CurvePricing memory pricing,
+            LibDerivativeStorage.CurveProfileData memory profileData,
             LibDerivativeStorage.CurveImmutables memory immutables,
             bool baseIsA
         )
@@ -24,6 +25,7 @@ contract MamCurveViewFacet {
         curve = ds.curves[curveId];
         data = ds.curveData[curveId];
         pricing = ds.curvePricing[curveId];
+        profileData = ds.curveProfileData[curveId];
         immutables = ds.curveImmutables[curveId];
         baseIsA = ds.curveBaseIsA[curveId];
     }

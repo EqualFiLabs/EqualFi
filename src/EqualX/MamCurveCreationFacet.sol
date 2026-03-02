@@ -33,7 +33,9 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
         uint128 endPrice,
         uint64 startTime,
         uint64 duration,
-        uint16 feeRateBps
+        uint16 feeRateBps,
+        address profile,
+        bytes32 profileParams
     );
 
     event CurvesBatchCreated(bytes32 indexed makerPositionKey, uint256 indexed firstCurveId, uint256 count);
@@ -108,6 +110,10 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             startTime: desc.startTime,
             duration: desc.duration
         });
+        ds.curveProfileData[curveId] = LibDerivativeStorage.CurveProfileData({
+            profile: desc.profile,
+            profileParams: desc.profileParams
+        });
         ds.curveImmutableHash[curveId] = _immutableHash(desc);
         ds.curveBaseIsA[curveId] = baseIsA;
 
@@ -129,7 +135,9 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             desc.endPrice,
             desc.startTime,
             desc.duration,
-            desc.feeRateBps
+            desc.feeRateBps,
+            desc.profile,
+            desc.profileParams
         );
     }
 
@@ -201,6 +209,10 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             startTime: desc.startTime,
             duration: desc.duration
         });
+        ds.curveProfileData[curveId] = LibDerivativeStorage.CurveProfileData({
+            profile: desc.profile,
+            profileParams: desc.profileParams
+        });
         ds.curveImmutableHash[curveId] = _immutableHash(desc);
         ds.curveBaseIsA[curveId] = baseIsA;
 
@@ -222,7 +234,9 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             desc.endPrice,
             desc.startTime,
             desc.duration,
-            desc.feeRateBps
+            desc.feeRateBps,
+            desc.profile,
+            desc.profileParams
         );
     }
 
@@ -230,6 +244,9 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
         internal
         returns (bool baseIsA, uint256 endTime)
     {
+        if (desc.profile != address(0) && !LibDerivativeStorage.derivativeStorage().approvedProfiles[desc.profile]) {
+            revert MamCurve_ProfileNotApproved(desc.profile);
+        }
         if (desc.maxVolume == 0) revert MamCurve_InvalidAmount(desc.maxVolume);
         if (desc.startPrice == 0 || desc.endPrice == 0) revert MamCurve_InvalidDescriptor();
         if (desc.duration == 0) revert MamCurve_InvalidTime(desc.startTime, desc.duration);

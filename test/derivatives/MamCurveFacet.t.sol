@@ -96,6 +96,7 @@ contract MamCurveFacetTest is Test {
             MamTypes.StoredCurve memory stored,
             LibDerivativeStorage.CurveData memory data,
             LibDerivativeStorage.CurvePricing memory pricing,
+            LibDerivativeStorage.CurveProfileData memory profileData,
             LibDerivativeStorage.CurveImmutables memory immutables,
             bool baseIsA
         ) = harness.getCurve(curveId);
@@ -103,6 +104,8 @@ contract MamCurveFacetTest is Test {
         assertEq(stored.remainingVolume, 1e18);
         assertEq(data.makerPositionKey, positionKey);
         assertEq(pricing.startPrice, desc.startPrice);
+        assertEq(profileData.profile, desc.profile);
+        assertEq(profileData.profileParams, desc.profileParams);
         assertEq(immutables.maxVolume, desc.maxVolume);
         assertTrue(baseIsA);
 
