@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 
 import {MamCurveCreationFacet} from "src/EqualX/MamCurveCreationFacet.sol";
+import {MamCurveManagementFacet} from "src/EqualX/MamCurveManagementFacet.sol";
 import {MamCurveExecutionFacet} from "src/EqualX/MamCurveExecutionFacet.sol";
 import {MamCurveViewFacet} from "src/views/MamCurveViewFacet.sol";
 import {MamTypes} from "src/libraries/MamTypes.sol";
@@ -19,7 +20,12 @@ import {MockERC20} from "src/mocks/MockERC20.sol";
 import {Types} from "src/libraries/Types.sol";
 import "src/libraries/MamCurveErrors.sol";
 
-contract MamCurveProfileLifecycleHarness is MamCurveCreationFacet, MamCurveExecutionFacet, MamCurveViewFacet {
+contract MamCurveProfileLifecycleHarness is
+    MamCurveCreationFacet,
+    MamCurveManagementFacet,
+    MamCurveExecutionFacet,
+    MamCurveViewFacet
+{
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;
@@ -129,6 +135,99 @@ contract MamCurveProfileLifecyclePropertyTest is Test {
         (, , , LibDerivativeStorage.CurveProfileData memory getCurveProfileData,,) = harness.getCurve(curveId);
         assertEq(getCurveProfileData.profile, profile, "getCurve profile mismatch");
         assertEq(getCurveProfileData.profileParams, profileParams, "getCurve profileParams mismatch");
+    }
+
+    // Property 7: Unapproved profile reverts update when updateProfile=true
+    function testFuzz_unapprovedProfileRevertsUpdateWhenUpdateProfileTrue(
+        address approvedProfile,
+        address unapprovedProfile,
+        bytes32 approvedParams,
+        uint96 salt
+    ) public {
+        vm.assume(approvedProfile != address(0));
+        vm.assume(unapprovedProfile != address(0));
+        vm.assume(approvedProfile != unapprovedProfile);
+
+        harness.approveCurveProfile(approvedProfile);
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+        _seedMakerPools(positionKey);
+
+        MamTypes.CurveDescriptor memory desc =
+            _descriptor(positionKey, makerTokenId, approvedProfile, approvedParams, salt);
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        MamTypes.CurveUpdateParams memory params = MamTypes.CurveUpdateParams({
+            startPrice: 3e18,
+            endPrice: 2e18,
+            startTime: uint64(block.timestamp + 1 hours),
+            duration: 2 days,
+            updateProfile: true,
+            profile: unapprovedProfile,
+            updateProfileParams: false,
+            profileParams: bytes32(0)
+        });
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(MamCurve_ProfileNotApproved.selector, unapprovedProfile));
+        harness.updateCurve(curveId, params);
+    }
+
+    // Property 10: Update increments generation and changes commitment
+    function testFuzz_updateIncrementsGenerationAndChangesCommitment(
+        address oldProfile,
+        address nextProfile,
+        bytes32 oldProfileParams,
+        bytes32 nextProfileParams,
+        uint128 startPrice,
+        uint128 endPrice,
+        uint96 salt
+    ) public {
+        vm.assume(oldProfile != address(0));
+        vm.assume(nextProfile != address(0));
+        vm.assume(oldProfile != nextProfile);
+        vm.assume(startPrice > 0);
+        vm.assume(endPrice > 0);
+
+        harness.approveCurveProfile(oldProfile);
+        harness.approveCurveProfile(nextProfile);
+
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+        _seedMakerPools(positionKey);
+
+        MamTypes.CurveDescriptor memory desc =
+            _descriptor(positionKey, makerTokenId, oldProfile, oldProfileParams, salt);
+        vm.prank(maker);
+        uint256 curveId = harness.createCurve(desc);
+
+        (MamTypes.StoredCurve memory beforeCurve,,,,,) = harness.getCurve(curveId);
+        LibDerivativeStorage.CurveProfileData memory beforeProfile = harness.getCurveProfileData(curveId);
+
+        MamTypes.CurveUpdateParams memory params = MamTypes.CurveUpdateParams({
+            startPrice: startPrice,
+            endPrice: endPrice,
+            startTime: uint64(block.timestamp + 2 hours),
+            duration: 3 days,
+            updateProfile: true,
+            profile: nextProfile,
+            updateProfileParams: true,
+            profileParams: nextProfileParams
+        });
+
+        vm.prank(maker);
+        harness.updateCurve(curveId, params);
+
+        (MamTypes.StoredCurve memory afterCurve,,,,,) = harness.getCurve(curveId);
+        LibDerivativeStorage.CurveProfileData memory afterProfile = harness.getCurveProfileData(curveId);
+
+        assertEq(afterCurve.generation, beforeCurve.generation + 1, "generation should increment");
+        assertTrue(afterCurve.commitment != beforeCurve.commitment, "commitment should change");
+        assertEq(afterProfile.profile, nextProfile, "profile should update");
+        assertEq(afterProfile.profileParams, nextProfileParams, "profile params should update");
+        assertEq(beforeProfile.profile, oldProfile, "precondition old profile");
     }
 
     function _seedMakerPools(bytes32 positionKey) internal {

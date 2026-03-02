@@ -16,6 +16,11 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         uint32 generation,
         MamTypes.CurveUpdateParams params
     );
+    event CurveProfileTransition(
+        uint256 indexed curveId,
+        address indexed oldProfile,
+        address indexed newProfile
+    );
 
     event CurveCancelled(uint256 indexed curveId, bytes32 indexed makerPositionKey, uint256 remainingVolume);
     event CurveExpired(uint256 indexed curveId, bytes32 indexed makerPositionKey, uint256 remainingVolume);
@@ -115,8 +120,22 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         uint256 endTime = uint256(params.startTime) + uint256(params.duration);
         if (endTime > type(uint64).max) revert MamCurve_InvalidTime(params.startTime, params.duration);
 
+        LibDerivativeStorage.CurveProfileData storage profData = ds.curveProfileData[curveId];
+        address oldProfile = profData.profile;
+        address nextProfile = oldProfile;
+        bytes32 nextProfileParams = profData.profileParams;
+
+        if (params.updateProfile) {
+            if (!ds.approvedProfiles[params.profile]) revert MamCurve_ProfileNotApproved(params.profile);
+            nextProfile = params.profile;
+        }
+        if (params.updateProfileParams) {
+            nextProfileParams = params.profileParams;
+        }
+
         uint32 newGen = curve.generation + 1;
-        MamTypes.CurveDescriptor memory desc = _buildDescriptor(curveId, params, newGen);
+        MamTypes.CurveDescriptor memory desc =
+            _buildDescriptor(curveId, params, newGen, nextProfile, nextProfileParams);
         bytes32 newCommitment = LibMamCurveHasher.curveHash(desc);
 
         curve.commitment = newCommitment;
@@ -130,6 +149,16 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
             duration: params.duration
         });
 
+        if (profData.profile != nextProfile) {
+            profData.profile = nextProfile;
+        }
+        if (profData.profileParams != nextProfileParams) {
+            profData.profileParams = nextProfileParams;
+        }
+
+        if (oldProfile != nextProfile) {
+            emit CurveProfileTransition(curveId, oldProfile, nextProfile);
+        }
         emit CurveUpdated(curveId, makerPositionKey, newGen, params);
     }
 
@@ -197,12 +226,13 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
     function _buildDescriptor(
         uint256 curveId,
         MamTypes.CurveUpdateParams calldata params,
-        uint32 newGen
+        uint32 newGen,
+        address profile,
+        bytes32 profileParams
     ) internal view returns (MamTypes.CurveDescriptor memory desc) {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         LibDerivativeStorage.CurveData storage data = ds.curveData[curveId];
         LibDerivativeStorage.CurveImmutables storage imm = ds.curveImmutables[curveId];
-        LibDerivativeStorage.CurveProfileData storage prof = ds.curveProfileData[curveId];
 
         desc.makerPositionKey = data.makerPositionKey;
         desc.makerPositionId = data.makerPositionId;
@@ -221,7 +251,7 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         desc.feeRateBps = imm.feeRateBps;
         desc.feeAsset = imm.feeAsset;
         desc.salt = imm.salt;
-        desc.profile = prof.profile;
-        desc.profileParams = prof.profileParams;
+        desc.profile = profile;
+        desc.profileParams = profileParams;
     }
 }
