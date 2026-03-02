@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {IlmTypes} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmLiquidation} from "../../src/libraries/LibIlmLiquidation.sol";
+import {IlmTypes} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmLiquidation} from "../../src/ilm-pooled/libraries/LibIlmLiquidation.sol";
 
 contract LibIlmLiquidationHarness {
     function computeHealthFactor(

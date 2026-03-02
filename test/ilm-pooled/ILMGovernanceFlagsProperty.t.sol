@@ -11,11 +11,11 @@ import {
     IlmTypes,
     IlmReservePaused,
     IlmReserveFrozen
-} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {ILMPooledFacet} from "../../src/modules/ILMPooledFacet.sol";
-import {ILMPooledLiquidationFacet} from "../../src/modules/ILMPooledLiquidationFacet.sol";
-import {IIlmOracleAdapter} from "../../src/interfaces/IIlmOracleAdapter.sol";
+} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {ILMPooledFacet} from "../../src/ilm-pooled/facets/ILMPooledFacet.sol";
+import {ILMPooledLiquidationFacet} from "../../src/ilm-pooled/facets/ILMPooledLiquidationFacet.sol";
+import {IIlmOracleAdapter} from "../../src/ilm-pooled/interfaces/IIlmOracleAdapter.sol";
 
 contract MockIlmOracleAdapterGov is IIlmOracleAdapter {
     uint256 internal _priceRay = 1e27;

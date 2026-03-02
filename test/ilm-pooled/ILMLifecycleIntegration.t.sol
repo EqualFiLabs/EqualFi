@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {ILMTestBase} from "./ILMTestBase.sol";
-import {IILMEvents} from "../../src/interfaces/IILMEvents.sol";
-import {IlmTypes} from "../../src/libraries/IlmTypes.sol";
+import {IILMEvents} from "../../src/ilm-pooled/interfaces/IILMEvents.sol";
+import {IlmTypes} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 contract ILMLifecycleIntegrationTest is ILMTestBase, IILMEvents {

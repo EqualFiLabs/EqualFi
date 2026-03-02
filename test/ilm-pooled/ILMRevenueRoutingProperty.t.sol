@@ -8,11 +8,11 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
 import {Types} from "../../src/libraries/Types.sol";
-import {IlmTypes} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {ILMPooledFacet} from "../../src/modules/ILMPooledFacet.sol";
-import {IIlmSentinelAdapter} from "../../src/interfaces/IIlmSentinelAdapter.sol";
-import {LibIlmInterestRate} from "../../src/libraries/LibIlmInterestRate.sol";
+import {IlmTypes} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {ILMPooledFacet} from "../../src/ilm-pooled/facets/ILMPooledFacet.sol";
+import {IIlmSentinelAdapter} from "../../src/ilm-pooled/interfaces/IIlmSentinelAdapter.sol";
+import {LibIlmInterestRate} from "../../src/ilm-pooled/libraries/LibIlmInterestRate.sol";
 
 contract MockIlmSentinelAdapterRR is IIlmSentinelAdapter {
     bool internal _borrowAllowed = true;

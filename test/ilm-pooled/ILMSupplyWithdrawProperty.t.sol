@@ -11,10 +11,10 @@ import {
     IlmTypes,
     IlmSupplyCapExceeded,
     IlmInsufficientLiquidity
-} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {LibIlmIndexing} from "../../src/libraries/LibIlmIndexing.sol";
-import {ILMPooledFacet} from "../../src/modules/ILMPooledFacet.sol";
+} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {LibIlmIndexing} from "../../src/ilm-pooled/libraries/LibIlmIndexing.sol";
+import {ILMPooledFacet} from "../../src/ilm-pooled/facets/ILMPooledFacet.sol";
 import {ModulePausedError} from "../../src/libraries/Errors.sol";
 
 contract ILMPooledFacetHarnessSW is ILMPooledFacet {

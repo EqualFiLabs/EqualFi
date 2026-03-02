@@ -6,9 +6,9 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
-import {IlmTypes} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {ILMPooledFacet} from "../../src/modules/ILMPooledFacet.sol";
+import {IlmTypes} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {ILMPooledFacet} from "../../src/ilm-pooled/facets/ILMPooledFacet.sol";
 
 contract ILMPooledFacetHarnessAci is ILMPooledFacet {
     function setPositionNftRaw(address nft, bool enabled) external {

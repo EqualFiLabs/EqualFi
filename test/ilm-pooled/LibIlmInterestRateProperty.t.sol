@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {IlmTypes} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmInterestRate} from "../../src/libraries/LibIlmInterestRate.sol";
+import {IlmTypes} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmInterestRate} from "../../src/ilm-pooled/libraries/LibIlmInterestRate.sol";
 
 contract LibIlmInterestRateHarness {
     function computeVariableBorrowRate(

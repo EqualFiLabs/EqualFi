@@ -14,8 +14,6 @@ import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {Types} from "../../src/libraries/Types.sol";
-import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
-import {DirectTypes} from "../../src/libraries/DirectTypes.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {CannotClearMembership} from "../../src/libraries/Errors.sol";
@@ -53,9 +51,25 @@ contract PositionManagementHarnessFacet is PositionManagementFacet {
     }
 
     function setDirectLocks(bytes32 positionKey, uint256 pid, uint256 locked, uint256 escrowed) external {
-        DirectTypes.DirectStorage storage ds = LibDirectStorage.directStorage();
         LibEncumbrance.position(positionKey, pid).directLocked = locked;
         LibEncumbrance.position(positionKey, pid).directOfferEscrow = escrowed;
+    }
+
+    function configureFeeRouter(address treasury, uint16 treasuryBps, uint16 activeCreditBps) external {
+        LibAppStorage.AppStorage storage ds = LibAppStorage.s();
+        ds.treasury = treasury;
+        ds.treasuryShareBps = treasuryBps;
+        ds.treasuryShareConfigured = true;
+        ds.activeCreditShareBps = activeCreditBps;
+        ds.activeCreditShareConfigured = true;
+    }
+
+    function setBorrowActionFee(uint256 pid, uint128 amount, bool enabled) external {
+        LibAppStorage.s().pools[pid].poolConfig.borrowFee = Types.ActionFeeConfig({amount: amount, enabled: enabled});
+    }
+
+    function trackedBalanceOf(uint256 pid) external view returns (uint256) {
+        return LibAppStorage.s().pools[pid].trackedBalance;
     }
 }
 
@@ -71,6 +85,9 @@ interface IPositionManagementHarness {
     function principalOf(uint256 pid, bytes32 key) external view returns (uint256);
     function rollingOf(uint256 pid, bytes32 key) external view returns (Types.RollingCreditLoan memory);
     function setDirectLocks(bytes32 positionKey, uint256 pid, uint256 locked, uint256 escrowed) external;
+    function configureFeeRouter(address treasury, uint16 treasuryBps, uint16 activeCreditBps) external;
+    function setBorrowActionFee(uint256 pid, uint128 amount, bool enabled) external;
+    function trackedBalanceOf(uint256 pid) external view returns (uint256);
 }
 
 interface ILendingFacetHarness {
@@ -88,6 +105,7 @@ contract MultiPoolPositionIntegrationTest is Test {
     ILendingFacetHarness internal lending;
 
     address internal user = address(0xA11CE);
+    address internal userB = address(0xB0B);
     uint256 constant PID1 = 1;
     uint256 constant PID2 = 2;
 
@@ -130,8 +148,69 @@ contract MultiPoolPositionIntegrationTest is Test {
         // Fund contract and user
         token.mint(address(diamond), 1_000_000 ether);
         token.transfer(user, 500_000 ether);
+        token.transfer(userB, 500_000 ether);
         vm.prank(user);
         token.approve(address(diamond), type(uint256).max);
+        vm.prank(userB);
+        token.approve(address(diamond), type(uint256).max);
+    }
+
+    function test_unencumberedUserWithdrawCanStallFromRealPaths() public {
+        pm.configureFeeRouter(address(0xBEEF), 10_000, 0);
+        pm.setBorrowActionFee(PID1, 250 ether, true);
+
+        vm.prank(user);
+        uint256 tokenA = pm.mintPosition(PID1, 0);
+        vm.prank(user);
+        pm.depositToPosition(tokenA, PID1, 100 ether, 100 ether);
+
+        vm.prank(userB);
+        uint256 tokenB = pm.mintPosition(PID1, 0);
+        vm.prank(userB);
+        pm.depositToPosition(tokenB, PID1, 300 ether, 300 ether);
+
+        // Real path: borrow succeeds after fee debit and liquidity gate.
+        vm.prank(userB);
+        lending.openRollingFromPosition(tokenB, PID1, 150 ether, 150 ether);
+
+        // Borrow path includes internal solvency check in LendingFacet; success here proves that
+        // guard passed before state updates.
+        bytes32 keyB = nft.getPositionKey(tokenB);
+        assertEq(pm.rollingOf(PID1, keyB).principalRemaining, 150 ether, "borrow debt recorded");
+        assertEq(pm.principalOf(PID1, keyB), 50 ether, "borrow fee debited from principal");
+        assertEq(pm.trackedBalanceOf(PID1), 0, "pool cash drained via real flows");
+
+        // user A has no debt/encumbrance but still cannot withdraw due shared trackedBalance gate.
+        vm.prank(user);
+        vm.expectRevert(bytes("PositionNFT: insufficient pool liquidity"));
+        pm.withdrawFromPosition(tokenA, PID1, 100 ether, 0);
+    }
+
+    function test_unencumberedUserCanWithdrawInNormalOpsFlow() public {
+        vm.prank(user);
+        uint256 tokenA = pm.mintPosition(PID1, 0);
+        bytes32 keyA = nft.getPositionKey(tokenA);
+        vm.prank(user);
+        pm.depositToPosition(tokenA, PID1, 100 ether, 100 ether);
+
+        vm.prank(userB);
+        uint256 tokenB = pm.mintPosition(PID1, 0);
+        vm.prank(userB);
+        pm.depositToPosition(tokenB, PID1, 300 ether, 300 ether);
+
+        // Normal flow: no extreme fee overrides. Borrow remains bounded by solvency + pool liquidity.
+        vm.prank(userB);
+        lending.openRollingFromPosition(tokenB, PID1, 150 ether, 150 ether);
+
+        assertEq(pm.rollingOf(PID1, keyA).principalRemaining, 0, "clean user has no debt");
+        assertEq(pm.principalOf(PID1, keyA), 100 ether, "clean user principal intact");
+        assertEq(pm.trackedBalanceOf(PID1), 250 ether, "shared liquidity remains available");
+
+        vm.prank(user);
+        pm.withdrawFromPosition(tokenA, PID1, 100 ether, 0);
+
+        assertEq(pm.principalOf(PID1, keyA), 0, "clean user principal fully withdrawn");
+        assertEq(pm.trackedBalanceOf(PID1), 150 ether, "remaining liquidity after clean withdraw");
     }
 
     function test_multiPoolWorkflowIsolatedAndCleansUpMembership() public {
@@ -278,7 +357,7 @@ contract MultiPoolPositionIntegrationTest is Test {
     }
 
     function _selectors(PositionManagementHarnessFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](13);
+        s = new bytes4[](16);
         s[0] = PositionManagementHarnessFacet.configurePositionNFT.selector;
         s[1] = PositionManagementHarnessFacet.initPool.selector;
         s[2] = PositionManagementHarnessFacet.isMember.selector;
@@ -292,6 +371,9 @@ contract MultiPoolPositionIntegrationTest is Test {
         s[10] = PositionManagementHarnessFacet.principalOf.selector;
         s[11] = PositionManagementHarnessFacet.rollingOf.selector;
         s[12] = PositionManagementHarnessFacet.setDirectLocks.selector;
+        s[13] = PositionManagementHarnessFacet.configureFeeRouter.selector;
+        s[14] = PositionManagementHarnessFacet.setBorrowActionFee.selector;
+        s[15] = PositionManagementHarnessFacet.trackedBalanceOf.selector;
     }
 
     function _selectors(LendingFacet) internal pure returns (bytes4[] memory s) {

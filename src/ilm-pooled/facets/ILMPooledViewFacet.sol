@@ -2,13 +2,13 @@
 pragma solidity ^0.8.20;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {PositionNFT} from "../nft/PositionNFT.sol";
-import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
+import {PositionNFT} from "../../nft/PositionNFT.sol";
+import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
 import {IlmTypes, IlmMarketNotFound, IlmInvalidRiskParams} from "../libraries/IlmTypes.sol";
 import {LibIlmStorage} from "../libraries/LibIlmStorage.sol";
 import {LibIlmIndexing} from "../libraries/LibIlmIndexing.sol";
 import {LibIlmInterestRate} from "../libraries/LibIlmInterestRate.sol";
-import {LibModuleEncumbrance} from "../libraries/LibModuleEncumbrance.sol";
+import {LibModuleEncumbrance} from "../../libraries/LibModuleEncumbrance.sol";
 import {IIlmOracleAdapter} from "../interfaces/IIlmOracleAdapter.sol";
 import {IILMPooledViewFacet} from "../interfaces/IILMPooledViewFacet.sol";
 

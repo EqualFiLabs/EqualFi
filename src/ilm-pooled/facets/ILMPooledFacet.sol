@@ -2,24 +2,24 @@
 pragma solidity ^0.8.20;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {PositionNFT} from "../nft/PositionNFT.sol";
-import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
-import {LibAppStorage} from "../libraries/LibAppStorage.sol";
-import {LibActiveCreditIndex} from "../libraries/LibActiveCreditIndex.sol";
-import {LibFeeIndex} from "../libraries/LibFeeIndex.sol";
-import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
-import {LibActionFees} from "../libraries/LibActionFees.sol";
-import {LibModuleEncumbrance} from "../libraries/LibModuleEncumbrance.sol";
-import {LibModuleRegistry} from "../libraries/LibModuleRegistry.sol";
-import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
+import {PositionNFT} from "../../nft/PositionNFT.sol";
+import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
+import {LibAppStorage} from "../../libraries/LibAppStorage.sol";
+import {LibActiveCreditIndex} from "../../libraries/LibActiveCreditIndex.sol";
+import {LibFeeIndex} from "../../libraries/LibFeeIndex.sol";
+import {LibFeeRouter} from "../../libraries/LibFeeRouter.sol";
+import {LibActionFees} from "../../libraries/LibActionFees.sol";
+import {LibModuleEncumbrance} from "../../libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../../libraries/LibModuleRegistry.sol";
+import {LibSolvencyChecks} from "../../libraries/LibSolvencyChecks.sol";
 import {IlmTypes, IlmMarketNotFound, IlmReserveInactive, IlmReservePaused, IlmReserveFrozen, IlmSupplyCapExceeded, IlmBorrowCapExceeded, IlmInsufficientLiquidity, IlmUnsafePosition, IlmInvalidRiskParams, IlmUnauthorized, IlmSentinelBlocked} from "../libraries/IlmTypes.sol";
 import {LibIlmStorage} from "../libraries/LibIlmStorage.sol";
 import {LibIlmIndexing} from "../libraries/LibIlmIndexing.sol";
 import {IILMPooledFacet} from "../interfaces/IILMPooledFacet.sol";
 import {IIlmOracleAdapter} from "../interfaces/IIlmOracleAdapter.sol";
 import {IIlmSentinelAdapter} from "../interfaces/IIlmSentinelAdapter.sol";
-import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
-import {InsufficientUnencumberedPrincipal, ModuleNotFound, ModulePausedError} from "../libraries/Errors.sol";
+import {ReentrancyGuardModifiers} from "../../libraries/LibReentrancyGuard.sol";
+import {InsufficientUnencumberedPrincipal, ModuleNotFound, ModulePausedError} from "../../libraries/Errors.sol";
 
 /// @notice Core ILM pooled operations (supply/withdraw/collateral; borrow/repay in later task).
 contract ILMPooledFacet is IILMPooledFacet, ReentrancyGuardModifiers {

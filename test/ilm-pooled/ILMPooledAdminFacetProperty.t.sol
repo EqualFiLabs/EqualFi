@@ -9,9 +9,9 @@ import {
     IlmInvalidRiskParams,
     IlmMarketNotFound,
     IlmNotGovernance
-} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {ILMPooledAdminFacet} from "../../src/modules/ILMPooledAdminFacet.sol";
+} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {ILMPooledAdminFacet} from "../../src/ilm-pooled/facets/ILMPooledAdminFacet.sol";
 
 contract ILMPooledAdminFacetHarness is ILMPooledAdminFacet {
     function setContractOwner(address owner) external {

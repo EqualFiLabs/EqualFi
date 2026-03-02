@@ -8,13 +8,13 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
-import {IlmTypes, IlmMarketNotFound} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {LibIlmIndexing} from "../../src/libraries/LibIlmIndexing.sol";
-import {LibIlmInterestRate} from "../../src/libraries/LibIlmInterestRate.sol";
-import {ILMPooledViewFacet} from "../../src/modules/ILMPooledViewFacet.sol";
-import {IIlmOracleAdapter} from "../../src/interfaces/IIlmOracleAdapter.sol";
-import {IIlmSentinelAdapter} from "../../src/interfaces/IIlmSentinelAdapter.sol";
+import {IlmTypes, IlmMarketNotFound} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {LibIlmIndexing} from "../../src/ilm-pooled/libraries/LibIlmIndexing.sol";
+import {LibIlmInterestRate} from "../../src/ilm-pooled/libraries/LibIlmInterestRate.sol";
+import {ILMPooledViewFacet} from "../../src/ilm-pooled/facets/ILMPooledViewFacet.sol";
+import {IIlmOracleAdapter} from "../../src/ilm-pooled/interfaces/IIlmOracleAdapter.sol";
+import {IIlmSentinelAdapter} from "../../src/ilm-pooled/interfaces/IIlmSentinelAdapter.sol";
 
 contract MockIlmOracleAdapterView is IIlmOracleAdapter {
     uint256 internal _priceRay = 1e27;

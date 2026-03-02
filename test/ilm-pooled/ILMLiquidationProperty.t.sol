@@ -8,11 +8,11 @@ import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
 import {LibActiveCreditIndex} from "../../src/libraries/LibActiveCreditIndex.sol";
-import {IlmTypes, IlmNotLiquidatable, IlmInvalidRiskParams, IlmUnauthorized} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {ILMPooledLiquidationFacet} from "../../src/modules/ILMPooledLiquidationFacet.sol";
-import {IIlmOracleAdapter} from "../../src/interfaces/IIlmOracleAdapter.sol";
-import {IIlmSentinelAdapter} from "../../src/interfaces/IIlmSentinelAdapter.sol";
+import {IlmTypes, IlmNotLiquidatable, IlmInvalidRiskParams, IlmUnauthorized} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {ILMPooledLiquidationFacet} from "../../src/ilm-pooled/facets/ILMPooledLiquidationFacet.sol";
+import {IIlmOracleAdapter} from "../../src/ilm-pooled/interfaces/IIlmOracleAdapter.sol";
+import {IIlmSentinelAdapter} from "../../src/ilm-pooled/interfaces/IIlmSentinelAdapter.sol";
 
 contract MockIlmOracleAdapterLiq is IIlmOracleAdapter {
     uint256 internal _priceRay = 1e27;

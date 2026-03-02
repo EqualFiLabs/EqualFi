@@ -2,15 +2,15 @@
 pragma solidity ^0.8.20;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {PositionNFT} from "../nft/PositionNFT.sol";
-import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
-import {LibAppStorage} from "../libraries/LibAppStorage.sol";
-import {LibActiveCreditIndex} from "../libraries/LibActiveCreditIndex.sol";
-import {LibFeeIndex} from "../libraries/LibFeeIndex.sol";
-import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
-import {LibModuleEncumbrance} from "../libraries/LibModuleEncumbrance.sol";
-import {LibModuleRegistry} from "../libraries/LibModuleRegistry.sol";
-import {LibSolvencyChecks} from "../libraries/LibSolvencyChecks.sol";
+import {PositionNFT} from "../../nft/PositionNFT.sol";
+import {LibPositionNFT} from "../../libraries/LibPositionNFT.sol";
+import {LibAppStorage} from "../../libraries/LibAppStorage.sol";
+import {LibActiveCreditIndex} from "../../libraries/LibActiveCreditIndex.sol";
+import {LibFeeIndex} from "../../libraries/LibFeeIndex.sol";
+import {LibFeeRouter} from "../../libraries/LibFeeRouter.sol";
+import {LibModuleEncumbrance} from "../../libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../../libraries/LibModuleRegistry.sol";
+import {LibSolvencyChecks} from "../../libraries/LibSolvencyChecks.sol";
 import {
     IlmTypes,
     IlmMarketNotFound,
@@ -27,8 +27,8 @@ import {LibIlmLiquidation} from "../libraries/LibIlmLiquidation.sol";
 import {IILMPooledLiquidationFacet} from "../interfaces/IILMPooledLiquidationFacet.sol";
 import {IIlmOracleAdapter} from "../interfaces/IIlmOracleAdapter.sol";
 import {IIlmSentinelAdapter} from "../interfaces/IIlmSentinelAdapter.sol";
-import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
-import {InsufficientPrincipal, InsufficientUnencumberedPrincipal, ModuleNotFound, ModulePausedError} from "../libraries/Errors.sol";
+import {ReentrancyGuardModifiers} from "../../libraries/LibReentrancyGuard.sol";
+import {InsufficientPrincipal, InsufficientUnencumberedPrincipal, ModuleNotFound, ModulePausedError} from "../../libraries/Errors.sol";
 
 /// @notice Pooled-style liquidation facet for ILM markets.
 contract ILMPooledLiquidationFacet is IILMPooledLiquidationFacet, ReentrancyGuardModifiers {

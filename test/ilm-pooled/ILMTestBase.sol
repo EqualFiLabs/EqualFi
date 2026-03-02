@@ -6,26 +6,28 @@ import {Diamond} from "../../src/core/Diamond.sol";
 import {DiamondCutFacet} from "../../src/core/DiamondCutFacet.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IModuleRegistryFacet} from "../../src/interfaces/IModuleRegistryFacet.sol";
-import {IILMPooledAdminFacet} from "../../src/interfaces/IILMPooledAdminFacet.sol";
-import {IILMPooledFacet} from "../../src/interfaces/IILMPooledFacet.sol";
-import {IILMPooledLiquidationFacet} from "../../src/interfaces/IILMPooledLiquidationFacet.sol";
-import {IILMPooledViewFacet} from "../../src/interfaces/IILMPooledViewFacet.sol";
+import {IILMPooledAdminFacet} from "../../src/ilm-pooled/interfaces/IILMPooledAdminFacet.sol";
+import {IILMPooledFacet} from "../../src/ilm-pooled/interfaces/IILMPooledFacet.sol";
+import {IILMPooledLiquidationFacet} from "../../src/ilm-pooled/interfaces/IILMPooledLiquidationFacet.sol";
+import {IILMPooledViewFacet} from "../../src/ilm-pooled/interfaces/IILMPooledViewFacet.sol";
 import {ModuleRegistryFacet} from "../../src/modules/ModuleRegistryFacet.sol";
-import {ILMPooledAdminFacet} from "../../src/modules/ILMPooledAdminFacet.sol";
-import {ILMPooledFacet} from "../../src/modules/ILMPooledFacet.sol";
-import {ILMPooledLiquidationFacet} from "../../src/modules/ILMPooledLiquidationFacet.sol";
-import {ILMPooledViewFacet} from "../../src/modules/ILMPooledViewFacet.sol";
+import {ILMPooledAdminFacet} from "../../src/ilm-pooled/facets/ILMPooledAdminFacet.sol";
+import {ILMPooledFacet} from "../../src/ilm-pooled/facets/ILMPooledFacet.sol";
+import {ILMPooledLiquidationFacet} from "../../src/ilm-pooled/facets/ILMPooledLiquidationFacet.sol";
+import {ILMPooledViewFacet} from "../../src/ilm-pooled/facets/ILMPooledViewFacet.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
+import {LibSolvencyChecks} from "../../src/libraries/LibSolvencyChecks.sol";
 import {Types} from "../../src/libraries/Types.sol";
-import {IlmTypes} from "../../src/libraries/IlmTypes.sol";
-import {IIlmOracleAdapter} from "../../src/interfaces/IIlmOracleAdapter.sol";
-import {IIlmSentinelAdapter} from "../../src/interfaces/IIlmSentinelAdapter.sol";
+import {IlmTypes} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {IIlmOracleAdapter} from "../../src/ilm-pooled/interfaces/IIlmOracleAdapter.sol";
+import {IIlmSentinelAdapter} from "../../src/ilm-pooled/interfaces/IIlmSentinelAdapter.sol";
 
 interface IILMTestHarness {
     function setPositionNftRaw(address nft, bool enabled) external;
@@ -34,8 +36,16 @@ interface IILMTestHarness {
     function setPoolTotalsAndTracked(uint256 poolId, uint256 totalDeposits, uint256 trackedBalance) external;
     function setGlobalFeeSplits(uint256 treasuryBps, uint256 activeCreditBps) external;
     function setTreasury(address treasury) external;
+    function setModuleAciPausedRaw(bool paused) external;
     function getPoolPrincipal(uint256 poolId, bytes32 positionKey) external view returns (uint256);
     function getEncumberedForModule(bytes32 positionKey, uint256 poolId, uint256 moduleId) external view returns (uint256);
+    function getPoolActiveCreditPrincipalTotal(uint256 poolId) external view returns (uint256);
+    function getPoolUserActiveCreditEncumbrancePrincipal(uint256 poolId, bytes32 positionKey)
+        external
+        view
+        returns (uint256);
+    function getModuleAciPausedRaw() external view returns (bool);
+    function getAvailablePrincipal(uint256 poolId, bytes32 positionKey) external view returns (uint256);
 }
 
 contract MockIlmOracleAdapterIntegration is IIlmOracleAdapter {
@@ -136,12 +146,36 @@ contract ILMTestHarnessFacet {
         LibAppStorage.s().treasury = treasury;
     }
 
+    function setModuleAciPausedRaw(bool paused) external {
+        LibModuleRegistry.s().moduleAciPaused = paused;
+    }
+
     function getPoolPrincipal(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
         return LibAppStorage.s().pools[poolId].userPrincipal[positionKey];
     }
 
     function getEncumberedForModule(bytes32 positionKey, uint256 poolId, uint256 moduleId) external view returns (uint256) {
         return LibModuleEncumbrance.getEncumberedForModule(positionKey, poolId, moduleId);
+    }
+
+    function getPoolActiveCreditPrincipalTotal(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].activeCreditPrincipalTotal;
+    }
+
+    function getPoolUserActiveCreditEncumbrancePrincipal(uint256 poolId, bytes32 positionKey)
+        external
+        view
+        returns (uint256)
+    {
+        return LibAppStorage.s().pools[poolId].userActiveCreditStateEncumbrance[positionKey].principal;
+    }
+
+    function getModuleAciPausedRaw() external view returns (bool) {
+        return LibModuleRegistry.s().moduleAciPaused;
+    }
+
+    function getAvailablePrincipal(uint256 poolId, bytes32 positionKey) external view returns (uint256) {
+        return LibSolvencyChecks.calculateAvailablePrincipal(LibAppStorage.s().pools[poolId], positionKey, poolId);
     }
 }
 
@@ -321,14 +355,19 @@ abstract contract ILMTestBase is Test {
     }
 
     function _selectorsHarness() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](8);
+        s = new bytes4[](13);
         s[0] = IILMTestHarness.setPositionNftRaw.selector;
         s[1] = IILMTestHarness.seedPool.selector;
         s[2] = IILMTestHarness.setPoolPrincipal.selector;
         s[3] = IILMTestHarness.setPoolTotalsAndTracked.selector;
         s[4] = IILMTestHarness.setGlobalFeeSplits.selector;
         s[5] = IILMTestHarness.setTreasury.selector;
-        s[6] = IILMTestHarness.getPoolPrincipal.selector;
-        s[7] = IILMTestHarness.getEncumberedForModule.selector;
+        s[6] = IILMTestHarness.setModuleAciPausedRaw.selector;
+        s[7] = IILMTestHarness.getPoolPrincipal.selector;
+        s[8] = IILMTestHarness.getEncumberedForModule.selector;
+        s[9] = IILMTestHarness.getPoolActiveCreditPrincipalTotal.selector;
+        s[10] = IILMTestHarness.getPoolUserActiveCreditEncumbrancePrincipal.selector;
+        s[11] = IILMTestHarness.getModuleAciPausedRaw.selector;
+        s[12] = IILMTestHarness.getAvailablePrincipal.selector;
     }
 }

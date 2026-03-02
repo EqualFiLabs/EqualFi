@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {IlmTypes} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {LibIlmIndexing} from "../../src/libraries/LibIlmIndexing.sol";
+import {IlmTypes} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {LibIlmIndexing} from "../../src/ilm-pooled/libraries/LibIlmIndexing.sol";
 
 contract LibIlmIndexingHarness {
     function toScaledSupply(uint256 amount, uint256 liquidityIndexRay) external pure returns (uint256) {

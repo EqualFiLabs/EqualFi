@@ -12,11 +12,11 @@ import {
     IlmBorrowCapExceeded,
     IlmInsufficientLiquidity,
     IlmSentinelBlocked
-} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {LibIlmIndexing} from "../../src/libraries/LibIlmIndexing.sol";
-import {ILMPooledFacet} from "../../src/modules/ILMPooledFacet.sol";
-import {IIlmSentinelAdapter} from "../../src/interfaces/IIlmSentinelAdapter.sol";
+} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {LibIlmIndexing} from "../../src/ilm-pooled/libraries/LibIlmIndexing.sol";
+import {ILMPooledFacet} from "../../src/ilm-pooled/facets/ILMPooledFacet.sol";
+import {IIlmSentinelAdapter} from "../../src/ilm-pooled/interfaces/IIlmSentinelAdapter.sol";
 
 contract MockIlmSentinelAdapterBR is IIlmSentinelAdapter {
     bool internal _borrowAllowed = true;

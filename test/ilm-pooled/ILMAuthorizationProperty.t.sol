@@ -7,11 +7,11 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibModuleRegistry} from "../../src/libraries/LibModuleRegistry.sol";
 import {LibModuleEncumbrance} from "../../src/libraries/LibModuleEncumbrance.sol";
-import {IlmTypes, IlmUnauthorized} from "../../src/libraries/IlmTypes.sol";
-import {LibIlmStorage} from "../../src/libraries/LibIlmStorage.sol";
-import {ILMPooledFacet} from "../../src/modules/ILMPooledFacet.sol";
-import {ILMPooledLiquidationFacet} from "../../src/modules/ILMPooledLiquidationFacet.sol";
-import {IIlmOracleAdapter} from "../../src/interfaces/IIlmOracleAdapter.sol";
+import {IlmTypes, IlmUnauthorized} from "../../src/ilm-pooled/libraries/IlmTypes.sol";
+import {LibIlmStorage} from "../../src/ilm-pooled/libraries/LibIlmStorage.sol";
+import {ILMPooledFacet} from "../../src/ilm-pooled/facets/ILMPooledFacet.sol";
+import {ILMPooledLiquidationFacet} from "../../src/ilm-pooled/facets/ILMPooledLiquidationFacet.sol";
+import {IIlmOracleAdapter} from "../../src/ilm-pooled/interfaces/IIlmOracleAdapter.sol";
 
 contract MockIlmOracleAdapterAuth is IIlmOracleAdapter {
     uint256 internal _priceRay = 1e27;

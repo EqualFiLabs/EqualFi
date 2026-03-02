@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import {LibDiamond} from "../libraries/LibDiamond.sol";
-import {LibAppStorage} from "../libraries/LibAppStorage.sol";
+import {LibDiamond} from "../../libraries/LibDiamond.sol";
+import {LibAppStorage} from "../../libraries/LibAppStorage.sol";
 import {IlmTypes, IlmMarketNotFound, IlmInvalidRiskParams, IlmNotGovernance} from "../libraries/IlmTypes.sol";
 import {LibIlmStorage} from "../libraries/LibIlmStorage.sol";
 import {IILMPooledAdminFacet} from "../interfaces/IILMPooledAdminFacet.sol";
