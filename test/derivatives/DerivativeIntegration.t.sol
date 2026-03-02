@@ -327,7 +327,7 @@ abstract contract DerivativeDiamondTestBase is Test {
         s = new bytes4[](3);
         s[0] = MamCurveExecutionFacet.loadCurveForFill.selector;
         s[1] = MamCurveExecutionFacet.previewCurveQuote.selector;
-        s[2] = MamCurveExecutionFacet.executeCurveSwap.selector;
+        s[2] = bytes4(keccak256("executeCurveSwap(uint256,uint256,uint256,uint256,uint64,address)"));
     }
 
     function _selectorsCommunity() internal pure returns (bytes4[] memory s) {

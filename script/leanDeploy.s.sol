@@ -662,7 +662,7 @@ contract LeanDeployScript is Script {
     function _selectors(MamCurveExecutionFacet) internal pure returns (bytes4[] memory s) {
         s = new bytes4[](2);
         s[0] = MamCurveExecutionFacet.loadCurveForFill.selector;
-        s[1] = MamCurveExecutionFacet.executeCurveSwap.selector;
+        s[1] = bytes4(keccak256("executeCurveSwap(uint256,uint256,uint256,uint256,uint64,address)"));
     }
 
     function _selectors(EqualLendDirectOfferFacet) internal pure returns (bytes4[] memory s) {
