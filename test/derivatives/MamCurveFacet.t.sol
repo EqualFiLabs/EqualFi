@@ -84,7 +84,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 1
+            salt: 1,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -136,7 +138,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 12
+            salt: 12,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -172,7 +176,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 13
+            salt: 13,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -211,7 +217,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: uint96(offset) + (past ? 1000 : 2000)
+            salt: uint96(offset) + (past ? 1000 : 2000),
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -252,7 +260,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 7
+            salt: 7,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -324,7 +334,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 999
+            salt: 999,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -372,7 +384,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 700
+            salt: 700,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -430,7 +444,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 7050
+            salt: 7050,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
         MamTypes.CurveDescriptor memory overDesc = MamTypes.CurveDescriptor({
             makerPositionKey: keyOver,
@@ -449,7 +465,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 7051
+            salt: 7051,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.startPrank(maker);
@@ -506,7 +524,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 703
+            salt: 703,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -541,7 +561,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 704
+            salt: 704,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -575,7 +597,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 705
+            salt: 705,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -609,7 +633,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 706
+            salt: 706,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -643,7 +669,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 707
+            salt: 707,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -687,7 +715,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 701
+            salt: 701,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         MamTypes.CurveDescriptor memory overDesc = MamTypes.CurveDescriptor({
@@ -707,7 +737,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 702
+            salt: 702,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.startPrank(maker);
@@ -781,7 +813,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 708
+            salt: 708,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -831,7 +865,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 709
+            salt: 709,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -883,7 +919,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 710
+            salt: 710,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -954,7 +992,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 711
+            salt: 711,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
         MamTypes.CurveDescriptor memory overDesc = MamTypes.CurveDescriptor({
             makerPositionKey: keyOver,
@@ -973,7 +1013,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 712
+            salt: 712,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.startPrank(maker);
@@ -1040,7 +1082,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 713
+            salt: 713,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1088,7 +1132,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 714
+            salt: 714,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1139,7 +1185,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 715
+            salt: 715,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1206,7 +1254,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 716
+            salt: 716,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1253,7 +1303,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 717
+            salt: 717,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1297,7 +1349,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 718
+            salt: 718,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1344,7 +1398,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 719
+            salt: 719,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1405,7 +1461,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 720
+            salt: 720,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1472,7 +1530,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 721
+            salt: 721,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
         MamTypes.CurveDescriptor memory nativeDesc = MamTypes.CurveDescriptor({
             makerPositionKey: keyNative,
@@ -1491,7 +1551,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 722
+            salt: 722,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.startPrank(maker);
@@ -1555,7 +1617,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 723
+            salt: 723,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
         MamTypes.CurveDescriptor memory overDesc = MamTypes.CurveDescriptor({
             makerPositionKey: keyOver,
@@ -1574,7 +1638,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 724
+            salt: 724,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.startPrank(maker);
@@ -1628,7 +1694,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 2
+            salt: 2,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1638,7 +1706,11 @@ contract MamCurveFacetTest is Test {
             startPrice: 3e18,
             endPrice: 2e18,
             startTime: uint64(block.timestamp + 20),
-            duration: 2 days
+            duration: 2 days,
+            updateProfile: false,
+            profile: address(0),
+            updateProfileParams: false,
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1674,7 +1746,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 3
+            salt: 3,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1715,7 +1789,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 11
+            salt: 11,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
         descs[1] = descs[0];
         descs[1].salt = 12;
@@ -1728,13 +1804,21 @@ contract MamCurveFacetTest is Test {
             startPrice: 3e18,
             endPrice: 2e18,
             startTime: uint64(block.timestamp + 20),
-            duration: 2 days
+            duration: 2 days,
+            updateProfile: false,
+            profile: address(0),
+            updateProfileParams: false,
+            profileParams: bytes32(0)
         });
         params[1] = MamTypes.CurveUpdateParams({
             startPrice: 4e18,
             endPrice: 3e18,
             startTime: uint64(block.timestamp + 30),
-            duration: 3 days
+            duration: 3 days,
+            updateProfile: false,
+            profile: address(0),
+            updateProfileParams: false,
+            profileParams: bytes32(0)
         });
 
         uint256[] memory ids = new uint256[](2);
@@ -1777,7 +1861,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 21
+            salt: 21,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
         descs[1] = descs[0];
         descs[1].salt = 22;
@@ -1825,7 +1911,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 3
+            salt: 3,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -1891,7 +1979,9 @@ contract MamCurveFacetTest is Test {
             generation: 1,
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 11
+            salt: 11,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);

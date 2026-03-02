@@ -82,7 +82,9 @@ contract MamCurveGasTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: salt
+            salt: salt,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
     }
 
@@ -109,7 +111,11 @@ contract MamCurveGasTest is Test {
                 startPrice: uint128(3e18 + (i * 1e18)),
                 endPrice: uint128(2e18 + (i * 1e18)),
                 startTime: startTimeBase + uint64((i + 1) * 1 hours),
-                duration: uint64(2 days + (i * 1 days))
+                duration: uint64(2 days + (i * 1 days)),
+                updateProfile: false,
+                profile: address(0),
+                updateProfileParams: false,
+                profileParams: bytes32(0)
             });
         }
         return params;
@@ -130,7 +136,11 @@ contract MamCurveGasTest is Test {
             startPrice: 3e18,
             endPrice: 2e18,
             startTime: uint64(block.timestamp + 1 hours),
-            duration: 2 days
+            duration: 2 days,
+            updateProfile: false,
+            profile: address(0),
+            updateProfileParams: false,
+            profileParams: bytes32(0)
         });
         vm.resumeGasMetering();
 

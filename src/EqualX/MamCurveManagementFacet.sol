@@ -202,6 +202,7 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         LibDerivativeStorage.CurveData storage data = ds.curveData[curveId];
         LibDerivativeStorage.CurveImmutables storage imm = ds.curveImmutables[curveId];
+        LibDerivativeStorage.CurveProfileData storage prof = ds.curveProfileData[curveId];
 
         desc.makerPositionKey = data.makerPositionKey;
         desc.makerPositionId = data.makerPositionId;
@@ -220,5 +221,7 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         desc.feeRateBps = imm.feeRateBps;
         desc.feeAsset = imm.feeAsset;
         desc.salt = imm.salt;
+        desc.profile = prof.profile;
+        desc.profileParams = prof.profileParams;
     }
 }

@@ -508,7 +508,9 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 1
+            salt: 1,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);

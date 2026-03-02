@@ -37,6 +37,8 @@ library LibDerivativeStorage {
         mapping(uint256 => CurveData) curveData;
         mapping(uint256 => CurveImmutables) curveImmutables;
         mapping(uint256 => CurvePricing) curvePricing;
+        mapping(uint256 => CurveProfileData) curveProfileData;
+        mapping(address => bool) approvedProfiles;
         mapping(uint256 => bytes32) curveImmutableHash;
         mapping(uint256 => bool) curveBaseIsA;
         uint256 nextCurveId;
@@ -93,6 +95,11 @@ library LibDerivativeStorage {
         uint128 endPrice;
         uint64 startTime;
         uint64 duration;
+    }
+
+    struct CurveProfileData {
+        address profile;
+        bytes32 profileParams;
     }
 
     function derivativeStorage() internal pure returns (DerivativeStorage storage ds) {

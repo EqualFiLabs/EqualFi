@@ -136,7 +136,9 @@ contract MamCurveFeeOnTransferTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 7
+            salt: 7,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);
@@ -186,7 +188,9 @@ contract MamCurveFeeOnTransferTest is Test {
             generation: 1,
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 8
+            salt: 8,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         vm.prank(maker);

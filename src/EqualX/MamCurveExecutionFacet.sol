@@ -41,6 +41,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.CurveData storage data = ds.curveData[curveId];
         LibDerivativeStorage.CurveImmutables storage imm = ds.curveImmutables[curveId];
         LibDerivativeStorage.CurvePricing storage pricing = ds.curvePricing[curveId];
+        LibDerivativeStorage.CurveProfileData storage prof = ds.curveProfileData[curveId];
 
         viewData = MamTypes.CurveFillView({
             makerPositionKey: data.makerPositionKey,
@@ -55,7 +56,9 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
             startTime: pricing.startTime,
             duration: pricing.duration,
             feeRateBps: imm.feeRateBps,
-            remainingVolume: curve.remainingVolume
+            remainingVolume: curve.remainingVolume,
+            profile: prof.profile,
+            profileParams: prof.profileParams
         });
     }
 

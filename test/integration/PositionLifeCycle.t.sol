@@ -133,7 +133,9 @@ contract PositionLifeCycleTest is Test {
             generation: 1,
             feeRateBps: 10,
             feeAsset: MamTypes.FeeAsset.TokenIn,
-            salt: 0
+            salt: 0,
+            profile: address(0),
+            profileParams: bytes32(0)
         });
 
         activeCurveId = IMamCreationFacet(sys.diamond).createCurve(desc);
