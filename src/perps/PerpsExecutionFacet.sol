@@ -7,6 +7,7 @@ import {LibPerpsFees} from "./LibPerpsFees.sol";
 import {LibPerpsFunding} from "./LibPerpsFunding.sol";
 import {LibPerpsIdentity} from "./LibPerpsIdentity.sol";
 import {LibPerpsIntent} from "./LibPerpsIntent.sol";
+import {LibPerpsOracle} from "./LibPerpsOracle.sol";
 import {LibPerpsRisk} from "./LibPerpsRisk.sol";
 import {LibPerpsSync} from "./LibPerpsSync.sol";
 import {LibPerpsStorage} from "./LibPerpsStorage.sol";
@@ -287,6 +288,7 @@ contract PerpsExecutionFacet {
         if (market.pauseIncrease) revert Perps_IncreasePaused(p.marketId);
         if (p.isLong && !market.longEnabled) revert Perps_RiskLimitExceeded();
         if (!p.isLong && !market.shortEnabled) revert Perps_RiskLimitExceeded();
+        LibPerpsOracle.validateExecutionPrice(market, p.executionPriceX18);
         _enforcePriceBounds(p.limitPriceX18, p.executionPriceX18, p.maxSlippageBps);
 
         uint256[] memory nonPerpsPoolIds = _singlePoolArray(market.collateralPoolId);
@@ -355,6 +357,7 @@ contract PerpsExecutionFacet {
         _requireAccount(p.accountId);
 
         if (market.pauseDecrease) revert Perps_DecreasePaused(p.marketId);
+        LibPerpsOracle.validateExecutionPrice(market, p.executionPriceX18);
         _enforcePriceBounds(p.limitPriceX18, p.executionPriceX18, p.maxSlippageBps);
 
         LibPerpsStorage.PerpsPosition storage position = ps.positions[p.marketId][p.accountId][p.isLong];

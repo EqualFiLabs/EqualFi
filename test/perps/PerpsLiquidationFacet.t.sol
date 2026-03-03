@@ -7,11 +7,34 @@ import {LibPerpsStorage} from "../../src/perps/LibPerpsStorage.sol";
 import {PerpsLiquidationFacet} from "../../src/perps/PerpsLiquidationFacet.sol";
 import {
     Perps_LiquidationPaused,
+    Perps_PriceOutOfBounds,
+    Perps_PriceStale,
     Perps_PositionHealthy,
     Perps_RiskLimitExceeded
 } from "../../src/perps/PerpsErrors.sol";
 
 contract PerpsLiquidationHarness is PerpsLiquidationFacet {
+    uint256 internal oraclePriceX18 = 2_000e18;
+    uint256 internal oracleUpdatedAt = block.timestamp;
+    uint256 internal oracleDeviationBps;
+
+    function setOracleData(uint256 priceX18, uint256 updatedAt, uint256 deviationBps) external {
+        oraclePriceX18 = priceX18;
+        oracleUpdatedAt = updatedAt;
+        oracleDeviationBps = deviationBps;
+    }
+
+    function getMarkPrice(bytes32, address) external view returns (uint256 priceX18, uint256 updatedAt, uint256 deviationBps) {
+        return (oraclePriceX18, oracleUpdatedAt, oracleDeviationBps);
+    }
+
+    function setOracleConfig(bytes32 marketId, uint256 maxStaleness, uint256 maxDeviationBps) external {
+        if (maxStaleness > type(uint32).max || maxDeviationBps > type(uint32).max) revert Perps_RiskLimitExceeded();
+        LibPerpsStorage.PerpsMarket storage market = LibPerpsStorage.s().markets[marketId];
+        market.maxStaleness = uint32(maxStaleness);
+        market.maxDeviationBps = uint32(maxDeviationBps);
+    }
+
     function setGlobalLiquidationEnabled(bool enabled) external {
         LibPerpsStorage.s().globalLiquidationEnabled = enabled;
     }
@@ -53,6 +76,9 @@ contract PerpsLiquidationHarness is PerpsLiquidationFacet {
         market.maxShortOpenInterest = maxShortOpenInterest;
         market.maxSkewAbs = maxSkewAbs;
         market.takerFeeBps = uint32(takerFeeBps);
+        market.oracleAdapter = address(this);
+        market.maxStaleness = type(uint32).max;
+        market.maxDeviationBps = 2_000;
         market.pauseLiquidation = pauseLiquidation;
         market.exists = true;
     }
@@ -238,6 +264,65 @@ contract PerpsLiquidationFacetTest is Test {
         );
     }
 
+    function test_liquidate_revertsWhenOracleStale() public {
+        PerpsLiquidationHarness h = new PerpsLiquidationHarness();
+        _seedBaseMarket(h, MARKET_A, 0, 500);
+        h.seedAccount(ACCOUNT, 1, 0, true);
+        h.setAccountCollateral(ACCOUNT, MARKET_A, 10e18);
+        h.seedPosition(MARKET_A, ACCOUNT, true, 1_000e18, 2_000e18, 0);
+        h.seedMarketState(MARKET_A, 1_000e18, 0, int256(1_000e18), 0, 0, 0, 0, 0, 0, 0, 0);
+        h.setDomainState(1_000_000e18, 0, 0);
+
+        vm.warp(100);
+        h.setOracleConfig(MARKET_A, 1, 2_000);
+        h.setOracleData(2_000e18, 98, 0);
+        vm.expectRevert(abi.encodeWithSelector(Perps_PriceStale.selector, 98, uint32(1)));
+        h.liquidate(
+            PerpsLiquidationFacet.LiquidationParams({
+                marketId: MARKET_A,
+                accountId: ACCOUNT,
+                isLong: true,
+                executionPriceX18: 2_000e18,
+                feePoolId: FEE_POOL
+            })
+        );
+    }
+
+    function test_liquidate_revertsWhenOracleOutOfBounds() public {
+        PerpsLiquidationHarness h = new PerpsLiquidationHarness();
+        _seedBaseMarket(h, MARKET_A, 0, 500);
+        h.seedAccount(ACCOUNT, 1, 0, true);
+        h.setAccountCollateral(ACCOUNT, MARKET_A, 10e18);
+        h.seedPosition(MARKET_A, ACCOUNT, true, 1_000e18, 2_000e18, 0);
+        h.seedMarketState(MARKET_A, 1_000e18, 0, int256(1_000e18), 0, 0, 0, 0, 0, 0, 0, 0);
+        h.setDomainState(1_000_000e18, 0, 0);
+
+        h.setOracleConfig(MARKET_A, 1 days, 500);
+        h.setOracleData(2_000e18, block.timestamp, 0);
+        vm.expectRevert(Perps_PriceOutOfBounds.selector);
+        h.liquidate(
+            PerpsLiquidationFacet.LiquidationParams({
+                marketId: MARKET_A,
+                accountId: ACCOUNT,
+                isLong: true,
+                executionPriceX18: 2_300e18,
+                feePoolId: FEE_POOL
+            })
+        );
+
+        h.setOracleData(2_300e18, block.timestamp, 700);
+        vm.expectRevert(Perps_PriceOutOfBounds.selector);
+        h.liquidate(
+            PerpsLiquidationFacet.LiquidationParams({
+                marketId: MARKET_A,
+                accountId: ACCOUNT,
+                isLong: true,
+                executionPriceX18: 2_300e18,
+                feePoolId: FEE_POOL
+            })
+        );
+    }
+
     function test_liquidate_partialClose_rewardBoundedByConfig() public {
         PerpsLiquidationHarness h = new PerpsLiquidationHarness();
         _seedBaseMarket(h, MARKET_A, 0, 500);
@@ -277,6 +362,7 @@ contract PerpsLiquidationFacetTest is Test {
         h.seedMarketState(MARKET_A, 1_000e18, 0, int256(1_000e18), 0, 0, 0, 80e18, 80e18, 0, 0, 0);
         h.seedMarketState(MARKET_B, 0, 0, 0, 0, 0, 0, 0, 0, 123e18, 0, 0);
         h.setDomainState(1_000_000e18, 0, 0);
+        h.setOracleData(1_000e18, block.timestamp, 0);
 
         (LibPerpsStorage.SettlementDelta memory delta, uint256 closeSize) = h.liquidate(
             PerpsLiquidationFacet.LiquidationParams({
@@ -373,6 +459,8 @@ contract PerpsLiquidationFacetTest is Test {
 
         _seedConvergenceScenario(hA, sizeUsdX18, collateral, insurance, insuranceTarget, liqFeeBps, liqRewardBps);
         _seedConvergenceScenario(hB, sizeUsdX18, collateral, insurance, insuranceTarget, liqFeeBps, liqRewardBps);
+        hA.setOracleData(executionPriceX18, block.timestamp, 0);
+        hB.setOracleData(executionPriceX18, block.timestamp, 0);
 
         address liquidatorA = address(0xAAA1);
         address liquidatorB = address(0xBBB2);

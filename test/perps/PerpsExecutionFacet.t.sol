@@ -12,11 +12,34 @@ import {
     Perps_DecreasePaused,
     Perps_InsufficientPerpsLiquidity,
     Perps_NonceMismatch,
+    Perps_PriceOutOfBounds,
+    Perps_PriceStale,
     Perps_RiskLimitExceeded,
     Perps_Unauthorized
 } from "../../src/perps/PerpsErrors.sol";
 
 contract PerpsExecutionHarness is PerpsExecutionFacet {
+    uint256 internal oraclePriceX18 = 2_000e18;
+    uint256 internal oracleUpdatedAt = block.timestamp;
+    uint256 internal oracleDeviationBps;
+
+    function setOracleData(uint256 priceX18, uint256 updatedAt, uint256 deviationBps) external {
+        oraclePriceX18 = priceX18;
+        oracleUpdatedAt = updatedAt;
+        oracleDeviationBps = deviationBps;
+    }
+
+    function getMarkPrice(bytes32, address) external view returns (uint256 priceX18, uint256 updatedAt, uint256 deviationBps) {
+        return (oraclePriceX18, oracleUpdatedAt, oracleDeviationBps);
+    }
+
+    function setOracleConfig(bytes32 marketId, uint256 maxStaleness, uint256 maxDeviationBps) external {
+        if (maxStaleness > type(uint32).max || maxDeviationBps > type(uint32).max) revert Perps_RiskLimitExceeded();
+        LibPerpsStorage.PerpsMarket storage market = LibPerpsStorage.s().markets[marketId];
+        market.maxStaleness = uint32(maxStaleness);
+        market.maxDeviationBps = uint32(maxDeviationBps);
+    }
+
     function setPositionNft(address nft, bool enabled) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;
@@ -40,6 +63,9 @@ contract PerpsExecutionHarness is PerpsExecutionFacet {
         market.maxSkewAbs = 1_000_000e18;
         market.takerFeeBps = 100;
         market.maxFundingVelocityBpsPerDay = 1_000;
+        market.oracleAdapter = address(this);
+        market.maxStaleness = type(uint32).max;
+        market.maxDeviationBps = 2_000;
         market.pauseIncrease = false;
         market.pauseDecrease = pauseDecrease;
         market.pauseLiquidation = false;
@@ -253,6 +279,85 @@ contract PerpsExecutionFacetTest is Test {
                 accountId: accountId,
                 collateralAsset: collateralAsset,
                 amount: 1
+            })
+        );
+    }
+
+    function test_openOrIncrease_revertsOnOracleStaleInvalidAndOutOfBounds() public {
+        bytes32 accountId = _createAndFundAccount(20_000e18);
+        PerpsExecutionFacet.OpenIncreaseParams memory params = PerpsExecutionFacet.OpenIncreaseParams({
+            marketId: marketId,
+            accountId: accountId,
+            isLong: true,
+            sizeDeltaUsdX18: 5_000e18,
+            executionPriceX18: 2_000e18,
+            limitPriceX18: 2_000e18,
+            maxSlippageBps: 100,
+            feePoolId: collateralPoolId,
+            executorFee: 0
+        });
+
+        vm.warp(100);
+        h.setOracleConfig(marketId, 1, 2_000);
+        h.setOracleData(2_000e18, 98, 0);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(Perps_PriceStale.selector, 98, uint32(1)));
+        h.openOrIncrease(params);
+
+        h.setOracleConfig(marketId, 1 days, 2_000);
+        h.setOracleData(0, block.timestamp, 0);
+        vm.prank(owner);
+        vm.expectRevert(Perps_PriceOutOfBounds.selector);
+        h.openOrIncrease(params);
+
+        h.setOracleConfig(marketId, 1 days, 500);
+        h.setOracleData(2_000e18, block.timestamp, 0);
+        params.executionPriceX18 = 2_300e18;
+        params.limitPriceX18 = 2_300e18;
+        vm.prank(owner);
+        vm.expectRevert(Perps_PriceOutOfBounds.selector);
+        h.openOrIncrease(params);
+
+        h.setOracleData(2_300e18, block.timestamp, 700);
+        vm.prank(owner);
+        vm.expectRevert(Perps_PriceOutOfBounds.selector);
+        h.openOrIncrease(params);
+    }
+
+    function test_decreaseOrClose_revertsOnOracleStale() public {
+        bytes32 accountId = _createAndFundAccount(20_000e18);
+
+        vm.prank(owner);
+        h.openOrIncrease(
+            PerpsExecutionFacet.OpenIncreaseParams({
+                marketId: marketId,
+                accountId: accountId,
+                isLong: true,
+                sizeDeltaUsdX18: 5_000e18,
+                executionPriceX18: 2_000e18,
+                limitPriceX18: 2_000e18,
+                maxSlippageBps: 100,
+                feePoolId: collateralPoolId,
+                executorFee: 0
+            })
+        );
+
+        vm.warp(200);
+        h.setOracleConfig(marketId, 1, 2_000);
+        h.setOracleData(2_100e18, 198, 0);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(Perps_PriceStale.selector, 198, uint32(1)));
+        h.decreaseOrClose(
+            PerpsExecutionFacet.DecreaseCloseParams({
+                marketId: marketId,
+                accountId: accountId,
+                isLong: true,
+                sizeDeltaUsdX18: 1_000e18,
+                executionPriceX18: 2_100e18,
+                limitPriceX18: 2_100e18,
+                maxSlippageBps: 100,
+                feePoolId: collateralPoolId,
+                executorFee: 0
             })
         );
     }

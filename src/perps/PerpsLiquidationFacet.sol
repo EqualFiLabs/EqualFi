@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {LibPerpsDomain} from "./LibPerpsDomain.sol";
 import {LibPerpsFees} from "./LibPerpsFees.sol";
 import {LibPerpsFunding} from "./LibPerpsFunding.sol";
+import {LibPerpsOracle} from "./LibPerpsOracle.sol";
 import {LibPerpsRisk} from "./LibPerpsRisk.sol";
 import {LibPerpsSync} from "./LibPerpsSync.sol";
 import {LibPerpsStorage} from "./LibPerpsStorage.sol";
@@ -45,6 +46,7 @@ contract PerpsLiquidationFacet {
         if (!ps.globalLiquidationEnabled || market.pauseLiquidation) {
             revert Perps_LiquidationPaused(p.marketId);
         }
+        LibPerpsOracle.validateExecutionPrice(market, p.executionPriceX18);
 
         _requireAccount(p.accountId);
         LibPerpsStorage.PerpsPosition storage position = ps.positions[p.marketId][p.accountId][p.isLong];
@@ -188,6 +190,7 @@ contract PerpsLiquidationFacet {
 
         LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
+        LibPerpsOracle.validateExecutionPrice(market, executionPriceX18);
         _requireAccount(accountId);
         LibPerpsStorage.PerpsPosition storage position = ps.positions[marketId][accountId][isLong];
         if (position.sizeUsdX18 == 0) revert Perps_RiskLimitExceeded();
