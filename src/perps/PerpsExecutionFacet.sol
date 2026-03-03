@@ -11,6 +11,7 @@ import {LibPerpsOracle} from "./LibPerpsOracle.sol";
 import {LibPerpsRisk} from "./LibPerpsRisk.sol";
 import {LibPerpsSync} from "./LibPerpsSync.sol";
 import {LibPerpsStorage} from "./LibPerpsStorage.sol";
+import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {
     Perps_AccountNotFound,
     Perps_DecreasePaused,
@@ -26,7 +27,7 @@ interface IPerpsExecutionPositionNFT {
 }
 
 /// @notice Account lifecycle and collateral reservation entry points for perps participants.
-contract PerpsExecutionFacet {
+contract PerpsExecutionFacet is ReentrancyGuardModifiers {
     uint8 internal constant ACTION_OPEN_INCREASE = 1;
     uint8 internal constant ACTION_DECREASE_CLOSE = 2;
     uint256 internal constant BPS_DENOMINATOR = 10_000;
@@ -86,7 +87,7 @@ contract PerpsExecutionFacet {
     event AccountSynced(bytes32 indexed marketId, bytes32 indexed accountId);
     event SettlementDeltaEmitted(bytes32 indexed marketId, bytes32 indexed accountId, LibPerpsStorage.SettlementDelta delta);
 
-    function createAccount(uint256 positionId, uint256 subaccountNonce) external returns (bytes32 accountId) {
+    function createAccount(uint256 positionId, uint256 subaccountNonce) external nonReentrant returns (bytes32 accountId) {
         LibPerpsIntent.requirePositionAuthority(positionId);
 
         bytes32 positionKey = _positionNft().getPositionKey(positionId);
@@ -105,7 +106,7 @@ contract PerpsExecutionFacet {
         }
     }
 
-    function addCollateral(AddCollateralParams calldata p) external {
+    function addCollateral(AddCollateralParams calldata p) external nonReentrant {
         if (p.amount == 0) revert Perps_RiskLimitExceeded();
 
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(p.marketId);
@@ -126,7 +127,7 @@ contract PerpsExecutionFacet {
         emit PerpsCollateralAdded(p.marketId, p.accountId, p.collateralAsset, p.amount);
     }
 
-    function removeCollateral(RemoveCollateralParams calldata p) external {
+    function removeCollateral(RemoveCollateralParams calldata p) external nonReentrant {
         if (p.amount == 0) revert Perps_RiskLimitExceeded();
 
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(p.marketId);
@@ -156,13 +157,21 @@ contract PerpsExecutionFacet {
         emit PerpsCollateralRemoved(p.marketId, p.accountId, p.collateralAsset, p.amount);
     }
 
-    function openOrIncrease(OpenIncreaseParams calldata p) external returns (LibPerpsStorage.SettlementDelta memory delta) {
+    function openOrIncrease(OpenIncreaseParams calldata p)
+        external
+        nonReentrant
+        returns (LibPerpsStorage.SettlementDelta memory delta)
+    {
         _requireAccount(p.accountId);
         LibPerpsIntent.requireDirectCallAuthority(p.accountId);
         delta = _openOrIncrease(p, p.executorFee);
     }
 
-    function decreaseOrClose(DecreaseCloseParams calldata p) external returns (LibPerpsStorage.SettlementDelta memory delta) {
+    function decreaseOrClose(DecreaseCloseParams calldata p)
+        external
+        nonReentrant
+        returns (LibPerpsStorage.SettlementDelta memory delta)
+    {
         _requireAccount(p.accountId);
         LibPerpsIntent.requireDirectCallAuthority(p.accountId);
         delta = _decreaseOrClose(p, p.executorFee);
@@ -172,7 +181,7 @@ contract PerpsExecutionFacet {
         LibPerpsStorage.PerpsIntent calldata intent,
         IntentExecutionParams calldata exec,
         bytes calldata signature
-    ) external returns (LibPerpsStorage.SettlementDelta memory delta) {
+    ) external nonReentrant returns (LibPerpsStorage.SettlementDelta memory delta) {
         LibPerpsIntent.validateIntentAndSignature(intent, exec.signer, signature);
 
         if (intent.action == ACTION_OPEN_INCREASE) {
@@ -211,16 +220,17 @@ contract PerpsExecutionFacet {
         emit PerpsIntentExecuted(intent.marketId, intent.accountId, intent.action, msg.sender);
     }
 
-    function cancelIntent(bytes32 accountId, bytes32 intentHash) external {
+    function cancelIntent(bytes32 accountId, bytes32 intentHash) external nonReentrant {
         LibPerpsIntent.cancelIntent(accountId, intentHash);
     }
 
-    function invalidateNoncesUpTo(bytes32 accountId, uint64 nonceUpperBound) external {
+    function invalidateNoncesUpTo(bytes32 accountId, uint64 nonceUpperBound) external nonReentrant {
         LibPerpsIntent.invalidateNoncesUpTo(accountId, nonceUpperBound);
     }
 
     function syncAccount(bytes32 accountId, bytes32 marketId)
         external
+        nonReentrant
         returns (LibPerpsStorage.SettlementDelta memory delta, LibPerpsSync.AccountSyncResult memory syncResult)
     {
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
@@ -299,9 +309,7 @@ contract PerpsExecutionFacet {
             LibPerpsFunding.settlePositionFunding(p.marketId, p.accountId, p.isLong);
 
         uint256 tradingFee = (p.sizeDeltaUsdX18 * market.takerFeeBps) / BPS_DENOMINATOR;
-        (LibPerpsFees.FeeSplit memory feeSplit, uint256 explicitOutboundCredit) =
-            LibPerpsFees.applyTradingFee(p.marketId, tradingFee, p.feePoolId, keccak256("perps.trade"));
-        uint256 executorFee = LibPerpsFees.applyExecutorFee(p.executorFee, executorFeeCap);
+        uint256 requestedExecutorFee = p.executorFee;
 
         LibPerpsStorage.PerpsPosition storage position = ps.positions[p.marketId][p.accountId][p.isLong];
         uint256 currentSize = position.sizeUsdX18;
@@ -312,7 +320,7 @@ contract PerpsExecutionFacet {
             positionNotionalUsdX18: nextSize,
             unrealizedPnlUsdX18: 0,
             fundingAccruedUsdX18: fundingSettlement.fundingPaidX18,
-            feesAccruedUsdX18: tradingFee + executorFee
+            feesAccruedUsdX18: tradingFee + requestedExecutorFee
         });
         LibPerpsRisk.enforceOpenRisk(market, healthState);
 
@@ -332,6 +340,11 @@ contract PerpsExecutionFacet {
         position.sizeUsdX18 = nextSize;
         position.collateralAmount = ps.accountCollateral[p.accountId][p.marketId];
         position.lastIncreaseTs = uint64(block.timestamp);
+
+        // Route outbound fees only after critical validation/state prep and before final invariant checks.
+        (LibPerpsFees.FeeSplit memory feeSplit, uint256 explicitOutboundCredit) =
+            LibPerpsFees.applyTradingFee(p.marketId, tradingFee, p.feePoolId, keccak256("perps.trade"));
+        uint256 executorFee = LibPerpsFees.applyExecutorFee(requestedExecutorFee, executorFeeCap);
 
         delta.marketId = p.marketId;
         delta.accountId = p.accountId;
@@ -372,12 +385,10 @@ contract PerpsExecutionFacet {
             LibPerpsFunding.settlePositionFunding(p.marketId, p.accountId, p.isLong);
 
         uint256 tradingFee = (p.sizeDeltaUsdX18 * market.takerFeeBps) / BPS_DENOMINATOR;
-        (LibPerpsFees.FeeSplit memory feeSplit, uint256 explicitOutboundCredit) =
-            LibPerpsFees.applyTradingFee(p.marketId, tradingFee, p.feePoolId, keccak256("perps.trade"));
-        uint256 executorFee = LibPerpsFees.applyExecutorFee(p.executorFee, executorFeeCap);
+        uint256 requestedExecutorFee = p.executorFee;
 
         int256 realizedPnl = _realizedPnlX18(position.entryPriceX18, p.executionPriceX18, p.sizeDeltaUsdX18, p.isLong);
-        int256 netPayout = realizedPnl - fundingSettlement.fundingPaidX18 - _toInt(tradingFee + executorFee);
+        int256 netPayout = realizedPnl - fundingSettlement.fundingPaidX18 - _toInt(tradingFee + requestedExecutorFee);
         if (netPayout > 0) {
             LibPerpsDomain.debitIsolatedTracked(uint256(netPayout));
         } else if (netPayout < 0) {
@@ -404,6 +415,11 @@ contract PerpsExecutionFacet {
             position.sizeUsdX18 = nextSize;
             emit PositionDecreased(p.marketId, p.accountId, p.isLong, p.sizeDeltaUsdX18);
         }
+
+        // Route outbound fees only after critical validation/state prep and before final invariant checks.
+        (LibPerpsFees.FeeSplit memory feeSplit, uint256 explicitOutboundCredit) =
+            LibPerpsFees.applyTradingFee(p.marketId, tradingFee, p.feePoolId, keccak256("perps.trade"));
+        uint256 executorFee = LibPerpsFees.applyExecutorFee(requestedExecutorFee, executorFeeCap);
 
         delta.marketId = p.marketId;
         delta.accountId = p.accountId;

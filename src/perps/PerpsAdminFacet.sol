@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
+import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {LibPerpsIdentity} from "./LibPerpsIdentity.sol";
 import {LibPerpsStorage} from "./LibPerpsStorage.sol";
 import {
@@ -14,7 +15,7 @@ import {
 } from "./PerpsErrors.sol";
 
 /// @notice Governance controls for isolated perps market configuration and genesis enable gating.
-contract PerpsAdminFacet {
+contract PerpsAdminFacet is ReentrancyGuardModifiers {
     uint8 internal constant CONFIG_RISK = 1 << 0;
     uint8 internal constant CONFIG_CAPS = 1 << 1;
     uint8 internal constant CONFIG_ORACLE = 1 << 2;
@@ -83,7 +84,7 @@ contract PerpsAdminFacet {
     event PerpsInsuranceConfigUpdated(bytes32 indexed marketId, InsuranceConfig previousConfig, InsuranceConfig newConfig);
     event PerpsGlobalConfigUpdated(GlobalPerpsConfig previousConfig, GlobalPerpsConfig newConfig);
 
-    function createMarket(CreatePerpsMarketParams calldata p) external returns (bytes32 marketId) {
+    function createMarket(CreatePerpsMarketParams calldata p) external nonReentrant returns (bytes32 marketId) {
         _onlyGovernance();
 
         if (p.collateralAsset == address(0) || p.indexAsset == address(0) || (!p.longEnabled && !p.shortEnabled)) {
@@ -119,7 +120,7 @@ contract PerpsAdminFacet {
         emit PerpsMarketCreated(marketId, p.collateralPoolId, p.collateralAsset, p.indexAsset);
     }
 
-    function setMarketRisk(bytes32 marketId, MarketRiskParams calldata p) external {
+    function setMarketRisk(bytes32 marketId, MarketRiskParams calldata p) external nonReentrant {
         _onlyGovernance();
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
         _validateRiskParams(p);
@@ -140,7 +141,7 @@ contract PerpsAdminFacet {
         emit PerpsMarketRiskUpdated(marketId, previous, p);
     }
 
-    function setMarketCaps(bytes32 marketId, MarketCapParams calldata p) external {
+    function setMarketCaps(bytes32 marketId, MarketCapParams calldata p) external nonReentrant {
         _onlyGovernance();
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
         _validateCapParams(p);
@@ -161,7 +162,7 @@ contract PerpsAdminFacet {
         emit PerpsMarketCapsUpdated(marketId, previous, p);
     }
 
-    function setOracleConfig(bytes32 marketId, OracleConfig calldata p) external {
+    function setOracleConfig(bytes32 marketId, OracleConfig calldata p) external nonReentrant {
         _onlyGovernance();
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
         if (p.oracleAdapter == address(0) || p.maxStaleness == 0 || p.maxDeviationBps > 10_000) {
@@ -182,7 +183,7 @@ contract PerpsAdminFacet {
         emit PerpsOracleConfigUpdated(marketId, previous, p);
     }
 
-    function setPauseFlags(bytes32 marketId, PauseFlags calldata p) external {
+    function setPauseFlags(bytes32 marketId, PauseFlags calldata p) external nonReentrant {
         _onlyGovernance();
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
 
@@ -202,7 +203,7 @@ contract PerpsAdminFacet {
         emit PerpsPauseFlagsUpdated(marketId, previous, p);
     }
 
-    function setFeeConfig(bytes32 marketId, FeeConfig calldata p) external {
+    function setFeeConfig(bytes32 marketId, FeeConfig calldata p) external nonReentrant {
         _onlyGovernance();
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
         if (p.takerFeeBps > 10_000 || p.makerFeeBps > 10_000) {
@@ -223,7 +224,7 @@ contract PerpsAdminFacet {
         emit PerpsFeeConfigUpdated(marketId, previous, p);
     }
 
-    function setInsuranceConfig(bytes32 marketId, InsuranceConfig calldata p) external {
+    function setInsuranceConfig(bytes32 marketId, InsuranceConfig calldata p) external nonReentrant {
         _onlyGovernance();
         _requireMarket(marketId);
 
@@ -235,7 +236,7 @@ contract PerpsAdminFacet {
         emit PerpsInsuranceConfigUpdated(marketId, previous, p);
     }
 
-    function setGlobalConfig(GlobalPerpsConfig calldata p) external {
+    function setGlobalConfig(GlobalPerpsConfig calldata p) external nonReentrant {
         _onlyGovernance();
         if (p.publicExecutionEnabled || p.publicLiquidationEnabled) {
             _requireAllMarketsGenesisConfigured();

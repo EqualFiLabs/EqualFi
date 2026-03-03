@@ -8,6 +8,7 @@ import {LibPerpsOracle} from "./LibPerpsOracle.sol";
 import {LibPerpsRisk} from "./LibPerpsRisk.sol";
 import {LibPerpsSync} from "./LibPerpsSync.sol";
 import {LibPerpsStorage} from "./LibPerpsStorage.sol";
+import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {
     Perps_AccountNotFound,
     Perps_LiquidationPaused,
@@ -18,7 +19,7 @@ import {
 } from "./PerpsErrors.sol";
 
 /// @notice Permissionless liquidation with deterministic close factor, waterfall handling, and settlement deltas.
-contract PerpsLiquidationFacet {
+contract PerpsLiquidationFacet is ReentrancyGuardModifiers {
     uint256 internal constant BPS_DENOMINATOR = 10_000;
     uint256 internal constant FULL_CLOSE_BPS = 10_000;
     uint256 internal constant PARTIAL_CLOSE_BPS = 5_000;
@@ -37,6 +38,7 @@ contract PerpsLiquidationFacet {
 
     function liquidate(LiquidationParams calldata p)
         external
+        nonReentrant
         returns (LibPerpsStorage.SettlementDelta memory delta, uint256 closeSizeUsdX18)
     {
         if (p.executionPriceX18 == 0) revert Perps_RiskLimitExceeded();
@@ -120,14 +122,6 @@ contract PerpsLiquidationFacet {
             overflowProtocolFee = liquidationProtocolFee - insuranceFromProtocol;
         }
 
-        LibPerpsFees.FeeSplit memory overflowSplit;
-        uint256 explicitOutboundCredit;
-        if (overflowProtocolFee > 0) {
-            (overflowSplit, explicitOutboundCredit) = LibPerpsFees.applyTradingFee(
-                p.marketId, overflowProtocolFee, p.feePoolId, keccak256("perps.liquidation.protocol")
-            );
-        }
-
         if (liquidatorReward > 0) {
             LibPerpsDomain.debitIsolatedTracked(liquidatorReward);
         }
@@ -161,6 +155,15 @@ contract PerpsLiquidationFacet {
         } else {
             position.sizeUsdX18 = nextSizeUsdX18;
             position.collateralAmount = accountCollateralAfter;
+        }
+
+        // Route overflow liquidation protocol fees after critical state prep and before final invariant checks.
+        LibPerpsFees.FeeSplit memory overflowSplit;
+        uint256 explicitOutboundCredit;
+        if (overflowProtocolFee > 0) {
+            (overflowSplit, explicitOutboundCredit) = LibPerpsFees.applyTradingFee(
+                p.marketId, overflowProtocolFee, p.feePoolId, keccak256("perps.liquidation.protocol")
+            );
         }
 
         delta.marketId = p.marketId;
@@ -213,7 +216,11 @@ contract PerpsLiquidationFacet {
         closeFactorBps = _closeFactorBps(health);
     }
 
-    function syncMarket(bytes32 marketId) external returns (LibPerpsSync.MarketSyncResult memory syncResult) {
+    function syncMarket(bytes32 marketId)
+        external
+        nonReentrant
+        returns (LibPerpsSync.MarketSyncResult memory syncResult)
+    {
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
         if (market.pauseSync) revert Perps_SyncPaused(marketId);
 
