@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../../src/views/AmmAuctionViewFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
@@ -126,7 +127,7 @@ contract AmmAuctionGasTest is Test {
     }
 }
 
-contract AmmAuctionGasHarness is AmmAuctionFacet {
+contract AmmAuctionGasHarness is AmmAuctionFacet, AmmAuctionViewFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

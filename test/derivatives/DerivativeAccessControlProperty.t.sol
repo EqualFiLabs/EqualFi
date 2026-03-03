@@ -6,6 +6,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {OptionToken} from "../../src/derivatives/OptionToken.sol";
 import {FuturesToken} from "../../src/derivatives/FuturesToken.sol";
 import {AmmAuctionFacet, AmmAuction_Paused} from "../../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../../src/views/AmmAuctionViewFacet.sol";
 import {OptionsFacet, Options_NotTokenHolder, Options_Paused} from "../../src/derivatives/OptionsFacet.sol";
 import {FuturesFacet, Futures_NotTokenHolder, Futures_Paused} from "../../src/derivatives/FuturesFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
@@ -649,7 +650,7 @@ contract FuturesAccessHarness is FuturesFacet {
     }
 }
 
-contract AmmAccessHarness is AmmAuctionFacet {
+contract AmmAccessHarness is AmmAuctionFacet, AmmAuctionViewFacet {
     function setContractOwner(address owner) external {
         LibDiamond.setContractOwner(owner);
     }

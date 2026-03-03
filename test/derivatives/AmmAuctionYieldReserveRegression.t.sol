@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../../src/views/AmmAuctionViewFacet.sol";
 import {PositionManagementFacet} from "../../src/equallend/PositionManagementFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
@@ -15,7 +16,7 @@ import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 
 /// @notice Regression harness that wires the AMM auction facet with position management to check yield reserve backing.
-contract AmmAuctionYieldReserveHarness is AmmAuctionFacet, PositionManagementFacet {
+contract AmmAuctionYieldReserveHarness is AmmAuctionFacet, AmmAuctionViewFacet, PositionManagementFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

@@ -50,11 +50,13 @@ import {EqualLendDirectRollingViewFacet} from "../src/views/EqualLendDirectRolli
 import {EqualLendDirectViewFacet} from "../src/views/EqualLendDirectViewFacet.sol";
 import {ActiveCreditViewFacet} from "../src/views/ActiveCreditViewFacet.sol";
 import {AmmAuctionFacet} from "../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../src/views/AmmAuctionViewFacet.sol";
 import {AtomicDeskFacet} from "../src/EqualX/AtomicDeskFacet.sol";
 import {MamCurveCreationFacet} from "../src/EqualX/MamCurveCreationFacet.sol";
 import {MamCurveManagementFacet} from "../src/EqualX/MamCurveManagementFacet.sol";
 import {MamCurveExecutionFacet} from "../src/EqualX/MamCurveExecutionFacet.sol";
 import {CommunityAuctionFacet} from "../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../src/views/CommunityAuctionViewFacet.sol";
 import {SettlementEscrowFacet} from "../src/EqualX/SettlementEscrowFacet.sol";
 import {Mailbox} from "../src/EqualX/Mailbox.sol";
 import {OptionsFacet} from "../src/derivatives/OptionsFacet.sol";
@@ -274,11 +276,13 @@ contract DeployDiamondScript is Script {
         EqualLendDirectViewFacet directView = new EqualLendDirectViewFacet();
         ActiveCreditViewFacet activeCreditView = new ActiveCreditViewFacet();
         AmmAuctionFacet ammAuction = new AmmAuctionFacet();
+        AmmAuctionViewFacet ammAuctionView = new AmmAuctionViewFacet();
         AtomicDeskFacet atomicDesk = new AtomicDeskFacet();
         MamCurveCreationFacet mamCurveCreate = new MamCurveCreationFacet();
         MamCurveManagementFacet mamCurveManage = new MamCurveManagementFacet();
         MamCurveExecutionFacet mamCurveExec = new MamCurveExecutionFacet();
         CommunityAuctionFacet communityAuction = new CommunityAuctionFacet();
+        CommunityAuctionViewFacet communityAuctionView = new CommunityAuctionViewFacet();
         SettlementEscrowFacet settlementEscrow = new SettlementEscrowFacet();
         OptionsFacet optionsFacet = new OptionsFacet();
         FuturesFacet futuresFacet = new FuturesFacet();
@@ -310,7 +314,7 @@ contract DeployDiamondScript is Script {
         cuts[13] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[14] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](44);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](46);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -355,6 +359,8 @@ contract DeployDiamondScript is Script {
         more[41] = _cut(address(pointsAdmin), _selectors(pointsAdmin));
         more[42] = _cut(address(pointsView), _selectors(pointsView));
         more[43] = _cut(address(pointsRedemption), _selectors(pointsRedemption));
+        more[44] = _cut(address(ammAuctionView), _selectors(ammAuctionView));
+        more[45] = _cut(address(communityAuctionView), _selectors(communityAuctionView));
 
         // Deploy diamond
         // Use broadcaster as temporary owner so subsequent diamondCut in this script is authorized.
@@ -879,18 +885,22 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(AmmAuctionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](7);
+        s = new bytes4[](5);
         s[0] = AmmAuctionFacet.setAmmPaused.selector;
         s[1] = AmmAuctionFacet.createAuction.selector;
         s[2] = AmmAuctionFacet.swapExactInOrFinalize.selector;
         s[3] = AmmAuctionFacet.cancelAuction.selector;
-        s[4] = AmmAuctionFacet.getAuction.selector;
-        s[5] = AmmAuctionFacet.previewSwap.selector;
-        s[6] = AmmAuctionFacet.addLiquidity.selector;
+        s[4] = AmmAuctionFacet.addLiquidity.selector;
+    }
+
+    function _selectors(AmmAuctionViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = AmmAuctionViewFacet.getAuction.selector;
+        s[1] = AmmAuctionViewFacet.previewSwap.selector;
     }
 
     function _selectors(CommunityAuctionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](13);
+        s = new bytes4[](7);
         s[0] = CommunityAuctionFacet.createCommunityAuction.selector;
         s[1] = CommunityAuctionFacet.joinCommunityAuction.selector;
         s[2] = CommunityAuctionFacet.leaveCommunityAuction.selector;
@@ -898,12 +908,16 @@ contract DeployDiamondScript is Script {
         s[4] = CommunityAuctionFacet.swapExactIn.selector;
         s[5] = CommunityAuctionFacet.finalizeAuction.selector;
         s[6] = CommunityAuctionFacet.cancelCommunityAuction.selector;
-        s[7] = CommunityAuctionFacet.getCommunityAuction.selector;
-        s[8] = CommunityAuctionFacet.getMakerShare.selector;
-        s[9] = CommunityAuctionFacet.previewJoin.selector;
-        s[10] = CommunityAuctionFacet.previewLeave.selector;
-        s[11] = CommunityAuctionFacet.getTotalMakers.selector;
-        s[12] = CommunityAuctionFacet.previewCommunitySwap.selector;
+    }
+
+    function _selectors(CommunityAuctionViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = CommunityAuctionViewFacet.getCommunityAuction.selector;
+        s[1] = CommunityAuctionViewFacet.getMakerShare.selector;
+        s[2] = CommunityAuctionViewFacet.previewJoin.selector;
+        s[3] = CommunityAuctionViewFacet.previewLeave.selector;
+        s[4] = CommunityAuctionViewFacet.getTotalMakers.selector;
+        s[5] = CommunityAuctionViewFacet.previewCommunitySwap.selector;
     }
 
     function _selectors(AtomicDeskFacet) internal pure returns (bytes4[] memory s) {

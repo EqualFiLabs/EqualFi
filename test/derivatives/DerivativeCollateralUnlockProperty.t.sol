@@ -6,6 +6,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {OptionToken} from "../../src/derivatives/OptionToken.sol";
 import {FuturesToken} from "../../src/derivatives/FuturesToken.sol";
 import {AmmAuctionFacet} from "../../src/EqualX/AmmAuctionFacet.sol";
+import {AmmAuctionViewFacet} from "../../src/views/AmmAuctionViewFacet.sol";
 import {OptionsFacet} from "../../src/derivatives/OptionsFacet.sol";
 import {FuturesFacet} from "../../src/derivatives/FuturesFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
@@ -302,7 +303,7 @@ contract FuturesUnlockHarness is FuturesFacet {
     }
 }
 
-contract AmmUnlockHarness is AmmAuctionFacet {
+contract AmmUnlockHarness is AmmAuctionFacet, AmmAuctionViewFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

@@ -7,6 +7,7 @@ import {
     CommunityAuctionFacet,
     CommunityAuction_ZeroOutput
 } from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../../src/views/CommunityAuctionViewFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
@@ -304,7 +305,7 @@ contract CommunityAuctionInvariantModeTest is Test {
     }
 }
 
-contract CommunityAuctionInvariantHarness is CommunityAuctionFacet {
+contract CommunityAuctionInvariantHarness is CommunityAuctionFacet, CommunityAuctionViewFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

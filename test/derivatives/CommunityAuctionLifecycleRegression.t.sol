@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {CommunityAuctionFacet} from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../../src/views/CommunityAuctionViewFacet.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
@@ -14,7 +15,7 @@ import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {Types} from "../../src/libraries/Types.sol";
 
 /// @notice Regression test to surface backing leaks across a full community auction lifecycle with two makers.
-contract CommunityAuctionLifecycleHarness is CommunityAuctionFacet {
+contract CommunityAuctionLifecycleHarness is CommunityAuctionFacet, CommunityAuctionViewFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;

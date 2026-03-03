@@ -11,6 +11,7 @@ import {
     CommunityAuction_InvalidAmount,
     CommunityAuction_StableModeDisabled
 } from "../../src/EqualX/CommunityAuctionFacet.sol";
+import {CommunityAuctionViewFacet} from "../../src/views/CommunityAuctionViewFacet.sol";
 import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
 import {LibCommunityAuctionFeeIndex} from "../../src/libraries/LibCommunityAuctionFeeIndex.sol";
 import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
@@ -1118,7 +1119,7 @@ contract CommunityAuctionFacetPropertyTest is Test {
     }
 }
 
-contract CommunityAuctionHarness is CommunityAuctionFacet {
+contract CommunityAuctionHarness is CommunityAuctionFacet, CommunityAuctionViewFacet {
     function configurePositionNFT(address nft) external {
         LibPositionNFT.PositionNFTStorage storage ns = LibPositionNFT.s();
         ns.positionNFTContract = nft;
