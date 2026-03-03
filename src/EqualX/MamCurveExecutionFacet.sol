@@ -7,6 +7,7 @@ import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
 import {LibMamMath} from "../libraries/LibMamMath.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
 import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
+import {LibMamCurveSnapshot} from "../libraries/LibMamCurveSnapshot.sol";
 import {LibPoints} from "../libraries/LibPoints.sol";
 import {ICurveProfile} from "../interfaces/ICurveProfile.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
@@ -216,6 +217,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         LibCurrency.transferWithMin(baseToken, recipient, baseFill, minOut);
         LibPoints.accrueToDefaultPosition(msg.sender, LibPoints.ACTION_SWAP_MAM_CURVE);
 
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_FILLED);
         emit CurveFilled(curveId, msg.sender, recipient, amountIn, totalQuote, amountOut, feeAmount, remaining);
     }
 
@@ -278,4 +280,5 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         }
         return remaining;
     }
+
 }

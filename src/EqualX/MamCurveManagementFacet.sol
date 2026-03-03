@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
 import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
 import {LibMamCurveHasher} from "../libraries/LibMamCurveHasher.sol";
+import {LibMamCurveSnapshot} from "../libraries/LibMamCurveSnapshot.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import "../libraries/MamCurveErrors.sol";
@@ -159,6 +160,7 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         if (oldProfile != nextProfile) {
             emit CurveProfileTransition(curveId, oldProfile, nextProfile);
         }
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_UPDATED);
         emit CurveUpdated(curveId, makerPositionKey, newGen, params);
     }
 
@@ -191,6 +193,7 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.removeCurveGlobal(curveId);
         LibDerivativeStorage.removeCurveByPair(imm.tokenA, imm.tokenB, curveId);
 
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_CANCELLED);
         emit CurveCancelled(curveId, makerPositionKey, remaining);
         return makerPositionKey;
     }
@@ -220,6 +223,7 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.removeCurveGlobal(curveId);
         LibDerivativeStorage.removeCurveByPair(imm.tokenA, imm.tokenB, curveId);
 
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_EXPIRED);
         emit CurveExpired(curveId, makerPositionKey, remaining);
     }
 
@@ -254,4 +258,5 @@ contract MamCurveManagementFacet is ReentrancyGuardModifiers {
         desc.profile = profile;
         desc.profileParams = profileParams;
     }
+
 }

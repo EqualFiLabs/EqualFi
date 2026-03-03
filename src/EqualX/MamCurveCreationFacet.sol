@@ -9,6 +9,7 @@ import {LibFeeIndex} from "../libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../libraries/LibActiveCreditIndex.sol";
 import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibMamCurveHasher} from "../libraries/LibMamCurveHasher.sol";
+import {LibMamCurveSnapshot} from "../libraries/LibMamCurveSnapshot.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {PoolMembershipRequired} from "../libraries/Errors.sol";
@@ -139,6 +140,8 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             desc.profile,
             desc.profileParams
         );
+
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_CREATED);
     }
 
     function createCurvesBatch(MamTypes.CurveDescriptor[] calldata descs)
@@ -238,6 +241,8 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             desc.profile,
             desc.profileParams
         );
+
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_CREATED);
     }
 
     function _validateDescriptor(MamTypes.CurveDescriptor calldata desc, bytes32 positionKey)
