@@ -307,10 +307,13 @@ abstract contract DerivativeDiamondTestBase is Test {
     }
 
     function _selectorsMamCreate() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](3);
+        s = new bytes4[](6);
         s[0] = MamCurveCreationFacet.setMamPaused.selector;
-        s[1] = MamCurveCreationFacet.createCurve.selector;
-        s[2] = MamCurveCreationFacet.createCurvesBatch.selector;
+        s[1] = MamCurveCreationFacet.approveCurveProfile.selector;
+        s[2] = MamCurveCreationFacet.revokeCurveProfile.selector;
+        s[3] = MamCurveCreationFacet.isCurveProfileApproved.selector;
+        s[4] = MamCurveCreationFacet.createCurve.selector;
+        s[5] = MamCurveCreationFacet.createCurvesBatch.selector;
     }
 
     function _selectorsMamManage() internal pure returns (bytes4[] memory s) {
@@ -324,10 +327,11 @@ abstract contract DerivativeDiamondTestBase is Test {
     }
 
     function _selectorsMamExec() internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](3);
+        s = new bytes4[](4);
         s[0] = MamCurveExecutionFacet.loadCurveForFill.selector;
         s[1] = MamCurveExecutionFacet.previewCurveQuote.selector;
         s[2] = bytes4(keccak256("executeCurveSwap(uint256,uint256,uint256,uint256,uint64,address)"));
+        s[3] = bytes4(keccak256("executeCurveSwap(uint256,uint256,uint256,uint256,uint64,address,uint32,bytes32)"));
     }
 
     function _selectorsCommunity() internal pure returns (bytes4[] memory s) {
@@ -526,7 +530,16 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
         tokenB.approve(address(diamond), maxQuote);
 
         vm.prank(swapper);
-        mam.executeCurveSwap(curveId, amountIn, maxQuote, 1, uint64(block.timestamp + 1 days), swapper);
+        mam.executeCurveSwap(
+            curveId,
+            amountIn,
+            maxQuote,
+            1,
+            uint64(block.timestamp + 1 days),
+            swapper,
+            stored.generation,
+            stored.commitment
+        );
 
         uint256 expectedBaseFill = (amountIn * 1e18) / 2e18;
         assertEq(harness.getDirectLocked(key, 1), 1e18 - expectedBaseFill, "base unlocked");

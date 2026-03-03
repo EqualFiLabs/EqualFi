@@ -6,6 +6,7 @@ import {MamTypes} from "../libraries/MamTypes.sol";
 import {LibMamMath} from "../libraries/LibMamMath.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {PositionNFT} from "../nft/PositionNFT.sol";
+import {ICurveProfile} from "../interfaces/ICurveProfile.sol";
 
 /// @notice View-only facet for MAM curve state.
 contract MamCurveViewFacet {
@@ -81,6 +82,7 @@ contract MamCurveViewFacet {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         MamTypes.StoredCurve storage curve = ds.curves[curveId];
         LibDerivativeStorage.CurvePricing storage pricing = ds.curvePricing[curveId];
+        LibDerivativeStorage.CurveProfileData storage profileData = ds.curveProfileData[curveId];
         LibDerivativeStorage.CurveImmutables storage imm = ds.curveImmutables[curveId];
 
         active = curve.active;
@@ -91,13 +93,7 @@ contract MamCurveViewFacet {
         baseIsA = ds.curveBaseIsA[curveId];
         tokenA = imm.tokenA;
         tokenB = imm.tokenB;
-        currentPrice = LibMamMath.computePrice(
-            pricing.startPrice,
-            pricing.endPrice,
-            pricing.startTime,
-            pricing.duration,
-            block.timestamp
-        );
+        currentPrice = _computeViewPrice(pricing, profileData.profile, profileData.profileParams);
         if (block.timestamp < endTime) {
             timeRemaining = endTime - block.timestamp;
         }
@@ -114,7 +110,7 @@ contract MamCurveViewFacet {
             bool ok
         )
     {
-        return _quoteCurveExactIn(curveId, amountIn);
+        return _quoteCurveExactIn(curveId, amountIn, false);
     }
 
     function quoteCurvesExactInBatch(uint256[] calldata curveIds, uint256[] calldata amountIns)
@@ -128,7 +124,8 @@ contract MamCurveViewFacet {
         feeAmounts = new uint256[](len);
         oks = new bool[](len);
         for (uint256 i = 0; i < len; i++) {
-            (uint256 out, uint256 fee,, uint128 remaining, bool ok) = _quoteCurveExactIn(curveIds[i], amountIns[i]);
+            (uint256 out, uint256 fee,, uint128 remaining, bool ok) =
+                _quoteCurveExactIn(curveIds[i], amountIns[i], true);
             remaining;
             amountOuts[i] = out;
             feeAmounts[i] = fee;
@@ -155,7 +152,7 @@ contract MamCurveViewFacet {
         return nft.getPositionKey(positionId);
     }
 
-    function _quoteCurveExactIn(uint256 curveId, uint256 amountIn)
+    function _quoteCurveExactIn(uint256 curveId, uint256 amountIn, bool suppressProfileRevert)
         private
         view
         returns (
@@ -173,6 +170,7 @@ contract MamCurveViewFacet {
         }
 
         LibDerivativeStorage.CurvePricing storage pricing = ds.curvePricing[curveId];
+        LibDerivativeStorage.CurveProfileData storage profileData = ds.curveProfileData[curveId];
         LibDerivativeStorage.CurveImmutables storage imm = ds.curveImmutables[curveId];
 
         uint256 endTime = uint256(pricing.startTime) + uint256(pricing.duration);
@@ -180,13 +178,17 @@ contract MamCurveViewFacet {
             return (0, 0, 0, curve.remainingVolume, false);
         }
 
-        uint256 price = LibMamMath.computePrice(
-            pricing.startPrice,
-            pricing.endPrice,
-            pricing.startTime,
-            pricing.duration,
-            block.timestamp
-        );
+        uint256 price;
+        if (suppressProfileRevert) {
+            (bool priceOk, uint256 computedPrice) =
+                _tryComputeViewPrice(pricing, profileData.profile, profileData.profileParams);
+            if (!priceOk) {
+                return (0, 0, 0, curve.remainingVolume, false);
+            }
+            price = computedPrice;
+        } else {
+            price = _computeViewPrice(pricing, profileData.profile, profileData.profileParams);
+        }
         uint256 baseFill = LibMamMath.amountOutForFill(amountIn, price);
         if (baseFill == 0 || baseFill > curve.remainingVolume) {
             return (0, 0, 0, curve.remainingVolume, false);
@@ -196,5 +198,79 @@ contract MamCurveViewFacet {
         remainingVolume = curve.remainingVolume;
         amountOut = baseFill;
         ok = true;
+    }
+
+    function _computeViewPrice(LibDerivativeStorage.CurvePricing storage pricing, address profile, bytes32 profileParams)
+        private
+        view
+        returns (uint256 price)
+    {
+        if (profile == address(0)) {
+            return LibMamMath.computePrice(
+                pricing.startPrice,
+                pricing.endPrice,
+                pricing.startTime,
+                pricing.duration,
+                block.timestamp
+            );
+        }
+
+        (bool success, bytes memory ret) = profile.staticcall(
+            abi.encodeCall(
+                ICurveProfile.computePrice,
+                (
+                    pricing.startPrice,
+                    pricing.endPrice,
+                    pricing.startTime,
+                    pricing.duration,
+                    block.timestamp,
+                    profileParams
+                )
+            )
+        );
+        if (!success) {
+            assembly {
+                revert(add(ret, 32), mload(ret))
+            }
+        }
+        price = abi.decode(ret, (uint256));
+    }
+
+    function _tryComputeViewPrice(LibDerivativeStorage.CurvePricing storage pricing, address profile, bytes32 profileParams)
+        private
+        view
+        returns (bool success, uint256 price)
+    {
+        if (profile == address(0)) {
+            return (
+                true,
+                LibMamMath.computePrice(
+                    pricing.startPrice,
+                    pricing.endPrice,
+                    pricing.startTime,
+                    pricing.duration,
+                    block.timestamp
+                )
+            );
+        }
+
+        bytes memory ret;
+        (success, ret) = profile.staticcall(
+            abi.encodeCall(
+                ICurveProfile.computePrice,
+                (
+                    pricing.startPrice,
+                    pricing.endPrice,
+                    pricing.startTime,
+                    pricing.duration,
+                    block.timestamp,
+                    profileParams
+                )
+            )
+        );
+        if (!success || ret.length < 32) {
+            return (false, 0);
+        }
+        price = abi.decode(ret, (uint256));
     }
 }

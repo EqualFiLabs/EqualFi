@@ -643,10 +643,13 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(MamCurveCreationFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](3);
+        s = new bytes4[](6);
         s[0] = MamCurveCreationFacet.setMamPaused.selector;
-        s[1] = MamCurveCreationFacet.createCurve.selector;
-        s[2] = MamCurveCreationFacet.createCurvesBatch.selector;
+        s[1] = MamCurveCreationFacet.approveCurveProfile.selector;
+        s[2] = MamCurveCreationFacet.revokeCurveProfile.selector;
+        s[3] = MamCurveCreationFacet.isCurveProfileApproved.selector;
+        s[4] = MamCurveCreationFacet.createCurve.selector;
+        s[5] = MamCurveCreationFacet.createCurvesBatch.selector;
     }
 
     function _selectors(MamCurveManagementFacet) internal pure returns (bytes4[] memory s) {
@@ -660,9 +663,10 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(MamCurveExecutionFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](2);
+        s = new bytes4[](3);
         s[0] = MamCurveExecutionFacet.loadCurveForFill.selector;
         s[1] = bytes4(keccak256("executeCurveSwap(uint256,uint256,uint256,uint256,uint64,address)"));
+        s[2] = bytes4(keccak256("executeCurveSwap(uint256,uint256,uint256,uint256,uint64,address,uint32,bytes32)"));
     }
 
     function _selectors(EqualLendDirectOfferFacet) internal pure returns (bytes4[] memory s) {

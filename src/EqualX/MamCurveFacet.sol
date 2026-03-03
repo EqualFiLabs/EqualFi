@@ -7,6 +7,12 @@ import {MamTypes} from "../libraries/MamTypes.sol";
 interface MamCurveFacet {
     function setMamPaused(bool paused) external;
 
+    function approveCurveProfile(address profile) external;
+
+    function revokeCurveProfile(address profile) external;
+
+    function isCurveProfileApproved(address profile) external view returns (bool);
+
     function createCurve(MamTypes.CurveDescriptor calldata desc) external returns (uint256 curveId);
 
     function createCurvesBatch(MamTypes.CurveDescriptor[] calldata descs)
@@ -38,6 +44,8 @@ interface MamCurveFacet {
         uint256 maxQuote,
         uint256 minOut,
         uint64 deadline,
-        address recipient
+        address recipient,
+        uint32 expectedGeneration,
+        bytes32 expectedCommitment
     ) external payable returns (uint256 amountOut);
 }
