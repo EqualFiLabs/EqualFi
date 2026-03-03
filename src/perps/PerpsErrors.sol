@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 error Perps_MarketNotFound(bytes32 marketId);
 error Perps_MarketAlreadyExists(bytes32 marketId);
+error Perps_NotGovernance(address caller);
+error Perps_GenesisConfigIncomplete(bytes32 marketId, uint8 got, uint8 required);
 error Perps_AccountNotFound(bytes32 accountId);
 error Perps_Unauthorized(bytes32 accountId, address caller);
 error Perps_InvalidIntent();
