@@ -154,6 +154,16 @@ library LibPerpsIntent {
         }
     }
 
+    function requirePositionAuthority(uint256 positionTokenId) internal view {
+        if (!_isAuthorizedPositionController(positionTokenId, msg.sender)) {
+            revert Perps_Unauthorized(bytes32(0), msg.sender);
+        }
+    }
+
+    function isPositionAuthority(uint256 positionTokenId, address actor) internal view returns (bool) {
+        return _isAuthorizedPositionController(positionTokenId, actor);
+    }
+
     function cancelIntent(bytes32 accountId, bytes32 intentHash) internal {
         if (intentHash == bytes32(0)) {
             revert Perps_InvalidIntent();
@@ -207,18 +217,22 @@ library LibPerpsIntent {
         view
         returns (bool)
     {
+        return _isAuthorizedPositionController(account.positionTokenId, actor);
+    }
+
+    function _isAuthorizedPositionController(uint256 positionTokenId, address actor) private view returns (bool) {
         address nftAddress = LibPositionNFT.s().positionNFTContract;
         if (nftAddress == address(0)) {
             return false;
         }
 
         IPerpsPositionNFT nft = IPerpsPositionNFT(nftAddress);
-        address owner = nft.ownerOf(account.positionTokenId);
-        if (actor == owner || nft.getApproved(account.positionTokenId) == actor || nft.isApprovedForAll(owner, actor)) {
+        address owner = nft.ownerOf(positionTokenId);
+        if (actor == owner || nft.getApproved(positionTokenId) == actor || nft.isApprovedForAll(owner, actor)) {
             return true;
         }
 
-        return _isCanonicalTba(account.positionTokenId, actor);
+        return _isCanonicalTba(positionTokenId, actor);
     }
 
     function _isCanonicalTba(uint256 positionTokenId, address actor) private view returns (bool) {
