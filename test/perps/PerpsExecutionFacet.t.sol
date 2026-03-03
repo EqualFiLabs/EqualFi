@@ -9,10 +9,11 @@ import {LibPerpsIdentity} from "../../src/perps/LibPerpsIdentity.sol";
 import {LibPerpsStorage} from "../../src/perps/LibPerpsStorage.sol";
 import {PerpsExecutionFacet} from "../../src/perps/PerpsExecutionFacet.sol";
 import {
-    Perps_Unauthorized,
-    Perps_RiskLimitExceeded,
+    Perps_DecreasePaused,
     Perps_InsufficientPerpsLiquidity,
-    Perps_DecreasePaused
+    Perps_NonceMismatch,
+    Perps_RiskLimitExceeded,
+    Perps_Unauthorized
 } from "../../src/perps/PerpsErrors.sol";
 
 contract PerpsExecutionHarness is PerpsExecutionFacet {
@@ -30,7 +31,19 @@ contract PerpsExecutionHarness is PerpsExecutionFacet {
         market.indexAsset = address(0xB0B);
         market.longEnabled = true;
         market.shortEnabled = true;
+        market.maxLeverageBps = 50_000;
+        market.initialMarginBps = 1_000;
+        market.maintenanceMarginBps = 700;
+        market.maxOpenInterest = 5_000_000e18;
+        market.maxLongOpenInterest = 3_000_000e18;
+        market.maxShortOpenInterest = 3_000_000e18;
+        market.maxSkewAbs = 1_000_000e18;
+        market.takerFeeBps = 100;
+        market.maxFundingVelocityBpsPerDay = 1_000;
+        market.pauseIncrease = false;
         market.pauseDecrease = pauseDecrease;
+        market.pauseLiquidation = false;
+        market.pauseSync = false;
         market.exists = true;
     }
 
@@ -39,8 +52,29 @@ contract PerpsExecutionHarness is PerpsExecutionFacet {
         LibAppStorage.s().pools[poolId].trackedBalance = trackedBalance;
     }
 
+    function seedFeePool(uint256 poolId, address underlying, uint256 totalDeposits, uint256 trackedBalance) external {
+        LibAppStorage.s().pools[poolId].initialized = true;
+        LibAppStorage.s().pools[poolId].underlying = underlying;
+        LibAppStorage.s().pools[poolId].totalDeposits = totalDeposits;
+        LibAppStorage.s().pools[poolId].trackedBalance = trackedBalance;
+    }
+
+    function configureFeeRouter(uint256 treasuryBps, uint256 activeCreditBps, address treasury) external {
+        if (treasuryBps > type(uint16).max || activeCreditBps > type(uint16).max) revert Perps_RiskLimitExceeded();
+        LibAppStorage.AppStorage storage store = LibAppStorage.s();
+        store.treasury = treasury;
+        store.treasuryShareConfigured = true;
+        store.treasuryShareBps = uint16(treasuryBps);
+        store.activeCreditShareConfigured = true;
+        store.activeCreditShareBps = uint16(activeCreditBps);
+    }
+
     function accountCount() external view returns (uint256) {
         return LibPerpsStorage.s().accountCount;
+    }
+
+    function accountNonce(bytes32 accountId) external view returns (uint64) {
+        return LibPerpsStorage.s().accounts[accountId].nonce;
     }
 
     function domainState() external view returns (LibPerpsStorage.PerpsDomainState memory) {
@@ -54,14 +88,24 @@ contract PerpsExecutionHarness is PerpsExecutionFacet {
     function poolTrackedBalance(uint256 poolId) external view returns (uint256) {
         return LibAppStorage.s().pools[poolId].trackedBalance;
     }
+
+    function poolFeeIndex(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].feeIndex;
+    }
+
+    function poolYieldReserve(uint256 poolId) external view returns (uint256) {
+        return LibAppStorage.s().pools[poolId].yieldReserve;
+    }
 }
 
 contract PerpsExecutionFacetTest is Test {
     PerpsExecutionHarness internal h;
     PositionNFT internal nft;
 
-    address internal owner = address(0xA11CE);
+    uint256 internal ownerKey;
+    address internal owner;
     address internal operator = address(0xCAFE);
+    address internal executor = address(0xEEEE);
     address internal other = address(0xDEAD);
 
     uint256 internal tokenId;
@@ -70,6 +114,9 @@ contract PerpsExecutionFacetTest is Test {
     address internal collateralAsset = address(0xC011A7);
 
     function setUp() public {
+        ownerKey = 0xA11CE;
+        owner = vm.addr(ownerKey);
+
         h = new PerpsExecutionHarness();
         nft = new PositionNFT();
         nft.setMinter(address(this));
@@ -77,7 +124,8 @@ contract PerpsExecutionFacetTest is Test {
 
         h.setPositionNft(address(nft), true);
         h.seedMarket(marketId, collateralPoolId, collateralAsset, false);
-        h.setPoolTrackedBalance(collateralPoolId, 1_000_000e6);
+        h.seedFeePool(collateralPoolId, collateralAsset, 1_000e18, 2_000_000e18);
+        h.configureFeeRouter(0, 0, address(0));
     }
 
     function test_createAccount_derivationAndViews_roundTrip() public {
@@ -247,5 +295,184 @@ contract PerpsExecutionFacetTest is Test {
             })
         );
         assertEq(h.getAccountCollateral(marketId, accountId), 400e6);
+    }
+
+    function test_openIncreaseAndDecreaseClose_directPath_updatesStateAndSettlementDeltas() public {
+        bytes32 accountId = _createAndFundAccount(20_000e18);
+
+        uint256 feeIndexBefore = h.poolFeeIndex(collateralPoolId);
+        PerpsExecutionFacet.OpenIncreaseParams memory openParams = PerpsExecutionFacet.OpenIncreaseParams({
+            marketId: marketId,
+            accountId: accountId,
+            isLong: true,
+            sizeDeltaUsdX18: 10_000e18,
+            executionPriceX18: 2_000e18,
+            limitPriceX18: 2_000e18,
+            maxSlippageBps: 100,
+            feePoolId: collateralPoolId,
+            executorFee: 10e18
+        });
+
+        vm.prank(owner);
+        LibPerpsStorage.SettlementDelta memory openDelta = h.openOrIncrease(openParams);
+        assertEq(openDelta.takerFee, 100e18);
+        assertEq(openDelta.lpFee, 70e18);
+        assertEq(openDelta.protocolFee, 30e18);
+        assertEq(openDelta.executorFee, 10e18);
+
+        LibPerpsStorage.PerpsPosition memory position = h.getPosition(marketId, accountId, true);
+        assertEq(position.sizeUsdX18, 10_000e18);
+        assertEq(position.entryPriceX18, 2_000e18);
+
+        LibPerpsStorage.PerpsMarketState memory stateAfterOpen = h.marketState(marketId);
+        assertEq(stateAfterOpen.openInterestLong, 10_000e18);
+        assertEq(stateAfterOpen.openInterestShort, 0);
+        assertEq(stateAfterOpen.lpFeeIndexX18, 70e18);
+        assertEq(stateAfterOpen.protocolFeesAccrued, 30e18);
+
+        // Domain debits only protocol + executor fee on open
+        assertEq(h.domainState().isolatedTrackedBalance, 19_960e18);
+        assertGt(h.poolFeeIndex(collateralPoolId), feeIndexBefore);
+
+        PerpsExecutionFacet.DecreaseCloseParams memory decParams = PerpsExecutionFacet.DecreaseCloseParams({
+            marketId: marketId,
+            accountId: accountId,
+            isLong: true,
+            sizeDeltaUsdX18: 5_000e18,
+            executionPriceX18: 2_200e18,
+            limitPriceX18: 2_200e18,
+            maxSlippageBps: 100,
+            feePoolId: collateralPoolId,
+            executorFee: 5e18
+        });
+
+        vm.prank(owner);
+        LibPerpsStorage.SettlementDelta memory decDelta = h.decreaseOrClose(decParams);
+        assertEq(decDelta.realizedPnl, 500e18);
+        assertEq(decDelta.takerFee, 50e18);
+        assertEq(decDelta.executorFee, 5e18);
+        assertEq(decDelta.collateralInOut, 445e18);
+
+        LibPerpsStorage.PerpsPosition memory positionAfterDec = h.getPosition(marketId, accountId, true);
+        assertEq(positionAfterDec.sizeUsdX18, 5_000e18);
+
+        PerpsExecutionFacet.DecreaseCloseParams memory closeParams = PerpsExecutionFacet.DecreaseCloseParams({
+            marketId: marketId,
+            accountId: accountId,
+            isLong: true,
+            sizeDeltaUsdX18: 5_000e18,
+            executionPriceX18: 1_800e18,
+            limitPriceX18: 1_800e18,
+            maxSlippageBps: 100,
+            feePoolId: collateralPoolId,
+            executorFee: 5e18
+        });
+
+        vm.prank(owner);
+        LibPerpsStorage.SettlementDelta memory closeDelta = h.decreaseOrClose(closeParams);
+        assertEq(closeDelta.realizedPnl, -500e18);
+
+        LibPerpsStorage.PerpsPosition memory closed = h.getPosition(marketId, accountId, true);
+        assertEq(closed.sizeUsdX18, 0);
+    }
+
+    function test_executeIntent_openAndClose_sharedCoreAndNonceProgression() public {
+        bytes32 accountId = _createAndFundAccount(20_000e18);
+
+        LibPerpsStorage.PerpsIntent memory openIntent = LibPerpsStorage.PerpsIntent({
+            marketId: marketId,
+            accountId: accountId,
+            action: 1,
+            isLong: true,
+            sizeDeltaUsdX18: 6_000e18,
+            collateralDelta: 0,
+            limitPriceX18: 2_000e18,
+            maxSlippageBps: 100,
+            maxExecutorFee: 20e18,
+            nonce: 0,
+            deadline: uint64(block.timestamp + 1 days)
+        });
+
+        bytes memory openSig = _signIntent(openIntent);
+        vm.prank(executor);
+        LibPerpsStorage.SettlementDelta memory openDelta = h.executeIntent(
+            openIntent,
+            PerpsExecutionFacet.IntentExecutionParams({
+                signer: owner,
+                executionPriceX18: 2_000e18,
+                feePoolId: collateralPoolId,
+                executorFee: 10e18
+            }),
+            openSig
+        );
+
+        assertEq(openDelta.takerFee, 60e18);
+        assertEq(h.accountNonce(accountId), 1);
+        assertEq(h.getPosition(marketId, accountId, true).sizeUsdX18, 6_000e18);
+
+        vm.prank(executor);
+        vm.expectRevert(abi.encodeWithSelector(Perps_NonceMismatch.selector, uint64(1), uint64(0)));
+        h.executeIntent(
+            openIntent,
+            PerpsExecutionFacet.IntentExecutionParams({
+                signer: owner,
+                executionPriceX18: 2_000e18,
+                feePoolId: collateralPoolId,
+                executorFee: 10e18
+            }),
+            openSig
+        );
+
+        LibPerpsStorage.PerpsIntent memory closeIntent = LibPerpsStorage.PerpsIntent({
+            marketId: marketId,
+            accountId: accountId,
+            action: 2,
+            isLong: true,
+            sizeDeltaUsdX18: 6_000e18,
+            collateralDelta: 0,
+            limitPriceX18: 2_100e18,
+            maxSlippageBps: 100,
+            maxExecutorFee: 20e18,
+            nonce: 1,
+            deadline: uint64(block.timestamp + 1 days)
+        });
+
+        bytes memory closeSig = _signIntent(closeIntent);
+        vm.prank(executor);
+        LibPerpsStorage.SettlementDelta memory closeDelta = h.executeIntent(
+            closeIntent,
+            PerpsExecutionFacet.IntentExecutionParams({
+                signer: owner,
+                executionPriceX18: 2_100e18,
+                feePoolId: collateralPoolId,
+                executorFee: 10e18
+            }),
+            closeSig
+        );
+
+        assertEq(closeDelta.realizedPnl, 300e18);
+        assertEq(h.accountNonce(accountId), 2);
+        assertEq(h.getPosition(marketId, accountId, true).sizeUsdX18, 0);
+    }
+
+    function _createAndFundAccount(uint256 collateralAmount) internal returns (bytes32 accountId) {
+        vm.prank(owner);
+        accountId = h.createAccount(tokenId, 0);
+
+        vm.prank(owner);
+        h.addCollateral(
+            PerpsExecutionFacet.AddCollateralParams({
+                marketId: marketId,
+                accountId: accountId,
+                collateralAsset: collateralAsset,
+                amount: collateralAmount
+            })
+        );
+    }
+
+    function _signIntent(LibPerpsStorage.PerpsIntent memory intent) internal view returns (bytes memory signature) {
+        bytes32 digest = h.intentDigest(intent);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+        signature = abi.encodePacked(r, s, v);
     }
 }

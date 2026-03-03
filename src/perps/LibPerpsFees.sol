@@ -76,8 +76,9 @@ library LibPerpsFees {
         explicitOutboundCredit = LibPerpsDomain.routeOutboundFeeCredit(protocolFee);
         _creditNonPerpsFeePoolFromPerpsDomain(feePoolId, explicitOutboundCredit);
 
-        // Route via canonical global fee rails (treasury/ACI/FI) from credited pool tracked backing.
-        LibFeeRouter.routeManagedShare(feePoolId, explicitOutboundCredit, feeSource, true, 0);
+        // Route via canonical global fee rails (treasury/ACI/FI) without debiting tracked
+        // during this perps operation to preserve explicit credit-only non-perps deltas.
+        LibFeeRouter.routeManagedShare(feePoolId, explicitOutboundCredit, feeSource, false, 0);
     }
 
     function _creditNonPerpsFeePoolFromPerpsDomain(uint256 feePoolId, uint256 amount) private {
