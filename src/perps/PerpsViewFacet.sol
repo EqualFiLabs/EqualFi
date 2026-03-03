@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
+import {LibPerpsFees} from "./LibPerpsFees.sol";
 import {LibPerpsOracle} from "./LibPerpsOracle.sol";
 import {LibPerpsRisk} from "./LibPerpsRisk.sol";
 import {LibPerpsStorage} from "./LibPerpsStorage.sol";
@@ -48,6 +49,7 @@ contract PerpsViewFacet {
         uint256 realizedPnlOut;
         uint256 realizedPnlIn;
         uint256 lpFeeIndexX18;
+        uint256 lpFeePendingDistribution;
         uint256 protocolFeesAccrued;
         uint256 isolatedTrackedBalance;
         uint256 isolatedLiabilities;
@@ -58,6 +60,7 @@ contract PerpsViewFacet {
         bytes32 marketId;
         uint256 collateralPoolId;
         uint256 lpFeeIndexX18;
+        uint256 lpFeePendingDistribution;
         uint256 protocolFeesAccrued;
         uint256 outboundRouterCredits;
         uint256 insuranceBalance;
@@ -67,6 +70,17 @@ contract PerpsViewFacet {
         uint256 feePoolTrackedBalance;
         uint256 feePoolYieldReserve;
         uint256 feePoolFeeIndexX18;
+    }
+
+    struct AccountLpFeeState {
+        bytes32 marketId;
+        bytes32 accountId;
+        uint256 collateralShares;
+        uint256 feeIndexX18;
+        uint256 feeIndexCheckpointX18;
+        uint256 accruedFees;
+        uint256 pendingFees;
+        uint256 totalClaimableFees;
     }
 
     struct IsolationProof {
@@ -111,6 +125,27 @@ contract PerpsViewFacet {
         _requireMarket(marketId);
         _requireAccount(accountId);
         collateral = LibPerpsStorage.s().accountCollateral[accountId][marketId];
+    }
+
+    function getPerpsAccountLpFeeState(bytes32 marketId, bytes32 accountId)
+        external
+        view
+        returns (AccountLpFeeState memory state)
+    {
+        _requireMarket(marketId);
+        _requireAccount(accountId);
+
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        (uint256 accrued, uint256 pending, uint256 total) = LibPerpsFees.previewAccountLpFees(marketId, accountId);
+
+        state.marketId = marketId;
+        state.accountId = accountId;
+        state.collateralShares = ps.accountCollateral[accountId][marketId];
+        state.feeIndexX18 = ps.marketState[marketId].lpFeeIndexX18;
+        state.feeIndexCheckpointX18 = ps.accountLpFeeIndexX18[accountId][marketId];
+        state.accruedFees = accrued;
+        state.pendingFees = pending;
+        state.totalClaimableFees = total;
     }
 
     function previewHealth(bytes32 marketId, bytes32 accountId)
@@ -174,6 +209,7 @@ contract PerpsViewFacet {
         summary.realizedPnlOut = state.realizedPnlOut;
         summary.realizedPnlIn = state.realizedPnlIn;
         summary.lpFeeIndexX18 = state.lpFeeIndexX18;
+        summary.lpFeePendingDistribution = LibPerpsStorage.s().marketPendingLpFees[marketId];
         summary.protocolFeesAccrued = state.protocolFeesAccrued;
         summary.isolatedTrackedBalance = domainState.isolatedTrackedBalance;
         summary.isolatedLiabilities = domainState.isolatedLiabilities;
@@ -188,6 +224,7 @@ contract PerpsViewFacet {
         audit.marketId = marketId;
         audit.collateralPoolId = poolId;
         audit.lpFeeIndexX18 = state.lpFeeIndexX18;
+        audit.lpFeePendingDistribution = LibPerpsStorage.s().marketPendingLpFees[marketId];
         audit.protocolFeesAccrued = state.protocolFeesAccrued;
         // In current perps flow protocol fees are routed immediately to fee rails.
         audit.outboundRouterCredits = state.protocolFeesAccrued;

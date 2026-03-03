@@ -80,6 +80,7 @@ contract PerpsExecutionFacet is ReentrancyGuardModifiers {
     event PerpsAccountCreated(bytes32 indexed accountId, bytes32 indexed positionKey, uint256 indexed positionTokenId);
     event PerpsCollateralAdded(bytes32 indexed marketId, bytes32 indexed accountId, address collateralAsset, uint256 amount);
     event PerpsCollateralRemoved(bytes32 indexed marketId, bytes32 indexed accountId, address collateralAsset, uint256 amount);
+    event PerpsLpFeesClaimed(bytes32 indexed marketId, bytes32 indexed accountId, uint256 feeAmount);
     event PerpsIntentExecuted(bytes32 indexed marketId, bytes32 indexed accountId, uint8 action, address executor);
     event PositionIncreased(bytes32 indexed marketId, bytes32 indexed accountId, bool isLong, uint256 sizeDeltaUsdX18);
     event PositionDecreased(bytes32 indexed marketId, bytes32 indexed accountId, bool isLong, uint256 sizeDeltaUsdX18);
@@ -119,6 +120,7 @@ contract PerpsExecutionFacet is ReentrancyGuardModifiers {
         LibPerpsDomain.IsolationSnapshot memory beforeSnap = LibPerpsDomain.snapshotIsolation(nonPerpsPoolIds);
 
         LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        LibPerpsFees.settleAccountLpFees(p.marketId, p.accountId);
         ps.accountCollateral[p.accountId][p.marketId] += p.amount;
         ps.marketState[p.marketId].reservedCollateral += p.amount;
         LibPerpsDomain.reserveIsolatedBacking(p.amount);
@@ -127,9 +129,7 @@ contract PerpsExecutionFacet is ReentrancyGuardModifiers {
         emit PerpsCollateralAdded(p.marketId, p.accountId, p.collateralAsset, p.amount);
     }
 
-    function removeCollateral(RemoveCollateralParams calldata p) external nonReentrant {
-        if (p.amount == 0) revert Perps_RiskLimitExceeded();
-
+    function removeCollateral(RemoveCollateralParams calldata p) external nonReentrant returns (uint256 totalOut) {
         LibPerpsStorage.PerpsMarket storage market = _requireMarket(p.marketId);
         if (market.pauseDecrease) revert Perps_DecreasePaused(p.marketId);
         if (p.collateralAsset != market.collateralAsset) revert Perps_RiskLimitExceeded();
@@ -138,7 +138,10 @@ contract PerpsExecutionFacet is ReentrancyGuardModifiers {
         _requireAccount(p.accountId);
         LibPerpsIntent.requireDirectCallAuthority(p.accountId);
 
+        LibPerpsFees.settleAccountLpFees(p.marketId, p.accountId);
+        uint256 claimableLpFees = ps.accountLpFeesAccrued[p.accountId][p.marketId];
         uint256 currentCollateral = ps.accountCollateral[p.accountId][p.marketId];
+        if (p.amount == 0 && claimableLpFees == 0) revert Perps_RiskLimitExceeded();
         if (currentCollateral < p.amount) {
             revert Perps_InsufficientPerpsLiquidity(p.amount, currentCollateral);
         }
@@ -146,14 +149,23 @@ contract PerpsExecutionFacet is ReentrancyGuardModifiers {
         uint256[] memory nonPerpsPoolIds = _singlePoolArray(market.collateralPoolId);
         LibPerpsDomain.IsolationSnapshot memory beforeSnap = LibPerpsDomain.snapshotIsolation(nonPerpsPoolIds);
 
-        ps.accountCollateral[p.accountId][p.marketId] = currentCollateral - p.amount;
-        ps.marketState[p.marketId].reservedCollateral -= p.amount;
-        LibPerpsDomain.releaseIsolatedBacking(p.amount);
+        if (p.amount > 0) {
+            ps.accountCollateral[p.accountId][p.marketId] = currentCollateral - p.amount;
+            ps.marketState[p.marketId].reservedCollateral -= p.amount;
+            LibPerpsDomain.releaseIsolatedBacking(p.amount);
+        }
+
+        if (claimableLpFees > 0) {
+            ps.accountLpFeesAccrued[p.accountId][p.marketId] = 0;
+            LibPerpsDomain.debitIsolatedTracked(claimableLpFees);
+            emit PerpsLpFeesClaimed(p.marketId, p.accountId, claimableLpFees);
+        }
 
         LibPerpsStorage.PerpsMarketState storage state = ps.marketState[p.marketId];
         LibPerpsDomain.enforceDomainSolvency(state.insuranceBalance, state.badDebt);
         LibPerpsDomain.enforceNonPerpsBackingInvariant(nonPerpsPoolIds, beforeSnap, 0);
 
+        totalOut = p.amount + claimableLpFees;
         emit PerpsCollateralRemoved(p.marketId, p.accountId, p.collateralAsset, p.amount);
     }
 
@@ -269,6 +281,16 @@ contract PerpsExecutionFacet is ReentrancyGuardModifiers {
         _requireMarket(marketId);
         _requireAccount(accountId);
         return LibPerpsStorage.s().accountCollateral[accountId][marketId];
+    }
+
+    function previewAccountLpFees(bytes32 marketId, bytes32 accountId)
+        external
+        view
+        returns (uint256 accrued, uint256 pending, uint256 total)
+    {
+        _requireMarket(marketId);
+        _requireAccount(accountId);
+        return LibPerpsFees.previewAccountLpFees(marketId, accountId);
     }
 
     function getPosition(bytes32 marketId, bytes32 accountId, bool isLong)

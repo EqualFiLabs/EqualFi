@@ -176,7 +176,16 @@ contract PerpsLiquidationReentrancyHarness is PerpsLiquidationFacet {
     }
 
     function setAccountCollateral(bytes32 accountId, bytes32 marketId, uint256 amount) external {
-        LibPerpsStorage.s().accountCollateral[accountId][marketId] = amount;
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        uint256 previous = ps.accountCollateral[accountId][marketId];
+        ps.accountCollateral[accountId][marketId] = amount;
+
+        LibPerpsStorage.PerpsMarketState storage state = ps.marketState[marketId];
+        if (amount > previous) {
+            state.reservedCollateral += amount - previous;
+        } else if (amount < previous) {
+            state.reservedCollateral -= previous - amount;
+        }
     }
 
     function seedPosition(bytes32 marketId, bytes32 accountId, bool isLong, uint256 sizeUsdX18, uint256 entryPriceX18) external {

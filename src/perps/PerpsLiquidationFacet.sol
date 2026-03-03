@@ -57,6 +57,7 @@ contract PerpsLiquidationFacet is ReentrancyGuardModifiers {
         uint256[] memory nonPerpsPoolIds = _singlePoolArray(market.collateralPoolId);
         LibPerpsDomain.IsolationSnapshot memory beforeSnap = LibPerpsDomain.snapshotIsolation(nonPerpsPoolIds);
 
+        LibPerpsFees.settleAccountLpFees(p.marketId, p.accountId);
         LibPerpsFunding.updateMarketFunding(p.marketId, uint64(block.timestamp));
         LibPerpsFunding.FundingSettlement memory fundingSettlement =
             LibPerpsFunding.settlePositionFunding(p.marketId, p.accountId, p.isLong);
@@ -136,6 +137,11 @@ contract PerpsLiquidationFacet is ReentrancyGuardModifiers {
         }
 
         ps.accountCollateral[p.accountId][p.marketId] = accountCollateralAfter;
+        if (accountCollateralAfter > accountCollateralBefore) {
+            state.reservedCollateral += accountCollateralAfter - accountCollateralBefore;
+        } else if (accountCollateralAfter < accountCollateralBefore) {
+            state.reservedCollateral -= accountCollateralBefore - accountCollateralAfter;
+        }
 
         LibPerpsRisk.OpenInterestPreview memory oiPreview =
             LibPerpsRisk.previewOpenInterestAfterDelta(market, state, p.isLong, -_toInt(closeSizeUsdX18));

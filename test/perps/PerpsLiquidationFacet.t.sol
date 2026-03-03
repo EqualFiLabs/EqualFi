@@ -123,7 +123,16 @@ contract PerpsLiquidationHarness is PerpsLiquidationFacet {
     }
 
     function setAccountCollateral(bytes32 accountId, bytes32 marketId, uint256 amount) external {
-        LibPerpsStorage.s().accountCollateral[accountId][marketId] = amount;
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        uint256 previous = ps.accountCollateral[accountId][marketId];
+        ps.accountCollateral[accountId][marketId] = amount;
+
+        LibPerpsStorage.PerpsMarketState storage state = ps.marketState[marketId];
+        if (amount > previous) {
+            state.reservedCollateral += amount - previous;
+        } else if (amount < previous) {
+            state.reservedCollateral -= previous - amount;
+        }
     }
 
     function seedPosition(
@@ -419,7 +428,7 @@ contract PerpsLiquidationFacetTest is Test {
 
         LibPerpsStorage.PerpsMarketState memory state = h.getMarketState(MARKET_A);
         assertEq(state.insuranceBalance, 100e18, "insurance target should be filled first");
-        assertEq(state.lpFeeIndexX18, 21e18, "overflow LP share");
+        assertEq(state.lpFeeIndexX18, 1_050_000_000_000_000_000, "overflow LP share index");
         assertEq(state.protocolFeesAccrued, 9e18, "overflow protocol share");
 
         assertEq(h.getPoolTrackedBalance(FEE_POOL), trackedBefore + 9e18, "explicit outbound credit from perps domain");

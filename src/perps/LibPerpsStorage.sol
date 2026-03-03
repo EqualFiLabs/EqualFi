@@ -109,6 +109,9 @@ library LibPerpsStorage {
         mapping(bytes32 => PerpsMarketState) marketState;
         mapping(bytes32 => PerpsAccount) accounts;
         mapping(bytes32 => mapping(bytes32 => uint256)) accountCollateral;
+        mapping(bytes32 => mapping(bytes32 => uint256)) accountLpFeeIndexX18;
+        mapping(bytes32 => mapping(bytes32 => uint256)) accountLpFeesAccrued;
+        mapping(bytes32 => uint256) marketPendingLpFees;
         mapping(bytes32 => mapping(bytes32 => mapping(bool => PerpsPosition))) positions;
         mapping(bytes32 => uint8) marketConfigMask;
         mapping(uint256 => bytes32) marketIds;

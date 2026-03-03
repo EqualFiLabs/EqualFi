@@ -39,6 +39,10 @@ contract PerpsFundingFeesHarness {
         state.protocolFeesAccrued = protocolFeesAccrued;
     }
 
+    function setReservedCollateral(bytes32 marketId, uint256 reservedCollateral) external {
+        LibPerpsStorage.s().marketState[marketId].reservedCollateral = reservedCollateral;
+    }
+
     function seedPosition(
         bytes32 marketId,
         bytes32 accountId,
@@ -140,6 +144,10 @@ contract PerpsFundingFeesHarness {
 
     function getMarketState(bytes32 marketId) external view returns (LibPerpsStorage.PerpsMarketState memory) {
         return LibPerpsStorage.s().marketState[marketId];
+    }
+
+    function getPendingLpFees(bytes32 marketId) external view returns (uint256) {
+        return LibPerpsStorage.s().marketPendingLpFees[marketId];
     }
 
     function getPosition(bytes32 marketId, bytes32 accountId, bool isLong)
@@ -250,6 +258,7 @@ contract PerpsFundingFeesTest is Test {
     function test_applyTradingFee_routes7030_andReconcilesAccounting() public {
         h.seedMarket(MARKET_ID, 1_000_000e18, 1_000);
         h.seedMarketState(MARKET_ID, int256(0), int256(0), int256(0), 0, 0, 0);
+        h.setReservedCollateral(MARKET_ID, 2_000e18);
         h.setDomainState(5_000e18, 0, 5_000e18);
         h.seedFeePool(FEE_POOL_ID, address(0xC011A7), 1_000e18, 2_000e18);
         h.configureFeeRouter(0, 0, address(0));
@@ -266,8 +275,9 @@ contract PerpsFundingFeesTest is Test {
         assertEq(explicitCredit, 300e18, "explicit outbound credit must match protocol share");
 
         LibPerpsStorage.PerpsMarketState memory marketState = h.getMarketState(MARKET_ID);
-        assertEq(marketState.lpFeeIndexX18, 700e18);
+        assertEq(marketState.lpFeeIndexX18, 350_000_000_000_000_000);
         assertEq(marketState.protocolFeesAccrued, 300e18);
+        assertEq(h.getPendingLpFees(MARKET_ID), 0);
 
         LibPerpsStorage.PerpsDomainState memory domain = h.getDomainState();
         assertEq(domain.isolatedTrackedBalance, 4_700e18, "protocol share leaves perps domain only");

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibCurrency} from "../libraries/LibCurrency.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
@@ -12,6 +13,7 @@ import {Perps_RiskLimitExceeded} from "./PerpsErrors.sol";
 /// @notice Perps fee split and routing helpers.
 library LibPerpsFees {
     uint256 internal constant BPS_DENOMINATOR = 10_000;
+    uint256 internal constant INDEX_SCALE = 1e18;
     uint256 internal constant LP_SHARE_BPS = 7_000;
     uint256 internal constant PROTOCOL_SHARE_BPS = 3_000;
     bytes32 internal constant DEFAULT_PERPS_FEE_SOURCE = keccak256("equalis.perps.fee.v1");
@@ -44,7 +46,20 @@ library LibPerpsFees {
         LibPerpsStorage.PerpsMarketState storage state = ps.marketState[marketId];
 
         if (split.lpFee > 0) {
-            state.lpFeeIndexX18 += split.lpFee;
+            uint256 distributable = split.lpFee + ps.marketPendingLpFees[marketId];
+            uint256 totalLpShares = state.reservedCollateral;
+            if (totalLpShares == 0) {
+                ps.marketPendingLpFees[marketId] = distributable;
+            } else {
+                uint256 deltaIndex = Math.mulDiv(distributable, INDEX_SCALE, totalLpShares);
+                if (deltaIndex == 0) {
+                    ps.marketPendingLpFees[marketId] = distributable;
+                } else {
+                    uint256 distributed = Math.mulDiv(deltaIndex, totalLpShares, INDEX_SCALE);
+                    state.lpFeeIndexX18 += deltaIndex;
+                    ps.marketPendingLpFees[marketId] = distributable - distributed;
+                }
+            }
         }
 
         if (split.protocolFee > 0) {
@@ -53,6 +68,54 @@ library LibPerpsFees {
             explicitOutboundCredit =
                 _routeProtocolFeeToGlobalRails(feePoolId, split.protocolFee, feeSource == bytes32(0) ? DEFAULT_PERPS_FEE_SOURCE : feeSource);
         }
+    }
+
+    function settleAccountLpFees(bytes32 marketId, bytes32 accountId)
+        internal
+        returns (uint256 newlyAccrued, uint256 totalAccrued)
+    {
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        uint256 globalIndex = ps.marketState[marketId].lpFeeIndexX18;
+        uint256 accountIndex = ps.accountLpFeeIndexX18[accountId][marketId];
+        uint256 collateralShares = ps.accountCollateral[accountId][marketId];
+
+        if (globalIndex > accountIndex && collateralShares > 0) {
+            newlyAccrued = Math.mulDiv(collateralShares, globalIndex - accountIndex, INDEX_SCALE);
+            if (newlyAccrued > 0) {
+                ps.accountLpFeesAccrued[accountId][marketId] += newlyAccrued;
+            }
+        }
+
+        ps.accountLpFeeIndexX18[accountId][marketId] = globalIndex;
+        totalAccrued = ps.accountLpFeesAccrued[accountId][marketId];
+    }
+
+    function claimAccountLpFees(bytes32 marketId, bytes32 accountId) internal returns (uint256 claimed) {
+        (, claimed) = settleAccountLpFees(marketId, accountId);
+        if (claimed == 0) {
+            return 0;
+        }
+
+        LibPerpsStorage.s().accountLpFeesAccrued[accountId][marketId] = 0;
+        LibPerpsDomain.debitIsolatedTracked(claimed);
+    }
+
+    function previewAccountLpFees(bytes32 marketId, bytes32 accountId)
+        internal
+        view
+        returns (uint256 accrued, uint256 pending, uint256 total)
+    {
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        accrued = ps.accountLpFeesAccrued[accountId][marketId];
+
+        uint256 globalIndex = ps.marketState[marketId].lpFeeIndexX18;
+        uint256 accountIndex = ps.accountLpFeeIndexX18[accountId][marketId];
+        uint256 collateralShares = ps.accountCollateral[accountId][marketId];
+        if (globalIndex > accountIndex && collateralShares > 0) {
+            pending = Math.mulDiv(collateralShares, globalIndex - accountIndex, INDEX_SCALE);
+        }
+
+        total = accrued + pending;
     }
 
     function applyExecutorFee(uint256 requestedExecutorFee, uint256 signerApprovedMaxExecutorFee)

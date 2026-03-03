@@ -432,7 +432,7 @@ contract PerpsExecutionFacetTest is Test {
         LibPerpsStorage.PerpsMarketState memory stateAfterOpen = h.marketState(marketId);
         assertEq(stateAfterOpen.openInterestLong, 10_000e18);
         assertEq(stateAfterOpen.openInterestShort, 0);
-        assertEq(stateAfterOpen.lpFeeIndexX18, 70e18);
+        assertEq(stateAfterOpen.lpFeeIndexX18, 3_500_000_000_000_000);
         assertEq(stateAfterOpen.protocolFeesAccrued, 30e18);
 
         // Domain debits only protocol + executor fee on open
@@ -479,6 +479,51 @@ contract PerpsExecutionFacetTest is Test {
 
         LibPerpsStorage.PerpsPosition memory closed = h.getPosition(marketId, accountId, true);
         assertEq(closed.sizeUsdX18, 0);
+    }
+
+    function test_removeCollateral_claimsAccruedLpFees_lazilyOnWithdraw() public {
+        bytes32 accountId = _createAndFundAccount(20_000e18);
+
+        vm.prank(owner);
+        h.openOrIncrease(
+            PerpsExecutionFacet.OpenIncreaseParams({
+                marketId: marketId,
+                accountId: accountId,
+                isLong: true,
+                sizeDeltaUsdX18: 10_000e18,
+                executionPriceX18: 2_000e18,
+                limitPriceX18: 2_000e18,
+                maxSlippageBps: 100,
+                feePoolId: collateralPoolId,
+                executorFee: 0
+            })
+        );
+
+        (uint256 accruedBefore, uint256 pendingBefore, uint256 totalBefore) = h.previewAccountLpFees(marketId, accountId);
+        assertEq(accruedBefore, 0);
+        assertEq(pendingBefore, 70e18);
+        assertEq(totalBefore, 70e18);
+
+        uint256 trackedBefore = h.domainState().isolatedTrackedBalance;
+
+        vm.prank(owner);
+        uint256 withdrawn = h.removeCollateral(
+            PerpsExecutionFacet.RemoveCollateralParams({
+                marketId: marketId,
+                accountId: accountId,
+                collateralAsset: collateralAsset,
+                amount: 1_000e18
+            })
+        );
+
+        assertEq(withdrawn, 1_070e18, "withdraw amount plus accrued LP fees");
+        assertEq(h.getAccountCollateral(marketId, accountId), 19_000e18);
+        assertEq(h.domainState().isolatedTrackedBalance, trackedBefore - 1_070e18);
+
+        (uint256 accruedAfter, uint256 pendingAfter, uint256 totalAfter) = h.previewAccountLpFees(marketId, accountId);
+        assertEq(accruedAfter, 0);
+        assertEq(pendingAfter, 0);
+        assertEq(totalAfter, 0);
     }
 
     function test_executeIntent_openAndClose_sharedCoreAndNonceProgression() public {

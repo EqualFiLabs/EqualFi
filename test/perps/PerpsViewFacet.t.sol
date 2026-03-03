@@ -185,7 +185,7 @@ contract PerpsViewFacetTest is Test {
         LibPerpsStorage.PerpsMarketState memory state = h.getMarketState(MARKET_A);
         assertEq(state.openInterestLong, 10_000e18);
         assertEq(state.openInterestShort, 0);
-        assertEq(state.lpFeeIndexX18, 70e18);
+        assertEq(state.lpFeeIndexX18, 3_500_000_000_000_000);
         assertEq(state.protocolFeesAccrued, 30e18);
 
         PerpsViewFacet.SettlementSummary memory summary = h.getSettlementSummary(MARKET_A);
@@ -195,7 +195,8 @@ contract PerpsViewFacetTest is Test {
         assertEq(summary.isolatedTrackedBalance, h.proveIsolationInvariant(MARKET_A).isolatedTrackedBalance);
 
         PerpsViewFacet.FeeRoutingAudit memory audit = h.getFeeRoutingAudit(MARKET_A);
-        assertEq(audit.lpFeeIndexX18, 70e18);
+        assertEq(audit.lpFeeIndexX18, 3_500_000_000_000_000);
+        assertEq(audit.lpFeePendingDistribution, 0);
         assertEq(audit.protocolFeesAccrued, 30e18);
         assertEq(audit.outboundRouterCredits, 30e18);
         assertEq(audit.insuranceTargetGap, 75e18);
