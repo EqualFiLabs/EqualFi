@@ -12,8 +12,8 @@ interface IDirectOfferCanceller {
     function hasOpenOffers(bytes32 positionKey) external view returns (bool);
 }
 
-interface IAgentURIDiamond {
-    function getAgentURI(uint256 agentId) external view returns (string memory);
+interface IPositionMetadataDiamond {
+    function getPositionTokenURI(uint256 positionTokenId) external view returns (string memory);
 }
 
 /// @title PositionNFT
@@ -130,9 +130,9 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
         return tokenCreationTime[tokenId];
     }
 
-    /// @notice Return the ERC-8004 agent registration file URI
+    /// @notice Return the metadata URI for this Position NFT
     /// @param tokenId The token ID
-    /// @return Registration file URI
+    /// @return Metadata URI
     function tokenURI(uint256 tokenId) 
         public 
         view 
@@ -143,7 +143,7 @@ contract PositionNFT is ERC721Enumerable, ReentrancyGuard {
             revert InvalidTokenId(tokenId);
         }
         if (diamond != address(0)) {
-            return IAgentURIDiamond(diamond).getAgentURI(tokenId);
+            return IPositionMetadataDiamond(diamond).getPositionTokenURI(tokenId);
         }
         return super.tokenURI(tokenId);
     }

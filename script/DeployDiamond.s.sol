@@ -81,6 +81,14 @@ import {ILMIsolatedFacet} from "../src/ilm-isolated/facets/ILMIsolatedFacet.sol"
 import {ILMIsolatedLiquidationFacet} from "../src/ilm-isolated/facets/ILMIsolatedLiquidationFacet.sol";
 import {ILMIsolatedViewFacet} from "../src/ilm-isolated/facets/ILMIsolatedViewFacet.sol";
 import {LibIlmIsolatedStorage} from "../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
+import {ILMPooledAdminFacet} from "../src/ilm-pooled/facets/ILMPooledAdminFacet.sol";
+import {ILMPooledFacet} from "../src/ilm-pooled/facets/ILMPooledFacet.sol";
+import {ILMPooledLiquidationFacet} from "../src/ilm-pooled/facets/ILMPooledLiquidationFacet.sol";
+import {ILMPooledViewFacet} from "../src/ilm-pooled/facets/ILMPooledViewFacet.sol";
+import {PerpsAdminFacet} from "../src/perps/PerpsAdminFacet.sol";
+import {PerpsExecutionFacet} from "../src/perps/PerpsExecutionFacet.sol";
+import {PerpsLiquidationFacet} from "../src/perps/PerpsLiquidationFacet.sol";
+import {PerpsViewFacet} from "../src/perps/PerpsViewFacet.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {PositionMSCAImpl} from "../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
@@ -198,6 +206,7 @@ contract DeployDiamondScript is Script {
     uint8 internal constant DEFAULT_ROLLING_PENALTY_EPOCHS = 3;
     uint16 internal constant DEFAULT_ROLLING_MIN_PAYMENT_BPS = 0;
     uint256 internal constant DEFAULT_ILM_MAX_STALENESS = 1 days;
+    uint256 internal constant MORE_FACET_CUT_COUNT = 58;
     bytes32 internal constant ACTION_BORROW = keccak256("ACTION_BORROW");
     bytes32 internal constant ACTION_REPAY = keccak256("ACTION_REPAY");
     bytes32 internal constant ACTION_FLASH = keccak256("ACTION_FLASH");
@@ -313,6 +322,14 @@ contract DeployDiamondScript is Script {
         ILMIsolatedFacet ilmIsolated = new ILMIsolatedFacet();
         ILMIsolatedLiquidationFacet ilmIsolatedLiquidation = new ILMIsolatedLiquidationFacet();
         ILMIsolatedViewFacet ilmIsolatedView = new ILMIsolatedViewFacet();
+        ILMPooledAdminFacet ilmPooledAdmin = new ILMPooledAdminFacet();
+        ILMPooledFacet ilmPooled = new ILMPooledFacet();
+        ILMPooledLiquidationFacet ilmPooledLiquidation = new ILMPooledLiquidationFacet();
+        ILMPooledViewFacet ilmPooledView = new ILMPooledViewFacet();
+        PerpsAdminFacet perpsAdmin = new PerpsAdminFacet();
+        PerpsExecutionFacet perpsExecution = new PerpsExecutionFacet();
+        PerpsLiquidationFacet perpsLiquidation = new PerpsLiquidationFacet();
+        PerpsViewFacet perpsView = new PerpsViewFacet();
 
         // Build facet cuts (core + admin + fee + index + base views)
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](15);
@@ -332,7 +349,7 @@ contract DeployDiamondScript is Script {
         cuts[13] = _cut(address(equalIndexView), _selectors(equalIndexView));
         cuts[14] = _cut(address(liqView), _selectors(liqView));
         // loanView, cfgView, and new view facets appended via add more selectors
-        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](50);
+        IDiamondCut.FacetCut[] memory more = new IDiamondCut.FacetCut[](MORE_FACET_CUT_COUNT);
         more[0] = _cut(address(loanView), _selectors(loanView));
         more[1] = _cut(address(cfgView), _selectors(cfgView));
         more[2] = _cut(address(enhancedView), _selectors(enhancedView));
@@ -383,6 +400,14 @@ contract DeployDiamondScript is Script {
         more[47] = _cut(address(ilmIsolated), _selectors(ilmIsolated));
         more[48] = _cut(address(ilmIsolatedLiquidation), _selectors(ilmIsolatedLiquidation));
         more[49] = _cut(address(ilmIsolatedView), _selectors(ilmIsolatedView));
+        more[50] = _cut(address(ilmPooledAdmin), _selectors(ilmPooledAdmin));
+        more[51] = _cut(address(ilmPooled), _selectors(ilmPooled));
+        more[52] = _cut(address(ilmPooledLiquidation), _selectors(ilmPooledLiquidation));
+        more[53] = _cut(address(ilmPooledView), _selectors(ilmPooledView));
+        more[54] = _cut(address(perpsAdmin), _selectors(perpsAdmin));
+        more[55] = _cut(address(perpsExecution), _selectors(perpsExecution));
+        more[56] = _cut(address(perpsLiquidation), _selectors(perpsLiquidation));
+        more[57] = _cut(address(perpsView), _selectors(perpsView));
 
         // Deploy diamond
         // Use broadcaster as temporary owner so subsequent diamondCut in this script is authorized.
@@ -509,6 +534,7 @@ contract DeployDiamondScript is Script {
         gov.setDefaultPoolConfig(_defaultPoolConfig(18));
         gov.setDirectRollingConfig(_defaultDirectRollingConfig());
         gov.setDerivativeFeeConfig(0, 500, 5, 10, 2, 7000, 7000, 7000, 5e18, 0, 0);
+        ILMPooledAdminFacet(address(diamond)).setPooledGlobalBounds(1, 9_500, 0, 10_000);
 
         _deployTokensAndPools(PoolManagementFacet(address(diamond)), isGov, 0.5 ether);
         _deployFaucet();
@@ -1148,6 +1174,101 @@ contract DeployDiamondScript is Script {
         s[4] = ILMIsolatedViewFacet.getIsolatedMarketProtocolFeeAssets.selector;
         s[5] = ILMIsolatedViewFacet.isIlmIrmManagedOnly.selector;
         s[6] = ILMIsolatedViewFacet.isIsolatedHealthy.selector;
+    }
+
+    function _selectors(ILMPooledAdminFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](8);
+        s[0] = ILMPooledAdminFacet.createPooledMarket.selector;
+        s[1] = ILMPooledAdminFacet.setPooledMarketFlags.selector;
+        s[2] = ILMPooledAdminFacet.setPooledMarketCaps.selector;
+        s[3] = ILMPooledAdminFacet.setPooledRiskParams.selector;
+        s[4] = ILMPooledAdminFacet.setPooledRateStrategy.selector;
+        s[5] = ILMPooledAdminFacet.setPooledOracleAdapter.selector;
+        s[6] = ILMPooledAdminFacet.setPooledSentinelAdapter.selector;
+        s[7] = ILMPooledAdminFacet.setPooledGlobalBounds.selector;
+    }
+
+    function _selectors(ILMPooledFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = ILMPooledFacet.pooledSupply.selector;
+        s[1] = ILMPooledFacet.pooledWithdraw.selector;
+        s[2] = ILMPooledFacet.pooledAddCollateral.selector;
+        s[3] = ILMPooledFacet.pooledRemoveCollateral.selector;
+        s[4] = ILMPooledFacet.pooledBorrow.selector;
+        s[5] = ILMPooledFacet.pooledRepay.selector;
+    }
+
+    function _selectors(ILMPooledLiquidationFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](1);
+        s[0] = ILMPooledLiquidationFacet.pooledLiquidationCall.selector;
+    }
+
+    function _selectors(ILMPooledViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](6);
+        s[0] = ILMPooledViewFacet.getPooledMarket.selector;
+        s[1] = ILMPooledViewFacet.getPooledPosition.selector;
+        s[2] = ILMPooledViewFacet.previewHealthFactor.selector;
+        s[3] = ILMPooledViewFacet.previewSupplyBalance.selector;
+        s[4] = ILMPooledViewFacet.previewDebtBalance.selector;
+        s[5] = ILMPooledViewFacet.getPooledMarketProtocolFeeAssets.selector;
+    }
+
+    function _selectors(PerpsAdminFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](14);
+        s[0] = PerpsAdminFacet.createMarket.selector;
+        s[1] = PerpsAdminFacet.setMarketRisk.selector;
+        s[2] = PerpsAdminFacet.setMarketCaps.selector;
+        s[3] = PerpsAdminFacet.setOracleConfig.selector;
+        s[4] = PerpsAdminFacet.setPauseFlags.selector;
+        s[5] = PerpsAdminFacet.setFeeConfig.selector;
+        s[6] = PerpsAdminFacet.setInsuranceConfig.selector;
+        s[7] = PerpsAdminFacet.setGlobalConfig.selector;
+        s[8] = PerpsAdminFacet.getGlobalConfig.selector;
+        s[9] = PerpsAdminFacet.getMarketConfigMask.selector;
+        s[10] = PerpsAdminFacet.getRequiredGenesisConfigMask.selector;
+        s[11] = PerpsAdminFacet.isMarketExecutionEnabled.selector;
+        s[12] = PerpsAdminFacet.isMarketLiquidationEnabled.selector;
+        s[13] = PerpsAdminFacet.perpsAdminVersion.selector;
+    }
+
+    function _selectors(PerpsExecutionFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](15);
+        s[0] = PerpsExecutionFacet.createAccount.selector;
+        s[1] = PerpsExecutionFacet.addCollateral.selector;
+        s[2] = PerpsExecutionFacet.removeCollateral.selector;
+        s[3] = PerpsExecutionFacet.openOrIncrease.selector;
+        s[4] = PerpsExecutionFacet.decreaseOrClose.selector;
+        s[5] = PerpsExecutionFacet.executeIntent.selector;
+        s[6] = PerpsExecutionFacet.cancelIntent.selector;
+        s[7] = PerpsExecutionFacet.invalidateNoncesUpTo.selector;
+        s[8] = PerpsExecutionFacet.syncAccount.selector;
+        s[9] = PerpsExecutionFacet.deriveAccountIdForPosition.selector;
+        s[10] = PerpsExecutionFacet.accountExists.selector;
+        s[11] = PerpsExecutionFacet.getAccount.selector;
+        s[12] = PerpsExecutionFacet.getAccountCollateral.selector;
+        s[13] = PerpsExecutionFacet.getPosition.selector;
+        s[14] = PerpsExecutionFacet.intentDigest.selector;
+    }
+
+    function _selectors(PerpsLiquidationFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](3);
+        s[0] = PerpsLiquidationFacet.liquidate.selector;
+        s[1] = PerpsLiquidationFacet.previewCloseFactorBps.selector;
+        s[2] = PerpsLiquidationFacet.syncMarket.selector;
+    }
+
+    function _selectors(PerpsViewFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](10);
+        s[0] = PerpsViewFacet.getMarket.selector;
+        s[1] = PerpsViewFacet.getMarketState.selector;
+        s[2] = PerpsViewFacet.getPerpsAccount.selector;
+        s[3] = PerpsViewFacet.getPerpsPosition.selector;
+        s[4] = PerpsViewFacet.getPerpsAccountCollateral.selector;
+        s[5] = PerpsViewFacet.previewHealth.selector;
+        s[6] = PerpsViewFacet.previewDelta.selector;
+        s[7] = PerpsViewFacet.getSettlementSummary.selector;
+        s[8] = PerpsViewFacet.getFeeRoutingAudit.selector;
+        s[9] = PerpsViewFacet.proveIsolationInvariant.selector;
     }
 
     function _deployTokensAndPools(

@@ -3,45 +3,86 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/Base64.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import {LibPositionAgentStorage} from "../libraries/LibPositionAgentStorage.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {DirectError_InvalidPositionNFT} from "../libraries/Errors.sol";
 import {PositionNFT} from "../nft/PositionNFT.sol";
+import {IERC6551Registry} from "@agent-wallet-core/interfaces/IERC6551Registry.sol";
+
+interface IIdentityRegistryMetadata {
+    function ownerOf(uint256 tokenId) external view returns (address);
+    function tokenURI(uint256 tokenId) external view returns (string memory);
+}
 
 /// @title PositionNFTMetadataFacet
 /// @notice Generates unique generative cypherpunk SVG art for Position NFTs
 /// @dev Uses deterministic pseudo-randomness from tokenId to create glitch grid patterns
 contract PositionNFTMetadataFacet {
-    /// @notice Returns a data URI for the Position NFT (ERC-8004 compatible)
-    function getAgentURI(uint256 tokenId) external view returns (string memory) {
-        PositionNFT nft = _positionNFT();
-        // Revert on invalid token by querying the position key.
-        nft.getPositionKey(tokenId);
-        
-        string memory svgData = _generateSVG(tokenId);
+    /// @notice Returns a data URI for the Position NFT metadata.
+    function getPositionTokenURI(uint256 positionTokenId) external view returns (string memory) {
+        _requireExistingPosition(positionTokenId);
+
+        string memory svgData = _generateSVG(positionTokenId);
         string memory imageURI = string(abi.encodePacked("data:image/svg+xml;base64,", Base64.encode(bytes(svgData))));
-        
+
         string memory json = string(abi.encodePacked(
-            '{"name":"Equalis Position #', Strings.toString(tokenId), '",',
+            '{"name":"Equalis Position #', Strings.toString(positionTokenId), '",',
             '"description":"Equalis Protocol Position NFT",',
             '"image":"', imageURI, '"}'
         ));
-        
+
         return string(abi.encodePacked("data:application/json;base64,", Base64.encode(bytes(json))));
+    }
+
+    /// @notice Returns canonical ERC-8004 tokenURI for the linked agent if the link is valid.
+    /// @dev Returns an empty string when no valid agent registration is linked to this Position NFT.
+    function getAgentTokenURI(uint256 positionTokenId) external view returns (string memory) {
+        address positionNFT = address(_requireExistingPosition(positionTokenId));
+        (address identityRegistry, uint256 agentId, bool linked) = _resolveLinkedAgent(positionNFT, positionTokenId);
+        if (!linked) {
+            return "";
+        }
+
+        try IIdentityRegistryMetadata(identityRegistry).tokenURI(agentId) returns (string memory uri) {
+            return uri;
+        } catch {
+            return "";
+        }
+    }
+
+    /// @notice Returns the configured ERC-8004 agentId for a Position NFT (0 when unregistered).
+    function getAgentIdOf(uint256 positionTokenId) external view returns (uint256) {
+        _requireExistingPosition(positionTokenId);
+        return LibPositionAgentStorage.s().positionToAgentId[positionTokenId];
+    }
+
+    /// @notice Returns true when positionTokenId has a valid agent registration owned by its computed TBA.
+    function isAgentLinked(uint256 positionTokenId) external view returns (bool) {
+        address positionNFT = address(_requireExistingPosition(positionTokenId));
+        (, , bool linked) = _resolveLinkedAgent(positionNFT, positionTokenId);
+        return linked;
     }
 
     /// @notice Returns a data URI for the Position NFT SVG image
     function tokenImageURI(uint256 tokenId) external view returns (string memory) {
-        PositionNFT nft = _positionNFT();
-        // Revert on invalid token by querying the position key.
-        nft.getPositionKey(tokenId);
+        _requireExistingPosition(tokenId);
         return string(abi.encodePacked("data:image/svg+xml;base64,", Base64.encode(bytes(_generateSVG(tokenId)))));
     }
 
     /// @notice Get function selectors for this facet
     function selectors() external pure returns (bytes4[] memory selectorsArr) {
-        selectorsArr = new bytes4[](2);
-        selectorsArr[0] = PositionNFTMetadataFacet.getAgentURI.selector;
-        selectorsArr[1] = PositionNFTMetadataFacet.tokenImageURI.selector;
+        selectorsArr = new bytes4[](5);
+        selectorsArr[0] = PositionNFTMetadataFacet.getPositionTokenURI.selector;
+        selectorsArr[1] = PositionNFTMetadataFacet.getAgentTokenURI.selector;
+        selectorsArr[2] = PositionNFTMetadataFacet.getAgentIdOf.selector;
+        selectorsArr[3] = PositionNFTMetadataFacet.isAgentLinked.selector;
+        selectorsArr[4] = PositionNFTMetadataFacet.tokenImageURI.selector;
+    }
+
+    function _requireExistingPosition(uint256 tokenId) internal view returns (PositionNFT nft) {
+        nft = _positionNFT();
+        // Revert on invalid token by querying the position key.
+        nft.getPositionKey(tokenId);
     }
 
     function _positionNFT() internal view returns (PositionNFT nft) {
@@ -50,6 +91,36 @@ contract PositionNFTMetadataFacet {
             revert DirectError_InvalidPositionNFT();
         }
         nft = PositionNFT(nftAddr);
+    }
+
+    function _resolveLinkedAgent(address positionNFT, uint256 positionTokenId)
+        internal
+        view
+        returns (address identityRegistry, uint256 agentId, bool linked)
+    {
+        LibPositionAgentStorage.AgentStorage storage ds = LibPositionAgentStorage.s();
+        agentId = ds.positionToAgentId[positionTokenId];
+        identityRegistry = ds.identityRegistry;
+        address registry = ds.erc6551Registry;
+        address implementation = ds.erc6551Implementation;
+
+        if (agentId == 0 || identityRegistry == address(0) || registry == address(0) || implementation == address(0)) {
+            return (identityRegistry, agentId, false);
+        }
+
+        address tbaAddress = IERC6551Registry(registry).account(
+            implementation,
+            ds.tbaSalt,
+            block.chainid,
+            positionNFT,
+            positionTokenId
+        );
+
+        try IIdentityRegistryMetadata(identityRegistry).ownerOf(agentId) returns (address registryOwner) {
+            linked = registryOwner == tbaAddress;
+        } catch {
+            linked = false;
+        }
     }
 
     /// @notice Generate SVG image for the NFT with cypherpunk glitch aesthetic
