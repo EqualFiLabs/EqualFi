@@ -5,13 +5,15 @@ import {LibPerpsDomain} from "./LibPerpsDomain.sol";
 import {LibPerpsFees} from "./LibPerpsFees.sol";
 import {LibPerpsFunding} from "./LibPerpsFunding.sol";
 import {LibPerpsRisk} from "./LibPerpsRisk.sol";
+import {LibPerpsSync} from "./LibPerpsSync.sol";
 import {LibPerpsStorage} from "./LibPerpsStorage.sol";
 import {
     Perps_AccountNotFound,
     Perps_LiquidationPaused,
     Perps_MarketNotFound,
     Perps_PositionHealthy,
-    Perps_RiskLimitExceeded
+    Perps_RiskLimitExceeded,
+    Perps_SyncPaused
 } from "./PerpsErrors.sol";
 
 /// @notice Permissionless liquidation with deterministic close factor, waterfall handling, and settlement deltas.
@@ -29,6 +31,7 @@ contract PerpsLiquidationFacet {
     }
 
     event PositionLiquidated(bytes32 indexed marketId, bytes32 indexed accountId, address liquidator, uint256 closeSizeUsdX18);
+    event MarketSynced(bytes32 indexed marketId);
     event SettlementDeltaEmitted(bytes32 indexed marketId, bytes32 indexed accountId, LibPerpsStorage.SettlementDelta delta);
 
     function liquidate(LiquidationParams calldata p)
@@ -205,6 +208,24 @@ contract PerpsLiquidationFacet {
         }
 
         closeFactorBps = _closeFactorBps(health);
+    }
+
+    function syncMarket(bytes32 marketId) external returns (LibPerpsSync.MarketSyncResult memory syncResult) {
+        LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
+        if (market.pauseSync) revert Perps_SyncPaused(marketId);
+
+        uint256[] memory nonPerpsPoolIds = _singlePoolArray(market.collateralPoolId);
+        LibPerpsDomain.IsolationSnapshot memory beforeSnap = LibPerpsDomain.snapshotIsolation(nonPerpsPoolIds);
+
+        syncResult = LibPerpsSync.syncMarket(marketId, uint64(block.timestamp));
+
+        LibPerpsStorage.PerpsMarketState storage state = LibPerpsStorage.s().marketState[marketId];
+        LibPerpsDomain.enforceDomainSolvency(state.insuranceBalance, state.badDebt);
+        LibPerpsDomain.enforceNonPerpsBackingInvariant(nonPerpsPoolIds, beforeSnap, 0);
+
+        if (syncResult.stateChanged) {
+            emit MarketSynced(marketId);
+        }
     }
 
     function _closeFactorBps(LibPerpsRisk.HealthResult memory health) internal pure returns (uint256) {

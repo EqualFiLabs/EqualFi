@@ -8,6 +8,7 @@ import {LibPerpsFunding} from "./LibPerpsFunding.sol";
 import {LibPerpsIdentity} from "./LibPerpsIdentity.sol";
 import {LibPerpsIntent} from "./LibPerpsIntent.sol";
 import {LibPerpsRisk} from "./LibPerpsRisk.sol";
+import {LibPerpsSync} from "./LibPerpsSync.sol";
 import {LibPerpsStorage} from "./LibPerpsStorage.sol";
 import {
     Perps_AccountNotFound,
@@ -15,7 +16,8 @@ import {
     Perps_IncreasePaused,
     Perps_InsufficientPerpsLiquidity,
     Perps_MarketNotFound,
-    Perps_RiskLimitExceeded
+    Perps_RiskLimitExceeded,
+    Perps_SyncPaused
 } from "./PerpsErrors.sol";
 
 interface IPerpsExecutionPositionNFT {
@@ -80,6 +82,7 @@ contract PerpsExecutionFacet {
     event PositionIncreased(bytes32 indexed marketId, bytes32 indexed accountId, bool isLong, uint256 sizeDeltaUsdX18);
     event PositionDecreased(bytes32 indexed marketId, bytes32 indexed accountId, bool isLong, uint256 sizeDeltaUsdX18);
     event PositionClosed(bytes32 indexed marketId, bytes32 indexed accountId, bool isLong);
+    event AccountSynced(bytes32 indexed marketId, bytes32 indexed accountId);
     event SettlementDeltaEmitted(bytes32 indexed marketId, bytes32 indexed accountId, LibPerpsStorage.SettlementDelta delta);
 
     function createAccount(uint256 positionId, uint256 subaccountNonce) external returns (bytes32 accountId) {
@@ -213,6 +216,29 @@ contract PerpsExecutionFacet {
 
     function invalidateNoncesUpTo(bytes32 accountId, uint64 nonceUpperBound) external {
         LibPerpsIntent.invalidateNoncesUpTo(accountId, nonceUpperBound);
+    }
+
+    function syncAccount(bytes32 accountId, bytes32 marketId)
+        external
+        returns (LibPerpsStorage.SettlementDelta memory delta, LibPerpsSync.AccountSyncResult memory syncResult)
+    {
+        LibPerpsStorage.PerpsMarket storage market = _requireMarket(marketId);
+        _requireAccount(accountId);
+        if (market.pauseSync) revert Perps_SyncPaused(marketId);
+
+        uint256[] memory nonPerpsPoolIds = _singlePoolArray(market.collateralPoolId);
+        LibPerpsDomain.IsolationSnapshot memory beforeSnap = LibPerpsDomain.snapshotIsolation(nonPerpsPoolIds);
+
+        (syncResult, delta) = LibPerpsSync.syncAccount(marketId, accountId, uint64(block.timestamp));
+
+        LibPerpsStorage.PerpsMarketState storage state = LibPerpsStorage.s().marketState[marketId];
+        LibPerpsDomain.enforceDomainSolvency(state.insuranceBalance, state.badDebt);
+        LibPerpsDomain.enforceNonPerpsBackingInvariant(nonPerpsPoolIds, beforeSnap, 0);
+
+        if (syncResult.stateChanged) {
+            emit AccountSynced(marketId, accountId);
+            emit SettlementDeltaEmitted(marketId, accountId, delta);
+        }
     }
 
     function deriveAccountIdForPosition(uint256 positionId, uint256 subaccountNonce) external view returns (bytes32) {
