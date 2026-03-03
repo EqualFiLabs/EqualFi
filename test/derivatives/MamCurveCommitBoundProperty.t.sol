@@ -80,6 +80,8 @@ contract MamCurveCommitBoundHarness is MamCurveCreationFacet, MamCurveExecutionF
 }
 
 contract MamCurveCommitBoundPropertyTest is Test {
+    uint16 internal constant FIXED_PROFILE_ID = 2;
+
     MamCurveCommitBoundHarness internal harness;
     PositionNFT internal nft;
     MockERC20 internal tokenA;
@@ -104,7 +106,7 @@ contract MamCurveCommitBoundPropertyTest is Test {
     function testFuzz_generationMismatchRevertsSwap(uint8 bump) public {
         bump = uint8(bound(bump, 1, type(uint8).max));
 
-        uint256 curveId = _createLinearCurve(address(0), bytes32(0), 7);
+        uint256 curveId = _createLinearCurve(1, bytes32(0), 7);
         MamTypes.StoredCurve memory curve = harness.getStoredCurve(curveId);
         uint256 amountIn = 2e18;
         uint256 maxQuote = harness.previewCurveQuote(curveId, amountIn);
@@ -129,7 +131,7 @@ contract MamCurveCommitBoundPropertyTest is Test {
 
     // Property 2: Commitment mismatch reverts swap
     function testFuzz_commitmentMismatchRevertsSwap(bytes32 wrongCommitment) public {
-        uint256 curveId = _createLinearCurve(address(0), bytes32(0), 8);
+        uint256 curveId = _createLinearCurve(1, bytes32(0), 8);
         MamTypes.StoredCurve memory curve = harness.getStoredCurve(curveId);
         vm.assume(wrongCommitment != curve.commitment);
 
@@ -155,7 +157,7 @@ contract MamCurveCommitBoundPropertyTest is Test {
 
     // Property 3: Matching generation and commitment allows swap
     function test_matchingGenerationAndCommitmentAllowsSwap() public {
-        uint256 curveId = _createLinearCurve(address(0), bytes32(0), 9);
+        uint256 curveId = _createLinearCurve(1, bytes32(0), 9);
         MamTypes.StoredCurve memory curve = harness.getStoredCurve(curveId);
 
         uint256 amountIn = 2e18;
@@ -182,9 +184,9 @@ contract MamCurveCommitBoundPropertyTest is Test {
     // Property 11: Swap execution uses stored profile for pricing
     function test_swapExecutionUsesStoredProfileForPricing() public {
         FixedPriceProfile profile = new FixedPriceProfile(4e18);
-        harness.approveCurveProfile(address(profile));
+        harness.setCurveProfile(FIXED_PROFILE_ID, address(profile), 0, true);
 
-        uint256 curveId = _createLinearCurve(address(profile), bytes32(uint256(123)), 10);
+        uint256 curveId = _createLinearCurve(FIXED_PROFILE_ID, bytes32(uint256(123)), 10);
         MamTypes.StoredCurve memory curve = harness.getStoredCurve(curveId);
 
         uint256 amountIn = 2e18;
@@ -211,7 +213,7 @@ contract MamCurveCommitBoundPropertyTest is Test {
         assertEq(tokenA.balanceOf(taker) - takerBaseBefore, expectedOut, "base delivered must match profile pricing");
     }
 
-    function _createLinearCurve(address profile, bytes32 profileParams, uint96 salt) internal returns (uint256 curveId) {
+    function _createLinearCurve(uint16 profileId, bytes32 profileParams, uint96 salt) internal returns (uint256 curveId) {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
 
@@ -238,7 +240,7 @@ contract MamCurveCommitBoundPropertyTest is Test {
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
             salt: salt,
-            profile: profile,
+            profileId: profileId,
             profileParams: profileParams
         });
 

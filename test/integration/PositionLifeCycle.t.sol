@@ -134,7 +134,7 @@ contract PositionLifeCycleTest is Test {
             feeRateBps: 10,
             feeAsset: MamTypes.FeeAsset.TokenIn,
             salt: 0,
-            profile: address(0),
+            profileId: 1,
             profileParams: bytes32(0)
         });
 

@@ -18,8 +18,7 @@ contract MamCurveProfileRegistryHarness is MamCurveCreationFacet {
 }
 
 contract MamCurveProfileRegistryPropertyTest is Test {
-    event CurveProfileApproved(address indexed profile);
-    event CurveProfileRevoked(address indexed profile);
+    event CurveProfileSet(uint16 indexed profileId, address impl, uint32 flags, bool approved);
 
     MamCurveProfileRegistryHarness internal harness;
 
@@ -33,42 +32,56 @@ contract MamCurveProfileRegistryPropertyTest is Test {
     }
 
     // Property 4: Profile approve/revoke round-trip
-    function testFuzz_profileApproveRevokeRoundTrip(address profile) public {
-        assertFalse(harness.isCurveProfileApproved(profile));
+    function testFuzz_profileApproveRevokeRoundTrip(uint16 profileIdRaw, address impl, uint32 flags) public {
+        uint16 profileId = uint16(bound(profileIdRaw, 2, type(uint16).max));
+        vm.assume(impl != address(0));
+
+        assertFalse(harness.isCurveProfileApproved(profileId));
 
         vm.expectEmit(true, false, false, true, address(harness));
-        emit CurveProfileApproved(profile);
+        emit CurveProfileSet(profileId, impl, flags, true);
         vm.prank(owner);
-        harness.approveCurveProfile(profile);
-        assertTrue(harness.isCurveProfileApproved(profile));
+        harness.setCurveProfile(profileId, impl, flags, true);
+        assertTrue(harness.isCurveProfileApproved(profileId));
+        (address storedImpl, uint32 storedFlags, bool approved) = harness.getCurveProfile(profileId);
+        assertEq(storedImpl, impl);
+        assertEq(storedFlags, flags);
+        assertTrue(approved);
 
         vm.expectEmit(true, false, false, true, address(harness));
-        emit CurveProfileRevoked(profile);
+        emit CurveProfileSet(profileId, impl, flags, false);
         vm.prank(owner);
-        harness.revokeCurveProfile(profile);
-        assertFalse(harness.isCurveProfileApproved(profile));
+        harness.setCurveProfile(profileId, impl, flags, false);
+        assertFalse(harness.isCurveProfileApproved(profileId));
     }
 
     // Property 5: Non-governance cannot modify profile registry
-    function testFuzz_nonGovernanceCannotModifyProfileRegistry(address caller, address profile) public {
+    function testFuzz_nonGovernanceCannotModifyProfileRegistry(address caller, uint16 profileIdRaw, address impl)
+        public
+    {
         vm.assume(caller != owner && caller != timelock);
+        uint16 profileId = uint16(bound(profileIdRaw, 2, type(uint16).max));
+        vm.assume(impl != address(0));
 
         vm.prank(caller);
         vm.expectRevert();
-        harness.approveCurveProfile(profile);
-
-        vm.prank(caller);
-        vm.expectRevert();
-        harness.revokeCurveProfile(profile);
+        harness.setCurveProfile(profileId, impl, 0, true);
     }
 
-    function test_timelockCanModifyProfileRegistry(address profile) public {
-        vm.prank(timelock);
-        harness.approveCurveProfile(profile);
-        assertTrue(harness.isCurveProfileApproved(profile));
+    function test_timelockCanModifyProfileRegistry(uint16 profileIdRaw, address impl) public {
+        uint16 profileId = uint16(bound(profileIdRaw, 2, type(uint16).max));
+        vm.assume(impl != address(0));
 
         vm.prank(timelock);
-        harness.revokeCurveProfile(profile);
-        assertFalse(harness.isCurveProfileApproved(profile));
+        harness.setCurveProfile(profileId, impl, 0, true);
+        assertTrue(harness.isCurveProfileApproved(profileId));
+
+        vm.prank(timelock);
+        harness.setCurveProfile(profileId, impl, 0, false);
+        assertFalse(harness.isCurveProfileApproved(profileId));
+    }
+
+    function test_builtinLinearProfileApprovedByDefault() public {
+        assertTrue(harness.isCurveProfileApproved(1));
     }
 }

@@ -19,8 +19,9 @@ import {LibDiamond} from "src/libraries/LibDiamond.sol";
 import {PositionNFT} from "src/nft/PositionNFT.sol";
 import {MockERC20} from "src/mocks/MockERC20.sol";
 import {Types} from "src/libraries/Types.sol";
+import "src/libraries/MamCurveErrors.sol";
 
-contract FixedPriceProfile is ICurveProfile {
+contract UnitFixedPriceProfile is ICurveProfile {
     uint256 internal immutable fixedPrice;
 
     constructor(uint256 price_) {
@@ -36,15 +37,15 @@ contract FixedPriceProfile is ICurveProfile {
     }
 }
 
-contract RevertingProfile is ICurveProfile {
-    error RevertingProfile_Boom();
+contract UnitRevertingProfile is ICurveProfile {
+    error UnitRevertingProfile_Boom();
 
     function computePrice(uint256, uint256, uint256, uint256, uint256, bytes32)
         external
         pure
         returns (uint256)
     {
-        revert RevertingProfile_Boom();
+        revert UnitRevertingProfile_Boom();
     }
 }
 
@@ -105,18 +106,22 @@ contract MamCurveProfileUnitHarness is
 }
 
 contract MamCurveProfileUnitTest is Test {
-    event CurveProfileApproved(address indexed profile);
-    event CurveProfileRevoked(address indexed profile);
-    event CurveProfileTransition(uint256 indexed curveId, address indexed oldProfile, address indexed newProfile);
+    event CurveProfileSet(uint16 indexed profileId, address impl, uint32 flags, bool approved);
+    event CurveProfileTransition(uint256 indexed curveId, uint16 indexed oldProfileId, uint16 indexed newProfileId);
+
+    uint16 internal constant LINEAR_ID = 1;
+    uint16 internal constant PROFILE_A_ID = 2;
+    uint16 internal constant PROFILE_B_ID = 3;
+    uint16 internal constant REVERTING_PROFILE_ID = 4;
 
     MamCurveProfileUnitHarness internal harness;
     PositionNFT internal nft;
     MockERC20 internal tokenA;
     MockERC20 internal tokenB;
 
-    FixedPriceProfile internal profileA;
-    FixedPriceProfile internal profileB;
-    RevertingProfile internal revertingProfile;
+    UnitFixedPriceProfile internal profileA;
+    UnitFixedPriceProfile internal profileB;
+    UnitRevertingProfile internal revertingProfile;
 
     address internal maker = address(0xA11CE);
     address internal taker = address(0xB0B);
@@ -130,34 +135,28 @@ contract MamCurveProfileUnitTest is Test {
         tokenA = new MockERC20("TokenA", "A", 18, 0);
         tokenB = new MockERC20("TokenB", "B", 18, 0);
 
-        profileA = new FixedPriceProfile(2e18);
-        profileB = new FixedPriceProfile(4e18);
-        revertingProfile = new RevertingProfile();
+        profileA = new UnitFixedPriceProfile(2e18);
+        profileB = new UnitFixedPriceProfile(4e18);
+        revertingProfile = new UnitRevertingProfile();
+
+        harness.setCurveProfile(PROFILE_A_ID, address(profileA), 0, true);
+        harness.setCurveProfile(PROFILE_B_ID, address(profileB), 0, true);
+        harness.setCurveProfile(REVERTING_PROFILE_ID, address(revertingProfile), 0, true);
 
         harness.configurePositionNFT(address(nft));
         vm.warp(1 days);
     }
 
-    function test_createCurveAddressZeroProfileUsesLinearFallback() public {
-        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(address(0), bytes32(0), 11);
+    function test_createCurveWithZeroProfileIdReverts() public {
+        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(0, bytes32(0), 11);
 
         vm.prank(maker);
-        uint256 curveId = harness.createCurve(desc);
-
-        LibDerivativeStorage.CurveProfileData memory stored = harness.getCurveProfileData(curveId);
-        assertEq(stored.profile, address(0), "profile should be zero");
-        assertEq(stored.profileParams, bytes32(0), "profile params should be zero");
-
-        (uint256 amountOut,,, uint128 remainingVolume, bool ok) = harness.quoteCurveExactIn(curveId, 2e18);
-        assertTrue(ok, "quote should succeed");
-        assertEq(amountOut, 1e18, "linear fallback should compute expected amountOut");
-        assertEq(remainingVolume, 2e18, "remaining volume mismatch");
+        vm.expectRevert(abi.encodeWithSelector(MamCurve_InvalidProfileId.selector, uint16(0)));
+        harness.createCurve(desc);
     }
 
     function test_updateWithUpdateProfileFalseKeepsCurrentProfile() public {
-        harness.approveCurveProfile(address(profileA));
-        harness.approveCurveProfile(address(profileB));
-        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(address(profileA), bytes32("A"), 12);
+        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(PROFILE_A_ID, bytes32("A"), 12);
 
         vm.prank(maker);
         uint256 curveId = harness.createCurve(desc);
@@ -168,7 +167,7 @@ contract MamCurveProfileUnitTest is Test {
             startTime: uint64(block.timestamp + 1 hours),
             duration: 2 days,
             updateProfile: false,
-            profile: address(profileB),
+            profileId: PROFILE_B_ID,
             updateProfileParams: true,
             profileParams: bytes32("NEW_PARAMS")
         });
@@ -177,14 +176,12 @@ contract MamCurveProfileUnitTest is Test {
         harness.updateCurve(curveId, params);
 
         LibDerivativeStorage.CurveProfileData memory stored = harness.getCurveProfileData(curveId);
-        assertEq(stored.profile, address(profileA), "profile should stay unchanged");
+        assertEq(stored.profileId, PROFILE_A_ID, "profileId should stay unchanged");
         assertEq(stored.profileParams, bytes32("NEW_PARAMS"), "profile params should update");
     }
 
     function test_updateWithUpdateProfileParamsFalseKeepsCurrentParams() public {
-        harness.approveCurveProfile(address(profileA));
-        harness.approveCurveProfile(address(profileB));
-        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(address(profileA), bytes32("ORIG"), 13);
+        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(PROFILE_A_ID, bytes32("ORIG"), 13);
 
         vm.prank(maker);
         uint256 curveId = harness.createCurve(desc);
@@ -195,7 +192,7 @@ contract MamCurveProfileUnitTest is Test {
             startTime: uint64(block.timestamp + 1 hours),
             duration: 2 days,
             updateProfile: true,
-            profile: address(profileB),
+            profileId: PROFILE_B_ID,
             updateProfileParams: false,
             profileParams: bytes32("IGNORED")
         });
@@ -204,22 +201,21 @@ contract MamCurveProfileUnitTest is Test {
         harness.updateCurve(curveId, params);
 
         LibDerivativeStorage.CurveProfileData memory stored = harness.getCurveProfileData(curveId);
-        assertEq(stored.profile, address(profileB), "profile should change");
+        assertEq(stored.profileId, PROFILE_B_ID, "profileId should change");
         assertEq(stored.profileParams, bytes32("ORIG"), "params should stay unchanged");
     }
 
     function test_revokeProfileUsedByActiveCurveHasNoRetroactiveEffect() public {
-        harness.approveCurveProfile(address(profileA));
-        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(address(profileA), bytes32("ACTIVE"), 14);
+        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(PROFILE_A_ID, bytes32("ACTIVE"), 14);
 
         vm.prank(maker);
         uint256 curveId = harness.createCurve(desc);
 
-        harness.revokeCurveProfile(address(profileA));
-        assertFalse(harness.isCurveProfileApproved(address(profileA)), "profile should be revoked");
+        harness.setCurveProfile(PROFILE_A_ID, address(profileA), 0, false);
+        assertFalse(harness.isCurveProfileApproved(PROFILE_A_ID), "profile should be revoked");
 
         MamTypes.CurveFillView memory fillView = harness.loadCurveForFill(curveId);
-        assertEq(fillView.profile, address(profileA), "stored curve profile should remain");
+        assertEq(fillView.profileId, PROFILE_A_ID, "stored curve profileId should remain");
 
         MamTypes.StoredCurve memory curve = harness.getStoredCurve(curveId);
         tokenB.mint(taker, 2e18);
@@ -241,18 +237,17 @@ contract MamCurveProfileUnitTest is Test {
     }
 
     function test_profileStaticcallRevertPropagates() public {
-        harness.approveCurveProfile(address(revertingProfile));
-        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(address(revertingProfile), bytes32(0), 15);
+        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(REVERTING_PROFILE_ID, bytes32(0), 15);
 
         vm.prank(maker);
         uint256 curveId = harness.createCurve(desc);
 
-        vm.expectRevert(RevertingProfile.RevertingProfile_Boom.selector);
+        vm.expectRevert(UnitRevertingProfile.UnitRevertingProfile_Boom.selector);
         harness.quoteCurveExactIn(curveId, 2e18);
 
         MamTypes.StoredCurve memory curve = harness.getStoredCurve(curveId);
         vm.prank(taker);
-        vm.expectRevert(RevertingProfile.RevertingProfile_Boom.selector);
+        vm.expectRevert(UnitRevertingProfile.UnitRevertingProfile_Boom.selector);
         harness.executeCurveSwap(
             curveId,
             2e18,
@@ -266,16 +261,13 @@ contract MamCurveProfileUnitTest is Test {
     }
 
     function test_batchCreateAndBatchUpdateWithProfileFields() public {
-        harness.approveCurveProfile(address(profileA));
-        harness.approveCurveProfile(address(profileB));
-
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
         _seedMakerPools(positionKey);
 
         MamTypes.CurveDescriptor[] memory descs = new MamTypes.CurveDescriptor[](2);
-        descs[0] = _descriptor(positionKey, makerTokenId, address(profileA), bytes32("P0"), 16);
-        descs[1] = _descriptor(positionKey, makerTokenId, address(profileA), bytes32("P1"), 17);
+        descs[0] = _descriptor(positionKey, makerTokenId, PROFILE_A_ID, bytes32("P0"), 16);
+        descs[1] = _descriptor(positionKey, makerTokenId, PROFILE_A_ID, bytes32("P1"), 17);
 
         vm.prank(maker);
         uint256 firstCurveId = harness.createCurvesBatch(descs);
@@ -295,7 +287,7 @@ contract MamCurveProfileUnitTest is Test {
             startTime: uint64(block.timestamp + 1 hours),
             duration: 2 days,
             updateProfile: true,
-            profile: address(profileB),
+            profileId: PROFILE_B_ID,
             updateProfileParams: true,
             profileParams: bytes32("N0")
         });
@@ -305,7 +297,7 @@ contract MamCurveProfileUnitTest is Test {
             startTime: uint64(block.timestamp + 2 hours),
             duration: 3 days,
             updateProfile: true,
-            profile: address(profileB),
+            profileId: PROFILE_B_ID,
             updateProfileParams: true,
             profileParams: bytes32("N1")
         });
@@ -313,9 +305,9 @@ contract MamCurveProfileUnitTest is Test {
         vm.prank(maker);
         harness.updateCurvesBatch(curveIds, params);
 
-        assertEq(harness.getCurveProfileData(firstCurveId).profile, address(profileB), "first profile mismatch");
+        assertEq(harness.getCurveProfileData(firstCurveId).profileId, PROFILE_B_ID, "first profileId mismatch");
         assertEq(harness.getCurveProfileData(firstCurveId).profileParams, bytes32("N0"), "first params mismatch");
-        assertEq(harness.getCurveProfileData(secondCurveId).profile, address(profileB), "second profile mismatch");
+        assertEq(harness.getCurveProfileData(secondCurveId).profileId, PROFILE_B_ID, "second profileId mismatch");
         assertEq(harness.getCurveProfileData(secondCurveId).profileParams, bytes32("N1"), "second params mismatch");
 
         assertEq(harness.getStoredCurve(firstCurveId).generation, 2, "first generation mismatch");
@@ -324,17 +316,10 @@ contract MamCurveProfileUnitTest is Test {
 
     function test_eventEmission_profileRegistryAndTransition() public {
         vm.expectEmit(true, false, false, true, address(harness));
-        emit CurveProfileApproved(address(profileA));
-        harness.approveCurveProfile(address(profileA));
+        emit CurveProfileSet(PROFILE_A_ID, address(profileA), 7, true);
+        harness.setCurveProfile(PROFILE_A_ID, address(profileA), 7, true);
 
-        vm.expectEmit(true, false, false, true, address(harness));
-        emit CurveProfileRevoked(address(profileA));
-        harness.revokeCurveProfile(address(profileA));
-
-        harness.approveCurveProfile(address(profileA));
-        harness.approveCurveProfile(address(profileB));
-
-        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(address(profileA), bytes32("X"), 18);
+        (MamTypes.CurveDescriptor memory desc,) = _seedAndDescriptor(PROFILE_A_ID, bytes32("X"), 18);
         vm.prank(maker);
         uint256 curveId = harness.createCurve(desc);
 
@@ -344,25 +329,25 @@ contract MamCurveProfileUnitTest is Test {
             startTime: uint64(block.timestamp + 1 hours),
             duration: 2 days,
             updateProfile: true,
-            profile: address(profileB),
+            profileId: PROFILE_B_ID,
             updateProfileParams: false,
             profileParams: bytes32(0)
         });
 
         vm.expectEmit(true, true, true, true, address(harness));
-        emit CurveProfileTransition(curveId, address(profileA), address(profileB));
+        emit CurveProfileTransition(curveId, PROFILE_A_ID, PROFILE_B_ID);
         vm.prank(maker);
         harness.updateCurve(curveId, params);
     }
 
-    function _seedAndDescriptor(address profile, bytes32 profileParams, uint96 salt)
+    function _seedAndDescriptor(uint16 profileId, bytes32 profileParams, uint96 salt)
         internal
         returns (MamTypes.CurveDescriptor memory desc, uint256 makerTokenId)
     {
         makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
         _seedMakerPools(positionKey);
-        desc = _descriptor(positionKey, makerTokenId, profile, profileParams, salt);
+        desc = _descriptor(positionKey, makerTokenId, profileId, profileParams, salt);
     }
 
     function _seedMakerPools(bytes32 positionKey) internal {
@@ -375,7 +360,7 @@ contract MamCurveProfileUnitTest is Test {
     function _descriptor(
         bytes32 positionKey,
         uint256 makerPositionId,
-        address profile,
+        uint16 profileId,
         bytes32 profileParams,
         uint96 salt
     ) internal view returns (MamTypes.CurveDescriptor memory desc) {
@@ -397,7 +382,7 @@ contract MamCurveProfileUnitTest is Test {
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
             salt: salt,
-            profile: profile,
+            profileId: profileId,
             profileParams: profileParams
         });
     }

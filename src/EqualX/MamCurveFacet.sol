@@ -7,11 +7,11 @@ import {MamTypes} from "../libraries/MamTypes.sol";
 interface MamCurveFacet {
     function setMamPaused(bool paused) external;
 
-    function approveCurveProfile(address profile) external;
+    function setCurveProfile(uint16 profileId, address impl, uint32 flags, bool approved) external;
 
-    function revokeCurveProfile(address profile) external;
+    function getCurveProfile(uint16 profileId) external view returns (address impl, uint32 flags, bool approved);
 
-    function isCurveProfileApproved(address profile) external view returns (bool);
+    function isCurveProfileApproved(uint16 profileId) external view returns (bool);
 
     function createCurve(MamTypes.CurveDescriptor calldata desc) external returns (uint256 curveId);
 

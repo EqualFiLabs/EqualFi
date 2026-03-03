@@ -22,22 +22,32 @@ contract MockCurveProfile is ICurveProfile {
 }
 
 contract MamCurveTask1Harness {
-    function setCurveProfileData(uint256 curveId, address profile, bytes32 profileParams) external {
+    function setCurveProfileData(uint256 curveId, uint16 profileId, bytes32 profileParams) external {
         LibDerivativeStorage.derivativeStorage().curveProfileData[curveId] =
-            LibDerivativeStorage.CurveProfileData({profile: profile, profileParams: profileParams});
+            LibDerivativeStorage.CurveProfileData({profileId: profileId, profileParams: profileParams});
     }
 
-    function getCurveProfileData(uint256 curveId) external view returns (address profile, bytes32 profileParams) {
+    function getCurveProfileData(uint256 curveId) external view returns (uint16 profileId, bytes32 profileParams) {
         LibDerivativeStorage.CurveProfileData storage data = LibDerivativeStorage.derivativeStorage().curveProfileData[curveId];
-        return (data.profile, data.profileParams);
+        return (data.profileId, data.profileParams);
     }
 
-    function setApprovedProfile(address profile, bool approved) external {
-        LibDerivativeStorage.derivativeStorage().approvedProfiles[profile] = approved;
+    function setCurveProfile(uint16 profileId, address impl, uint32 flags, bool approved) external {
+        LibDerivativeStorage.derivativeStorage().curveProfiles[profileId] = LibDerivativeStorage.CurveProfileRegistryEntry({
+            impl: impl,
+            flags: flags,
+            approved: approved
+        });
     }
 
-    function isApprovedProfile(address profile) external view returns (bool) {
-        return LibDerivativeStorage.derivativeStorage().approvedProfiles[profile];
+    function getCurveProfile(uint16 profileId)
+        external
+        view
+        returns (address impl, uint32 flags, bool approved)
+    {
+        LibDerivativeStorage.CurveProfileRegistryEntry storage entry =
+            LibDerivativeStorage.derivativeStorage().curveProfiles[profileId];
+        return (entry.impl, entry.flags, entry.approved);
     }
 
     function revertGenerationMismatch(uint32 expected, uint32 actual) external pure {
@@ -48,8 +58,8 @@ contract MamCurveTask1Harness {
         revert MamCurve_CommitmentMismatch(expected, actual);
     }
 
-    function revertProfileNotApproved(address profile) external pure {
-        revert MamCurve_ProfileNotApproved(profile);
+    function revertProfileNotApproved(uint16 profileId) external pure {
+        revert MamCurve_ProfileNotApproved(profileId);
     }
 }
 
@@ -64,51 +74,59 @@ contract MamCurveTask1ModelsAndErrorsTest is Test {
 
     function testCurveDescriptorIncludesProfileFields() public {
         MamTypes.CurveDescriptor memory desc;
-        desc.profile = address(profile);
+        desc.profileId = 7;
         desc.profileParams = bytes32(uint256(777));
 
-        assertEq(desc.profile, address(profile));
+        assertEq(desc.profileId, 7);
         assertEq(uint256(desc.profileParams), 777);
     }
 
     function testCurveUpdateParamsIncludesProfileFields() public {
         MamTypes.CurveUpdateParams memory params;
         params.updateProfile = true;
-        params.profile = address(profile);
+        params.profileId = 8;
         params.updateProfileParams = true;
         params.profileParams = bytes32(uint256(888));
 
         assertTrue(params.updateProfile);
-        assertEq(params.profile, address(profile));
+        assertEq(params.profileId, 8);
         assertTrue(params.updateProfileParams);
         assertEq(uint256(params.profileParams), 888);
     }
 
     function testCurveFillViewIncludesProfileFields() public {
         MamTypes.CurveFillView memory viewData;
-        viewData.profile = address(profile);
+        viewData.profileId = 9;
         viewData.profileParams = bytes32(uint256(999));
 
-        assertEq(viewData.profile, address(profile));
+        assertEq(viewData.profileId, 9);
         assertEq(uint256(viewData.profileParams), 999);
     }
 
     function testCurveProfileDataStorageRoundTrip() public {
         uint256 curveId = 42;
         bytes32 params = bytes32(uint256(123456));
-        harness.setCurveProfileData(curveId, address(profile), params);
+        harness.setCurveProfileData(curveId, 10, params);
 
-        (address storedProfile, bytes32 storedParams) = harness.getCurveProfileData(curveId);
-        assertEq(storedProfile, address(profile));
+        (uint16 storedProfileId, bytes32 storedParams) = harness.getCurveProfileData(curveId);
+        assertEq(storedProfileId, 10);
         assertEq(storedParams, params);
     }
 
-    function testApprovedProfilesStorageRoundTrip() public {
-        assertFalse(harness.isApprovedProfile(address(profile)));
-        harness.setApprovedProfile(address(profile), true);
-        assertTrue(harness.isApprovedProfile(address(profile)));
-        harness.setApprovedProfile(address(profile), false);
-        assertFalse(harness.isApprovedProfile(address(profile)));
+    function testProfileRegistryStorageRoundTrip() public {
+        (address impl0,, bool approved0) = harness.getCurveProfile(11);
+        assertEq(impl0, address(0));
+        assertFalse(approved0);
+
+        harness.setCurveProfile(11, address(profile), 77, true);
+        (address impl1, uint32 flags1, bool approved1) = harness.getCurveProfile(11);
+        assertEq(impl1, address(profile));
+        assertEq(flags1, 77);
+        assertTrue(approved1);
+
+        harness.setCurveProfile(11, address(profile), 77, false);
+        (, , bool approved2) = harness.getCurveProfile(11);
+        assertFalse(approved2);
     }
 
     function testGenerationMismatchError() public {
@@ -124,8 +142,8 @@ contract MamCurveTask1ModelsAndErrorsTest is Test {
     }
 
     function testProfileNotApprovedError() public {
-        vm.expectRevert(abi.encodeWithSelector(MamCurve_ProfileNotApproved.selector, address(profile)));
-        harness.revertProfileNotApproved(address(profile));
+        vm.expectRevert(abi.encodeWithSelector(MamCurve_ProfileNotApproved.selector, uint16(12)));
+        harness.revertProfileNotApproved(12);
     }
 
     function testICurveProfileSignatureAndStaticcall() public {

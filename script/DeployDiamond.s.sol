@@ -996,8 +996,8 @@ contract DeployDiamondScript is Script {
     function _selectors(MamCurveCreationFacet) internal pure returns (bytes4[] memory s) {
         s = new bytes4[](6);
         s[0] = MamCurveCreationFacet.setMamPaused.selector;
-        s[1] = MamCurveCreationFacet.approveCurveProfile.selector;
-        s[2] = MamCurveCreationFacet.revokeCurveProfile.selector;
+        s[1] = MamCurveCreationFacet.setCurveProfile.selector;
+        s[2] = MamCurveCreationFacet.getCurveProfile.selector;
         s[3] = MamCurveCreationFacet.isCurveProfileApproved.selector;
         s[4] = MamCurveCreationFacet.createCurve.selector;
         s[5] = MamCurveCreationFacet.createCurvesBatch.selector;

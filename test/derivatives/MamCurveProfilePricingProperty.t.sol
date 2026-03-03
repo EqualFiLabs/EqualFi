@@ -79,6 +79,9 @@ contract MamCurveProfilePricingHarness is MamCurveCreationFacet, MamCurveViewFac
 }
 
 contract MamCurveProfilePricingPropertyTest is Test {
+    uint16 internal constant PARAMETRIC_PROFILE_ID = 2;
+    uint16 internal constant REVERTING_PROFILE_ID = 3;
+
     MamCurveProfilePricingHarness internal harness;
     PositionNFT internal nft;
     MockERC20 internal tokenA;
@@ -100,8 +103,8 @@ contract MamCurveProfilePricingPropertyTest is Test {
 
         parametricProfile = new ParametricPriceProfile();
         revertingProfile = new RevertingPriceProfile();
-        harness.approveCurveProfile(address(parametricProfile));
-        harness.approveCurveProfile(address(revertingProfile));
+        harness.setCurveProfile(PARAMETRIC_PROFILE_ID, address(parametricProfile), 0, true);
+        harness.setCurveProfile(REVERTING_PROFILE_ID, address(revertingProfile), 0, true);
 
         harness.configurePositionNFT(address(nft));
         vm.warp(1 days);
@@ -111,7 +114,7 @@ contract MamCurveProfilePricingPropertyTest is Test {
     function testFuzz_viewFunctionsUseStoredProfileForPrice(uint128 profilePrice, uint96 salt) public {
         profilePrice = uint128(bound(profilePrice, 1e12, 1e24));
 
-        uint256 curveId = _createCurve(address(parametricProfile), bytes32(uint256(profilePrice)), salt);
+        uint256 curveId = _createCurve(PARAMETRIC_PROFILE_ID, bytes32(uint256(profilePrice)), salt);
 
         (, , , uint256 currentPrice, , , , , , ) = harness.getCurveStatus(curveId);
         assertEq(currentPrice, profilePrice, "getCurveStatus should use profile price");
@@ -126,8 +129,8 @@ contract MamCurveProfilePricingPropertyTest is Test {
     }
 
     function test_quoteCurvesExactInBatchContinuesOnProfileRevert() public {
-        uint256 okCurveId = _createCurve(address(parametricProfile), bytes32(uint256(2e18)), 100);
-        uint256 badCurveId = _createCurve(address(revertingProfile), bytes32(0), 101);
+        uint256 okCurveId = _createCurve(PARAMETRIC_PROFILE_ID, bytes32(uint256(2e18)), 100);
+        uint256 badCurveId = _createCurve(REVERTING_PROFILE_ID, bytes32(0), 101);
 
         uint256[] memory curveIds = new uint256[](3);
         uint256[] memory amountIns = new uint256[](3);
@@ -155,12 +158,12 @@ contract MamCurveProfilePricingPropertyTest is Test {
     }
 
     function test_quoteCurveExactInPropagatesProfileRevert() public {
-        uint256 badCurveId = _createCurve(address(revertingProfile), bytes32(0), 102);
+        uint256 badCurveId = _createCurve(REVERTING_PROFILE_ID, bytes32(0), 102);
         vm.expectRevert(RevertingPriceProfile.RevertingPriceProfile_Boom.selector);
         harness.quoteCurveExactIn(badCurveId, 2e18);
     }
 
-    function _createCurve(address profile, bytes32 profileParams, uint96 salt) internal returns (uint256 curveId) {
+    function _createCurve(uint16 profileId, bytes32 profileParams, uint96 salt) internal returns (uint256 curveId) {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
 
@@ -187,7 +190,7 @@ contract MamCurveProfilePricingPropertyTest is Test {
             feeRateBps: 0,
             feeAsset: MamTypes.FeeAsset.TokenIn,
             salt: salt,
-            profile: profile,
+            profileId: profileId,
             profileParams: profileParams
         });
 

@@ -21,7 +21,7 @@ library LibMamCurveSnapshot {
         uint256 metaWord,
         uint256 priceWord,
         uint256 volumeWord,
-        address profile,
+        uint16 profileId,
         bytes32 profileParams,
         bytes32 commitment
     );
@@ -42,7 +42,7 @@ library LibMamCurveSnapshot {
         uint128 endPrice,
         uint128 maxVolume,
         uint128 remainingVolume,
-        address profile,
+        uint16 profileId,
         bytes32 profileParams,
         bytes32 commitment
     ) internal {
@@ -67,7 +67,7 @@ library LibMamCurveSnapshot {
             metaWord,
             priceWord,
             volumeWord,
-            profile,
+            profileId,
             profileParams,
             commitment
         );
@@ -101,7 +101,7 @@ library LibMamCurveSnapshot {
             metaWord,
             priceWord,
             volumeWord,
-            prof.profile,
+            prof.profileId,
             prof.profileParams,
             curve.commitment
         );

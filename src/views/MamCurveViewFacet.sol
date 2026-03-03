@@ -4,9 +4,9 @@ pragma solidity ^0.8.20;
 import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
 import {LibMamMath} from "../libraries/LibMamMath.sol";
+import {LibMamProfile} from "../libraries/LibMamProfile.sol";
 import {LibPositionNFT} from "../libraries/LibPositionNFT.sol";
 import {PositionNFT} from "../nft/PositionNFT.sol";
-import {ICurveProfile} from "../interfaces/ICurveProfile.sol";
 
 /// @notice View-only facet for MAM curve state.
 contract MamCurveViewFacet {
@@ -93,7 +93,7 @@ contract MamCurveViewFacet {
         baseIsA = ds.curveBaseIsA[curveId];
         tokenA = imm.tokenA;
         tokenB = imm.tokenB;
-        currentPrice = _computeViewPrice(pricing, profileData.profile, profileData.profileParams);
+        currentPrice = _computeViewPrice(ds, pricing, profileData.profileId, profileData.profileParams);
         if (block.timestamp < endTime) {
             timeRemaining = endTime - block.timestamp;
         }
@@ -181,13 +181,13 @@ contract MamCurveViewFacet {
         uint256 price;
         if (suppressProfileRevert) {
             (bool priceOk, uint256 computedPrice) =
-                _tryComputeViewPrice(pricing, profileData.profile, profileData.profileParams);
+                _tryComputeViewPrice(ds, pricing, profileData.profileId, profileData.profileParams);
             if (!priceOk) {
                 return (0, 0, 0, curve.remainingVolume, false);
             }
             price = computedPrice;
         } else {
-            price = _computeViewPrice(pricing, profileData.profile, profileData.profileParams);
+            price = _computeViewPrice(ds, pricing, profileData.profileId, profileData.profileParams);
         }
         uint256 baseFill = LibMamMath.amountOutForFill(amountIn, price);
         if (baseFill == 0 || baseFill > curve.remainingVolume) {
@@ -200,77 +200,29 @@ contract MamCurveViewFacet {
         ok = true;
     }
 
-    function _computeViewPrice(LibDerivativeStorage.CurvePricing storage pricing, address profile, bytes32 profileParams)
+    function _computeViewPrice(
+        LibDerivativeStorage.DerivativeStorage storage ds,
+        LibDerivativeStorage.CurvePricing storage pricing,
+        uint16 profileId,
+        bytes32 profileParams
+    )
         private
         view
         returns (uint256 price)
     {
-        if (profile == address(0)) {
-            return LibMamMath.computePrice(
-                pricing.startPrice,
-                pricing.endPrice,
-                pricing.startTime,
-                pricing.duration,
-                block.timestamp
-            );
-        }
-
-        (bool success, bytes memory ret) = profile.staticcall(
-            abi.encodeCall(
-                ICurveProfile.computePrice,
-                (
-                    pricing.startPrice,
-                    pricing.endPrice,
-                    pricing.startTime,
-                    pricing.duration,
-                    block.timestamp,
-                    profileParams
-                )
-            )
-        );
-        if (!success) {
-            assembly {
-                revert(add(ret, 32), mload(ret))
-            }
-        }
-        price = abi.decode(ret, (uint256));
+        price = LibMamProfile.computePrice(ds, pricing, profileId, profileParams);
     }
 
-    function _tryComputeViewPrice(LibDerivativeStorage.CurvePricing storage pricing, address profile, bytes32 profileParams)
+    function _tryComputeViewPrice(
+        LibDerivativeStorage.DerivativeStorage storage ds,
+        LibDerivativeStorage.CurvePricing storage pricing,
+        uint16 profileId,
+        bytes32 profileParams
+    )
         private
         view
         returns (bool success, uint256 price)
     {
-        if (profile == address(0)) {
-            return (
-                true,
-                LibMamMath.computePrice(
-                    pricing.startPrice,
-                    pricing.endPrice,
-                    pricing.startTime,
-                    pricing.duration,
-                    block.timestamp
-                )
-            );
-        }
-
-        bytes memory ret;
-        (success, ret) = profile.staticcall(
-            abi.encodeCall(
-                ICurveProfile.computePrice,
-                (
-                    pricing.startPrice,
-                    pricing.endPrice,
-                    pricing.startTime,
-                    pricing.duration,
-                    block.timestamp,
-                    profileParams
-                )
-            )
-        );
-        if (!success || ret.length < 32) {
-            return (false, 0);
-        }
-        price = abi.decode(ret, (uint256));
+        (success, price) = LibMamProfile.tryComputePrice(ds, pricing, profileId, profileParams);
     }
 }

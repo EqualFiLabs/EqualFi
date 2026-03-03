@@ -309,8 +309,8 @@ abstract contract DerivativeDiamondTestBase is Test {
     function _selectorsMamCreate() internal pure returns (bytes4[] memory s) {
         s = new bytes4[](6);
         s[0] = MamCurveCreationFacet.setMamPaused.selector;
-        s[1] = MamCurveCreationFacet.approveCurveProfile.selector;
-        s[2] = MamCurveCreationFacet.revokeCurveProfile.selector;
+        s[1] = MamCurveCreationFacet.setCurveProfile.selector;
+        s[2] = MamCurveCreationFacet.getCurveProfile.selector;
         s[3] = MamCurveCreationFacet.isCurveProfileApproved.selector;
         s[4] = MamCurveCreationFacet.createCurve.selector;
         s[5] = MamCurveCreationFacet.createCurvesBatch.selector;
@@ -513,7 +513,7 @@ contract DerivativeIntegrationTest is DerivativeDiamondTestBase {
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
             salt: 1,
-            profile: address(0),
+            profileId: 1,
             profileParams: bytes32(0)
         });
 

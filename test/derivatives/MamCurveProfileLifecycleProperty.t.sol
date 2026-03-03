@@ -94,68 +94,73 @@ contract MamCurveProfileLifecyclePropertyTest is Test {
     }
 
     // Property 6: Unapproved profile reverts curve creation
-    function testFuzz_unapprovedProfileRevertsCreate(address profile, bytes32 profileParams) public {
-        vm.assume(profile != address(0));
+    function testFuzz_unapprovedProfileRevertsCreate(uint16 profileIdRaw, bytes32 profileParams) public {
+        uint16 profileId = uint16(bound(profileIdRaw, 2, type(uint16).max));
 
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
         _seedMakerPools(positionKey);
 
-        MamTypes.CurveDescriptor memory desc = _descriptor(positionKey, makerTokenId, profile, profileParams, 1);
+        MamTypes.CurveDescriptor memory desc = _descriptor(positionKey, makerTokenId, profileId, profileParams, 1);
 
         vm.prank(maker);
-        vm.expectRevert(abi.encodeWithSelector(MamCurve_ProfileNotApproved.selector, profile));
+        vm.expectRevert(abi.encodeWithSelector(MamCurve_ProfileNotApproved.selector, profileId));
         harness.createCurve(desc);
     }
 
     // Property 8: Profile data round-trips through create and read
-    function testFuzz_profileDataRoundTripsThroughCreateAndRead(address profile, bytes32 profileParams, uint96 salt)
+    function testFuzz_profileDataRoundTripsThroughCreateAndRead(
+        uint16 profileIdRaw,
+        bytes32 profileParams,
+        uint96 salt
+    )
         public
     {
-        vm.assume(profile != address(0));
+        uint16 profileId = uint16(bound(profileIdRaw, 2, type(uint16).max));
+        address impl = address(uint160(uint256(profileId) + 0x1000));
 
-        harness.approveCurveProfile(profile);
+        harness.setCurveProfile(profileId, impl, 0, true);
 
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
         _seedMakerPools(positionKey);
 
-        MamTypes.CurveDescriptor memory desc = _descriptor(positionKey, makerTokenId, profile, profileParams, salt);
+        MamTypes.CurveDescriptor memory desc = _descriptor(positionKey, makerTokenId, profileId, profileParams, salt);
         vm.prank(maker);
         uint256 curveId = harness.createCurve(desc);
 
         LibDerivativeStorage.CurveProfileData memory stored = harness.getCurveProfileData(curveId);
-        assertEq(stored.profile, profile, "stored profile mismatch");
+        assertEq(stored.profileId, profileId, "stored profileId mismatch");
         assertEq(stored.profileParams, profileParams, "stored profileParams mismatch");
 
         MamTypes.CurveFillView memory fillView = harness.loadCurveForFill(curveId);
-        assertEq(fillView.profile, profile, "fill view profile mismatch");
+        assertEq(fillView.profileId, profileId, "fill view profileId mismatch");
         assertEq(fillView.profileParams, profileParams, "fill view profileParams mismatch");
 
         (, , , LibDerivativeStorage.CurveProfileData memory getCurveProfileData,,) = harness.getCurve(curveId);
-        assertEq(getCurveProfileData.profile, profile, "getCurve profile mismatch");
+        assertEq(getCurveProfileData.profileId, profileId, "getCurve profileId mismatch");
         assertEq(getCurveProfileData.profileParams, profileParams, "getCurve profileParams mismatch");
     }
 
     // Property 7: Unapproved profile reverts update when updateProfile=true
     function testFuzz_unapprovedProfileRevertsUpdateWhenUpdateProfileTrue(
-        address approvedProfile,
-        address unapprovedProfile,
+        uint16 approvedProfileIdRaw,
+        uint16 unapprovedProfileIdRaw,
         bytes32 approvedParams,
         uint96 salt
     ) public {
-        vm.assume(approvedProfile != address(0));
-        vm.assume(unapprovedProfile != address(0));
-        vm.assume(approvedProfile != unapprovedProfile);
+        uint16 approvedProfileId = uint16(bound(approvedProfileIdRaw, 2, type(uint16).max));
+        uint16 unapprovedProfileId = uint16(bound(unapprovedProfileIdRaw, 2, type(uint16).max));
+        vm.assume(approvedProfileId != unapprovedProfileId);
 
-        harness.approveCurveProfile(approvedProfile);
+        harness.setCurveProfile(approvedProfileId, address(uint160(uint256(approvedProfileId) + 0x2000)), 0, true);
 
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
         _seedMakerPools(positionKey);
 
         MamTypes.CurveDescriptor memory desc =
-            _descriptor(positionKey, makerTokenId, approvedProfile, approvedParams, salt);
+            _descriptor(positionKey, makerTokenId, approvedProfileId, approvedParams, salt);
         vm.prank(maker);
         uint256 curveId = harness.createCurve(desc);
 
@@ -165,41 +170,41 @@ contract MamCurveProfileLifecyclePropertyTest is Test {
             startTime: uint64(block.timestamp + 1 hours),
             duration: 2 days,
             updateProfile: true,
-            profile: unapprovedProfile,
+            profileId: unapprovedProfileId,
             updateProfileParams: false,
             profileParams: bytes32(0)
         });
 
         vm.prank(maker);
-        vm.expectRevert(abi.encodeWithSelector(MamCurve_ProfileNotApproved.selector, unapprovedProfile));
+        vm.expectRevert(abi.encodeWithSelector(MamCurve_ProfileNotApproved.selector, unapprovedProfileId));
         harness.updateCurve(curveId, params);
     }
 
     // Property 10: Update increments generation and changes commitment
     function testFuzz_updateIncrementsGenerationAndChangesCommitment(
-        address oldProfile,
-        address nextProfile,
+        uint16 oldProfileIdRaw,
+        uint16 nextProfileIdRaw,
         bytes32 oldProfileParams,
         bytes32 nextProfileParams,
         uint128 startPrice,
         uint128 endPrice,
         uint96 salt
     ) public {
-        vm.assume(oldProfile != address(0));
-        vm.assume(nextProfile != address(0));
-        vm.assume(oldProfile != nextProfile);
+        uint16 oldProfileId = uint16(bound(oldProfileIdRaw, 2, type(uint16).max));
+        uint16 nextProfileId = uint16(bound(nextProfileIdRaw, 2, type(uint16).max));
+        vm.assume(oldProfileId != nextProfileId);
         vm.assume(startPrice > 0);
         vm.assume(endPrice > 0);
 
-        harness.approveCurveProfile(oldProfile);
-        harness.approveCurveProfile(nextProfile);
+        harness.setCurveProfile(oldProfileId, address(uint160(uint256(oldProfileId) + 0x3000)), 0, true);
+        harness.setCurveProfile(nextProfileId, address(uint160(uint256(nextProfileId) + 0x3000)), 0, true);
 
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
         _seedMakerPools(positionKey);
 
         MamTypes.CurveDescriptor memory desc =
-            _descriptor(positionKey, makerTokenId, oldProfile, oldProfileParams, salt);
+            _descriptor(positionKey, makerTokenId, oldProfileId, oldProfileParams, salt);
         vm.prank(maker);
         uint256 curveId = harness.createCurve(desc);
 
@@ -212,7 +217,7 @@ contract MamCurveProfileLifecyclePropertyTest is Test {
             startTime: uint64(block.timestamp + 2 hours),
             duration: 3 days,
             updateProfile: true,
-            profile: nextProfile,
+            profileId: nextProfileId,
             updateProfileParams: true,
             profileParams: nextProfileParams
         });
@@ -225,9 +230,9 @@ contract MamCurveProfileLifecyclePropertyTest is Test {
 
         assertEq(afterCurve.generation, beforeCurve.generation + 1, "generation should increment");
         assertTrue(afterCurve.commitment != beforeCurve.commitment, "commitment should change");
-        assertEq(afterProfile.profile, nextProfile, "profile should update");
+        assertEq(afterProfile.profileId, nextProfileId, "profileId should update");
         assertEq(afterProfile.profileParams, nextProfileParams, "profile params should update");
-        assertEq(beforeProfile.profile, oldProfile, "precondition old profile");
+        assertEq(beforeProfile.profileId, oldProfileId, "precondition old profileId");
     }
 
     function _seedMakerPools(bytes32 positionKey) internal {
@@ -240,7 +245,7 @@ contract MamCurveProfileLifecyclePropertyTest is Test {
     function _descriptor(
         bytes32 positionKey,
         uint256 makerPositionId,
-        address profile,
+        uint16 profileId,
         bytes32 profileParams,
         uint96 salt
     ) internal view returns (MamTypes.CurveDescriptor memory desc) {
@@ -262,7 +267,7 @@ contract MamCurveProfileLifecyclePropertyTest is Test {
             feeRateBps: 100,
             feeAsset: MamTypes.FeeAsset.TokenIn,
             salt: salt,
-            profile: profile,
+            profileId: profileId,
             profileParams: profileParams
         });
     }

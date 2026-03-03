@@ -34,7 +34,7 @@ library MamTypes {
         uint16 feeRateBps;
         FeeAsset feeAsset;
         uint96 salt;
-        address profile;
+        uint16 profileId;
         bytes32 profileParams;
     }
 
@@ -54,7 +54,7 @@ library MamTypes {
         uint64 startTime;
         uint64 duration;
         bool updateProfile;
-        address profile;
+        uint16 profileId;
         bool updateProfileParams;
         bytes32 profileParams;
     }
@@ -74,7 +74,7 @@ library MamTypes {
         uint64 duration;
         uint16 feeRateBps;
         uint128 remainingVolume;
-        address profile;
+        uint16 profileId;
         bytes32 profileParams;
     }
 }

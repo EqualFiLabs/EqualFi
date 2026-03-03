@@ -8,8 +8,8 @@ import {LibMamMath} from "../libraries/LibMamMath.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
 import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
 import {LibMamCurveSnapshot} from "../libraries/LibMamCurveSnapshot.sol";
+import {LibMamProfile} from "../libraries/LibMamProfile.sol";
 import {LibPoints} from "../libraries/LibPoints.sol";
-import {ICurveProfile} from "../interfaces/ICurveProfile.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {InsufficientPrincipal} from "../libraries/Errors.sol";
@@ -59,7 +59,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
             duration: pricing.duration,
             feeRateBps: imm.feeRateBps,
             remainingVolume: curve.remainingVolume,
-            profile: prof.profile,
+            profileId: prof.profileId,
             profileParams: prof.profileParams
         });
     }
@@ -148,7 +148,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
             revert MamCurve_Expired(curveId);
         }
 
-        uint256 price = _computePrice(pricing, prof.profile, prof.profileParams);
+        uint256 price = _computePrice(ds, pricing, prof.profileId, prof.profileParams);
         uint256 baseFill = LibMamMath.amountOutForFill(amountIn, price);
         if (baseFill == 0) revert MamCurve_InvalidAmount(baseFill);
         if (baseFill > curve.remainingVolume) {
@@ -221,40 +221,17 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         emit CurveFilled(curveId, msg.sender, recipient, amountIn, totalQuote, amountOut, feeAmount, remaining);
     }
 
-    function _computePrice(LibDerivativeStorage.CurvePricing storage pricing, address profile, bytes32 profileParams)
+    function _computePrice(
+        LibDerivativeStorage.DerivativeStorage storage ds,
+        LibDerivativeStorage.CurvePricing storage pricing,
+        uint16 profileId,
+        bytes32 profileParams
+    )
         internal
         view
         returns (uint256 price)
     {
-        if (profile == address(0)) {
-            return LibMamMath.computePrice(
-                pricing.startPrice,
-                pricing.endPrice,
-                pricing.startTime,
-                pricing.duration,
-                block.timestamp
-            );
-        }
-
-        (bool success, bytes memory ret) = profile.staticcall(
-            abi.encodeCall(
-                ICurveProfile.computePrice,
-                (
-                    pricing.startPrice,
-                    pricing.endPrice,
-                    pricing.startTime,
-                    pricing.duration,
-                    block.timestamp,
-                    profileParams
-                )
-            )
-        );
-        if (!success) {
-            assembly {
-                revert(add(ret, 32), mload(ret))
-            }
-        }
-        price = abi.decode(ret, (uint256));
+        price = LibMamProfile.computePrice(ds, pricing, profileId, profileParams);
     }
 
     function _consumeCurve(uint256 curveId, uint128 baseFill) internal returns (uint128 remainingAfter) {

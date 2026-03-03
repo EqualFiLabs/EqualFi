@@ -70,7 +70,7 @@ contract MamCurveSnapshotPackedEventTest is Test {
         uint256 metaWord,
         uint256 priceWord,
         uint256 volumeWord,
-        address profile,
+        uint16 profileId,
         bytes32 profileParams,
         bytes32 commitment
     );
@@ -83,7 +83,7 @@ contract MamCurveSnapshotPackedEventTest is Test {
     uint8 internal constant PACKING_VERSION = 1;
 
     bytes32 internal constant SNAPSHOT_SIG =
-        keccak256("CurveSnapshotPackedV1(uint256,bytes32,bytes32,uint256,uint256,uint256,address,bytes32,bytes32)");
+        keccak256("CurveSnapshotPackedV1(uint256,bytes32,bytes32,uint256,uint256,uint256,uint16,bytes32,bytes32)");
 
     struct Snapshot {
         uint256 curveId;
@@ -92,7 +92,7 @@ contract MamCurveSnapshotPackedEventTest is Test {
         uint256 metaWord;
         uint256 priceWord;
         uint256 volumeWord;
-        address profile;
+        uint16 profileId;
         bytes32 profileParams;
         bytes32 commitment;
     }
@@ -148,7 +148,7 @@ contract MamCurveSnapshotPackedEventTest is Test {
         assertEq(s.metaWord, expectedMeta, "metaWord");
         assertEq(s.priceWord, expectedPrice, "priceWord");
         assertEq(s.volumeWord, expectedVolume, "volumeWord");
-        assertEq(s.profile, desc.profile, "profile");
+        assertEq(s.profileId, desc.profileId, "profileId");
         assertEq(s.profileParams, desc.profileParams, "profileParams");
         assertEq(s.commitment, curve.commitment, "commitment");
 
@@ -165,7 +165,7 @@ contract MamCurveSnapshotPackedEventTest is Test {
             startTime: uint64(block.timestamp),
             duration: 2 days,
             updateProfile: false,
-            profile: address(0),
+            profileId: 1,
             updateProfileParams: false,
             profileParams: bytes32(0)
         });
@@ -306,7 +306,7 @@ contract MamCurveSnapshotPackedEventTest is Test {
             feeRateBps: feeRateBps,
             feeAsset: MamTypes.FeeAsset.TokenIn,
             salt: salt,
-            profile: address(0),
+            profileId: 1,
             profileParams: bytes32(0)
         });
     }
@@ -321,10 +321,10 @@ contract MamCurveSnapshotPackedEventTest is Test {
                     snap.metaWord,
                     snap.priceWord,
                     snap.volumeWord,
-                    snap.profile,
+                    snap.profileId,
                     snap.profileParams,
                     snap.commitment
-                ) = abi.decode(logs[i].data, (uint256, uint256, uint256, address, bytes32, bytes32));
+                ) = abi.decode(logs[i].data, (uint256, uint256, uint256, uint16, bytes32, bytes32));
                 return snap;
             }
         }
