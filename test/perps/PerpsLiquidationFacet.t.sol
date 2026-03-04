@@ -386,14 +386,14 @@ contract PerpsLiquidationFacetTest is Test {
         assertEq(closeSize, 1_000e18, "full close expected");
         assertEq(delta.realizedPnl, -int256(500e18));
         assertEq(delta.insuranceUsed, 80e18);
-        assertEq(delta.badDebtDelta, 320e18);
+        assertEq(delta.badDebtDelta, 370e18);
 
         assertEq(h.getAccountCollateral(ACCOUNT, MARKET_A), 0);
 
         LibPerpsStorage.PerpsMarketState memory a = h.getMarketState(MARKET_A);
         LibPerpsStorage.PerpsMarketState memory b = h.getMarketState(MARKET_B);
         assertEq(a.insuranceBalance, 0);
-        assertEq(a.badDebt, 320e18);
+        assertEq(a.badDebt, 370e18);
         assertEq(b.badDebt, 123e18, "other market bad debt must remain untouched");
     }
 

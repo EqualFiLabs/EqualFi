@@ -66,6 +66,10 @@ contract PerpsInvariantHarness {
         market.pauseSync = pauseSync;
         market.pauseLiquidation = pauseLiquidation;
         market.exists = true;
+
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        ps.globalExecutionEnabled = true;
+        ps.marketConfigMask[marketId] = 0x3f;
     }
 
     function seedMarketState(bytes32 marketId, uint256 insuranceBalance, uint256 insuranceTarget, uint256 badDebt) external {

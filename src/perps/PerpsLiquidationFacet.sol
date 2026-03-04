@@ -100,10 +100,7 @@ contract PerpsLiquidationFacet is ReentrancyGuardModifiers {
             accountCollateralAfter = uint256(finalAccountEquity);
         } else {
             uint256 deficit = uint256(-finalAccountEquity);
-
-            uint256 collateralConsumed = _min(accountCollateralBefore, deficit);
-            accountCollateralAfter = accountCollateralBefore - collateralConsumed;
-            deficit -= collateralConsumed;
+            accountCollateralAfter = 0;
 
             insuranceUsed = _min(state.insuranceBalance, deficit);
             state.insuranceBalance -= insuranceUsed;

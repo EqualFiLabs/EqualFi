@@ -79,6 +79,20 @@ library LibPerpsDomain {
         ds.isolatedTrackedBalance -= amount;
     }
 
+    function increaseIsolatedEncumbered(uint256 amount) internal {
+        if (amount == 0) return;
+        LibPerpsStorage.s().domainState.isolatedEncumbered += amount;
+    }
+
+    function decreaseIsolatedEncumbered(uint256 amount) internal {
+        if (amount == 0) return;
+        LibPerpsStorage.PerpsDomainState storage ds = LibPerpsStorage.s().domainState;
+        if (ds.isolatedEncumbered < amount) {
+            revert Perps_InsufficientPerpsLiquidity(amount, ds.isolatedEncumbered);
+        }
+        ds.isolatedEncumbered -= amount;
+    }
+
     function increaseLiabilities(uint256 amount) internal {
         if (amount == 0) return;
         LibPerpsStorage.s().domainState.isolatedLiabilities += amount;

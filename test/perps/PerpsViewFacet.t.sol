@@ -65,6 +65,8 @@ contract PerpsViewHarness is PerpsViewFacet {
         market.pauseLiquidation = false;
         market.pauseSync = false;
         market.exists = true;
+        ps.globalExecutionEnabled = true;
+        ps.marketConfigMask[marketId] = 0x3f;
 
         if (isNew) {
             uint256 nextCount = ps.marketCount + 1;
@@ -180,7 +182,7 @@ contract PerpsViewFacetTest is Test {
         assertEq(position.sizeUsdX18, 10_000e18);
         assertEq(position.entryPriceX18, 2_000e18);
 
-        assertEq(h.getPerpsAccountCollateral(MARKET_A, accountId), 20_000e18);
+        assertEq(h.getPerpsAccountCollateral(MARKET_A, accountId), 19_900e18);
 
         LibPerpsStorage.PerpsMarketState memory state = h.getMarketState(MARKET_A);
         assertEq(state.openInterestLong, 10_000e18);
@@ -217,7 +219,7 @@ contract PerpsViewFacetTest is Test {
         assertEq(markPriceX18, 2_100e18);
         assertEq(baseState.positionNotionalUsdX18, 10_000e18);
         assertEq(baseState.unrealizedPnlUsdX18, int256(500e18));
-        assertEq(health.equityUsdX18, int256(20_500e18));
+        assertEq(health.equityUsdX18, int256(20_400e18));
 
         PerpsViewFacet.PreviewParams memory params = PerpsViewFacet.PreviewParams({
             marketId: MARKET_A,

@@ -92,6 +92,10 @@ contract PerpsExecutionReentrancyHarness is PerpsExecutionFacet {
         market.maxStaleness = type(uint32).max;
         market.maxDeviationBps = 2_000;
         market.exists = true;
+
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        ps.globalExecutionEnabled = true;
+        ps.marketConfigMask[marketId] = 0x3f;
     }
 
     function seedFeePool(uint256 poolId, address underlying, uint256 totalDeposits, uint256 trackedBalance) external {

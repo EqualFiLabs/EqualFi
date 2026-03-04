@@ -83,7 +83,20 @@ contract PerpsSyncAccountHarness is PerpsExecutionFacet {
     }
 
     function setAccountCollateral(bytes32 accountId, bytes32 marketId, uint256 amount) external {
-        LibPerpsStorage.s().accountCollateral[accountId][marketId] = amount;
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        uint256 previous = ps.accountCollateral[accountId][marketId];
+        ps.accountCollateral[accountId][marketId] = amount;
+
+        LibPerpsStorage.PerpsMarketState storage state = ps.marketState[marketId];
+        if (amount > previous) {
+            uint256 delta = amount - previous;
+            state.reservedCollateral += delta;
+            ps.domainState.isolatedEncumbered += delta;
+        } else if (amount < previous) {
+            uint256 delta = previous - amount;
+            state.reservedCollateral -= delta;
+            ps.domainState.isolatedEncumbered -= delta;
+        }
     }
 
     function setDomainState(uint256 isolatedTrackedBalance, uint256 isolatedLiabilities, uint256 isolatedEncumbered) external {
@@ -220,9 +233,11 @@ contract PerpsSyncFacetTest is Test {
         assertTrue(result1.stateChanged);
         assertTrue(result1.marketFundingUpdated);
         assertEq(delta1.fundingPaid, int256(200e18));
+        assertEq(delta1.collateralInOut, -int256(200e18));
         assertEq(result1.longFundingPaidX18, int256(200e18));
         assertEq(result1.shortFundingPaidX18, 0);
         assertEq(h.readPosition(MARKET_ID, ACCOUNT_ID, true).entryFundingX18, int256(2e16));
+        assertEq(h.readAccountCollateral(ACCOUNT_ID, MARKET_ID), 99_800e18, "sync applies funding to account collateral");
 
         vm.recordLogs();
         vm.prank(KEEPER_B);
@@ -233,6 +248,7 @@ contract PerpsSyncFacetTest is Test {
         assertFalse(result2.stateChanged);
         assertFalse(result2.marketFundingUpdated);
         assertEq(delta2.fundingPaid, 0);
+        assertEq(delta2.collateralInOut, 0);
         assertEq(secondLogs.length, 0, "idempotent sync must not emit when unchanged");
         assertEq(h.getPoolTrackedBalance(COLLATERAL_POOL_ID), 5_000_000e18, "sync cannot debit non-perps tracked balance");
     }
@@ -318,11 +334,31 @@ contract PerpsSyncFacetTest is Test {
 
         vm.warp(500 + elapsed);
         vm.prank(KEEPER_A);
-        (LibPerpsStorage.SettlementDelta memory deltaA1, LibPerpsSync.AccountSyncResult memory resA1) =
-            hA.syncAccount(ACCOUNT_ID, MARKET_ID);
+        (bool okA1, bytes memory outA1) = _callSyncAccount(hA);
         vm.prank(KEEPER_B);
+        (bool okB1, bytes memory outB1) = _callSyncAccount(hB);
+
+        assertEq(okA1, okB1, "executor convergence: first sync outcome mismatch");
+        if (!okA1) {
+            assertEq(keccak256(outA1), keccak256(outB1), "executor convergence: first sync revert mismatch");
+            assertEq(keccak256(abi.encode(hA.getMarketState(MARKET_ID))), keccak256(abi.encode(hB.getMarketState(MARKET_ID))));
+            assertEq(
+                keccak256(abi.encode(hA.readPosition(MARKET_ID, ACCOUNT_ID, true))),
+                keccak256(abi.encode(hB.readPosition(MARKET_ID, ACCOUNT_ID, true)))
+            );
+            assertEq(
+                keccak256(abi.encode(hA.readPosition(MARKET_ID, ACCOUNT_ID, false))),
+                keccak256(abi.encode(hB.readPosition(MARKET_ID, ACCOUNT_ID, false)))
+            );
+            assertEq(hA.readAccountCollateral(ACCOUNT_ID, MARKET_ID), hB.readAccountCollateral(ACCOUNT_ID, MARKET_ID));
+            assertEq(keccak256(abi.encode(hA.getDomainState())), keccak256(abi.encode(hB.getDomainState())));
+            return;
+        }
+
+        (LibPerpsStorage.SettlementDelta memory deltaA1, LibPerpsSync.AccountSyncResult memory resA1) =
+            abi.decode(outA1, (LibPerpsStorage.SettlementDelta, LibPerpsSync.AccountSyncResult));
         (LibPerpsStorage.SettlementDelta memory deltaB1, LibPerpsSync.AccountSyncResult memory resB1) =
-            hB.syncAccount(ACCOUNT_ID, MARKET_ID);
+            abi.decode(outB1, (LibPerpsStorage.SettlementDelta, LibPerpsSync.AccountSyncResult));
 
         assertEq(keccak256(abi.encode(resA1)), keccak256(abi.encode(resB1)));
         assertEq(keccak256(abi.encode(deltaA1)), keccak256(abi.encode(deltaB1)));
@@ -339,11 +375,20 @@ contract PerpsSyncFacetTest is Test {
         assertEq(keccak256(abi.encode(hA.getDomainState())), keccak256(abi.encode(hB.getDomainState())));
 
         vm.prank(KEEPER_B);
-        (LibPerpsStorage.SettlementDelta memory deltaA2, LibPerpsSync.AccountSyncResult memory resA2) =
-            hA.syncAccount(ACCOUNT_ID, MARKET_ID);
+        (bool okA2, bytes memory outA2) = _callSyncAccount(hA);
         vm.prank(KEEPER_A);
+        (bool okB2, bytes memory outB2) = _callSyncAccount(hB);
+
+        assertEq(okA2, okB2, "executor convergence: second sync outcome mismatch");
+        if (!okA2) {
+            assertEq(keccak256(outA2), keccak256(outB2), "executor convergence: second sync revert mismatch");
+            return;
+        }
+
+        (LibPerpsStorage.SettlementDelta memory deltaA2, LibPerpsSync.AccountSyncResult memory resA2) =
+            abi.decode(outA2, (LibPerpsStorage.SettlementDelta, LibPerpsSync.AccountSyncResult));
         (LibPerpsStorage.SettlementDelta memory deltaB2, LibPerpsSync.AccountSyncResult memory resB2) =
-            hB.syncAccount(ACCOUNT_ID, MARKET_ID);
+            abi.decode(outB2, (LibPerpsStorage.SettlementDelta, LibPerpsSync.AccountSyncResult));
 
         assertFalse(resA2.stateChanged);
         assertFalse(resB2.stateChanged);
@@ -413,7 +458,7 @@ contract PerpsSyncFacetTest is Test {
         h.seedPosition(MARKET_ID, ACCOUNT_ID, true, longSizeUsdX18, entryFundingLong);
         h.seedPosition(MARKET_ID, ACCOUNT_ID, false, shortSizeUsdX18, 0);
         h.setAccountCollateral(ACCOUNT_ID, MARKET_ID, 100_000e18);
-        h.setDomainState(2_000_000e18, 0, 0);
+        h.setDomainState(2_000_000e18, 0, 100_000e18);
         h.setPoolTrackedBalance(COLLATERAL_POOL_ID, 5_000_000e18);
     }
 
@@ -431,5 +476,9 @@ contract PerpsSyncFacetTest is Test {
         );
         h.setDomainState(2_000_000e18, 0, 0);
         h.setPoolTrackedBalance(COLLATERAL_POOL_ID, 9_000_000e18);
+    }
+
+    function _callSyncAccount(PerpsSyncAccountHarness h) internal returns (bool ok, bytes memory out) {
+        return address(h).call(abi.encodeWithSelector(h.syncAccount.selector, ACCOUNT_ID, MARKET_ID));
     }
 }

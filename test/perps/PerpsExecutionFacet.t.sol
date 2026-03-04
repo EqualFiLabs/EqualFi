@@ -10,6 +10,7 @@ import {LibPerpsStorage} from "../../src/perps/LibPerpsStorage.sol";
 import {PerpsExecutionFacet} from "../../src/perps/PerpsExecutionFacet.sol";
 import {
     Perps_DecreasePaused,
+    Perps_InsufficientMargin,
     Perps_InsufficientPerpsLiquidity,
     Perps_NonceMismatch,
     Perps_PriceOutOfBounds,
@@ -71,6 +72,10 @@ contract PerpsExecutionHarness is PerpsExecutionFacet {
         market.pauseLiquidation = false;
         market.pauseSync = false;
         market.exists = true;
+
+        LibPerpsStorage.Layout storage ps = LibPerpsStorage.s();
+        ps.globalExecutionEnabled = true;
+        ps.marketConfigMask[marketId] = 0x3f;
     }
 
     function setPoolTrackedBalance(uint256 poolId, uint256 trackedBalance) external {
@@ -324,6 +329,74 @@ contract PerpsExecutionFacetTest is Test {
         h.openOrIncrease(params);
     }
 
+    function test_removeCollateral_revertsWhenWithdrawalBreaksMaintenance() public {
+        bytes32 accountId = _createAndFundAccount(2_000e18);
+
+        vm.prank(owner);
+        h.openOrIncrease(
+            PerpsExecutionFacet.OpenIncreaseParams({
+                marketId: marketId,
+                accountId: accountId,
+                isLong: true,
+                sizeDeltaUsdX18: 5_000e18,
+                executionPriceX18: 2_000e18,
+                limitPriceX18: 2_000e18,
+                maxSlippageBps: 100,
+                feePoolId: collateralPoolId,
+                executorFee: 0
+            })
+        );
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(Perps_InsufficientMargin.selector, 350e18, 250e18));
+        h.removeCollateral(
+            PerpsExecutionFacet.RemoveCollateralParams({
+                marketId: marketId,
+                accountId: accountId,
+                collateralAsset: collateralAsset,
+                amount: 1_700e18
+            })
+        );
+    }
+
+    function test_decreaseOrClose_revertsWhenNetLossExceedsCollateral() public {
+        bytes32 accountId = _createAndFundAccount(2_000e18);
+
+        vm.prank(owner);
+        h.openOrIncrease(
+            PerpsExecutionFacet.OpenIncreaseParams({
+                marketId: marketId,
+                accountId: accountId,
+                isLong: true,
+                sizeDeltaUsdX18: 5_000e18,
+                executionPriceX18: 2_000e18,
+                limitPriceX18: 2_000e18,
+                maxSlippageBps: 100,
+                feePoolId: collateralPoolId,
+                executorFee: 0
+            })
+        );
+
+        h.setOracleData(1_000e18, block.timestamp, 0);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(Perps_InsufficientPerpsLiquidity.selector, 2_550e18, 1_950e18));
+        h.decreaseOrClose(
+            PerpsExecutionFacet.DecreaseCloseParams({
+                marketId: marketId,
+                accountId: accountId,
+                isLong: true,
+                sizeDeltaUsdX18: 5_000e18,
+                executionPriceX18: 1_000e18,
+                limitPriceX18: 1_000e18,
+                maxSlippageBps: 100,
+                feePoolId: collateralPoolId,
+                executorFee: 0
+            })
+        );
+
+        assertEq(h.getPosition(marketId, accountId, true).sizeUsdX18, 5_000e18, "position remains open for liquidation");
+    }
+
     function test_decreaseOrClose_revertsOnOracleStale() public {
         bytes32 accountId = _createAndFundAccount(20_000e18);
 
@@ -428,6 +501,7 @@ contract PerpsExecutionFacetTest is Test {
         LibPerpsStorage.PerpsPosition memory position = h.getPosition(marketId, accountId, true);
         assertEq(position.sizeUsdX18, 10_000e18);
         assertEq(position.entryPriceX18, 2_000e18);
+        assertEq(h.getAccountCollateral(marketId, accountId), 19_890e18, "open charges taker+executor fees to collateral");
 
         LibPerpsStorage.PerpsMarketState memory stateAfterOpen = h.marketState(marketId);
         assertEq(stateAfterOpen.openInterestLong, 10_000e18);
@@ -457,6 +531,7 @@ contract PerpsExecutionFacetTest is Test {
         assertEq(decDelta.takerFee, 50e18);
         assertEq(decDelta.executorFee, 5e18);
         assertEq(decDelta.collateralInOut, 445e18);
+        assertEq(h.getAccountCollateral(marketId, accountId), 20_335e18, "partial close applies pnl/funding/fees to collateral");
 
         LibPerpsStorage.PerpsPosition memory positionAfterDec = h.getPosition(marketId, accountId, true);
         assertEq(positionAfterDec.sizeUsdX18, 5_000e18);
@@ -476,6 +551,8 @@ contract PerpsExecutionFacetTest is Test {
         vm.prank(owner);
         LibPerpsStorage.SettlementDelta memory closeDelta = h.decreaseOrClose(closeParams);
         assertEq(closeDelta.realizedPnl, -500e18);
+        assertEq(closeDelta.collateralInOut, -555e18);
+        assertEq(h.getAccountCollateral(marketId, accountId), 19_780e18, "loss path debits collateral");
 
         LibPerpsStorage.PerpsPosition memory closed = h.getPosition(marketId, accountId, true);
         assertEq(closed.sizeUsdX18, 0);
@@ -501,8 +578,8 @@ contract PerpsExecutionFacetTest is Test {
 
         (uint256 accruedBefore, uint256 pendingBefore, uint256 totalBefore) = h.previewAccountLpFees(marketId, accountId);
         assertEq(accruedBefore, 0);
-        assertEq(pendingBefore, 70e18);
-        assertEq(totalBefore, 70e18);
+        assertEq(pendingBefore, 69_650_000_000_000_000_000);
+        assertEq(totalBefore, 69_650_000_000_000_000_000);
 
         uint256 trackedBefore = h.domainState().isolatedTrackedBalance;
 
@@ -516,14 +593,56 @@ contract PerpsExecutionFacetTest is Test {
             })
         );
 
-        assertEq(withdrawn, 1_070e18, "withdraw amount plus accrued LP fees");
-        assertEq(h.getAccountCollateral(marketId, accountId), 19_000e18);
-        assertEq(h.domainState().isolatedTrackedBalance, trackedBefore - 1_070e18);
+        assertEq(withdrawn, 1_069_650_000_000_000_000_000, "withdraw amount plus accrued LP fees");
+        assertEq(h.getAccountCollateral(marketId, accountId), 18_900e18);
+        assertEq(h.domainState().isolatedTrackedBalance, trackedBefore - withdrawn);
 
         (uint256 accruedAfter, uint256 pendingAfter, uint256 totalAfter) = h.previewAccountLpFees(marketId, accountId);
         assertEq(accruedAfter, 0);
         assertEq(pendingAfter, 0);
         assertEq(totalAfter, 0);
+    }
+
+    function test_withdrawLpFees_claimsFeesOnly_withoutChangingCollateral() public {
+        bytes32 accountId = _createAndFundAccount(20_000e18);
+
+        vm.prank(owner);
+        h.openOrIncrease(
+            PerpsExecutionFacet.OpenIncreaseParams({
+                marketId: marketId,
+                accountId: accountId,
+                isLong: true,
+                sizeDeltaUsdX18: 10_000e18,
+                executionPriceX18: 2_000e18,
+                limitPriceX18: 2_000e18,
+                maxSlippageBps: 100,
+                feePoolId: collateralPoolId,
+                executorFee: 0
+            })
+        );
+
+        uint256 collateralBefore = h.getAccountCollateral(marketId, accountId);
+        uint256 trackedBefore = h.domainState().isolatedTrackedBalance;
+
+        vm.prank(owner);
+        uint256 feesOut = h.withdrawLpFees(marketId, accountId);
+
+        assertEq(feesOut, 69_650_000_000_000_000_000);
+        assertEq(h.getAccountCollateral(marketId, accountId), collateralBefore, "collateral unchanged on fee-only withdraw");
+        assertEq(h.domainState().isolatedTrackedBalance, trackedBefore - feesOut, "only fee amount leaves isolated tracked");
+
+        (uint256 accruedAfter, uint256 pendingAfter, uint256 totalAfter) = h.previewAccountLpFees(marketId, accountId);
+        assertEq(accruedAfter, 0);
+        assertEq(pendingAfter, 0);
+        assertEq(totalAfter, 0);
+    }
+
+    function test_withdrawLpFees_revertsWhenNoFeesAccrued() public {
+        bytes32 accountId = _createAndFundAccount(20_000e18);
+
+        vm.prank(owner);
+        vm.expectRevert(Perps_RiskLimitExceeded.selector);
+        h.withdrawLpFees(marketId, accountId);
     }
 
     function test_executeIntent_openAndClose_sharedCoreAndNonceProgression() public {
