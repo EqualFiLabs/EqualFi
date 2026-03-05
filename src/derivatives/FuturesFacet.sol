@@ -91,7 +91,6 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         returns (uint256 seriesId)
     {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
-        DerivativeTypes.DerivativeConfig storage cfg = ds.config;
         if (ds.futuresPaused) revert Futures_Paused();
         if (params.totalSize == 0) revert Futures_InvalidAmount(params.totalSize);
         if (params.contractSize == 0) revert Futures_InvalidContractSize(params.contractSize);
@@ -122,11 +121,19 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         LibActiveCreditIndex.settle(params.quotePoolId, positionKey);
 
         uint256 underlyingNotional = _contractsToUnderlying(params.totalSize, params.contractSize);
-        (uint16 createFeeBps, uint16 exerciseFeeBps, uint16 reclaimFeeBps) =
-            _resolveFeeBps(cfg, params.useCustomFees, params.createFeeBps, params.exerciseFeeBps, params.reclaimFeeBps);
-        _chargeCreateFee(
-            positionKey, params.underlyingPoolId, underlyingNotional, createFeeBps, cfg.defaultCreateFeeFlatWad
+        DerivativeTypes.DerivativeActionFeeConfig memory createFeeConfig = LibDerivativeStorage.resolveActionFeeConfig(
+            ds, params.underlyingPoolId, DerivativeTypes.DerivativeFeeAction.Create
         );
+        DerivativeTypes.DerivativeActionFeeConfig memory exerciseFeeConfig = LibDerivativeStorage.resolveActionFeeConfig(
+            ds, params.quotePoolId, DerivativeTypes.DerivativeFeeAction.Exercise
+        );
+        DerivativeTypes.DerivativeActionFeeConfig memory reclaimFeeConfig = LibDerivativeStorage.resolveActionFeeConfig(
+            ds, params.underlyingPoolId, DerivativeTypes.DerivativeFeeAction.Reclaim
+        );
+        (uint16 createFeeBps, uint16 exerciseFeeBps, uint16 reclaimFeeBps) = _resolveFeeBps(
+            params.useCustomFees, params.createFeeBps, params.exerciseFeeBps, params.reclaimFeeBps, createFeeConfig, exerciseFeeConfig, reclaimFeeConfig
+        );
+        _chargeCreateFee(positionKey, params.underlyingPoolId, underlyingNotional, createFeeBps, createFeeConfig);
         LibDerivativeHelpers._lockCollateral(positionKey, params.underlyingPoolId, underlyingNotional);
 
         seriesId = ++ds.nextFuturesSeriesId;
@@ -265,7 +272,6 @@ contract FuturesFacet is ReentrancyGuardModifiers {
             LibAppStorage.s().nativeTrackedTotal -= underlyingAmount;
         }
 
-        DerivativeTypes.DerivativeConfig storage cfg = LibDerivativeStorage.derivativeStorage().config;
         (uint256 exerciseFee, uint256 received) = _chargeExerciseFee(
             holder,
             quotePool,
@@ -274,7 +280,11 @@ contract FuturesFacet is ReentrancyGuardModifiers {
             quoteAmount,
             maxPayment,
             series.exerciseFeeBps,
-            cfg.defaultExerciseFeeFlatWad
+            LibDerivativeStorage.resolveActionFeeConfig(
+                LibDerivativeStorage.derivativeStorage(),
+                series.quotePoolId,
+                DerivativeTypes.DerivativeFeeAction.Exercise
+            )
         );
         uint256 netQuote = received - exerciseFee;
         quotePool.userPrincipal[makerKey] += netQuote;
@@ -319,7 +329,9 @@ contract FuturesFacet is ReentrancyGuardModifiers {
                 series.underlyingPoolId,
                 collateralUnlocked,
                 series.reclaimFeeBps,
-                ds.config.defaultReclaimFeeFlatWad
+                LibDerivativeStorage.resolveActionFeeConfig(
+                    ds, series.underlyingPoolId, DerivativeTypes.DerivativeFeeAction.Reclaim
+                )
             );
         }
 
@@ -416,24 +428,26 @@ contract FuturesFacet is ReentrancyGuardModifiers {
     }
 
     function _resolveFeeBps(
-        DerivativeTypes.DerivativeConfig storage cfg,
         bool useCustomFees,
         uint16 createFeeBps,
         uint16 exerciseFeeBps,
-        uint16 reclaimFeeBps
-    ) internal view returns (uint16 resolvedCreate, uint16 resolvedExercise, uint16 resolvedReclaim) {
-        uint16 minBps = cfg.minFeeBps;
-        uint16 maxBps = cfg.maxFeeBps;
-        if (useCustomFees) {
-            LibDerivativeFees.validateFeeBps(createFeeBps, minBps, maxBps);
-            LibDerivativeFees.validateFeeBps(exerciseFeeBps, minBps, maxBps);
-            LibDerivativeFees.validateFeeBps(reclaimFeeBps, minBps, maxBps);
-            return (createFeeBps, exerciseFeeBps, reclaimFeeBps);
-        }
-        LibDerivativeFees.validateFeeBps(cfg.defaultCreateFeeBps, minBps, maxBps);
-        LibDerivativeFees.validateFeeBps(cfg.defaultExerciseFeeBps, minBps, maxBps);
-        LibDerivativeFees.validateFeeBps(cfg.defaultReclaimFeeBps, minBps, maxBps);
-        return (cfg.defaultCreateFeeBps, cfg.defaultExerciseFeeBps, cfg.defaultReclaimFeeBps);
+        uint16 reclaimFeeBps,
+        DerivativeTypes.DerivativeActionFeeConfig memory createFeeConfig,
+        DerivativeTypes.DerivativeActionFeeConfig memory exerciseFeeConfig,
+        DerivativeTypes.DerivativeActionFeeConfig memory reclaimFeeConfig
+    ) internal pure returns (uint16 resolvedCreate, uint16 resolvedExercise, uint16 resolvedReclaim) {
+        resolvedCreate = _resolveActionFeeBps(useCustomFees, createFeeBps, createFeeConfig);
+        resolvedExercise = _resolveActionFeeBps(useCustomFees, exerciseFeeBps, exerciseFeeConfig);
+        resolvedReclaim = _resolveActionFeeBps(useCustomFees, reclaimFeeBps, reclaimFeeConfig);
+    }
+
+    function _resolveActionFeeBps(
+        bool useCustomFees,
+        uint16 customFeeBps,
+        DerivativeTypes.DerivativeActionFeeConfig memory feeConfig
+    ) internal pure returns (uint16 resolvedFeeBps) {
+        resolvedFeeBps = useCustomFees ? customFeeBps : feeConfig.defaultFeeBps;
+        LibDerivativeFees.validateFeeBps(resolvedFeeBps, feeConfig.maxFeeBps);
     }
 
     function _chargeCreateFee(
@@ -441,13 +455,15 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 poolId,
         uint256 baseAmount,
         uint16 feeBps,
-        uint128 flatFeeWad
+        DerivativeTypes.DerivativeActionFeeConfig memory feeConfig
     ) internal returns (uint256 feeAmount) {
-        if (feeBps == 0 && flatFeeWad == 0) {
+        if (feeBps == 0 && feeConfig.defaultFlatFee == 0) {
             return 0;
         }
+        LibDerivativeFees.validateFeeBps(feeBps, feeConfig.maxFeeBps);
         Types.PoolData storage pool = LibAppStorage.s().pools[poolId];
-        feeAmount = LibDerivativeFees.computeFeeAmount(baseAmount, feeBps, flatFeeWad, pool.underlying);
+        feeAmount =
+            LibDerivativeFees.computeFeeAmount(baseAmount, feeBps, feeConfig.defaultFlatFee, feeConfig.maxTotalFeeBps);
         LibDerivativeFees.enforceFeeWithinPayment(feeAmount, baseAmount);
 
         uint256 principal = pool.userPrincipal[positionKey];
@@ -474,7 +490,7 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 paymentAmount,
         uint256 maxPaymentAmount,
         uint16 feeBps,
-        uint128 flatFeeWad
+        DerivativeTypes.DerivativeActionFeeConfig memory feeConfig
     ) internal returns (uint256 feeAmount, uint256 received) {
         received = LibCurrency.pullAtLeast(paymentAsset, payer, paymentAmount, maxPaymentAmount);
         if (received > paymentAmount) {
@@ -486,10 +502,13 @@ contract FuturesFacet is ReentrancyGuardModifiers {
             received = paymentAmount;
         }
         pool.trackedBalance += received;
-        if (feeBps == 0 && flatFeeWad == 0) {
+        if (feeBps == 0 && feeConfig.defaultFlatFee == 0) {
             return (0, received);
         }
-        feeAmount = LibDerivativeFees.computeFeeAmount(paymentAmount, feeBps, flatFeeWad, paymentAsset);
+        LibDerivativeFees.validateFeeBps(feeBps, feeConfig.maxFeeBps);
+        feeAmount = LibDerivativeFees.computeFeeAmount(
+            paymentAmount, feeBps, feeConfig.defaultFlatFee, feeConfig.maxTotalFeeBps
+        );
         LibDerivativeFees.enforceFeeWithinPayment(feeAmount, paymentAmount);
         LibFeeTreasury.accrueWithTreasury(pool, poolId, feeAmount, keccak256("FUTURES_EXERCISE_FEE"));
     }
@@ -499,13 +518,15 @@ contract FuturesFacet is ReentrancyGuardModifiers {
         uint256 poolId,
         uint256 baseAmount,
         uint16 feeBps,
-        uint128 flatFeeWad
+        DerivativeTypes.DerivativeActionFeeConfig memory feeConfig
     ) internal returns (uint256 feeAmount) {
-        if (feeBps == 0 && flatFeeWad == 0) {
+        if (feeBps == 0 && feeConfig.defaultFlatFee == 0) {
             return 0;
         }
+        LibDerivativeFees.validateFeeBps(feeBps, feeConfig.maxFeeBps);
         Types.PoolData storage pool = LibAppStorage.s().pools[poolId];
-        feeAmount = LibDerivativeFees.computeFeeAmount(baseAmount, feeBps, flatFeeWad, pool.underlying);
+        feeAmount =
+            LibDerivativeFees.computeFeeAmount(baseAmount, feeBps, feeConfig.defaultFlatFee, feeConfig.maxTotalFeeBps);
         LibDerivativeFees.enforceFeeWithinPayment(feeAmount, baseAmount);
 
         uint256 principal = pool.userPrincipal[positionKey];

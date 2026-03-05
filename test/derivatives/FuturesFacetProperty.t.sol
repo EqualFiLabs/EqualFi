@@ -265,6 +265,44 @@ contract FuturesFacetPropertyTest is Test {
         assertEq(harness.getPrincipal(positionKey, 1), principalBefore - flatFee, "native flat fee applied");
     }
 
+    function test_createFuturesSeries_usesPoolCreateFeeOverride() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principal = 5e18;
+        uint256 globalFlatFee = 1e16;
+        uint256 poolOverrideFlatFee = 3e16;
+        vm.deal(address(harness), principal);
+        harness.seedPool(1, address(0), positionKey, principal, principal);
+        harness.seedPool(2, address(quote), positionKey, principal, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setFeeSplits(0, 0);
+        harness.setCreateFeeConfig(0, 10_000, 10_000, uint128(globalFlatFee), uint128(globalFlatFee));
+        harness.setPoolCreateFeeOverride(1, true, 0, 10_000, 10_000, uint128(poolOverrideFlatFee), uint128(poolOverrideFlatFee));
+
+        uint256 principalBefore = harness.getPrincipal(positionKey, 1);
+        vm.prank(maker);
+        harness.createFuturesSeries(
+            DerivativeTypes.CreateFuturesSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                quotePoolId: 2,
+                forwardPrice: 2e18,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: 1e18,
+                contractSize: 1,
+                isEuropean: false,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        assertEq(harness.getPrincipal(positionKey, 1), principalBefore - poolOverrideFlatFee, "pool override flat fee applied");
+    }
+
     function test_createFuturesSeries_supportsFractionalNotionalPerContract() public {
         uint256 makerTokenId = nft.mint(maker, 1);
         bytes32 positionKey = nft.getPositionKey(makerTokenId);
@@ -356,10 +394,42 @@ contract FuturesHarness is FuturesFacet {
         LibDerivativeStorage.derivativeStorage().config.defaultGracePeriodSeconds = gracePeriod;
     }
 
-    function setDefaultCreateFeeConfig(uint16 feeBps, uint128 flatFeeWad) external {
+    function setDefaultCreateFeeConfig(uint16 feeBps, uint128 flatFee) external {
+        setCreateFeeConfig(feeBps, 10_000, 10_000, flatFee, flatFee);
+    }
+
+    function setCreateFeeConfig(
+        uint16 defaultFeeBps,
+        uint16 maxFeeBps,
+        uint16 maxTotalFeeBps,
+        uint128 defaultFlatFee,
+        uint128 maxFlatFee
+    ) public {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
-        ds.config.defaultCreateFeeBps = feeBps;
-        ds.config.defaultCreateFeeFlatWad = flatFeeWad;
+        ds.config.createFeeConfig.defaultFeeBps = defaultFeeBps;
+        ds.config.createFeeConfig.maxFeeBps = maxFeeBps;
+        ds.config.createFeeConfig.maxTotalFeeBps = maxTotalFeeBps;
+        ds.config.createFeeConfig.defaultFlatFee = defaultFlatFee;
+        ds.config.createFeeConfig.maxFlatFee = maxFlatFee;
+    }
+
+    function setPoolCreateFeeOverride(
+        uint256 poolId,
+        bool enabled,
+        uint16 defaultFeeBps,
+        uint16 maxFeeBps,
+        uint16 maxTotalFeeBps,
+        uint128 defaultFlatFee,
+        uint128 maxFlatFee
+    ) external {
+        DerivativeTypes.DerivativeActionFeeOverride storage overrideCfg =
+            LibDerivativeStorage.derivativeStorage().actionFeeOverridesByPool[poolId][uint8(DerivativeTypes.DerivativeFeeAction.Create)];
+        overrideCfg.enabled = enabled;
+        overrideCfg.feeConfig.defaultFeeBps = defaultFeeBps;
+        overrideCfg.feeConfig.maxFeeBps = maxFeeBps;
+        overrideCfg.feeConfig.maxTotalFeeBps = maxTotalFeeBps;
+        overrideCfg.feeConfig.defaultFlatFee = defaultFlatFee;
+        overrideCfg.feeConfig.maxFlatFee = maxFlatFee;
     }
 
     function setFeeSplits(uint16 treasuryBps, uint16 activeCreditBps) external {

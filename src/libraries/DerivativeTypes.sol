@@ -8,6 +8,12 @@ library DerivativeTypes {
         TokenOut
     }
 
+    enum DerivativeFeeAction {
+        Create,
+        Exercise,
+        Reclaim
+    }
+
     enum InvariantMode {
         Volatile,
         Stable
@@ -125,18 +131,27 @@ library DerivativeTypes {
         uint64 europeanToleranceSeconds;
         uint64 defaultGracePeriodSeconds;
         uint16 maxFeeBps;
-        uint16 minFeeBps;
-        uint16 defaultCreateFeeBps;
-        uint16 defaultExerciseFeeBps;
-        uint16 defaultReclaimFeeBps;
         uint16 ammMakerShareBps;
         uint16 communityMakerShareBps;
         uint16 mamMakerShareBps;
-        uint128 defaultCreateFeeFlatWad;
-        uint128 defaultExerciseFeeFlatWad;
-        uint128 defaultReclaimFeeFlatWad;
+        DerivativeActionFeeConfig createFeeConfig;
+        DerivativeActionFeeConfig exerciseFeeConfig;
+        DerivativeActionFeeConfig reclaimFeeConfig;
         bool requirePositionNFT;
         bool stableModeEnabled;
+    }
+
+    struct DerivativeActionFeeConfig {
+        uint16 defaultFeeBps;
+        uint16 maxFeeBps;
+        uint16 maxTotalFeeBps;
+        uint128 defaultFlatFee;
+        uint128 maxFlatFee;
+    }
+
+    struct DerivativeActionFeeOverride {
+        DerivativeActionFeeConfig feeConfig;
+        bool enabled;
     }
 
     struct CreateAuctionParams {

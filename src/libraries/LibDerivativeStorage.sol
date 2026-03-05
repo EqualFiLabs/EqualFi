@@ -13,6 +13,7 @@ library LibDerivativeStorage {
 
     struct DerivativeStorage {
         DerivativeTypes.DerivativeConfig config;
+        mapping(uint256 => mapping(uint8 => DerivativeTypes.DerivativeActionFeeOverride)) actionFeeOverridesByPool;
 
         mapping(uint256 => DerivativeTypes.AmmAuction) auctions;
         uint256 nextAuctionId;
@@ -113,6 +114,34 @@ library LibDerivativeStorage {
         assembly {
             ds.slot := position
         }
+    }
+
+    function resolveActionFeeConfig(
+        DerivativeStorage storage ds,
+        uint256 poolId,
+        DerivativeTypes.DerivativeFeeAction action
+    ) internal view returns (DerivativeTypes.DerivativeActionFeeConfig memory feeConfig) {
+        DerivativeTypes.DerivativeActionFeeOverride storage overrideCfg = ds.actionFeeOverridesByPool[poolId][uint8(action)];
+        if (overrideCfg.enabled) {
+            return overrideCfg.feeConfig;
+        }
+        return globalActionFeeConfig(ds, action);
+    }
+
+    function globalActionFeeConfig(
+        DerivativeStorage storage ds,
+        DerivativeTypes.DerivativeFeeAction action
+    ) internal view returns (DerivativeTypes.DerivativeActionFeeConfig memory feeConfig) {
+        if (action == DerivativeTypes.DerivativeFeeAction.Create) {
+            return ds.config.createFeeConfig;
+        }
+        if (action == DerivativeTypes.DerivativeFeeAction.Exercise) {
+            return ds.config.exerciseFeeConfig;
+        }
+        if (action == DerivativeTypes.DerivativeFeeAction.Reclaim) {
+            return ds.config.reclaimFeeConfig;
+        }
+        revert("EqualFi: invalid fee action");
     }
 
     function addAuction(bytes32 positionKey, uint256 auctionId) internal {

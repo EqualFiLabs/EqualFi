@@ -11,6 +11,7 @@ import {LibPoolMembership} from "../../src/libraries/LibPoolMembership.sol";
 import {LibFeeIndex} from "../../src/libraries/LibFeeIndex.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {LibDerivativeFees} from "../../src/libraries/LibDerivativeFees.sol";
 import {LibDirectStorage} from "../../src/libraries/LibDirectStorage.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
@@ -582,6 +583,87 @@ contract OptionsFacetPropertyTest is Test {
         assertGt(seriesId, 0, "series created");
         assertEq(harness.getPrincipal(positionKey, 1), principalBefore - flatFee, "native flat fee applied");
     }
+
+    function test_createOptionSeries_usesPoolCreateFeeOverride() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principal = 5e18;
+        uint256 globalFlatFee = 1e16;
+        uint256 poolOverrideFlatFee = 2e16;
+        vm.deal(address(harness), principal);
+        harness.seedPool(1, address(0), positionKey, principal, principal);
+        harness.seedPool(2, address(strike), positionKey, principal, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setFeeSplits(0, 0);
+        harness.setCreateFeeConfig(0, 10_000, 10_000, uint128(globalFlatFee), uint128(globalFlatFee));
+        harness.setPoolCreateFeeOverride(1, true, 0, 10_000, 10_000, uint128(poolOverrideFlatFee), uint128(poolOverrideFlatFee));
+
+        uint256 principalBefore = harness.getPrincipal(positionKey, 1);
+        vm.prank(maker);
+        harness.createOptionSeries(
+            DerivativeTypes.CreateOptionSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                strikePoolId: 2,
+                strikePrice: 2e18,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: 1e18,
+                contractSize: 1,
+                isCall: true,
+                isAmerican: true,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+
+        assertEq(harness.getPrincipal(positionKey, 1), principalBefore - poolOverrideFlatFee, "pool override flat fee applied");
+    }
+
+    function test_createOptionSeries_revertsWhenFeeExceedsMaxPercentOfBase() public {
+        uint256 makerTokenId = nft.mint(maker, 1);
+        bytes32 positionKey = nft.getPositionKey(makerTokenId);
+
+        uint256 principal = 5e18;
+        uint256 flatFee = 2e17;
+        vm.deal(address(harness), principal);
+        harness.seedPool(1, address(0), positionKey, principal, principal);
+        harness.seedPool(2, address(strike), positionKey, principal, 0);
+        harness.joinPool(positionKey, 1);
+        harness.joinPool(positionKey, 2);
+        harness.setFeeSplits(0, 0);
+        harness.setCreateFeeConfig(0, 10_000, 1_000, uint128(flatFee), uint128(flatFee));
+
+        vm.prank(maker);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibDerivativeFees.DerivativeFeeExceedsCap.selector,
+                flatFee,
+                1e17, // 10% of the 1e18 notional
+                uint16(1_000)
+            )
+        );
+        harness.createOptionSeries(
+            DerivativeTypes.CreateOptionSeriesParams({
+                positionId: makerTokenId,
+                underlyingPoolId: 1,
+                strikePoolId: 2,
+                strikePrice: 2e18,
+                expiry: uint64(block.timestamp + 1 days),
+                totalSize: 1e18,
+                contractSize: 1,
+                isCall: true,
+                isAmerican: true,
+                useCustomFees: false,
+                createFeeBps: 0,
+                exerciseFeeBps: 0,
+                reclaimFeeBps: 0
+            })
+        );
+    }
 }
 
 contract OptionsHarness is OptionsFacet {
@@ -599,10 +681,42 @@ contract OptionsHarness is OptionsFacet {
         LibDerivativeStorage.derivativeStorage().config.europeanToleranceSeconds = tolerance;
     }
 
-    function setDefaultCreateFeeConfig(uint16 feeBps, uint128 flatFeeWad) external {
+    function setDefaultCreateFeeConfig(uint16 feeBps, uint128 flatFee) external {
+        setCreateFeeConfig(feeBps, 10_000, 10_000, flatFee, flatFee);
+    }
+
+    function setCreateFeeConfig(
+        uint16 defaultFeeBps,
+        uint16 maxFeeBps,
+        uint16 maxTotalFeeBps,
+        uint128 defaultFlatFee,
+        uint128 maxFlatFee
+    ) public {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
-        ds.config.defaultCreateFeeBps = feeBps;
-        ds.config.defaultCreateFeeFlatWad = flatFeeWad;
+        ds.config.createFeeConfig.defaultFeeBps = defaultFeeBps;
+        ds.config.createFeeConfig.maxFeeBps = maxFeeBps;
+        ds.config.createFeeConfig.maxTotalFeeBps = maxTotalFeeBps;
+        ds.config.createFeeConfig.defaultFlatFee = defaultFlatFee;
+        ds.config.createFeeConfig.maxFlatFee = maxFlatFee;
+    }
+
+    function setPoolCreateFeeOverride(
+        uint256 poolId,
+        bool enabled,
+        uint16 defaultFeeBps,
+        uint16 maxFeeBps,
+        uint16 maxTotalFeeBps,
+        uint128 defaultFlatFee,
+        uint128 maxFlatFee
+    ) external {
+        DerivativeTypes.DerivativeActionFeeOverride storage overrideCfg =
+            LibDerivativeStorage.derivativeStorage().actionFeeOverridesByPool[poolId][uint8(DerivativeTypes.DerivativeFeeAction.Create)];
+        overrideCfg.enabled = enabled;
+        overrideCfg.feeConfig.defaultFeeBps = defaultFeeBps;
+        overrideCfg.feeConfig.maxFeeBps = maxFeeBps;
+        overrideCfg.feeConfig.maxTotalFeeBps = maxTotalFeeBps;
+        overrideCfg.feeConfig.defaultFlatFee = defaultFlatFee;
+        overrideCfg.feeConfig.maxFlatFee = maxFlatFee;
     }
 
     function setFeeSplits(uint16 treasuryBps, uint16 activeCreditBps) external {

@@ -7,6 +7,7 @@ import {Types} from "../libraries/Types.sol";
 import {IDiamondCut} from "../interfaces/IDiamondCut.sol";
 import {LibEqualIndex} from "../libraries/LibEqualIndex.sol";
 import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
+import {LibDerivativeFees} from "../libraries/LibDerivativeFees.sol";
 import {LibDirectRolling} from "../libraries/LibDirectRolling.sol";
 import {LibDirectStorage} from "../libraries/LibDirectStorage.sol";
 import {DirectTypes} from "../libraries/DirectTypes.sol";
@@ -36,17 +37,35 @@ contract AdminGovernanceFacet {
     event DefaultPoolConfigUpdated(uint256 fixedTermCount);
     event PoolConfigUpdated(uint256 indexed pid, uint256 fixedTermCount);
     event DerivativeFeeConfigUpdated(
-        uint16 minFeeBps,
         uint16 maxFeeBps,
-        uint16 createFeeBps,
-        uint16 exerciseFeeBps,
-        uint16 reclaimFeeBps,
+        uint16 createDefaultFeeBps,
+        uint16 createMaxFeeBps,
+        uint16 createMaxTotalFeeBps,
+        uint128 createDefaultFlatFee,
+        uint128 createMaxFlatFee,
+        uint16 exerciseDefaultFeeBps,
+        uint16 exerciseMaxFeeBps,
+        uint16 exerciseMaxTotalFeeBps,
+        uint128 exerciseDefaultFlatFee,
+        uint128 exerciseMaxFlatFee,
+        uint16 reclaimDefaultFeeBps,
+        uint16 reclaimMaxFeeBps,
+        uint16 reclaimMaxTotalFeeBps,
+        uint128 reclaimDefaultFlatFee,
+        uint128 reclaimMaxFlatFee,
         uint16 ammMakerShareBps,
         uint16 communityMakerShareBps,
-        uint16 mamMakerShareBps,
-        uint128 createFeeFlatWad,
-        uint128 exerciseFeeFlatWad,
-        uint128 reclaimFeeFlatWad
+        uint16 mamMakerShareBps
+    );
+    event DerivativePoolFeeConfigUpdated(
+        uint256 indexed poolId,
+        uint8 indexed action,
+        bool enabled,
+        uint16 defaultFeeBps,
+        uint16 maxFeeBps,
+        uint16 maxTotalFeeBps,
+        uint128 defaultFlatFee,
+        uint128 maxFlatFee
     );
     event RollingMinPaymentBpsUpdated(uint16 oldBps, uint16 newBps);
     event PositionNFTUpdated(address indexed oldPositionNFT, address indexed newPositionNFT, bool enabled);
@@ -359,60 +378,159 @@ contract AdminGovernanceFacet {
     }
 
     function setDerivativeFeeConfig(
-        uint16 minFeeBps,
         uint16 maxFeeBps,
-        uint16 createFeeBps,
-        uint16 exerciseFeeBps,
-        uint16 reclaimFeeBps,
+        uint16 createDefaultFeeBps,
+        uint16 createMaxFeeBps,
+        uint16 createMaxTotalFeeBps,
+        uint128 createDefaultFlatFee,
+        uint128 createMaxFlatFee,
+        uint16 exerciseDefaultFeeBps,
+        uint16 exerciseMaxFeeBps,
+        uint16 exerciseMaxTotalFeeBps,
+        uint128 exerciseDefaultFlatFee,
+        uint128 exerciseMaxFlatFee,
+        uint16 reclaimDefaultFeeBps,
+        uint16 reclaimMaxFeeBps,
+        uint16 reclaimMaxTotalFeeBps,
+        uint128 reclaimDefaultFlatFee,
+        uint128 reclaimMaxFlatFee,
         uint16 ammMakerShareBps,
         uint16 communityMakerShareBps,
-        uint16 mamMakerShareBps,
-        uint128 createFeeFlatWad,
-        uint128 exerciseFeeFlatWad,
-        uint128 reclaimFeeFlatWad
+        uint16 mamMakerShareBps
     ) external {
         LibAccess.enforceOwnerOrTimelock();
-        if (minFeeBps > maxFeeBps) revert InvalidParameterRange("minFeeBps > maxFeeBps");
         if (maxFeeBps > 10_000) revert InvalidParameterRange("maxFeeBps > 100%");
-        if (createFeeBps < minFeeBps || createFeeBps > maxFeeBps) {
-            revert InvalidParameterRange("createFeeBps out of bounds");
-        }
-        if (exerciseFeeBps < minFeeBps || exerciseFeeBps > maxFeeBps) {
-            revert InvalidParameterRange("exerciseFeeBps out of bounds");
-        }
-        if (reclaimFeeBps < minFeeBps || reclaimFeeBps > maxFeeBps) {
-            revert InvalidParameterRange("reclaimFeeBps out of bounds");
-        }
         if (ammMakerShareBps > 10_000) revert InvalidParameterRange("ammMakerShareBps > 100%");
         if (communityMakerShareBps > 10_000) revert InvalidParameterRange("communityMakerShareBps > 100%");
         if (mamMakerShareBps > 10_000) revert InvalidParameterRange("mamMakerShareBps > 100%");
 
         DerivativeTypes.DerivativeConfig storage cfg = LibDerivativeStorage.derivativeStorage().config;
-        cfg.minFeeBps = minFeeBps;
         cfg.maxFeeBps = maxFeeBps;
-        cfg.defaultCreateFeeBps = createFeeBps;
-        cfg.defaultExerciseFeeBps = exerciseFeeBps;
-        cfg.defaultReclaimFeeBps = reclaimFeeBps;
         cfg.ammMakerShareBps = ammMakerShareBps;
         cfg.communityMakerShareBps = communityMakerShareBps;
         cfg.mamMakerShareBps = mamMakerShareBps;
-        cfg.defaultCreateFeeFlatWad = createFeeFlatWad;
-        cfg.defaultExerciseFeeFlatWad = exerciseFeeFlatWad;
-        cfg.defaultReclaimFeeFlatWad = reclaimFeeFlatWad;
+        _setGlobalActionFeeConfig(
+            cfg.createFeeConfig,
+            createDefaultFeeBps,
+            createMaxFeeBps,
+            createMaxTotalFeeBps,
+            createDefaultFlatFee,
+            createMaxFlatFee
+        );
+        _setGlobalActionFeeConfig(
+            cfg.exerciseFeeConfig,
+            exerciseDefaultFeeBps,
+            exerciseMaxFeeBps,
+            exerciseMaxTotalFeeBps,
+            exerciseDefaultFlatFee,
+            exerciseMaxFlatFee
+        );
+        _setGlobalActionFeeConfig(
+            cfg.reclaimFeeConfig,
+            reclaimDefaultFeeBps,
+            reclaimMaxFeeBps,
+            reclaimMaxTotalFeeBps,
+            reclaimDefaultFlatFee,
+            reclaimMaxFlatFee
+        );
 
         emit DerivativeFeeConfigUpdated(
-            minFeeBps,
             maxFeeBps,
-            createFeeBps,
-            exerciseFeeBps,
-            reclaimFeeBps,
+            createDefaultFeeBps,
+            createMaxFeeBps,
+            createMaxTotalFeeBps,
+            createDefaultFlatFee,
+            createMaxFlatFee,
+            exerciseDefaultFeeBps,
+            exerciseMaxFeeBps,
+            exerciseMaxTotalFeeBps,
+            exerciseDefaultFlatFee,
+            exerciseMaxFlatFee,
+            reclaimDefaultFeeBps,
+            reclaimMaxFeeBps,
+            reclaimMaxTotalFeeBps,
+            reclaimDefaultFlatFee,
+            reclaimMaxFlatFee,
             ammMakerShareBps,
             communityMakerShareBps,
-            mamMakerShareBps,
-            createFeeFlatWad,
-            exerciseFeeFlatWad,
-            reclaimFeeFlatWad
+            mamMakerShareBps
         );
+    }
+
+    function setDerivativePoolFeeConfig(
+        uint256 poolId,
+        uint8 action,
+        bool enabled,
+        uint16 defaultFeeBps,
+        uint16 maxFeeBps,
+        uint16 maxTotalFeeBps,
+        uint128 defaultFlatFee,
+        uint128 maxFlatFee
+    ) external {
+        LibAccess.enforceOwnerOrTimelock();
+        _pool(poolId);
+        if (action > uint8(DerivativeTypes.DerivativeFeeAction.Reclaim)) {
+            revert InvalidParameterRange("invalid derivative fee action");
+        }
+
+        DerivativeTypes.DerivativeActionFeeOverride storage overrideCfg =
+            LibDerivativeStorage.derivativeStorage().actionFeeOverridesByPool[poolId][action];
+
+        if (!enabled) {
+            delete LibDerivativeStorage.derivativeStorage().actionFeeOverridesByPool[poolId][action];
+            emit DerivativePoolFeeConfigUpdated(poolId, action, false, 0, 0, 0, 0, 0);
+            return;
+        }
+
+        DerivativeTypes.DerivativeActionFeeConfig memory actionConfig = DerivativeTypes.DerivativeActionFeeConfig({
+            defaultFeeBps: defaultFeeBps,
+            maxFeeBps: maxFeeBps,
+            maxTotalFeeBps: maxTotalFeeBps,
+            defaultFlatFee: defaultFlatFee,
+            maxFlatFee: maxFlatFee
+        });
+        LibDerivativeFees.validateActionFeeConfig(actionConfig);
+
+        overrideCfg.feeConfig.defaultFeeBps = defaultFeeBps;
+        overrideCfg.feeConfig.maxFeeBps = maxFeeBps;
+        overrideCfg.feeConfig.maxTotalFeeBps = maxTotalFeeBps;
+        overrideCfg.feeConfig.defaultFlatFee = defaultFlatFee;
+        overrideCfg.feeConfig.maxFlatFee = maxFlatFee;
+        overrideCfg.enabled = true;
+
+        emit DerivativePoolFeeConfigUpdated(
+            poolId,
+            action,
+            true,
+            defaultFeeBps,
+            maxFeeBps,
+            maxTotalFeeBps,
+            defaultFlatFee,
+            maxFlatFee
+        );
+    }
+
+    function _setGlobalActionFeeConfig(
+        DerivativeTypes.DerivativeActionFeeConfig storage target,
+        uint16 defaultFeeBps,
+        uint16 maxFeeBps,
+        uint16 maxTotalFeeBps,
+        uint128 defaultFlatFee,
+        uint128 maxFlatFee
+    ) internal {
+        DerivativeTypes.DerivativeActionFeeConfig memory actionConfig = DerivativeTypes.DerivativeActionFeeConfig({
+            defaultFeeBps: defaultFeeBps,
+            maxFeeBps: maxFeeBps,
+            maxTotalFeeBps: maxTotalFeeBps,
+            defaultFlatFee: defaultFlatFee,
+            maxFlatFee: maxFlatFee
+        });
+        LibDerivativeFees.validateActionFeeConfig(actionConfig);
+        target.defaultFeeBps = defaultFeeBps;
+        target.maxFeeBps = maxFeeBps;
+        target.maxTotalFeeBps = maxTotalFeeBps;
+        target.defaultFlatFee = defaultFlatFee;
+        target.maxFlatFee = maxFlatFee;
     }
 
     /// @notice Enable or disable stable invariant mode for new non-CL auction creation.

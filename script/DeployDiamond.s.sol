@@ -81,6 +81,9 @@ import {ILMIsolatedFacet} from "../src/ilm-isolated/facets/ILMIsolatedFacet.sol"
 import {ILMIsolatedLiquidationFacet} from "../src/ilm-isolated/facets/ILMIsolatedLiquidationFacet.sol";
 import {ILMIsolatedViewFacet} from "../src/ilm-isolated/facets/ILMIsolatedViewFacet.sol";
 import {LibIlmIsolatedStorage} from "../src/ilm-isolated/libraries/LibIlmIsolatedStorage.sol";
+import {IlmManagedFixedRateIrm} from "../src/ilm-isolated/irm/IlmManagedFixedRateIrm.sol";
+import {ChainlinkPairIsolatedOracleAdapter} from "../src/ilm-isolated/oracles/ChainlinkPairIsolatedOracleAdapter.sol";
+import {IlmIsolatedTypes} from "../src/ilm-isolated/types/IlmIsolatedTypes.sol";
 import {ILMPooledAdminFacet} from "../src/ilm-pooled/facets/ILMPooledAdminFacet.sol";
 import {ILMPooledFacet} from "../src/ilm-pooled/facets/ILMPooledFacet.sol";
 import {ILMPooledLiquidationFacet} from "../src/ilm-pooled/facets/ILMPooledLiquidationFacet.sol";
@@ -176,6 +179,30 @@ contract LocalERC6551Registry is IERC6551Registry {
     }
 }
 
+contract LocalChainlinkAggregatorV3 {
+    uint8 public immutable decimals;
+    int256 internal answer;
+    uint80 internal roundId;
+    uint80 internal answeredInRound;
+    uint256 internal updatedAt;
+
+    constructor(uint8 decimals_, uint256 answer_, uint256 updatedAt_) {
+        decimals = decimals_;
+        answer = int256(answer_);
+        roundId = 1;
+        answeredInRound = 1;
+        updatedAt = updatedAt_;
+    }
+
+    function latestRoundData()
+        external
+        view
+        returns (uint80, int256, uint256, uint256, uint80)
+    {
+        return (roundId, answer, updatedAt, updatedAt, answeredInRound);
+    }
+}
+
 contract IlmIsolatedInit {
     function init(address owner_, uint256 maxStaleness_) external {
         LibIlmIsolatedStorage.IlmIsolatedStorageLayout storage ds = LibIlmIsolatedStorage.s();
@@ -195,6 +222,10 @@ contract DeployDiamondScript is Script {
     address internal futuresTokenAddress;
     address internal mailboxAddress;
     address internal faucetAddress;
+    address internal ilmOracleAdapterAddress;
+    address internal ilmIrmAddress;
+    bytes32 internal ilmMarketId;
+    uint256 internal ilmModuleId;
 
     uint16 internal constant DEFAULT_DEPOSITOR_LTV_BPS = 7_500;
     uint16 internal constant DEFAULT_EXTERNAL_CR_BPS = 15_000;
@@ -206,6 +237,15 @@ contract DeployDiamondScript is Script {
     uint8 internal constant DEFAULT_ROLLING_PENALTY_EPOCHS = 3;
     uint16 internal constant DEFAULT_ROLLING_MIN_PAYMENT_BPS = 0;
     uint256 internal constant DEFAULT_ILM_MAX_STALENESS = 1 days;
+    uint256 internal constant DEFAULT_ILM_LLTV_WAD = 8e17;
+    uint256 internal constant DEFAULT_ILM_IRM_RATE_PER_SECOND_WAD = 32_000_000_000; // ~101% APR
+    uint256 internal constant DEFAULT_ILM_LOAN_POOL_ID = 5; // USDC
+    uint256 internal constant DEFAULT_ILM_COLLATERAL_POOL_ID = 6; // ETH
+    uint256 internal constant DEFAULT_ILM_BASE_USD_PRICE = 2_000e8; // collateral(ETH)/USD
+    uint256 internal constant DEFAULT_ILM_QUOTE_USD_PRICE = 1e8; // loan(USDC)/USD
+    uint8 internal constant DEFAULT_ILM_FEED_DECIMALS = 8;
+    uint8 internal constant DEFAULT_ILM_LOAN_ASSET_DECIMALS = 6;
+    uint8 internal constant DEFAULT_ILM_COLLATERAL_ASSET_DECIMALS = 18;
     uint256 internal constant MORE_FACET_CUT_COUNT = 58;
     bytes32 internal constant ACTION_BORROW = keccak256("ACTION_BORROW");
     bytes32 internal constant ACTION_REPAY = keccak256("ACTION_REPAY");
@@ -533,10 +573,31 @@ contract DeployDiamondScript is Script {
         gov.setFoundationReceiver(owner);
         gov.setDefaultPoolConfig(_defaultPoolConfig(18));
         gov.setDirectRollingConfig(_defaultDirectRollingConfig());
-        gov.setDerivativeFeeConfig(0, 500, 5, 10, 2, 7000, 7000, 7000, 5e18, 0, 0);
+        gov.setDerivativeFeeConfig(
+            500, // max auction fee bps
+            5, // create default fee bps
+            500, // create max fee bps
+            10_000, // create max fee as percent of base
+            5e18, // create default flat fee (native units)
+            5e18, // create max flat fee
+            10, // exercise default fee bps
+            500, // exercise max fee bps
+            10_000, // exercise max fee as percent of base
+            0, // exercise default flat fee
+            0, // exercise max flat fee
+            2, // reclaim default fee bps
+            500, // reclaim max fee bps
+            10_000, // reclaim max fee as percent of base
+            0, // reclaim default flat fee
+            0, // reclaim max flat fee
+            7000,
+            7000,
+            7000
+        );
         ILMPooledAdminFacet(address(diamond)).setPooledGlobalBounds(1, 9_500, 0, 10_000);
 
         _deployTokensAndPools(PoolManagementFacet(address(diamond)), isGov, 0.5 ether);
+        _bootstrapIlmIsolatedMarket(deployer);
         _deployFaucet();
         _deployIndexTokens(isGov, 0.2 ether);
         EqualLendDirectViewFacet(address(diamond)).setDirectConfig(_defaultDirectConfig());
@@ -679,7 +740,7 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(AdminGovernanceFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](23);
+        s = new bytes4[](24);
         s[0] = AdminGovernanceFacet.setDefaultPoolConfig.selector;
         s[1] = AdminGovernanceFacet.setAumFee.selector;
         s[2] = AdminGovernanceFacet.setPoolConfig.selector;
@@ -695,14 +756,15 @@ contract DeployDiamondScript is Script {
         s[12] = AdminGovernanceFacet.setActionFeeBounds.selector;
         s[13] = AdminGovernanceFacet.setActionFeeConfig.selector;
         s[14] = AdminGovernanceFacet.setDerivativeFeeConfig.selector;
-        s[15] = AdminGovernanceFacet.setProtocolFeeReceiver.selector;
-        s[16] = AdminGovernanceFacet.setIndexCreationFee.selector;
-        s[17] = AdminGovernanceFacet.setPoolCreationFee.selector;
-        s[18] = AdminGovernanceFacet.setPositionMintFee.selector;
-        s[19] = AdminGovernanceFacet.executeDiamondCut.selector;
-        s[20] = AdminGovernanceFacet.setDirectRollingConfig.selector;
-        s[21] = AdminGovernanceFacet.setPositionNFT.selector;
-        s[22] = AdminGovernanceFacet.setManagedPoolSystemShareBps.selector;
+        s[15] = AdminGovernanceFacet.setDerivativePoolFeeConfig.selector;
+        s[16] = AdminGovernanceFacet.setProtocolFeeReceiver.selector;
+        s[17] = AdminGovernanceFacet.setIndexCreationFee.selector;
+        s[18] = AdminGovernanceFacet.setPoolCreationFee.selector;
+        s[19] = AdminGovernanceFacet.setPositionMintFee.selector;
+        s[20] = AdminGovernanceFacet.executeDiamondCut.selector;
+        s[21] = AdminGovernanceFacet.setDirectRollingConfig.selector;
+        s[22] = AdminGovernanceFacet.setPositionNFT.selector;
+        s[23] = AdminGovernanceFacet.setManagedPoolSystemShareBps.selector;
     }
 
     function _selectors(PoolManagementFacet) internal pure returns (bytes4[] memory s) {
@@ -1341,6 +1403,77 @@ contract DeployDiamondScript is Script {
         // This function is kept for any additional post-creation configuration
     }
 
+    /// @notice Bootstrap a default ILM isolated market and oracle adapter.
+    /// @dev Enabled by default on local anvil (31337). Can be toggled via ILM_BOOTSTRAP_MARKET.
+    function _bootstrapIlmIsolatedMarket(address deployer) internal {
+        bool shouldBootstrap = vm.envOr("ILM_BOOTSTRAP_MARKET", block.chainid == 31337);
+        if (!shouldBootstrap) {
+            console2.log("ILM bootstrap disabled");
+            return;
+        }
+
+        // ILM admin controls are owner-gated; skip safely when broadcaster is timelock.
+        if (deployer != owner) {
+            console2.log("ILM bootstrap skipped: broadcaster is not OWNER");
+            return;
+        }
+
+        uint256 loanPoolId = vm.envOr("ILM_LOAN_POOL_ID", uint256(DEFAULT_ILM_LOAN_POOL_ID));
+        uint256 collateralPoolId = vm.envOr("ILM_COLLATERAL_POOL_ID", uint256(DEFAULT_ILM_COLLATERAL_POOL_ID));
+        uint256 lltvWad = vm.envOr("ILM_LLTV_WAD", uint256(DEFAULT_ILM_LLTV_WAD));
+        uint256 irmRatePerSecondWad =
+            vm.envOr("ILM_IRM_RATE_PER_SECOND_WAD", uint256(DEFAULT_ILM_IRM_RATE_PER_SECOND_WAD));
+        uint8 loanAssetDecimals =
+            _toUint8(vm.envOr("ILM_LOAN_ASSET_DECIMALS", uint256(DEFAULT_ILM_LOAN_ASSET_DECIMALS)));
+        uint8 collateralAssetDecimals =
+            _toUint8(vm.envOr("ILM_COLLATERAL_ASSET_DECIMALS", uint256(DEFAULT_ILM_COLLATERAL_ASSET_DECIMALS)));
+
+        address baseUsdFeed = vm.envOr("ILM_BASE_USD_FEED", address(0));
+        address quoteUsdFeed = vm.envOr("ILM_QUOTE_USD_FEED", address(0));
+        if (baseUsdFeed == address(0) || quoteUsdFeed == address(0)) {
+            uint8 feedDecimals = _toUint8(vm.envOr("ILM_LOCAL_FEED_DECIMALS", uint256(DEFAULT_ILM_FEED_DECIMALS)));
+            uint256 baseUsdPrice = vm.envOr("ILM_LOCAL_BASE_USD_PRICE", uint256(DEFAULT_ILM_BASE_USD_PRICE));
+            uint256 quoteUsdPrice = vm.envOr("ILM_LOCAL_QUOTE_USD_PRICE", uint256(DEFAULT_ILM_QUOTE_USD_PRICE));
+            LocalChainlinkAggregatorV3 localBaseFeed = new LocalChainlinkAggregatorV3(feedDecimals, baseUsdPrice, block.timestamp);
+            LocalChainlinkAggregatorV3 localQuoteFeed =
+                new LocalChainlinkAggregatorV3(feedDecimals, quoteUsdPrice, block.timestamp);
+            baseUsdFeed = address(localBaseFeed);
+            quoteUsdFeed = address(localQuoteFeed);
+            console2.log("ILM local base/USD feed:", baseUsdFeed);
+            console2.log("ILM local quote/USD feed:", quoteUsdFeed);
+        }
+
+        ChainlinkPairIsolatedOracleAdapter oracleAdapter = new ChainlinkPairIsolatedOracleAdapter(
+            baseUsdFeed, quoteUsdFeed, collateralAssetDecimals, loanAssetDecimals
+        );
+        ilmOracleAdapterAddress = address(oracleAdapter);
+        console2.log("ILM oracle adapter:", ilmOracleAdapterAddress);
+
+        IlmManagedFixedRateIrm irm = new IlmManagedFixedRateIrm(irmRatePerSecondWad);
+        ilmIrmAddress = address(irm);
+        console2.log("ILM fixed-rate IRM:", ilmIrmAddress);
+
+        ILMIsolatedAdminFacet ilmAdmin = ILMIsolatedAdminFacet(diamondAddress);
+        ilmAdmin.enableIrm(ilmIrmAddress);
+        ilmAdmin.enableLltv(lltvWad);
+
+        bytes32 moduleMetadataHash = keccak256(
+            abi.encodePacked("ILM_ISOLATED_BOOTSTRAP", block.chainid, loanPoolId, collateralPoolId)
+        );
+        ilmModuleId = ModuleRegistryFacet(diamondAddress).registerModule(moduleMetadataHash);
+        console2.log("ILM module id:", ilmModuleId);
+
+        IlmIsolatedTypes.IlmIsolatedMarketParams memory params = IlmIsolatedTypes.IlmIsolatedMarketParams({
+            loanPoolId: loanPoolId,
+            collateralPoolId: collateralPoolId,
+            oracle: ilmOracleAdapterAddress,
+            irm: ilmIrmAddress,
+            lltv: lltvWad
+        });
+        ilmMarketId = ilmAdmin.createIlmIsolatedMarket(params, ilmModuleId);
+        console2.logBytes32(ilmMarketId);
+    }
+
     /// @notice Deploy and fund the testnet faucet with 100M of each token
     function _deployFaucet() internal {
         address deployer = vm.addr(vm.envUint("PRIVATE_KEY"));
@@ -1602,6 +1735,11 @@ contract DeployDiamondScript is Script {
         configs[3] = Types.FixedTermConfig({durationSecs: 365 days, apyBps: 400});
     }
 
+    function _toUint8(uint256 value) internal pure returns (uint8) {
+        require(value <= type(uint8).max, "value exceeds uint8");
+        return uint8(value);
+    }
+
     function _unit(uint8 decimals) internal pure returns (uint256) {
         return 10 ** uint256(decimals);
     }
@@ -1654,5 +1792,21 @@ contract DeployDiamondScript is Script {
 
     function deployedFaucet() external view returns (address) {
         return faucetAddress;
+    }
+
+    function deployedIlmOracleAdapter() external view returns (address) {
+        return ilmOracleAdapterAddress;
+    }
+
+    function deployedIlmIrm() external view returns (address) {
+        return ilmIrmAddress;
+    }
+
+    function deployedIlmMarketId() external view returns (bytes32) {
+        return ilmMarketId;
+    }
+
+    function deployedIlmModuleId() external view returns (uint256) {
+        return ilmModuleId;
     }
 }

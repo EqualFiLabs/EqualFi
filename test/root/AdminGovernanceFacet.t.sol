@@ -9,6 +9,8 @@ import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {Types} from "../../src/libraries/Types.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
 import {LibDerivativeStorage} from "../../src/libraries/LibDerivativeStorage.sol";
+import {DerivativeTypes} from "../../src/libraries/DerivativeTypes.sol";
+import {LibDerivativeFees} from "../../src/libraries/LibDerivativeFees.sol";
 import "../../src/libraries/Errors.sol";
 
 contract AdminGovernanceHarness is PoolManagementFacet, AdminGovernanceFacet {
@@ -39,6 +41,41 @@ contract AdminGovernanceHarness is PoolManagementFacet, AdminGovernanceFacet {
 
     function stableModeEnabled() external view returns (bool) {
         return LibDerivativeStorage.derivativeStorage().config.stableModeEnabled;
+    }
+
+    function globalDerivativeActionFeeConfig(uint8 action)
+        external
+        view
+        returns (
+            uint16 defaultFeeBps,
+            uint16 maxFeeBps,
+            uint16 maxTotalFeeBps,
+            uint128 defaultFlatFee,
+            uint128 maxFlatFee
+        )
+    {
+        DerivativeTypes.DerivativeActionFeeConfig memory cfg = LibDerivativeStorage.globalActionFeeConfig(
+            LibDerivativeStorage.derivativeStorage(), DerivativeTypes.DerivativeFeeAction(action)
+        );
+        return (cfg.defaultFeeBps, cfg.maxFeeBps, cfg.maxTotalFeeBps, cfg.defaultFlatFee, cfg.maxFlatFee);
+    }
+
+    function poolDerivativeActionFeeConfig(uint256 poolId, uint8 action)
+        external
+        view
+        returns (
+            bool enabled,
+            uint16 defaultFeeBps,
+            uint16 maxFeeBps,
+            uint16 maxTotalFeeBps,
+            uint128 defaultFlatFee,
+            uint128 maxFlatFee
+        )
+    {
+        DerivativeTypes.DerivativeActionFeeOverride storage overrideCfg =
+            LibDerivativeStorage.derivativeStorage().actionFeeOverridesByPool[poolId][action];
+        DerivativeTypes.DerivativeActionFeeConfig storage cfg = overrideCfg.feeConfig;
+        return (overrideCfg.enabled, cfg.defaultFeeBps, cfg.maxFeeBps, cfg.maxTotalFeeBps, cfg.defaultFlatFee, cfg.maxFlatFee);
     }
     
     function getPoolUnderlying(uint256 pid) external view returns (address) {
@@ -215,6 +252,101 @@ contract AdminGovernanceFacetTest is Test {
     function testSetStableModeEnabledAccessControl() public {
         vm.expectRevert("LibAccess: not owner or timelock");
         facet.setStableModeEnabled(true);
+    }
+
+    function testSetDerivativeFeeConfigStoresGlobalActionCaps() public {
+        vm.prank(TIMELOCK);
+        facet.setDerivativeFeeConfig(
+            700,
+            25,
+            400,
+            1_500,
+            2e15,
+            5e15,
+            35,
+            500,
+            2_500,
+            1e15,
+            2e15,
+            45,
+            600,
+            3_000,
+            5e14,
+            1e15,
+            2_000,
+            2_000,
+            2_000
+        );
+
+        (
+            uint16 createDefaultFeeBps,
+            uint16 createMaxFeeBps,
+            uint16 createMaxTotalFeeBps,
+            uint128 createDefaultFlatFee,
+            uint128 createMaxFlatFee
+        ) = facet.globalDerivativeActionFeeConfig(uint8(DerivativeTypes.DerivativeFeeAction.Create));
+        assertEq(createDefaultFeeBps, 25);
+        assertEq(createMaxFeeBps, 400);
+        assertEq(createMaxTotalFeeBps, 1_500);
+        assertEq(createDefaultFlatFee, 2e15);
+        assertEq(createMaxFlatFee, 5e15);
+    }
+
+    function testSetDerivativePoolFeeConfigCanEnableAndDisable() public {
+        vm.prank(TIMELOCK);
+        facet.setDerivativePoolFeeConfig(PID, uint8(DerivativeTypes.DerivativeFeeAction.Create), true, 20, 350, 2_000, 1e15, 3e15);
+
+        (
+            bool enabled,
+            uint16 defaultFeeBps,
+            uint16 maxFeeBps,
+            uint16 maxTotalFeeBps,
+            uint128 defaultFlatFee,
+            uint128 maxFlatFee
+        ) = facet.poolDerivativeActionFeeConfig(PID, uint8(DerivativeTypes.DerivativeFeeAction.Create));
+        assertTrue(enabled);
+        assertEq(defaultFeeBps, 20);
+        assertEq(maxFeeBps, 350);
+        assertEq(maxTotalFeeBps, 2_000);
+        assertEq(defaultFlatFee, 1e15);
+        assertEq(maxFlatFee, 3e15);
+
+        vm.prank(TIMELOCK);
+        facet.setDerivativePoolFeeConfig(PID, uint8(DerivativeTypes.DerivativeFeeAction.Create), false, 0, 0, 0, 0, 0);
+        (enabled, defaultFeeBps, maxFeeBps, maxTotalFeeBps, defaultFlatFee, maxFlatFee) =
+            facet.poolDerivativeActionFeeConfig(PID, uint8(DerivativeTypes.DerivativeFeeAction.Create));
+        assertFalse(enabled);
+        assertEq(defaultFeeBps, 0);
+        assertEq(maxFeeBps, 0);
+        assertEq(maxTotalFeeBps, 0);
+        assertEq(defaultFlatFee, 0);
+        assertEq(maxFlatFee, 0);
+    }
+
+    function testSetDerivativeFeeConfigRejectsInvalidActionConfig() public {
+        vm.prank(TIMELOCK);
+        vm.expectRevert(abi.encodeWithSelector(LibDerivativeFees.DerivativeDefaultFeeOutOfBounds.selector, uint16(500), uint16(400)));
+        facet.setDerivativeFeeConfig(
+            700,
+            500,
+            400,
+            1_500,
+            2e15,
+            5e15,
+            35,
+            500,
+            2_500,
+            1e15,
+            2e15,
+            45,
+            600,
+            3_000,
+            5e14,
+            1e15,
+            2_000,
+            2_000,
+            2_000
+        );
     }
 
     function testDiamondCutAccessControl() public {

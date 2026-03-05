@@ -133,17 +133,21 @@ contract LeanDeployScript is Script {
 
     uint16 internal constant DEFAULT_MAINTENANCE_RATE_BPS = 100;
     uint16 internal constant DEFAULT_ACTIVE_CREDIT_SHARE_BPS = 2_500;
-    uint16 internal constant DEFAULT_DERIVATIVE_MIN_FEE_BPS = 0;
+    uint16 internal constant DEFAULT_DERIVATIVE_AUCTION_MAX_FEE_BPS = 1_000;
     uint16 internal constant DEFAULT_DERIVATIVE_MAX_FEE_BPS = 1_000;
+    uint16 internal constant DEFAULT_DERIVATIVE_MAX_TOTAL_FEE_BPS = 10_000;
     uint16 internal constant DEFAULT_DERIVATIVE_CREATE_FEE_BPS = 30;
     uint16 internal constant DEFAULT_DERIVATIVE_EXERCISE_FEE_BPS = 30;
     uint16 internal constant DEFAULT_DERIVATIVE_RECLAIM_FEE_BPS = 30;
     uint16 internal constant DEFAULT_AMM_MAKER_SHARE_BPS = 2_000;
     uint16 internal constant DEFAULT_COMMUNITY_MAKER_SHARE_BPS = 2_000;
     uint16 internal constant DEFAULT_MAM_MAKER_SHARE_BPS = 2_000;
-    uint128 internal constant DEFAULT_DERIVATIVE_CREATE_FEE_FLAT_WAD = 0;
-    uint128 internal constant DEFAULT_DERIVATIVE_EXERCISE_FEE_FLAT_WAD = 0;
-    uint128 internal constant DEFAULT_DERIVATIVE_RECLAIM_FEE_FLAT_WAD = 0;
+    uint128 internal constant DEFAULT_DERIVATIVE_CREATE_FEE_FLAT = 0;
+    uint128 internal constant DEFAULT_DERIVATIVE_EXERCISE_FEE_FLAT = 0;
+    uint128 internal constant DEFAULT_DERIVATIVE_RECLAIM_FEE_FLAT = 0;
+    uint128 internal constant DEFAULT_DERIVATIVE_CREATE_MAX_FLAT = 0;
+    uint128 internal constant DEFAULT_DERIVATIVE_EXERCISE_MAX_FLAT = 0;
+    uint128 internal constant DEFAULT_DERIVATIVE_RECLAIM_MAX_FLAT = 0;
     address internal constant ERC6551_REGISTRY = 0x000000006551c19487814612e58FE06813775758;
     address internal constant ERC8004_MAINNET = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
     address internal constant ERC8004_SEPOLIA = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
@@ -338,17 +342,25 @@ contract LeanDeployScript is Script {
         gov.setPoolCreationFee(0.5 ether);
         gov.setActionFeeBounds(0, type(uint128).max);
         gov.setDerivativeFeeConfig(
-            DEFAULT_DERIVATIVE_MIN_FEE_BPS,
-            DEFAULT_DERIVATIVE_MAX_FEE_BPS,
+            DEFAULT_DERIVATIVE_AUCTION_MAX_FEE_BPS,
             DEFAULT_DERIVATIVE_CREATE_FEE_BPS,
+            DEFAULT_DERIVATIVE_MAX_FEE_BPS,
+            DEFAULT_DERIVATIVE_MAX_TOTAL_FEE_BPS,
+            DEFAULT_DERIVATIVE_CREATE_FEE_FLAT,
+            DEFAULT_DERIVATIVE_CREATE_MAX_FLAT,
             DEFAULT_DERIVATIVE_EXERCISE_FEE_BPS,
+            DEFAULT_DERIVATIVE_MAX_FEE_BPS,
+            DEFAULT_DERIVATIVE_MAX_TOTAL_FEE_BPS,
+            DEFAULT_DERIVATIVE_EXERCISE_FEE_FLAT,
+            DEFAULT_DERIVATIVE_EXERCISE_MAX_FLAT,
             DEFAULT_DERIVATIVE_RECLAIM_FEE_BPS,
+            DEFAULT_DERIVATIVE_MAX_FEE_BPS,
+            DEFAULT_DERIVATIVE_MAX_TOTAL_FEE_BPS,
+            DEFAULT_DERIVATIVE_RECLAIM_FEE_FLAT,
+            DEFAULT_DERIVATIVE_RECLAIM_MAX_FLAT,
             DEFAULT_AMM_MAKER_SHARE_BPS,
             DEFAULT_COMMUNITY_MAKER_SHARE_BPS,
-            DEFAULT_MAM_MAKER_SHARE_BPS,
-            DEFAULT_DERIVATIVE_CREATE_FEE_FLAT_WAD,
-            DEFAULT_DERIVATIVE_EXERCISE_FEE_FLAT_WAD,
-            DEFAULT_DERIVATIVE_RECLAIM_FEE_FLAT_WAD
+            DEFAULT_MAM_MAKER_SHARE_BPS
         );
         gov.setMaxMaintenanceRateBps(DEFAULT_MAINTENANCE_RATE_BPS);
         gov.setDefaultMaintenanceRateBps(DEFAULT_MAINTENANCE_RATE_BPS);
@@ -472,7 +484,7 @@ contract LeanDeployScript is Script {
     }
 
     function _selectors(AdminGovernanceFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](21);
+        s = new bytes4[](22);
         s[0] = AdminGovernanceFacet.setDefaultPoolConfig.selector;
         s[1] = AdminGovernanceFacet.setAumFee.selector;
         s[2] = AdminGovernanceFacet.setPoolConfig.selector;
@@ -488,12 +500,13 @@ contract LeanDeployScript is Script {
         s[12] = AdminGovernanceFacet.setActionFeeBounds.selector;
         s[13] = AdminGovernanceFacet.setActionFeeConfig.selector;
         s[14] = AdminGovernanceFacet.setDerivativeFeeConfig.selector;
-        s[15] = AdminGovernanceFacet.setProtocolFeeReceiver.selector;
-        s[16] = AdminGovernanceFacet.setIndexCreationFee.selector;
-        s[17] = AdminGovernanceFacet.setPoolCreationFee.selector;
-        s[18] = AdminGovernanceFacet.setPositionMintFee.selector;
-        s[19] = AdminGovernanceFacet.executeDiamondCut.selector;
-        s[20] = AdminGovernanceFacet.setDirectRollingConfig.selector;
+        s[15] = AdminGovernanceFacet.setDerivativePoolFeeConfig.selector;
+        s[16] = AdminGovernanceFacet.setProtocolFeeReceiver.selector;
+        s[17] = AdminGovernanceFacet.setIndexCreationFee.selector;
+        s[18] = AdminGovernanceFacet.setPoolCreationFee.selector;
+        s[19] = AdminGovernanceFacet.setPositionMintFee.selector;
+        s[20] = AdminGovernanceFacet.executeDiamondCut.selector;
+        s[21] = AdminGovernanceFacet.setDirectRollingConfig.selector;
     }
 
     function _selectors(PoolManagementFacet) internal pure returns (bytes4[] memory s) {
