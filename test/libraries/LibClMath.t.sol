@@ -67,6 +67,8 @@ contract LibClMathHarness {
 }
 
 contract LibClMathTest is Test {
+    uint256 internal constant Q96 = 0x1000000000000000000000000;
+
     LibClMathHarness internal h;
 
     function setUp() public {
@@ -102,6 +104,9 @@ contract LibClMathTest is Test {
         int24 currentTick = tickLower + (tickUpper - tickLower) / 2;
 
         uint160 sqrtRatioX96 = h.getSqrtRatioAtTick(currentTick);
+        // getLiquidityForAmounts uses liquidity0 with floor(sqrtX * sqrtB / Q96). At the extreme low-price edge this
+        // floor becomes zero (matching Uniswap's reference implementation), which makes this property non-representable.
+        vm.assume(uint256(sqrtRatioX96) >= (Q96 + uint256(sqrtRatioBX96) - 1) / uint256(sqrtRatioBX96));
         uint128 recomputedLiquidity = h.getLiquidityForAmounts(sqrtRatioX96, sqrtRatioAX96, sqrtRatioBX96, amount0, amount1);
 
         assertGe(recomputedLiquidity, liquidity);
