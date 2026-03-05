@@ -1,24 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
+import {LibClAuctionStorage} from "./LibClAuctionStorage.sol";
+
 /// @notice Packed initialized-tick bitmap indexed per auction.
 /// @dev Mirrors Uniswap v3 bitmap traversal semantics with auction-scoped storage.
 library LibClTickBitmap {
-    bytes32 internal constant STORAGE_POSITION = keccak256("equal.cl.tick.bitmap.storage");
-
-    struct ClTickBitmapStorage {
-        mapping(uint256 => mapping(int16 => uint256)) tickBitmaps;
-    }
-
     error LibClTickBitmap_InvalidTickSpacing(int24 tickSpacing);
     error LibClTickBitmap_UnalignedTick(int24 tick, int24 tickSpacing);
-
-    function s() internal pure returns (ClTickBitmapStorage storage bs) {
-        bytes32 position = STORAGE_POSITION;
-        assembly {
-            bs.slot := position
-        }
-    }
 
     function flipTick(uint256 auctionId, int24 tick, int24 tickSpacing) internal {
         if (tickSpacing <= 0) revert LibClTickBitmap_InvalidTickSpacing(tickSpacing);
@@ -26,7 +15,7 @@ library LibClTickBitmap {
 
         (int16 wordPos, uint8 bitPos) = _position(tick / tickSpacing);
         uint256 mask = uint256(1) << bitPos;
-        s().tickBitmaps[auctionId][wordPos] ^= mask;
+        LibClAuctionStorage.s().tickBitmaps[auctionId][wordPos] ^= mask;
     }
 
     function nextInitializedTickWithinOneWord(uint256 auctionId, int24 tick, int24 tickSpacing, bool lte)
@@ -44,7 +33,7 @@ library LibClTickBitmap {
         if (lte) {
             (int16 wordPos, uint8 bitPos) = _position(compressed);
             uint256 mask = (uint256(1) << bitPos) - 1 + (uint256(1) << bitPos);
-            uint256 masked = s().tickBitmaps[auctionId][wordPos] & mask;
+            uint256 masked = LibClAuctionStorage.s().tickBitmaps[auctionId][wordPos] & mask;
 
             initialized = masked != 0;
             next = initialized
@@ -53,7 +42,7 @@ library LibClTickBitmap {
         } else {
             (int16 wordPos, uint8 bitPos) = _position(compressed + 1);
             uint256 mask = ~((uint256(1) << bitPos) - 1);
-            uint256 masked = s().tickBitmaps[auctionId][wordPos] & mask;
+            uint256 masked = LibClAuctionStorage.s().tickBitmaps[auctionId][wordPos] & mask;
 
             initialized = masked != 0;
             next = initialized
@@ -63,7 +52,11 @@ library LibClTickBitmap {
     }
 
     function getWord(uint256 auctionId, int16 wordPos) internal view returns (uint256) {
-        return s().tickBitmaps[auctionId][wordPos];
+        return LibClAuctionStorage.s().tickBitmaps[auctionId][wordPos];
+    }
+
+    function setWord(uint256 auctionId, int16 wordPos, uint256 word) internal {
+        LibClAuctionStorage.s().tickBitmaps[auctionId][wordPos] = word;
     }
 
     function _position(int24 tick) private pure returns (int16 wordPos, uint8 bitPos) {

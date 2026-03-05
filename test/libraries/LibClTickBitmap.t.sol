@@ -18,11 +18,11 @@ contract LibClTickBitmapHarness {
     }
 
     function setWord(uint256 auctionId, int16 wordPos, uint256 word) external {
-        LibClTickBitmap.s().tickBitmaps[auctionId][wordPos] = word;
+        LibClTickBitmap.setWord(auctionId, wordPos, word);
     }
 
     function getWord(uint256 auctionId, int16 wordPos) external view returns (uint256) {
-        return LibClTickBitmap.s().tickBitmaps[auctionId][wordPos];
+        return LibClTickBitmap.getWord(auctionId, wordPos);
     }
 }
 
