@@ -25,6 +25,7 @@ library LibClAuctionStorage {
         bool finalized;
         bool cancelled;
         bytes32 creatorPositionKey;
+        uint256 creatorPositionId;
     }
 
     struct TickInfo {

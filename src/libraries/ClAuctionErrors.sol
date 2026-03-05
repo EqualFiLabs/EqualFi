@@ -19,3 +19,6 @@ error ClAuction_InvalidTimeWindow(uint64 startTime, uint64 endTime);
 error ClAuction_TBADeploymentFailed(address expected, address actual);
 error ClAuction_LiquidityUnderflow(uint128 requested, uint128 available);
 error ClAuction_InputAmountMismatch(uint256 expected, uint256 actual);
+error ClAuction_InvalidSwapFee(uint24 swapFee, uint24 maxFee);
+error ClAuction_InvalidToken(address token);
+error ClAuction_InvalidAmount(uint256 amount);
