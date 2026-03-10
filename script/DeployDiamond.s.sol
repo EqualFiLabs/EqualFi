@@ -744,19 +744,23 @@ contract DeployDiamondScript is Script {
     }
 
     function _selectors(EqualIndexLendingFacet) internal pure returns (bytes4[] memory s) {
-        s = new bytes4[](12);
+        s = new bytes4[](16);
         s[0] = EqualIndexLendingFacet.configureLending.selector;
-        s[1] = EqualIndexLendingFacet.borrowFromPosition.selector;
-        s[2] = EqualIndexLendingFacet.repayFromPosition.selector;
-        s[3] = EqualIndexLendingFacet.extendFromPosition.selector;
-        s[4] = EqualIndexLendingFacet.recoverExpired.selector;
-        s[5] = EqualIndexLendingFacet.getLoan.selector;
-        s[6] = EqualIndexLendingFacet.getOutstandingPrincipal.selector;
-        s[7] = EqualIndexLendingFacet.getLockedCollateralUnits.selector;
-        s[8] = EqualIndexLendingFacet.getLendingConfig.selector;
-        s[9] = EqualIndexLendingFacet.economicBalance.selector;
-        s[10] = EqualIndexLendingFacet.maxBorrowable.selector;
-        s[11] = EqualIndexLendingFacet.lendingModuleId.selector;
+        s[1] = EqualIndexLendingFacet.configureBorrowFeeTiers.selector;
+        s[2] = EqualIndexLendingFacet.borrowFromPosition.selector;
+        s[3] = EqualIndexLendingFacet.repayFromPosition.selector;
+        s[4] = EqualIndexLendingFacet.extendFromPosition.selector;
+        s[5] = EqualIndexLendingFacet.recoverExpired.selector;
+        s[6] = EqualIndexLendingFacet.getLoan.selector;
+        s[7] = EqualIndexLendingFacet.getOutstandingPrincipal.selector;
+        s[8] = EqualIndexLendingFacet.getLockedCollateralUnits.selector;
+        s[9] = EqualIndexLendingFacet.getLendingConfig.selector;
+        s[10] = EqualIndexLendingFacet.economicBalance.selector;
+        s[11] = EqualIndexLendingFacet.maxBorrowable.selector;
+        s[12] = EqualIndexLendingFacet.quoteBorrowBasket.selector;
+        s[13] = EqualIndexLendingFacet.quoteBorrowFee.selector;
+        s[14] = EqualIndexLendingFacet.getBorrowFeeTiers.selector;
+        s[15] = EqualIndexLendingFacet.lendingModuleId.selector;
     }
 
     function _selectors(EqualIndexPositionFacet) internal pure returns (bytes4[] memory s) {

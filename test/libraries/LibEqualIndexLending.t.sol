@@ -27,18 +27,16 @@ contract LibEqualIndexLendingHarness {
         uint256 loanId,
         bytes32 positionKey,
         uint256 indexId,
-        address borrowAsset,
         uint256 collateralUnits,
-        uint256 principal,
+        uint256 ltvBps,
         uint256 maturity
     ) external {
         LibEqualIndexLending.LendingStorage storage ls = LibEqualIndexLending.s();
         ls.loans[loanId] = LibEqualIndexLending.IndexLoan({
             positionKey: positionKey,
             indexId: indexId,
-            borrowAsset: borrowAsset,
             collateralUnits: collateralUnits,
-            principal: principal,
+            ltvBps: _toUint16(ltvBps),
             maturity: _toUint40(maturity)
         });
     }
@@ -53,6 +51,24 @@ contract LibEqualIndexLendingHarness {
 
     function setNextLoanId(uint256 nextLoanId) external {
         LibEqualIndexLending.s().nextLoanId = nextLoanId;
+    }
+
+    function setBorrowFeeTiers(
+        uint256 indexId,
+        uint256[] calldata minCollateralUnits,
+        uint256[] calldata flatFeeNative
+    ) external {
+        if (minCollateralUnits.length != flatFeeNative.length) revert InvalidNarrowCast();
+        LibEqualIndexLending.LendingStorage storage ls = LibEqualIndexLending.s();
+        delete ls.borrowFeeTiers[indexId];
+        for (uint256 i = 0; i < minCollateralUnits.length; i++) {
+            ls.borrowFeeTiers[indexId].push(
+                LibEqualIndexLending.BorrowFeeTier({
+                    minCollateralUnits: minCollateralUnits[i],
+                    flatFeeNative: flatFeeNative[i]
+                })
+            );
+        }
     }
 
     function getConfig(uint256 indexId) external view returns (LibEqualIndexLending.LendingConfig memory) {
@@ -75,6 +91,19 @@ contract LibEqualIndexLendingHarness {
         return LibEqualIndexLending.s().nextLoanId;
     }
 
+    function getBorrowFeeTierCount(uint256 indexId) external view returns (uint256) {
+        return LibEqualIndexLending.s().borrowFeeTiers[indexId].length;
+    }
+
+    function getBorrowFeeTier(uint256 indexId, uint256 tierIndex)
+        external
+        view
+        returns (uint256 minCollateralUnits, uint256 flatFeeNative)
+    {
+        LibEqualIndexLending.BorrowFeeTier storage tier = LibEqualIndexLending.s().borrowFeeTiers[indexId][tierIndex];
+        return (tier.minCollateralUnits, tier.flatFeeNative);
+    }
+
     function getEconomicBalance(uint256 indexId, address asset, uint256 vaultBalance) external view returns (uint256) {
         return LibEqualIndexLending.getEconomicBalance(indexId, asset, vaultBalance);
     }
@@ -83,33 +112,31 @@ contract LibEqualIndexLendingHarness {
         uint256 loanId,
         bytes32 positionKey,
         uint256 indexId,
-        address borrowAsset,
         uint256 collateralUnits,
-        uint256 principal,
-        uint256 maturity,
-        uint256 fee
+        uint256 ltvBps,
+        uint256 maturity
     ) external {
-        emit LibEqualIndexLending.LoanCreated(
-            loanId, positionKey, indexId, borrowAsset, collateralUnits, principal, _toUint40(maturity), fee
-        );
+        emit LibEqualIndexLending.LoanCreated(loanId, positionKey, indexId, collateralUnits, _toUint16(ltvBps), _toUint40(maturity));
     }
 
-    function emitLoanRepaid(uint256 loanId, uint256 indexId, address borrowAsset, uint256 principal) external {
-        emit LibEqualIndexLending.LoanRepaid(loanId, indexId, borrowAsset, principal);
+    function emitLoanAssetDelta(uint256 loanId, address borrowAsset, uint256 principal, uint256 fee, bool outgoing)
+        external
+    {
+        emit LibEqualIndexLending.LoanAssetDelta(loanId, borrowAsset, principal, fee, outgoing);
+    }
+
+    function emitLoanRepaid(uint256 loanId, uint256 indexId) external {
+        emit LibEqualIndexLending.LoanRepaid(loanId, indexId);
     }
 
     function emitLoanExtended(uint256 loanId, uint256 newMaturity, uint256 fee) external {
         emit LibEqualIndexLending.LoanExtended(loanId, _toUint40(newMaturity), fee);
     }
 
-    function emitLoanRecovered(
-        uint256 loanId,
-        uint256 indexId,
-        address borrowAsset,
-        uint256 collateralUnits,
-        uint256 writtenOffPrincipal
-    ) external {
-        emit LibEqualIndexLending.LoanRecovered(loanId, indexId, borrowAsset, collateralUnits, writtenOffPrincipal);
+    function emitLoanRecovered(uint256 loanId, uint256 indexId, uint256 collateralUnits, uint256 writtenOffPrincipal)
+        external
+    {
+        emit LibEqualIndexLending.LoanRecovered(loanId, indexId, collateralUnits, writtenOffPrincipal);
     }
 
     function emitLendingConfigured(
@@ -121,6 +148,30 @@ contract LibEqualIndexLendingHarness {
     ) external {
         emit LibEqualIndexLending.LendingConfigured(
             indexId, _toUint16(ltvBps), _toUint16(originationFeeBps), _toUint40(minDuration), _toUint40(maxDuration)
+        );
+    }
+
+    function emitBorrowFeeTiersConfigured(
+        uint256 indexId,
+        uint256[] calldata minCollateralUnits,
+        uint256[] calldata flatFeeNative
+    ) external {
+        emit LibEqualIndexLending.BorrowFeeTiersConfigured(indexId, minCollateralUnits, flatFeeNative);
+    }
+
+    function emitBorrowFlatFeePaid(uint256 loanId, uint256 indexId, uint256 collateralUnits, uint256 feeNative) external {
+        emit LibEqualIndexLending.BorrowFlatFeePaid(loanId, indexId, collateralUnits, feeNative);
+    }
+
+    function emitLoanExtendFlatFeePaid(
+        uint256 loanId,
+        uint256 indexId,
+        uint256 collateralUnits,
+        uint256 addedDuration,
+        uint256 feeNative
+    ) external {
+        emit LibEqualIndexLending.LoanExtendFlatFeePaid(
+            loanId, indexId, collateralUnits, _toUint40(addedDuration), feeNative
         );
     }
 
@@ -140,23 +191,33 @@ contract LibEqualIndexLendingTest is Test {
         uint256 indexed loanId,
         bytes32 indexed positionKey,
         uint256 indexed indexId,
-        address borrowAsset,
         uint256 collateralUnits,
-        uint256 principal,
-        uint40 maturity,
-        uint256 fee
+        uint16 ltvBps,
+        uint40 maturity
     );
-    event LoanRepaid(uint256 indexed loanId, uint256 indexed indexId, address borrowAsset, uint256 principal);
-    event LoanExtended(uint256 indexed loanId, uint40 newMaturity, uint256 fee);
-    event LoanRecovered(
+    event LoanAssetDelta(
         uint256 indexed loanId,
-        uint256 indexed indexId,
-        address borrowAsset,
-        uint256 collateralUnits,
-        uint256 writtenOffPrincipal
+        address indexed borrowAsset,
+        uint256 principal,
+        uint256 fee,
+        bool outgoing
     );
+    event LoanRepaid(uint256 indexed loanId, uint256 indexed indexId);
+    event LoanExtended(uint256 indexed loanId, uint40 newMaturity, uint256 totalFee);
+    event LoanRecovered(uint256 indexed loanId, uint256 indexed indexId, uint256 collateralUnits, uint256 writtenOffPrincipalTotal);
     event LendingConfigured(
         uint256 indexed indexId, uint16 ltvBps, uint16 originationFeeBps, uint40 minDuration, uint40 maxDuration
+    );
+    event BorrowFeeTiersConfigured(uint256 indexed indexId, uint256[] minCollateralUnits, uint256[] flatFeeNative);
+    event BorrowFlatFeePaid(
+        uint256 indexed loanId, uint256 indexed indexId, uint256 collateralUnits, uint256 feeNative
+    );
+    event LoanExtendFlatFeePaid(
+        uint256 indexed loanId,
+        uint256 indexed indexId,
+        uint256 collateralUnits,
+        uint40 addedDuration,
+        uint256 feeNative
     );
 
     LibEqualIndexLendingHarness internal h;
@@ -172,10 +233,17 @@ contract LibEqualIndexLendingTest is Test {
         address asset = address(0xBEEF);
 
         h.setConfig(indexId, 9200, 75, 1 days, 30 days);
-        h.setLoan(loanId, positionKey, indexId, asset, 10 ether, 9 ether, block.timestamp + 7 days);
+        h.setLoan(loanId, positionKey, indexId, 10 ether, 9200, block.timestamp + 7 days);
         h.setOutstandingPrincipal(indexId, asset, 1234);
         h.setLockedCollateralUnits(indexId, 22 ether);
         h.setNextLoanId(11);
+        uint256[] memory mins = new uint256[](2);
+        uint256[] memory fees = new uint256[](2);
+        mins[0] = 1 ether;
+        mins[1] = 5 ether;
+        fees[0] = 0.001 ether;
+        fees[1] = 0.005 ether;
+        h.setBorrowFeeTiers(indexId, mins, fees);
 
         LibEqualIndexLending.LendingConfig memory cfg = h.getConfig(indexId);
         assertEq(cfg.ltvBps, 9200);
@@ -186,14 +254,17 @@ contract LibEqualIndexLendingTest is Test {
         LibEqualIndexLending.IndexLoan memory loan = h.getLoan(loanId);
         assertEq(loan.positionKey, positionKey);
         assertEq(loan.indexId, indexId);
-        assertEq(loan.borrowAsset, asset);
         assertEq(loan.collateralUnits, 10 ether);
-        assertEq(loan.principal, 9 ether);
+        assertEq(loan.ltvBps, 9200);
         assertEq(loan.maturity, uint40(block.timestamp + 7 days));
 
         assertEq(h.getOutstandingPrincipal(indexId, asset), 1234);
         assertEq(h.getLockedCollateralUnits(indexId), 22 ether);
         assertEq(h.getNextLoanId(), 11);
+        assertEq(h.getBorrowFeeTierCount(indexId), 2);
+        (uint256 min0, uint256 fee0) = h.getBorrowFeeTier(indexId, 0);
+        assertEq(min0, 1 ether);
+        assertEq(fee0, 0.001 ether);
     }
 
     function test_getEconomicBalance_AddsOutstandingPrincipal() public {
@@ -214,23 +285,46 @@ contract LibEqualIndexLendingTest is Test {
         address asset = address(0xCAFE);
 
         vm.expectEmit(true, true, true, true);
-        emit LoanCreated(1, positionKey, 2, asset, 5, 4, 123, 1);
-        h.emitLoanCreated(1, positionKey, 2, asset, 5, 4, 123, 1);
+        emit LoanCreated(1, positionKey, 2, 5, 4, 123);
+        h.emitLoanCreated(1, positionKey, 2, 5, 4, 123);
 
         vm.expectEmit(true, true, false, true);
-        emit LoanRepaid(1, 2, asset, 4);
-        h.emitLoanRepaid(1, 2, asset, 4);
+        emit LoanAssetDelta(1, asset, 4, 1, true);
+        h.emitLoanAssetDelta(1, asset, 4, 1, true);
+
+        vm.expectEmit(true, true, false, true);
+        emit LoanRepaid(1, 2);
+        h.emitLoanRepaid(1, 2);
 
         vm.expectEmit(true, false, false, true);
         emit LoanExtended(1, 456, 2);
         h.emitLoanExtended(1, 456, 2);
 
         vm.expectEmit(true, true, false, true);
-        emit LoanRecovered(1, 2, asset, 5, 4);
-        h.emitLoanRecovered(1, 2, asset, 5, 4);
+        emit LoanRecovered(1, 2, 5, 4);
+        h.emitLoanRecovered(1, 2, 5, 4);
 
         vm.expectEmit(true, false, false, true);
         emit LendingConfigured(2, 9000, 50, 1 days, 30 days);
         h.emitLendingConfigured(2, 9000, 50, 1 days, 30 days);
+
+        uint256[] memory mins = new uint256[](2);
+        uint256[] memory fees = new uint256[](2);
+        mins[0] = 1 ether;
+        mins[1] = 3 ether;
+        fees[0] = 0.001 ether;
+        fees[1] = 0.003 ether;
+
+        vm.expectEmit(true, false, false, true);
+        emit BorrowFeeTiersConfigured(2, mins, fees);
+        h.emitBorrowFeeTiersConfigured(2, mins, fees);
+
+        vm.expectEmit(true, true, false, true);
+        emit BorrowFlatFeePaid(9, 2, 1 ether, 0.001 ether);
+        h.emitBorrowFlatFeePaid(9, 2, 1 ether, 0.001 ether);
+
+        vm.expectEmit(true, true, false, true);
+        emit LoanExtendFlatFeePaid(9, 2, 1 ether, 1 days, 0.001 ether);
+        h.emitLoanExtendFlatFeePaid(9, 2, 1 ether, 1 days, 0.001 ether);
     }
 }

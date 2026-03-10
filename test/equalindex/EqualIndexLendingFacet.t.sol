@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {EqualIndexAdminFacetV3} from "../../src/equalindex/EqualIndexAdminFacetV3.sol";
-import {EqualIndexPositionFacet} from "../../src/equalindex/EqualIndexPositionFacet.sol";
+import {EqualIndexActionsFacetV3} from "../../src/equalindex/EqualIndexActionsFacetV3.sol";
 import {EqualIndexLendingFacet} from "../../src/equalindex/EqualIndexLendingFacet.sol";
 import {EqualIndexBaseV3} from "../../src/equalindex/EqualIndexBaseV3.sol";
 import {LibAppStorage} from "../../src/libraries/LibAppStorage.sol";
@@ -15,23 +15,21 @@ import {LibPositionNFT} from "../../src/libraries/LibPositionNFT.sol";
 import {LibEqualIndex} from "../../src/libraries/LibEqualIndex.sol";
 import {LibEqualIndexLending} from "../../src/libraries/LibEqualIndexLending.sol";
 import {Types} from "../../src/libraries/Types.sol";
-import {
-    Unauthorized,
-    InvalidParameterRange,
-    NotNFTOwner,
-    PoolMembershipRequired,
-    InsufficientUnencumberedPrincipal
-} from "../../src/libraries/Errors.sol";
+import {Unauthorized, InvalidParameterRange, NotNFTOwner} from "../../src/libraries/Errors.sol";
 import {PositionNFT} from "../../src/nft/PositionNFT.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 
-contract EqualIndexLendingHarness is EqualIndexAdminFacetV3, EqualIndexPositionFacet, EqualIndexLendingFacet {
+contract EqualIndexLendingHarness is EqualIndexAdminFacetV3, EqualIndexActionsFacetV3, EqualIndexLendingFacet {
     function setOwner(address owner) external {
         LibDiamond.setContractOwner(owner);
     }
 
     function setTimelock(address timelock) external {
         LibAppStorage.s().timelock = timelock;
+    }
+
+    function setTreasury(address treasury) external {
+        LibAppStorage.s().treasury = treasury;
     }
 
     function setPositionNFT(address nft) external {
@@ -77,8 +75,20 @@ contract EqualIndexLendingHarness is EqualIndexAdminFacetV3, EqualIndexPositionF
         return PositionNFT(LibPositionNFT.s().positionNFTContract).mint(owner, poolId);
     }
 
-    function setUserPrincipal(uint256 pid, bytes32 positionKey, uint256 principal) external {
+    function setPoolPrincipal(uint256 pid, bytes32 positionKey, uint256 principal) external {
         Types.PoolData storage p = LibAppStorage.s().pools[pid];
+        uint256 prev = p.userPrincipal[positionKey];
+        if (principal > prev) {
+            uint256 add = principal - prev;
+            p.totalDeposits += add;
+            p.trackedBalance += add;
+            if (prev == 0) p.userCount += 1;
+        } else if (principal < prev) {
+            uint256 sub = prev - principal;
+            p.totalDeposits -= sub;
+            p.trackedBalance -= sub;
+            if (principal == 0 && p.userCount > 0) p.userCount -= 1;
+        }
         p.userPrincipal[positionKey] = principal;
         p.userFeeIndex[positionKey] = p.feeIndex;
         p.userMaintenanceIndex[positionKey] = p.maintenanceIndex;
@@ -100,16 +110,16 @@ contract EqualIndexLendingHarness is EqualIndexAdminFacetV3, EqualIndexPositionF
         return LibAppStorage.s().pools[pid].trackedBalance;
     }
 
+    function getPoolTotalDeposits(uint256 pid) external view returns (uint256) {
+        return LibAppStorage.s().pools[pid].totalDeposits;
+    }
+
     function getVaultBalanceRaw(uint256 indexId, address asset) external view returns (uint256) {
         return s().vaultBalances[indexId][asset];
     }
 
     function getIndexTotalUnits(uint256 indexId) external view returns (uint256) {
         return s().indexes[indexId].totalUnits;
-    }
-
-    function setVaultBalanceRaw(uint256 indexId, address asset, uint256 amount) external {
-        s().vaultBalances[indexId][asset] = amount;
     }
 
     function lendingEncumbered(bytes32 positionKey, uint256 poolId) external view returns (uint256) {
@@ -120,17 +130,16 @@ contract EqualIndexLendingHarness is EqualIndexAdminFacetV3, EqualIndexPositionF
 contract EqualIndexLendingFacetTest is Test {
     EqualIndexLendingHarness internal facet;
     PositionNFT internal nft;
-    MockERC20 internal asset;
-    MockERC20 internal otherAsset;
+    MockERC20 internal assetA;
+    MockERC20 internal assetB;
 
-    address internal constant USER = address(0xA11CE);
-    address internal constant USER2 = address(0xB22);
+    address internal constant BORROWER = address(0xB22);
+    address internal constant LP = address(0xA11);
     address internal constant TIMELOCK = address(0xBEEF);
-    uint256 internal constant ASSET_POOL_ID = 1;
-    uint256 internal constant POSITION_PRINCIPAL = 10 ether;
-    uint256 internal constant MINT_UNITS = 2 ether;
+    address internal constant TREASURY = address(0xFEE);
+    uint256 internal constant ASSET_A_POOL_ID = 1;
+    uint256 internal constant ASSET_B_POOL_ID = 2;
     uint256 internal constant COLLATERAL_UNITS = 1 ether;
-    uint256 internal constant BORROW_AMOUNT = 0.5 ether;
 
     struct Ctx {
         uint256 indexId;
@@ -139,334 +148,282 @@ contract EqualIndexLendingFacetTest is Test {
         uint256 indexPoolId;
     }
 
-    event LoanCreated(
-        uint256 indexed loanId,
-        bytes32 indexed positionKey,
-        uint256 indexed indexId,
-        address borrowAsset,
-        uint256 collateralUnits,
-        uint256 principal,
-        uint40 maturity,
-        uint256 fee
-    );
-    event LoanRepaid(uint256 indexed loanId, uint256 indexed indexId, address borrowAsset, uint256 principal);
-    event LoanExtended(uint256 indexed loanId, uint40 newMaturity, uint256 fee);
-    event LoanRecovered(
-        uint256 indexed loanId,
-        uint256 indexed indexId,
-        address borrowAsset,
-        uint256 collateralUnits,
-        uint256 writtenOffPrincipal
-    );
-
     function setUp() public {
-        asset = new MockERC20("Asset", "AST", 18, 0);
-        otherAsset = new MockERC20("Other", "OTH", 18, 0);
+        assetA = new MockERC20("AssetA", "ASTA", 18, 0);
+        assetB = new MockERC20("AssetB", "ASTB", 18, 0);
         nft = new PositionNFT();
         facet = new EqualIndexLendingHarness();
 
         facet.setOwner(address(this));
         facet.setTimelock(TIMELOCK);
+        facet.setTreasury(TREASURY);
         facet.setPositionNFT(address(nft));
         facet.setDefaultPoolConfig();
-
         nft.setMinter(address(facet));
 
-        facet.seedPool(ASSET_POOL_ID, address(asset), 1_000_000 ether);
-        facet.setAssetToPoolId(address(asset), ASSET_POOL_ID);
+        facet.seedPool(ASSET_A_POOL_ID, address(assetA), 1_000_000 ether);
+        facet.seedPool(ASSET_B_POOL_ID, address(assetB), 1_000_000 ether);
+        facet.setAssetToPoolId(address(assetA), ASSET_A_POOL_ID);
+        facet.setAssetToPoolId(address(assetB), ASSET_B_POOL_ID);
 
-        asset.mint(USER, 10 ether);
-        asset.mint(USER2, 10 ether);
-        vm.prank(USER);
-        asset.approve(address(facet), type(uint256).max);
-        vm.prank(USER2);
-        asset.approve(address(facet), type(uint256).max);
+        assetA.mint(LP, 1000 ether);
+        assetB.mint(LP, 1000 ether);
+        assetA.mint(BORROWER, 1000 ether);
+        assetB.mint(BORROWER, 1000 ether);
+        vm.deal(BORROWER, 10 ether);
+
+        vm.startPrank(LP);
+        assetA.approve(address(facet), type(uint256).max);
+        assetB.approve(address(facet), type(uint256).max);
+        vm.stopPrank();
+
+        vm.startPrank(BORROWER);
+        assetA.approve(address(facet), type(uint256).max);
+        assetB.approve(address(facet), type(uint256).max);
+        vm.stopPrank();
     }
 
     function test_configureLending_onlyTimelockAndWritesConfig() public {
-        Ctx memory ctx = _createIndexAndPosition();
+        uint256 indexId = _createMultiAssetIndex();
 
         vm.expectRevert(Unauthorized.selector);
-        facet.configureLending(ctx.indexId, 8000, 100, 1 days, 30 days);
+        facet.configureLending(indexId, 10_000, 100, 1 days, 30 days);
 
         vm.prank(TIMELOCK);
-        facet.configureLending(ctx.indexId, 8000, 100, 1 days, 30 days);
+        facet.configureLending(indexId, 10_000, 100, 1 days, 30 days);
 
-        LibEqualIndexLending.LendingConfig memory cfg = facet.getLendingConfig(ctx.indexId);
-        assertEq(cfg.ltvBps, 8000);
+        LibEqualIndexLending.LendingConfig memory cfg = facet.getLendingConfig(indexId);
+        assertEq(cfg.ltvBps, 10_000);
         assertEq(cfg.originationFeeBps, 100);
         assertEq(cfg.minDuration, 1 days);
         assertEq(cfg.maxDuration, 30 days);
     }
 
-    function test_configureLending_revertsOnInvalidRanges() public {
-        Ctx memory ctx = _createIndexAndPosition();
+    function test_borrowBasket_borrowsAllUnderlyingAssets() public {
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 100, COLLATERAL_UNITS);
+        (address[] memory quoteAssets, uint256[] memory quotePrincipals) =
+            facet.quoteBorrowBasket(ctx.indexId, COLLATERAL_UNITS);
+        assertEq(quoteAssets.length, 2);
+        assertEq(quotePrincipals[0], 1 ether);
+        assertEq(quotePrincipals[1], 2 ether);
 
-        vm.prank(TIMELOCK);
-        vm.expectRevert(abi.encodeWithSelector(InvalidParameterRange.selector, "ltvBps"));
-        facet.configureLending(ctx.indexId, 10001, 100, 1 days, 30 days);
+        uint256 balABefore = assetA.balanceOf(BORROWER);
+        uint256 balBBefore = assetB.balanceOf(BORROWER);
 
-        vm.prank(TIMELOCK);
-        vm.expectRevert(abi.encodeWithSelector(InvalidParameterRange.selector, "duration"));
-        facet.configureLending(ctx.indexId, 8000, 100, 31 days, 30 days);
-    }
-
-    function test_borrowRepay_updatesAccountingAndViews() public {
-        Ctx memory ctx = _readyBorrowContext();
-
-        vm.expectEmit(true, true, true, true);
-        emit LoanCreated(
-            0, ctx.positionKey, ctx.indexId, address(asset), COLLATERAL_UNITS, BORROW_AMOUNT, uint40(block.timestamp + 7 days), 0.005 ether
-        );
-        vm.prank(USER);
-        uint256 loanId = facet.borrowFromPosition(
-            ctx.positionId, ctx.indexId, address(asset), COLLATERAL_UNITS, BORROW_AMOUNT, 7 days
-        );
-
+        vm.prank(BORROWER);
+        uint256 loanId = facet.borrowFromPosition(ctx.positionId, ctx.indexId, COLLATERAL_UNITS, 7 days);
         LibEqualIndexLending.IndexLoan memory loan = facet.getLoan(loanId);
         assertEq(loan.positionKey, ctx.positionKey);
         assertEq(loan.indexId, ctx.indexId);
-        assertEq(loan.borrowAsset, address(asset));
         assertEq(loan.collateralUnits, COLLATERAL_UNITS);
-        assertEq(loan.principal, BORROW_AMOUNT);
+        assertEq(loan.ltvBps, 10_000);
         assertEq(loan.maturity, uint40(block.timestamp + 7 days));
 
-        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(asset)), BORROW_AMOUNT);
+        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(assetA)), 1 ether);
+        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(assetB)), 2 ether);
         assertEq(facet.getLockedCollateralUnits(ctx.indexId), COLLATERAL_UNITS);
-        assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(asset)), 1.5 ether);
-        assertEq(facet.economicBalance(ctx.indexId, address(asset)), 2 ether);
-        assertEq(facet.maxBorrowable(ctx.indexId, address(asset), COLLATERAL_UNITS), 0.8 ether);
         assertEq(facet.lendingEncumbered(ctx.positionKey, ctx.indexPoolId), COLLATERAL_UNITS);
 
-        vm.expectEmit(true, true, false, true);
-        emit LoanRepaid(loanId, ctx.indexId, address(asset), BORROW_AMOUNT);
-        vm.prank(USER);
+        assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(assetA)), 9 ether);
+        assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(assetB)), 18 ether);
+        assertEq(assetA.balanceOf(BORROWER) - balABefore, 1 ether);
+        assertEq(assetB.balanceOf(BORROWER) - balBBefore, 2 ether);
+    }
+
+    function test_borrow_revertsForNonWholeCollateralUnits() public {
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 0, 2 ether);
+        vm.prank(BORROWER);
+        vm.expectRevert(abi.encodeWithSelector(InvalidParameterRange.selector, "collateralUnitsWhole"));
+        facet.borrowFromPosition(ctx.positionId, ctx.indexId, 1.5 ether, 7 days);
+    }
+
+    function test_repay_basketClearsAllOutstandingPrincipals() public {
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 100, COLLATERAL_UNITS);
+
+        vm.prank(BORROWER);
+        uint256 loanId = facet.borrowFromPosition(ctx.positionId, ctx.indexId, COLLATERAL_UNITS, 7 days);
+
+        vm.prank(BORROWER);
         facet.repayFromPosition(ctx.positionId, loanId);
 
-        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(asset)), 0);
+        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(assetA)), 0);
+        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(assetB)), 0);
         assertEq(facet.getLockedCollateralUnits(ctx.indexId), 0);
-        assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(asset)), 2 ether);
-        assertEq(facet.lendingEncumbered(ctx.positionKey, ctx.indexPoolId), 0);
-        assertEq(facet.getLoan(loanId).principal, 0);
+        assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(assetA)), 10 ether);
+        assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(assetB)), 20 ether);
+        assertEq(facet.getLoan(loanId).collateralUnits, 0);
     }
 
-    function test_borrow_revertsForNonOwner() public {
-        Ctx memory ctx = _readyBorrowContext();
+    function test_borrowTierFee_requiresExactNativeFeeAndPaysTreasury() public {
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 0, COLLATERAL_UNITS);
+        uint256[] memory mins = new uint256[](2);
+        uint256[] memory fees = new uint256[](2);
+        mins[0] = 1 ether;
+        mins[1] = 3 ether;
+        fees[0] = 0.001 ether;
+        fees[1] = 0.003 ether;
 
-        vm.prank(USER2);
-        vm.expectRevert(abi.encodeWithSelector(NotNFTOwner.selector, USER2, ctx.positionId));
-        facet.borrowFromPosition(ctx.positionId, ctx.indexId, address(asset), COLLATERAL_UNITS, BORROW_AMOUNT, 7 days);
-    }
-
-    function test_borrow_revertsForNonMember() public {
-        Ctx memory ctx = _createIndexAndPosition();
         vm.prank(TIMELOCK);
-        facet.configureLending(ctx.indexId, 8000, 100, 1 days, 30 days);
-        uint256 indexPoolId = facet.getIndexPoolId(ctx.indexId);
+        facet.configureBorrowFeeTiers(ctx.indexId, mins, fees);
 
-        vm.prank(USER);
-        vm.expectRevert(abi.encodeWithSelector(PoolMembershipRequired.selector, ctx.positionKey, indexPoolId));
-        facet.borrowFromPosition(ctx.positionId, ctx.indexId, address(asset), COLLATERAL_UNITS, BORROW_AMOUNT, 7 days);
-    }
-
-    function test_borrow_revertsForInvalidAsset() public {
-        Ctx memory ctx = _readyBorrowContext();
-        vm.prank(USER);
-        vm.expectRevert(abi.encodeWithSelector(LibEqualIndexLending.InvalidAsset.selector, address(otherAsset)));
-        facet.borrowFromPosition(ctx.positionId, ctx.indexId, address(otherAsset), COLLATERAL_UNITS, BORROW_AMOUNT, 7 days);
-    }
-
-    function test_borrow_revertsForInvalidDuration() public {
-        Ctx memory ctx = _readyBorrowContext();
-        vm.prank(USER);
+        vm.prank(BORROWER);
         vm.expectRevert(
-            abi.encodeWithSelector(LibEqualIndexLending.InvalidDuration.selector, uint40(12 hours), uint40(1 days), uint40(30 days))
+            abi.encodeWithSelector(LibEqualIndexLending.FlatFeePaymentMismatch.selector, 0.001 ether, 0)
         );
-        facet.borrowFromPosition(ctx.positionId, ctx.indexId, address(asset), COLLATERAL_UNITS, BORROW_AMOUNT, 12 hours);
+        facet.borrowFromPosition(ctx.positionId, ctx.indexId, COLLATERAL_UNITS, 7 days);
+
+        uint256 treasuryBefore = TREASURY.balance;
+        vm.prank(BORROWER);
+        facet.borrowFromPosition{value: 0.001 ether}(ctx.positionId, ctx.indexId, COLLATERAL_UNITS, 7 days);
+        assertEq(TREASURY.balance - treasuryBefore, 0.001 ether);
     }
 
-    function test_borrow_revertsForLtvExceeded() public {
-        Ctx memory ctx = _readyBorrowContext();
-        vm.prank(USER);
-        vm.expectRevert(abi.encodeWithSelector(LibEqualIndexLending.LtvExceeded.selector, 0.9 ether, 0.8 ether));
-        facet.borrowFromPosition(ctx.positionId, ctx.indexId, address(asset), COLLATERAL_UNITS, 0.9 ether, 7 days);
+    function test_borrowTierFee_usesMatchingTierForCollateralUnits() public {
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 0, 5 ether);
+        uint256[] memory mins = new uint256[](3);
+        uint256[] memory fees = new uint256[](3);
+        mins[0] = 1 ether;
+        mins[1] = 3 ether;
+        mins[2] = 5 ether;
+        fees[0] = 0.001 ether;
+        fees[1] = 0.003 ether;
+        fees[2] = 0.005 ether;
+
+        vm.prank(TIMELOCK);
+        facet.configureBorrowFeeTiers(ctx.indexId, mins, fees);
+
+        assertEq(facet.quoteBorrowFee(ctx.indexId, 1 ether), 0.001 ether);
+        assertEq(facet.quoteBorrowFee(ctx.indexId, 3 ether), 0.003 ether);
+        assertEq(facet.quoteBorrowFee(ctx.indexId, 5 ether), 0.005 ether);
     }
 
-    function test_borrow_revertsForRedeemabilityViolation() public {
-        Ctx memory ctx = _readyBorrowContext();
-        facet.setVaultBalanceRaw(ctx.indexId, address(asset), 1.2 ether);
+    function test_extend_usesFlatNativeTierFee() public {
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 0, 2 ether);
+        uint256[] memory mins = new uint256[](1);
+        uint256[] memory fees = new uint256[](1);
+        mins[0] = 1 ether;
+        fees[0] = 0.002 ether;
 
-        vm.prank(USER);
-        vm.expectRevert(abi.encodeWithSelector(LibEqualIndexLending.RedeemabilityViolation.selector, address(asset), 1 ether, 0.4 ether));
-        facet.borrowFromPosition(ctx.positionId, ctx.indexId, address(asset), COLLATERAL_UNITS, 0.8 ether, 7 days);
+        vm.prank(TIMELOCK);
+        facet.configureBorrowFeeTiers(ctx.indexId, mins, fees);
+
+        vm.prank(BORROWER);
+        uint256 loanId = facet.borrowFromPosition{value: 0.002 ether}(ctx.positionId, ctx.indexId, COLLATERAL_UNITS, 7 days);
+
+        vm.prank(BORROWER);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibEqualIndexLending.FlatFeePaymentMismatch.selector, 0.002 ether, 0)
+        );
+        facet.extendFromPosition(ctx.positionId, loanId, 3 days);
+
+        uint256 treasuryBefore = TREASURY.balance;
+        vm.prank(BORROWER);
+        facet.extendFromPosition{value: 0.002 ether}(ctx.positionId, loanId, 3 days);
+        assertEq(TREASURY.balance - treasuryBefore, 0.002 ether);
     }
 
-    function test_borrow_revertsForInsufficientPrincipal() public {
-        Ctx memory ctx = _readyBorrowContext();
-        vm.prank(USER);
-        vm.expectRevert(abi.encodeWithSelector(InsufficientUnencumberedPrincipal.selector, 3 ether, 2 ether));
-        facet.borrowFromPosition(ctx.positionId, ctx.indexId, address(asset), 3 ether, BORROW_AMOUNT, 7 days);
+    function test_recoverExpired_multiAssetLoanWritesOffBasketDebt() public {
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 0, COLLATERAL_UNITS);
+
+        vm.prank(BORROWER);
+        uint256 loanId = facet.borrowFromPosition(ctx.positionId, ctx.indexId, COLLATERAL_UNITS, 3 days);
+
+        uint256 totalUnitsBefore = facet.getIndexTotalUnits(ctx.indexId);
+        uint256 poolPrincipalBefore = facet.getPoolPrincipal(ctx.indexPoolId, ctx.positionKey);
+        uint256 poolTrackedBefore = facet.getPoolTrackedBalance(ctx.indexPoolId);
+        uint256 poolDepositsBefore = facet.getPoolTotalDeposits(ctx.indexPoolId);
+
+        vm.warp(block.timestamp + 4 days);
+        facet.recoverExpired(loanId);
+
+        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(assetA)), 0);
+        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(assetB)), 0);
+        assertEq(facet.getLockedCollateralUnits(ctx.indexId), 0);
+        assertEq(facet.getLoan(loanId).collateralUnits, 0);
+        assertEq(facet.getIndexTotalUnits(ctx.indexId), totalUnitsBefore - COLLATERAL_UNITS);
+        assertEq(facet.getPoolPrincipal(ctx.indexPoolId, ctx.positionKey), poolPrincipalBefore - COLLATERAL_UNITS);
+        assertEq(facet.getPoolTrackedBalance(ctx.indexPoolId), poolTrackedBefore - COLLATERAL_UNITS);
+        assertEq(facet.getPoolTotalDeposits(ctx.indexPoolId), poolDepositsBefore - COLLATERAL_UNITS);
     }
 
-    function test_repay_revertsForLoanNotFound() public {
-        Ctx memory ctx = _readyBorrowContext();
-        vm.prank(USER);
-        vm.expectRevert(abi.encodeWithSelector(LibEqualIndexLending.LoanNotFound.selector, 999));
-        facet.repayFromPosition(ctx.positionId, 999);
+    function test_quoteBorrowBasket_returnsExactMintBasketForWholeUnitCollateral() public {
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 0, 2 ether);
+        (address[] memory assets, uint256[] memory principals) = facet.quoteBorrowBasket(ctx.indexId, 1 ether);
+        assertEq(assets.length, 2);
+        assertEq(principals[0], 1 ether);
+        assertEq(principals[1], 2 ether);
+    }
+
+    function test_configureLending_revertsForNonExactBasketLtv() public {
+        uint256 indexId = _createMultiAssetIndex();
+        vm.prank(TIMELOCK);
+        vm.expectRevert(abi.encodeWithSelector(InvalidParameterRange.selector, "ltvBps"));
+        facet.configureLending(indexId, 9_000, 100, 1 days, 30 days);
     }
 
     function test_repay_revertsForNonOwner() public {
-        Ctx memory ctx = _readyBorrowContext();
-        uint256 loanId = _openLoan(ctx, 7 days, BORROW_AMOUNT, COLLATERAL_UNITS);
+        Ctx memory ctx = _readyMultiAssetBorrowContext(10_000, 0, COLLATERAL_UNITS);
 
-        vm.prank(USER2);
-        vm.expectRevert(abi.encodeWithSelector(NotNFTOwner.selector, USER2, ctx.positionId));
+        vm.prank(BORROWER);
+        uint256 loanId = facet.borrowFromPosition(ctx.positionId, ctx.indexId, COLLATERAL_UNITS, 7 days);
+
+        address stranger = address(0xC33);
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(NotNFTOwner.selector, stranger, ctx.positionId));
         facet.repayFromPosition(ctx.positionId, loanId);
     }
 
-    function test_repay_revertsForPositionMismatch() public {
-        Ctx memory ctx = _readyBorrowContext();
-        uint256 loanId = _openLoan(ctx, 7 days, BORROW_AMOUNT, COLLATERAL_UNITS);
-
-        vm.prank(USER2);
-        uint256 position2 = facet.mintPosition(USER2, ASSET_POOL_ID);
-
-        vm.startPrank(USER2);
-        vm.expectRevert(abi.encodeWithSelector(LibEqualIndexLending.PositionMismatch.selector, ctx.positionKey, nft.getPositionKey(position2)));
-        facet.repayFromPosition(position2, loanId);
-        vm.stopPrank();
-    }
-
-    function test_extendFromPosition_updatesMaturity() public {
-        Ctx memory ctx = _readyBorrowContext();
-
-        uint256 loanId = _openLoan(ctx, 7 days, BORROW_AMOUNT, COLLATERAL_UNITS);
-        uint40 maturityBefore = facet.getLoan(loanId).maturity;
-
-        vm.expectEmit(true, false, false, true);
-        emit LoanExtended(loanId, maturityBefore + 2 days, 0.005 ether);
-        vm.prank(USER);
-        facet.extendFromPosition(ctx.positionId, loanId, 2 days);
-
-        uint40 maturityAfter = facet.getLoan(loanId).maturity;
-        assertEq(uint256(maturityAfter), uint256(maturityBefore) + 2 days);
-    }
-
-    function test_extend_revertsForExpiredLoan() public {
-        Ctx memory ctx = _readyBorrowContext();
-        uint256 loanId = _openLoan(ctx, 3 days, BORROW_AMOUNT, COLLATERAL_UNITS);
-        vm.warp(block.timestamp + 4 days);
-
-        vm.prank(USER);
-        vm.expectRevert(abi.encodeWithSelector(LibEqualIndexLending.LoanExpired.selector, loanId, uint40(block.timestamp - 1 days)));
-        facet.extendFromPosition(ctx.positionId, loanId, 1 days);
-    }
-
-    function test_extend_revertsForMaxDurationExceeded() public {
-        Ctx memory ctx = _readyBorrowContext();
-        uint256 loanId = _openLoan(ctx, 7 days, BORROW_AMOUNT, COLLATERAL_UNITS);
-        uint256 maxAllowed = block.timestamp + 30 days;
-
-        vm.prank(USER);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibEqualIndexLending.MaxDurationExceeded.selector, uint40(block.timestamp + 47 days), uint40(maxAllowed)
-            )
-        );
-        facet.extendFromPosition(ctx.positionId, loanId, 40 days);
-    }
-
-    function test_extend_revertsForNonOwner() public {
-        Ctx memory ctx = _readyBorrowContext();
-        uint256 loanId = _openLoan(ctx, 7 days, BORROW_AMOUNT, COLLATERAL_UNITS);
-
-        vm.prank(USER2);
-        vm.expectRevert(abi.encodeWithSelector(NotNFTOwner.selector, USER2, ctx.positionId));
-        facet.extendFromPosition(ctx.positionId, loanId, 1 days);
-    }
-
-    function test_recoverExpired_burnsAndClearsLoan() public {
-        Ctx memory ctx = _readyBorrowContext();
-
-        uint256 loanId = _openLoan(ctx, 3 days, BORROW_AMOUNT, COLLATERAL_UNITS);
-
-        uint256 totalUnitsBefore = facet.getIndexTotalUnits(ctx.indexId);
-        uint256 principalBefore = facet.getPoolPrincipal(ctx.indexPoolId, ctx.positionKey);
-
-        vm.warp(block.timestamp + 4 days);
-        vm.expectEmit(true, true, false, true);
-        emit LoanRecovered(loanId, ctx.indexId, address(asset), COLLATERAL_UNITS, BORROW_AMOUNT);
-        facet.recoverExpired(loanId);
-
-        assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(asset)), 0);
-        assertEq(facet.getLockedCollateralUnits(ctx.indexId), 0);
-        assertEq(facet.getLoan(loanId).principal, 0);
-        assertEq(facet.getIndexTotalUnits(ctx.indexId), totalUnitsBefore - COLLATERAL_UNITS);
-        assertEq(facet.getPoolPrincipal(ctx.indexPoolId, ctx.positionKey), principalBefore - COLLATERAL_UNITS);
-        assertEq(facet.lendingEncumbered(ctx.positionKey, ctx.indexPoolId), 0);
-    }
-
-    function test_recover_revertsForLoanNotFound() public {
-        vm.expectRevert(abi.encodeWithSelector(LibEqualIndexLending.LoanNotFound.selector, 999));
-        facet.recoverExpired(999);
-    }
-
-    function test_recover_revertsForLoanNotExpired() public {
-        Ctx memory ctx = _readyBorrowContext();
-        uint256 loanId = _openLoan(ctx, 7 days, BORROW_AMOUNT, COLLATERAL_UNITS);
-
-        vm.expectRevert(abi.encodeWithSelector(LibEqualIndexLending.LoanNotExpired.selector, loanId, uint40(block.timestamp + 7 days)));
-        facet.recoverExpired(loanId);
-    }
-
-    function _openLoan(Ctx memory ctx, uint40 duration, uint256 amount, uint256 collateralUnits) internal returns (uint256 loanId) {
-        vm.prank(USER);
-        loanId = facet.borrowFromPosition(ctx.positionId, ctx.indexId, address(asset), collateralUnits, amount, duration);
-    }
-
-    function _readyBorrowContext() internal returns (Ctx memory ctx) {
-        ctx = _createIndexAndPosition();
+    function _readyMultiAssetBorrowContext(uint16 ltvBps, uint16 feeBps, uint256 seededPrincipal)
+        internal
+        returns (Ctx memory ctx)
+    {
+        ctx.indexId = _createMultiAssetIndex();
+        _seedInitialMint(ctx.indexId, 10 ether);
 
         vm.prank(TIMELOCK);
-        facet.configureLending(ctx.indexId, 8000, 100, 1 days, 30 days);
+        facet.configureLending(ctx.indexId, ltvBps, feeBps, 1 days, 30 days);
 
-        vm.prank(USER);
-        facet.mintFromPosition(ctx.positionId, ctx.indexId, MINT_UNITS);
-
-        ctx.indexPoolId = facet.getIndexPoolId(ctx.indexId);
-    }
-
-    function _createIndexAndPosition() internal returns (Ctx memory ctx) {
-        vm.prank(USER);
-        ctx.positionId = facet.mintPosition(USER, ASSET_POOL_ID);
+        vm.prank(BORROWER);
+        ctx.positionId = facet.mintPosition(BORROWER, ASSET_A_POOL_ID);
         ctx.positionKey = nft.getPositionKey(ctx.positionId);
-
-        facet.setUserPrincipal(ASSET_POOL_ID, ctx.positionKey, POSITION_PRINCIPAL);
-        facet.joinPool(ctx.positionKey, ASSET_POOL_ID);
-
-        EqualIndexBaseV3.CreateIndexParams memory p = _singleAssetParams();
-        (ctx.indexId,) = facet.createIndex(p);
+        ctx.indexPoolId = facet.getIndexPoolId(ctx.indexId);
+        facet.setPoolPrincipal(ctx.indexPoolId, ctx.positionKey, seededPrincipal);
+        facet.joinPool(ctx.positionKey, ctx.indexPoolId);
     }
 
-    function _singleAssetParams() internal view returns (EqualIndexBaseV3.CreateIndexParams memory p) {
-        address[] memory assets = new address[](1);
-        uint256[] memory bundle = new uint256[](1);
-        uint16[] memory mintFee = new uint16[](1);
-        uint16[] memory burnFee = new uint16[](1);
+    function _seedInitialMint(uint256 indexId, uint256 units) internal {
+        uint256[] memory maxInput = new uint256[](2);
+        maxInput[0] = units;
+        maxInput[1] = units * 2;
 
-        assets[0] = address(asset);
+        vm.prank(LP);
+        facet.mint(indexId, units, address(facet), maxInput);
+    }
+
+    function _createMultiAssetIndex() internal returns (uint256 indexId) {
+        address[] memory assets = new address[](2);
+        uint256[] memory bundle = new uint256[](2);
+        uint16[] memory mintFee = new uint16[](2);
+        uint16[] memory burnFee = new uint16[](2);
+
+        assets[0] = address(assetA);
+        assets[1] = address(assetB);
         bundle[0] = 1 ether;
+        bundle[1] = 2 ether;
         mintFee[0] = 0;
+        mintFee[1] = 0;
         burnFee[0] = 0;
+        burnFee[1] = 0;
 
-        p = EqualIndexBaseV3.CreateIndexParams({
-            name: "EQL",
-            symbol: "EQL",
+        EqualIndexBaseV3.CreateIndexParams memory p = EqualIndexBaseV3.CreateIndexParams({
+            name: "MIDX",
+            symbol: "MIDX",
             assets: assets,
             bundleAmounts: bundle,
             mintFeeBps: mintFee,
             burnFeeBps: burnFee,
             flashFeeBps: 0
         });
+        (indexId,) = facet.createIndex(p);
     }
 }
