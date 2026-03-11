@@ -11,8 +11,18 @@ contract AgentMailboxFacet {
     error AgentMailbox_EmptyEnvelope();
     error AgentMailbox_UnauthorizedPublisher();
 
-    event BorrowerPayloadPublished(uint256 indexed agreementId, address indexed borrower, bytes envelope);
-    event ProviderPayloadPublished(uint256 indexed agreementId, address indexed provider, bytes envelope);
+    event BorrowerPayloadPublished(
+        uint256 indexed agreementId,
+        address indexed borrower,
+        address indexed provider,
+        bytes envelope
+    );
+    event ProviderPayloadPublished(
+        uint256 indexed agreementId,
+        address indexed provider,
+        address indexed borrower,
+        bytes envelope
+    );
 
     function publishBorrowerPayload(uint256 agreementId, bytes calldata envelope) external returns (uint256 nonce) {
         if (envelope.length == 0) revert AgentMailbox_EmptyEnvelope();
@@ -32,7 +42,7 @@ contract AgentMailboxFacet {
             publishedAt: uint40(block.timestamp)
         });
 
-        emit BorrowerPayloadPublished(agreementId, msg.sender, envelope);
+        emit BorrowerPayloadPublished(agreementId, msg.sender, agreement.provider, envelope);
     }
 
     function publishProviderPayload(uint256 agreementId, bytes calldata envelope) external returns (uint256 nonce) {
@@ -53,7 +63,7 @@ contract AgentMailboxFacet {
             publishedAt: uint40(block.timestamp)
         });
 
-        emit ProviderPayloadPublished(agreementId, msg.sender, envelope);
+        emit ProviderPayloadPublished(agreementId, msg.sender, agreement.borrower, envelope);
     }
 
     function getBorrowerPayload(uint256 agreementId, uint256 nonce)
