@@ -19,7 +19,7 @@ contract AgenticFinancingFacet {
     event ProposalApproved(uint256 indexed proposalId, address indexed approver);
     event ProposalRejected(uint256 indexed proposalId, address indexed rejector);
 
-    event AgreementActivated(uint256 indexed agreementId, uint256 indexed proposalId, uint8 mode);
+    event AgreementActivated(uint256 indexed agreementId, uint256 indexed proposalId, uint8 mode, address indexed provider);
     event NativeEncumbranceUpdated(
         uint256 indexed agreementId,
         bytes32 indexed positionKey,
@@ -28,10 +28,10 @@ contract AgenticFinancingFacet {
         bytes32 reason
     );
     event RepaymentApplied(uint256 indexed agreementId, uint256 amount, uint256 toFees, uint256 toInterest, uint256 toPrincipal);
-    event AgreementDelinquent(uint256 indexed agreementId, uint256 pastDue);
+    event AgreementDelinquent(uint256 indexed agreementId, uint256 pastDue, address indexed provider);
     event DrawRightsTerminated(uint256 indexed agreementId, bytes32 reason);
-    event AgreementDefaulted(uint256 indexed agreementId, uint256 pastDue);
-    event AgreementTerminated(uint256 indexed agreementId, bytes32 reason);
+    event AgreementDefaulted(uint256 indexed agreementId, uint256 pastDue, address indexed provider, bytes32 reason);
+    event AgreementTerminated(uint256 indexed agreementId, address indexed provider, bytes32 reason);
 
     function proposeAgreement(
         uint256 agentId,
@@ -93,7 +93,7 @@ contract AgenticFinancingFacet {
         ds.agreementsByBorrower[a.borrower].push(agreementId);
         ds.agreementsByProvider[a.provider].push(agreementId);
 
-        emit AgreementActivated(agreementId, proposalId, mode);
+        emit AgreementActivated(agreementId, proposalId, mode, a.provider);
         emit NativeEncumbranceUpdated(
             agreementId, a.positionKey, a.principalEncumbered, a.unitsEncumbered, keccak256("ACTIVATION")
         );
@@ -183,7 +183,7 @@ contract AgenticFinancingFacet {
         }
         a.updatedAt = uint40(block.timestamp);
 
-        emit AgreementDelinquent(agreementId, pastDue);
+        emit AgreementDelinquent(agreementId, pastDue, a.provider);
     }
 
     function markDefaulted(uint256 agreementId, uint256 pastDue, bytes32 reason) external {
@@ -208,7 +208,7 @@ contract AgenticFinancingFacet {
         }
         a.updatedAt = uint40(block.timestamp);
 
-        emit AgreementDefaulted(agreementId, pastDue);
+        emit AgreementDefaulted(agreementId, pastDue, a.provider, reason);
     }
 
     function terminateAgreement(uint256 agreementId, bytes32 reason) external {
@@ -234,7 +234,7 @@ contract AgenticFinancingFacet {
         }
         a.updatedAt = uint40(block.timestamp);
 
-        emit AgreementTerminated(agreementId, reason);
+        emit AgreementTerminated(agreementId, a.provider, reason);
     }
 
     function getProposal(uint256 proposalId) external view returns (LibAgenticFinancingStorage.Proposal memory) {
