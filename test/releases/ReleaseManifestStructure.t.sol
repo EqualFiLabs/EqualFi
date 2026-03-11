@@ -31,11 +31,11 @@ contract ReleaseManifestStructureTest is Test {
         FacetId[] memory v4Ids = v4.facetIds();
         FacetId[] memory v5Ids = v5.facetIds();
 
-        assertEq(v1Ids.length, 30);
-        assertEq(v2Ids.length, 40);
-        assertEq(v3Ids.length, 44);
-        assertEq(v4Ids.length, 48);
-        assertEq(v5Ids.length, 52);
+        assertEq(v1Ids.length, 42);
+        assertEq(v2Ids.length, 52);
+        assertEq(v3Ids.length, 56);
+        assertEq(v4Ids.length, 60);
+        assertEq(v5Ids.length, 64);
 
         _assertPrefix(v1Ids, v2Ids);
         _assertPrefix(v2Ids, v3Ids);

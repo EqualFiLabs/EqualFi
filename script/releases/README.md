@@ -43,9 +43,13 @@ Launch surface:
 
 - Self-secured lending
 - AMM auctions
+- Community auctions
 - MAM curves
 - Index tokens / index lending
 - Options
+- Points
+- ERC-6551 position agents (TBA, registry, view, config)
+- Module registry / gateway / view facets for agents
 - Required core and view facets used by those products
 
 ### `v2`
@@ -127,11 +131,19 @@ Runtime inputs:
 - `PRIVATE_KEY`
 - `MANIFEST`
 - optional `DIAMOND_ADDRESS`
+- `ENTRYPOINT_ADDRESS` (required when canonical ERC-4337 entrypoint is unavailable)
+- `ERC6551_REGISTRY` (required when canonical ERC-6551 registry is unavailable)
+- `IDENTITY_REGISTRY` or `IDENTITY_REGISTRY_<chainid>` (required when canonical ERC-8004 registry is unavailable)
+- optional `ERC6551_IMPLEMENTATION`
 
 Behavior:
 
 - If `DIAMOND_ADDRESS` is unset or zero, the script deploys a new base diamond first, then applies the manifest.
 - If `DIAMOND_ADDRESS` is set, the script applies the manifest to the existing diamond.
+- On fresh deploys, the script bootstraps launch support for `v1`:
+- deploys `OptionToken` and wires `OptionsFacet.setOptionToken`
+- configures `PositionAgentConfigFacet` with ERC-4337 entrypoint, ERC-6551 registry, ERC-6551 implementation, and ERC-8004 identity registry
+- The script does not deploy local fallback contracts for ERC-4337, ERC-6551, or ERC-8004. Missing dependencies hard-revert.
 
 Supported `MANIFEST` values:
 

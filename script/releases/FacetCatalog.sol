@@ -76,10 +76,52 @@ import {PerpsAdminFacet} from "../../src/perps/PerpsAdminFacet.sol";
 import {PerpsExecutionFacet} from "../../src/perps/PerpsExecutionFacet.sol";
 import {PerpsLiquidationFacet} from "../../src/perps/PerpsLiquidationFacet.sol";
 import {PerpsViewFacet} from "../../src/perps/PerpsViewFacet.sol";
+import {OptionToken} from "../../src/derivatives/OptionToken.sol";
+import {PositionMSCAImpl} from "../../src/agent-wallet/erc6900/PositionMSCAImpl.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@agent-wallet-core/core/BeaconProxy.sol";
 import {DeployDiamondScript} from "../DeployDiamond.s.sol";
 import {ApplyReport, FacetId, FacetPlan, IReleaseManifest, ManifestPlan} from "./ManifestTypes.sol";
 
 abstract contract FacetCatalog is DeployDiamondScript {
+    function _bootstrapLaunchSupport(address diamond, address owner_)
+        internal
+        returns (
+            address optionToken,
+            address entryPoint,
+            address erc6551Registry,
+            address erc6551Implementation,
+            address identityRegistry
+        )
+    {
+        if (_facetAddressOrZero(diamond, OptionsFacet.setOptionToken.selector) != address(0)) {
+            OptionToken deployedOptionToken = new OptionToken("", owner_, diamond);
+            optionToken = address(deployedOptionToken);
+            OptionsFacet(diamond).setOptionToken(optionToken);
+        }
+
+        if (_facetAddressOrZero(diamond, PositionAgentConfigFacet.setERC6551Registry.selector) == address(0)) {
+            return (optionToken, address(0), address(0), address(0), address(0));
+        }
+
+        entryPoint = _resolveEntryPointStrict();
+        erc6551Registry = _resolveERC6551RegistryStrict();
+        identityRegistry = _resolveIdentityRegistryStrict();
+
+        PositionMSCAImpl mscaImplementation = new PositionMSCAImpl(entryPoint);
+        UpgradeableBeacon beacon = new UpgradeableBeacon(address(mscaImplementation), owner_);
+        BeaconProxy beaconProxy = new BeaconProxy(address(beacon));
+
+        erc6551Implementation = vm.envOr("ERC6551_IMPLEMENTATION", address(beaconProxy));
+        if (erc6551Implementation == address(0) || erc6551Implementation.code.length == 0) {
+            revert("FacetCatalog: ERC6551 implementation missing");
+        }
+
+        PositionAgentConfigFacet(diamond).setERC6551Registry(erc6551Registry);
+        PositionAgentConfigFacet(diamond).setERC6551Implementation(erc6551Implementation);
+        PositionAgentConfigFacet(diamond).setIdentityRegistry(identityRegistry);
+    }
+
     function _planManifest(address diamond, IReleaseManifest manifest) internal returns (ManifestPlan memory plan) {
         FacetId[] memory ids = manifest.facetIds();
         plan.manifestName = manifest.name();
@@ -481,6 +523,11 @@ abstract contract FacetCatalog is DeployDiamondScript {
     function _writeManifestArtifact(
         address diamond,
         address positionNFT,
+        address optionToken,
+        address entryPoint,
+        address erc6551Registry,
+        address erc6551Implementation,
+        address identityRegistry,
         ManifestPlan memory plan,
         ApplyReport memory report
     ) internal {
@@ -496,6 +543,11 @@ abstract contract FacetCatalog is DeployDiamondScript {
         vm.serializeUint(artifact, "chainId", block.chainid);
         vm.serializeAddress(artifact, "diamond", diamond);
         vm.serializeAddress(artifact, "positionNFT", positionNFT);
+        vm.serializeAddress(artifact, "optionToken", optionToken);
+        vm.serializeAddress(artifact, "entryPoint", entryPoint);
+        vm.serializeAddress(artifact, "erc6551Registry", erc6551Registry);
+        vm.serializeAddress(artifact, "erc6551Implementation", erc6551Implementation);
+        vm.serializeAddress(artifact, "identityRegistry", identityRegistry);
         vm.serializeUint(artifact, "deployedFacetCount", report.deployedFacetCount);
         vm.serializeUint(artifact, "reusedFacetCount", report.reusedFacetCount);
         vm.serializeUint(artifact, "addCutCount", report.addCutCount);
@@ -531,6 +583,31 @@ abstract contract FacetCatalog is DeployDiamondScript {
 
         string memory json = vm.serializeUint(artifact, "facetCount", plan.facets.length);
         vm.writeJson(json, string.concat(chainDir, "/", plan.manifestName, ".json"));
+    }
+
+    function _resolveEntryPointStrict() internal view returns (address entryPoint) {
+        entryPoint = _resolveEntryPoint();
+        if (entryPoint == address(0) || entryPoint.code.length == 0) {
+            revert("FacetCatalog: ERC4337 entrypoint missing");
+        }
+    }
+
+    function _resolveERC6551RegistryStrict() internal view returns (address registry) {
+        if (ERC6551_REGISTRY.code.length > 0) {
+            return ERC6551_REGISTRY;
+        }
+
+        registry = vm.envOr("ERC6551_REGISTRY", address(0));
+        if (registry == address(0) || registry.code.length == 0) {
+            revert("FacetCatalog: ERC6551 registry missing");
+        }
+    }
+
+    function _resolveIdentityRegistryStrict() internal view returns (address identityRegistry) {
+        identityRegistry = _resolveIdentityRegistry();
+        if (identityRegistry == address(0) || identityRegistry.code.length == 0) {
+            revert("FacetCatalog: ERC8004 identity registry missing");
+        }
     }
 
     function _facetAddressOrZero(address diamond, bytes4 selector) internal view returns (address facet) {

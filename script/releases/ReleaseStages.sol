@@ -5,7 +5,7 @@ import {FacetId} from "./ManifestTypes.sol";
 
 abstract contract ReleaseStages {
     function _v1Base() internal pure returns (FacetId[] memory ids) {
-        ids = new FacetId[](30);
+        ids = new FacetId[](42);
         ids[0] = FacetId.Admin;
         ids[1] = FacetId.Maintenance;
         ids[2] = FacetId.AdminGovernance;
@@ -36,6 +36,18 @@ abstract contract ReleaseStages {
         ids[27] = FacetId.Options;
         ids[28] = FacetId.DerivativeView;
         ids[29] = FacetId.MamCurveView;
+        ids[30] = FacetId.PointsAdmin;
+        ids[31] = FacetId.PointsView;
+        ids[32] = FacetId.PointsRedemption;
+        ids[33] = FacetId.CommunityAuction;
+        ids[34] = FacetId.CommunityAuctionView;
+        ids[35] = FacetId.PositionAgentTBA;
+        ids[36] = FacetId.PositionAgentRegistry;
+        ids[37] = FacetId.PositionAgentView;
+        ids[38] = FacetId.PositionAgentConfig;
+        ids[39] = FacetId.ModuleRegistry;
+        ids[40] = FacetId.ModuleGateway;
+        ids[41] = FacetId.ModuleView;
     }
 
     function _v2Direct() internal pure returns (FacetId[] memory ids) {

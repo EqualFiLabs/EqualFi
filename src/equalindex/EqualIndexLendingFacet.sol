@@ -4,10 +4,12 @@ pragma solidity ^0.8.20;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {EqualIndexBaseV3} from "./EqualIndexBaseV3.sol";
 import {IndexToken} from "./IndexToken.sol";
+import {LibActiveCreditIndex} from "../libraries/LibActiveCreditIndex.sol";
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibCurrency} from "../libraries/LibCurrency.sol";
 import {LibFeeIndex} from "../libraries/LibFeeIndex.sol";
 import {LibModuleEncumbrance} from "../libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../libraries/LibModuleRegistry.sol";
 import {LibPoolMembership} from "../libraries/LibPoolMembership.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
@@ -141,7 +143,7 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             ltvBps: cfg.ltvBps,
             maturity: uint40(block.timestamp + duration)
         });
-        LibModuleEncumbrance.encumber(positionKey, indexPoolId, LENDING_MODULE_ID, collateralUnits);
+        _encumberWithAci(indexPool, positionKey, indexPoolId, collateralUnits);
 
         for (uint256 i = 0; i < len; i++) {
             address asset = assets[i];
@@ -200,7 +202,7 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         ls.lockedCollateralUnits[loan.indexId] -= loan.collateralUnits;
 
         uint256 indexPoolId = s().indexToPoolId[loan.indexId];
-        LibModuleEncumbrance.unencumber(positionKey, indexPoolId, LENDING_MODULE_ID, loan.collateralUnits);
+        _unencumberWithAci(LibAppStorage.s().pools[indexPoolId], positionKey, indexPoolId, loan.collateralUnits);
 
         uint256 repaidIndexId = loan.indexId;
         delete ls.loans[loanId];
@@ -286,7 +288,7 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         indexPool.userFeeIndex[loan.positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[loan.positionKey] = indexPool.maintenanceIndex;
 
-        LibModuleEncumbrance.unencumber(loan.positionKey, indexPoolId, LENDING_MODULE_ID, loan.collateralUnits);
+        _unencumberWithAci(indexPool, loan.positionKey, indexPoolId, loan.collateralUnits);
 
         uint256 recoveredIndexId = loan.indexId;
         uint256 recoveredCollateral = loan.collateralUnits;
@@ -456,5 +458,22 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
                 sum += amounts[i];
             }
         }
+    }
+
+    function _encumberWithAci(Types.PoolData storage pool, bytes32 positionKey, uint256 poolId, uint256 amount)
+        private
+    {
+        LibModuleEncumbrance.encumber(positionKey, poolId, LENDING_MODULE_ID, amount);
+        if (amount == 0 || LibModuleRegistry.s().moduleAciPaused) {
+            return;
+        }
+        LibActiveCreditIndex.applyEncumbranceIncrease(pool, poolId, positionKey, amount);
+    }
+
+    function _unencumberWithAci(Types.PoolData storage pool, bytes32 positionKey, uint256 poolId, uint256 amount)
+        private
+    {
+        LibModuleEncumbrance.unencumber(positionKey, poolId, LENDING_MODULE_ID, amount);
+        LibActiveCreditIndex.applyEncumbranceDecrease(pool, poolId, positionKey, amount);
     }
 }

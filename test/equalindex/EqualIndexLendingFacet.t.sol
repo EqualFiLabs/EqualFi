@@ -125,6 +125,18 @@ contract EqualIndexLendingHarness is EqualIndexAdminFacetV3, EqualIndexActionsFa
     function lendingEncumbered(bytes32 positionKey, uint256 poolId) external view returns (uint256) {
         return LibModuleEncumbrance.getEncumberedForModule(positionKey, poolId, this.lendingModuleId());
     }
+
+    function getActiveCreditPrincipalTotal(uint256 pid) external view returns (uint256) {
+        return LibAppStorage.s().pools[pid].activeCreditPrincipalTotal;
+    }
+
+    function getActiveCreditEncumbranceState(uint256 pid, bytes32 positionKey)
+        external
+        view
+        returns (Types.ActiveCreditState memory)
+    {
+        return LibAppStorage.s().pools[pid].userActiveCreditStateEncumbrance[positionKey];
+    }
 }
 
 contract EqualIndexLendingFacetTest is Test {
@@ -223,6 +235,11 @@ contract EqualIndexLendingFacetTest is Test {
         assertEq(facet.getOutstandingPrincipal(ctx.indexId, address(assetB)), 2 ether);
         assertEq(facet.getLockedCollateralUnits(ctx.indexId), COLLATERAL_UNITS);
         assertEq(facet.lendingEncumbered(ctx.positionKey, ctx.indexPoolId), COLLATERAL_UNITS);
+        assertEq(facet.getActiveCreditPrincipalTotal(ctx.indexPoolId), COLLATERAL_UNITS);
+
+        Types.ActiveCreditState memory encState = facet.getActiveCreditEncumbranceState(ctx.indexPoolId, ctx.positionKey);
+        assertEq(encState.principal, COLLATERAL_UNITS);
+        assertGt(encState.startTime, 0);
 
         assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(assetA)), 9 ether);
         assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(assetB)), 18 ether);
@@ -252,6 +269,11 @@ contract EqualIndexLendingFacetTest is Test {
         assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(assetA)), 10 ether);
         assertEq(facet.getVaultBalanceRaw(ctx.indexId, address(assetB)), 20 ether);
         assertEq(facet.getLoan(loanId).collateralUnits, 0);
+        assertEq(facet.getActiveCreditPrincipalTotal(ctx.indexPoolId), 0);
+
+        Types.ActiveCreditState memory encState = facet.getActiveCreditEncumbranceState(ctx.indexPoolId, ctx.positionKey);
+        assertEq(encState.principal, 0);
+        assertEq(encState.startTime, 0);
     }
 
     function test_borrowTierFee_requiresExactNativeFeeAndPaysTreasury() public {
