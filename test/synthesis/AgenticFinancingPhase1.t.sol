@@ -104,6 +104,43 @@ contract AgenticFinancingPhase1Test is Test {
         financing.applyUsage(agreementId, 1, 0, keccak256("USAGE_BLOCKED"));
     }
 
+    function test_activationPreconditions_andAccessControl() public {
+        vm.expectRevert(AgenticFinancingFacet.AgenticFinancing_InvalidPositionKey.selector);
+        financing.proposeAgreement(1, bytes32(0), borrower, provider, 1, 100, 1, bytes32(0));
+
+        vm.expectRevert(AgenticFinancingFacet.AgenticFinancing_InvalidAddress.selector);
+        financing.proposeAgreement(1, POSITION_KEY, address(0), provider, 1, 100, 1, bytes32(0));
+
+        uint256 proposalId = financing.proposeAgreement(1, POSITION_KEY, borrower, provider, 1, 100, 1, bytes32(0));
+
+        vm.prank(address(0xCAFE));
+        vm.expectRevert(bytes("LibAccess: not owner or timelock"));
+        financing.approveAndActivate(proposalId, 1);
+    }
+
+    function test_nativeEncumbranceAccounting_usageIncrease_repayDecrease() public {
+        uint256 proposalId = financing.proposeAgreement(10, POSITION_KEY, borrower, provider, 1, 200, 1, bytes32(0));
+        uint256 agreementId = financing.approveAndActivate(proposalId, 1);
+
+        LibAgenticFinancingStorage.Agreement memory initial = financing.getAgreement(agreementId);
+        assertEq(initial.principalEncumbered, 200);
+
+        vm.prank(provider);
+        financing.applyUsage(agreementId, 50, 2, keccak256("USAGE_INCREASE"));
+
+        LibAgenticFinancingStorage.Agreement memory afterUsage = financing.getAgreement(agreementId);
+        assertEq(afterUsage.principalEncumbered, 250);
+        assertEq(afterUsage.unitsEncumbered, 3);
+
+        vm.prank(borrower);
+        financing.repay(agreementId, 40);
+
+        LibAgenticFinancingStorage.Agreement memory afterRepay = financing.getAgreement(agreementId);
+        assertEq(afterRepay.principalEncumbered, 210);
+        assertEq(afterRepay.unitsEncumbered, 3);
+        assertEq(uint8(afterRepay.status), uint8(LibAgenticFinancingStorage.AgreementStatus.Active));
+    }
+
     function test_mailbox_publishAndRead_roundtrip() public {
         mailbox.seedAgreement(1, borrower, provider);
 
