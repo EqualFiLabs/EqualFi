@@ -34,6 +34,8 @@ library MamTypes {
         uint16 feeRateBps;
         FeeAsset feeAsset;
         uint96 salt;
+        uint16 profileId;
+        bytes32 profileParams;
     }
 
     /// @notice Minimal onchain representation for a committed curve.
@@ -51,6 +53,10 @@ library MamTypes {
         uint128 endPrice;
         uint64 startTime;
         uint64 duration;
+        bool updateProfile;
+        uint16 profileId;
+        bool updateProfileParams;
+        bytes32 profileParams;
     }
 
     /// @notice View struct returned by loadCurveForFill (curveId-only flow).
@@ -68,5 +74,7 @@ library MamTypes {
         uint64 duration;
         uint16 feeRateBps;
         uint128 remainingVolume;
+        uint16 profileId;
+        bytes32 profileParams;
     }
 }

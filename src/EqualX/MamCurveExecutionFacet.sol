@@ -7,6 +7,8 @@ import {LibDerivativeStorage} from "../libraries/LibDerivativeStorage.sol";
 import {LibMamMath} from "../libraries/LibMamMath.sol";
 import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
 import {LibDerivativeHelpers} from "../libraries/LibDerivativeHelpers.sol";
+import {LibMamCurveSnapshot} from "../libraries/LibMamCurveSnapshot.sol";
+import {LibMamProfile} from "../libraries/LibMamProfile.sol";
 import {LibPoints} from "../libraries/LibPoints.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
@@ -41,6 +43,7 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.CurveData storage data = ds.curveData[curveId];
         LibDerivativeStorage.CurveImmutables storage imm = ds.curveImmutables[curveId];
         LibDerivativeStorage.CurvePricing storage pricing = ds.curvePricing[curveId];
+        LibDerivativeStorage.CurveProfileData storage prof = ds.curveProfileData[curveId];
 
         viewData = MamTypes.CurveFillView({
             makerPositionKey: data.makerPositionKey,
@@ -55,7 +58,9 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
             startTime: pricing.startTime,
             duration: pricing.duration,
             feeRateBps: imm.feeRateBps,
-            remainingVolume: curve.remainingVolume
+            remainingVolume: curve.remainingVolume,
+            profileId: prof.profileId,
+            profileParams: prof.profileParams
         });
     }
 
@@ -75,6 +80,52 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         uint64 deadline,
         address recipient
     ) external payable nonReentrant returns (uint256 amountOut) {
+        LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
+        MamTypes.StoredCurve storage curve = ds.curves[curveId];
+        amountOut = _executeCurveSwap(
+            curveId,
+            amountIn,
+            maxQuote,
+            minOut,
+            deadline,
+            recipient,
+            curve.generation,
+            curve.commitment
+        );
+    }
+
+    function executeCurveSwap(
+        uint256 curveId,
+        uint256 amountIn,
+        uint256 maxQuote,
+        uint256 minOut,
+        uint64 deadline,
+        address recipient,
+        uint32 expectedGeneration,
+        bytes32 expectedCommitment
+    ) external payable nonReentrant returns (uint256 amountOut) {
+        amountOut = _executeCurveSwap(
+            curveId,
+            amountIn,
+            maxQuote,
+            minOut,
+            deadline,
+            recipient,
+            expectedGeneration,
+            expectedCommitment
+        );
+    }
+
+    function _executeCurveSwap(
+        uint256 curveId,
+        uint256 amountIn,
+        uint256 maxQuote,
+        uint256 minOut,
+        uint64 deadline,
+        address recipient,
+        uint32 expectedGeneration,
+        bytes32 expectedCommitment
+    ) internal returns (uint256 amountOut) {
         if (amountIn == 0) revert MamCurve_InvalidAmount(amountIn);
         if (recipient == address(0)) revert MamCurve_InvalidDescriptor();
         if (block.timestamp > deadline) revert MamCurve_Expired(curveId);
@@ -82,23 +133,22 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         LibDerivativeStorage.DerivativeStorage storage ds = LibDerivativeStorage.derivativeStorage();
         MamTypes.StoredCurve storage curve = ds.curves[curveId];
         if (!curve.active) revert MamCurve_NotActive(curveId);
+        if (curve.generation != expectedGeneration) revert MamCurve_GenerationMismatch(expectedGeneration, curve.generation);
+        if (curve.commitment != expectedCommitment) {
+            revert MamCurve_CommitmentMismatch(expectedCommitment, curve.commitment);
+        }
 
         LibDerivativeStorage.CurveData storage data = ds.curveData[curveId];
         LibDerivativeStorage.CurveImmutables storage imm = ds.curveImmutables[curveId];
         LibDerivativeStorage.CurvePricing storage pricing = ds.curvePricing[curveId];
+        LibDerivativeStorage.CurveProfileData storage prof = ds.curveProfileData[curveId];
 
         uint256 endTime = uint256(pricing.startTime) + uint256(pricing.duration);
         if (block.timestamp < pricing.startTime || block.timestamp > endTime) {
             revert MamCurve_Expired(curveId);
         }
 
-        uint256 price = LibMamMath.computePrice(
-            pricing.startPrice,
-            pricing.endPrice,
-            pricing.startTime,
-            pricing.duration,
-            block.timestamp
-        );
+        uint256 price = _computePrice(ds, pricing, prof.profileId, prof.profileParams);
         uint256 baseFill = LibMamMath.amountOutForFill(amountIn, price);
         if (baseFill == 0) revert MamCurve_InvalidAmount(baseFill);
         if (baseFill > curve.remainingVolume) {
@@ -167,7 +217,21 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         LibCurrency.transferWithMin(baseToken, recipient, baseFill, minOut);
         LibPoints.accrueToDefaultPosition(msg.sender, LibPoints.ACTION_SWAP_MAM_CURVE);
 
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_FILLED);
         emit CurveFilled(curveId, msg.sender, recipient, amountIn, totalQuote, amountOut, feeAmount, remaining);
+    }
+
+    function _computePrice(
+        LibDerivativeStorage.DerivativeStorage storage ds,
+        LibDerivativeStorage.CurvePricing storage pricing,
+        uint16 profileId,
+        bytes32 profileParams
+    )
+        internal
+        view
+        returns (uint256 price)
+    {
+        price = LibMamProfile.computePrice(ds, pricing, profileId, profileParams);
     }
 
     function _consumeCurve(uint256 curveId, uint128 baseFill) internal returns (uint128 remainingAfter) {
@@ -193,4 +257,5 @@ contract MamCurveExecutionFacet is ReentrancyGuardModifiers {
         }
         return remaining;
     }
+
 }

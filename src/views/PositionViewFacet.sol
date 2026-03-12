@@ -269,15 +269,16 @@ contract PositionViewFacet {
 
     /// @notice Helper to expose selectors for deployment tooling
     function selectors() external pure returns (bytes4[] memory selectorsArr) {
-        selectorsArr = new bytes4[](8);
+        selectorsArr = new bytes4[](9);
         selectorsArr[0] = bytes4(keccak256("getPositionState(uint256,uint256)"));
         selectorsArr[1] = bytes4(keccak256("getPositionSolvency(uint256,uint256)"));
         selectorsArr[2] = bytes4(keccak256("getPositionLoanSummary(uint256,uint256)"));
         selectorsArr[3] = bytes4(keccak256("getPositionLoanIds(uint256,uint256,uint256,uint256)"));
         selectorsArr[4] = bytes4(keccak256("isPositionDelinquent(uint256,uint256)"));
         selectorsArr[5] = bytes4(keccak256("getPositionMetadata(uint256,uint256)"));
-        selectorsArr[6] = bytes4(keccak256("getLoansDetails(uint256,uint256[])"));
-        selectorsArr[7] = bytes4(keccak256("getPositionEncumbrance(uint256,uint256)"));
+        selectorsArr[6] = bytes4(keccak256("getPositionStates(uint256,uint256[])"));
+        selectorsArr[7] = bytes4(keccak256("getLoansDetails(uint256,uint256[])"));
+        selectorsArr[8] = bytes4(keccak256("getPositionEncumbrance(uint256,uint256)"));
     }
 
     function _computeDelinquencyFlags(

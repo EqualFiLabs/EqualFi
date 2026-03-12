@@ -11,13 +11,13 @@ contract MockAgentURIDiamond {
         agentURIs[agentId] = uri;
     }
 
-    function getAgentURI(uint256 agentId) external view returns (string memory) {
+    function getPositionTokenURI(uint256 agentId) external view returns (string memory) {
         return agentURIs[agentId];
     }
 }
 
 contract RevertingDiamond {
-    function getAgentURI(uint256) external pure returns (string memory) {
+    function getPositionTokenURI(uint256) external pure returns (string memory) {
         revert("diamond call failed");
     }
 }
@@ -40,17 +40,17 @@ contract PositionNFTMetadataUnit is Test {
         positionNFT.setDiamond(address(mockDiamond));
     }
 
-    /// @notice tokenURI returns the agentURI from the diamond
+    /// @notice tokenURI returns the position metadata URI from the diamond
     function test_TokenURIReturnsAgentURI() public {
         uint256 tokenId = positionNFT.mint(user1, POOL_ID);
         string memory expected = "ipfs://agent-registry/1.json";
         mockDiamond.setAgentURI(tokenId, expected);
 
         string memory uri = positionNFT.tokenURI(tokenId);
-        assertEq(uri, expected, "Token URI should match agentURI");
+        assertEq(uri, expected, "Token URI should match forwarded metadata URI");
     }
 
-    /// @notice tokenURI reflects per-token agentURI updates
+    /// @notice tokenURI reflects per-token metadata URI updates
     function test_TokenURIsAreUniqueForDifferentTokens() public {
         uint256 tokenId1 = positionNFT.mint(user1, POOL_ID);
         uint256 tokenId2 = positionNFT.mint(user1, POOL_ID);
@@ -61,7 +61,7 @@ contract PositionNFTMetadataUnit is Test {
         assertFalse(
             keccak256(bytes(positionNFT.tokenURI(tokenId1))) ==
                 keccak256(bytes(positionNFT.tokenURI(tokenId2))),
-            "Different tokens should have different agentURIs"
+            "Different tokens should have different forwarded metadata URIs"
         );
     }
 

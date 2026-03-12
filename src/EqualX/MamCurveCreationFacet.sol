@@ -9,6 +9,8 @@ import {LibFeeIndex} from "../libraries/LibFeeIndex.sol";
 import {LibActiveCreditIndex} from "../libraries/LibActiveCreditIndex.sol";
 import {LibDirectHelpers} from "../libraries/LibDirectHelpers.sol";
 import {LibMamCurveHasher} from "../libraries/LibMamCurveHasher.sol";
+import {LibMamCurveSnapshot} from "../libraries/LibMamCurveSnapshot.sol";
+import {LibMamProfile} from "../libraries/LibMamProfile.sol";
 import {MamTypes} from "../libraries/MamTypes.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
 import {PoolMembershipRequired} from "../libraries/Errors.sol";
@@ -33,16 +35,45 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
         uint128 endPrice,
         uint64 startTime,
         uint64 duration,
-        uint16 feeRateBps
+        uint16 feeRateBps,
+        uint16 profileId,
+        bytes32 profileParams
     );
 
     event CurvesBatchCreated(bytes32 indexed makerPositionKey, uint256 indexed firstCurveId, uint256 count);
     event MamPausedUpdated(bool paused);
+    event CurveProfileSet(uint16 indexed profileId, address impl, uint32 flags, bool approved);
 
     function setMamPaused(bool paused) external {
         LibAccess.enforceOwnerOrTimelock();
         LibDerivativeStorage.derivativeStorage().mamPaused = paused;
         emit MamPausedUpdated(paused);
+    }
+
+    function setCurveProfile(uint16 profileId, address impl, uint32 flags, bool approved) external {
+        LibAccess.enforceOwnerOrTimelock();
+        if (profileId == 0) revert MamCurve_InvalidProfileId(profileId);
+        if (profileId != LibMamProfile.BUILTIN_LINEAR_PROFILE_ID && impl == address(0)) {
+            revert MamCurve_InvalidProfileId(profileId);
+        }
+
+        LibDerivativeStorage.derivativeStorage().curveProfiles[profileId] = LibDerivativeStorage.CurveProfileRegistryEntry({
+            impl: impl,
+            flags: flags,
+            approved: approved
+        });
+        emit CurveProfileSet(profileId, impl, flags, approved);
+    }
+
+    function getCurveProfile(uint16 profileId) external view returns (address impl, uint32 flags, bool approved) {
+        LibDerivativeStorage.CurveProfileRegistryEntry storage entry =
+            LibDerivativeStorage.derivativeStorage().curveProfiles[profileId];
+        return (entry.impl, entry.flags, entry.approved);
+    }
+
+    function isCurveProfileApproved(uint16 profileId) external view returns (bool) {
+        if (profileId == LibMamProfile.BUILTIN_LINEAR_PROFILE_ID) return true;
+        return LibDerivativeStorage.derivativeStorage().curveProfiles[profileId].approved;
     }
 
     function createCurve(MamTypes.CurveDescriptor calldata desc)
@@ -90,6 +121,10 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             startTime: desc.startTime,
             duration: desc.duration
         });
+        ds.curveProfileData[curveId] = LibDerivativeStorage.CurveProfileData({
+            profileId: desc.profileId,
+            profileParams: desc.profileParams
+        });
         ds.curveImmutableHash[curveId] = _immutableHash(desc);
         ds.curveBaseIsA[curveId] = baseIsA;
 
@@ -111,8 +146,12 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             desc.endPrice,
             desc.startTime,
             desc.duration,
-            desc.feeRateBps
+            desc.feeRateBps,
+            desc.profileId,
+            desc.profileParams
         );
+
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_CREATED);
     }
 
     function createCurvesBatch(MamTypes.CurveDescriptor[] calldata descs)
@@ -183,6 +222,10 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             startTime: desc.startTime,
             duration: desc.duration
         });
+        ds.curveProfileData[curveId] = LibDerivativeStorage.CurveProfileData({
+            profileId: desc.profileId,
+            profileParams: desc.profileParams
+        });
         ds.curveImmutableHash[curveId] = _immutableHash(desc);
         ds.curveBaseIsA[curveId] = baseIsA;
 
@@ -204,14 +247,19 @@ contract MamCurveCreationFacet is ReentrancyGuardModifiers {
             desc.endPrice,
             desc.startTime,
             desc.duration,
-            desc.feeRateBps
+            desc.feeRateBps,
+            desc.profileId,
+            desc.profileParams
         );
+
+        LibMamCurveSnapshot.emitSnapshotForCurve(curveId, LibMamCurveSnapshot.STATUS_CREATED);
     }
 
     function _validateDescriptor(MamTypes.CurveDescriptor calldata desc, bytes32 positionKey)
         internal
         returns (bool baseIsA, uint256 endTime)
     {
+        LibMamProfile.enforceProfileApprovedForMutation(LibDerivativeStorage.derivativeStorage(), desc.profileId);
         if (desc.maxVolume == 0) revert MamCurve_InvalidAmount(desc.maxVolume);
         if (desc.startPrice == 0 || desc.endPrice == 0) revert MamCurve_InvalidDescriptor();
         if (desc.duration == 0) revert MamCurve_InvalidTime(desc.startTime, desc.duration);

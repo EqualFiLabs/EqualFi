@@ -12,3 +12,7 @@ error MamCurve_InsufficientVolume(uint256 requested, uint256 available);
 error MamCurve_Slippage(uint256 minOut, uint256 actualOut);
 error MamCurve_NotMaker(address caller, uint256 positionId);
 error MamCurve_Paused();
+error MamCurve_GenerationMismatch(uint32 expected, uint32 actual);
+error MamCurve_CommitmentMismatch(bytes32 expected, bytes32 actual);
+error MamCurve_ProfileNotApproved(uint16 profileId);
+error MamCurve_InvalidProfileId(uint16 profileId);

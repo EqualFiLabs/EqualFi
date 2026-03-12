@@ -4,11 +4,12 @@ pragma solidity ^0.8.20;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {EqualIndexBaseV3} from "./EqualIndexBaseV3.sol";
 import {IndexToken} from "./IndexToken.sol";
+import {LibActiveCreditIndex} from "../libraries/LibActiveCreditIndex.sol";
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibCurrency} from "../libraries/LibCurrency.sol";
 import {LibFeeIndex} from "../libraries/LibFeeIndex.sol";
-import {LibFeeRouter} from "../libraries/LibFeeRouter.sol";
 import {LibModuleEncumbrance} from "../libraries/LibModuleEncumbrance.sol";
+import {LibModuleRegistry} from "../libraries/LibModuleRegistry.sol";
 import {LibPoolMembership} from "../libraries/LibPoolMembership.sol";
 import {LibPositionHelpers} from "../libraries/LibPositionHelpers.sol";
 import {ReentrancyGuardModifiers} from "../libraries/LibReentrancyGuard.sol";
@@ -19,8 +20,8 @@ import {Types} from "../libraries/Types.sol";
 import "../libraries/Errors.sol";
 
 /// @notice Position-based borrowing against index-token pool principal.
+/// @dev Borrowing is basket-based: collateral index units mint a proportional debt basket.
 contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
-    bytes32 internal constant INDEX_LENDING_FEE_SOURCE = keccak256("INDEX_LENDING_FEE");
     uint256 internal constant LENDING_MODULE_ID = uint256(keccak256("equal.index.lending.module"));
 
     function configureLending(
@@ -30,7 +31,7 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         uint40 minDuration,
         uint40 maxDuration
     ) external onlyTimelock indexExists(indexId) {
-        if (ltvBps > 10_000) revert InvalidParameterRange("ltvBps");
+        if (ltvBps != 10_000) revert InvalidParameterRange("ltvBps");
         if (originationFeeBps > 10_000) revert InvalidParameterRange("originationFeeBps");
         if (minDuration > maxDuration) revert InvalidParameterRange("duration");
 
@@ -44,17 +45,47 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         emit LibEqualIndexLending.LendingConfigured(indexId, ltvBps, originationFeeBps, minDuration, maxDuration);
     }
 
-    function borrowFromPosition(
-        uint256 positionId,
+    function configureBorrowFeeTiers(
         uint256 indexId,
-        address asset,
-        uint256 collateralUnits,
-        uint256 amount,
-        uint40 duration
-    ) external nonReentrant indexExists(indexId) returns (uint256 loanId) {
-        LibCurrency.assertZeroMsgValue();
+        uint256[] calldata minCollateralUnits,
+        uint256[] calldata flatFeeNative
+    ) external onlyTimelock indexExists(indexId) {
+        uint256 len = minCollateralUnits.length;
+        if (len == 0 || len != flatFeeNative.length) revert InvalidArrayLength();
+
+        uint256 prevMin;
+        for (uint256 i = 0; i < len; i++) {
+            uint256 minUnits = minCollateralUnits[i];
+            if (minUnits == 0 || minUnits % LibEqualIndex.INDEX_SCALE != 0) {
+                revert InvalidParameterRange("tierCollateralUnitsWhole");
+            }
+            if (i > 0 && minUnits <= prevMin) revert InvalidParameterRange("tierOrder");
+            prevMin = minUnits;
+        }
+
+        LibEqualIndexLending.LendingStorage storage ls = LibEqualIndexLending.s();
+        delete ls.borrowFeeTiers[indexId];
+        for (uint256 i = 0; i < len; i++) {
+            ls.borrowFeeTiers[indexId].push(
+                LibEqualIndexLending.BorrowFeeTier({
+                    minCollateralUnits: minCollateralUnits[i],
+                    flatFeeNative: flatFeeNative[i]
+                })
+            );
+        }
+
+        emit LibEqualIndexLending.BorrowFeeTiersConfigured(indexId, minCollateralUnits, flatFeeNative);
+    }
+
+    function borrowFromPosition(uint256 positionId, uint256 indexId, uint256 collateralUnits, uint40 duration)
+        external
+        payable
+        nonReentrant
+        indexExists(indexId)
+        returns (uint256 loanId)
+    {
         if (collateralUnits == 0) revert InvalidParameterRange("collateralUnits");
-        if (amount == 0) revert InvalidParameterRange("amount");
+        if (collateralUnits % LibEqualIndex.INDEX_SCALE != 0) revert InvalidParameterRange("collateralUnitsWhole");
 
         LibPositionHelpers.requireOwnership(positionId);
         bytes32 positionKey = LibPositionHelpers.positionKey(positionId);
@@ -63,11 +94,11 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         if (duration < cfg.minDuration || duration > cfg.maxDuration) {
             revert LibEqualIndexLending.InvalidDuration(duration, cfg.minDuration, cfg.maxDuration);
         }
+        uint256 flatFeeNative = _borrowFlatFee(indexId, collateralUnits);
+        _collectFlatNativeFee(flatFeeNative);
 
         Index storage idx = s().indexes[indexId];
         _requireIndexActive(idx, indexId);
-        (bool found, uint256 bundleAmount) = _bundleAmountForAsset(idx, asset);
-        if (!found) revert LibEqualIndexLending.InvalidAsset(asset);
 
         uint256 indexPoolId = s().indexToPoolId[indexId];
         if (indexPoolId == 0) revert PoolNotInitialized(indexPoolId);
@@ -80,66 +111,62 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             revert InsufficientUnencumberedPrincipal(collateralUnits, availableCollateral);
         }
 
-        uint256 collateralValue = Math.mulDiv(collateralUnits, bundleAmount, LibEqualIndex.INDEX_SCALE);
-        uint256 maxByLtv = Math.mulDiv(collateralValue, cfg.ltvBps, 10_000);
-        if (amount > maxByLtv) {
-            revert LibEqualIndexLending.LtvExceeded(amount, maxByLtv);
-        }
-
-        uint256 vaultBalance = s().vaultBalances[indexId][asset];
-        if (vaultBalance < amount) revert InsufficientPoolLiquidity(amount, vaultBalance);
-
-        uint256 lockedAfter = LibEqualIndexLending.s().lockedCollateralUnits[indexId] + collateralUnits;
-        if (idx.totalUnits < lockedAfter) {
-            revert LibEqualIndexLending.RedeemabilityViolation(asset, lockedAfter, idx.totalUnits);
-        }
-
-        uint256 redeemableUnits = idx.totalUnits - lockedAfter;
-        uint256 requiredVaultAfter = Math.mulDiv(redeemableUnits, bundleAmount, LibEqualIndex.INDEX_SCALE);
-        uint256 vaultAfter = vaultBalance - amount;
-        if (vaultAfter < requiredVaultAfter) {
-            revert LibEqualIndexLending.RedeemabilityViolation(asset, requiredVaultAfter, vaultAfter);
-        }
-
-        uint256 fee = Math.mulDiv(amount, cfg.originationFeeBps, 10_000);
-        uint256 netAmount = amount - fee;
-        uint256 assetPoolId = app.assetToPoolId[asset];
-        if (assetPoolId == 0) revert NoPoolForAsset(asset);
-
         LibEqualIndexLending.LendingStorage storage ls = LibEqualIndexLending.s();
+        uint256 lockedAfter = ls.lockedCollateralUnits[indexId] + collateralUnits;
+        if (idx.totalUnits < lockedAfter) {
+            revert LibEqualIndexLending.RedeemabilityViolation(address(0), lockedAfter, idx.totalUnits);
+        }
+        uint256 redeemableUnits = idx.totalUnits - lockedAfter;
+
+        (address[] memory assets, uint256[] memory principals) = _loanPrincipals(idx, collateralUnits, cfg.ltvBps);
+        uint256 len = assets.length;
+        for (uint256 i = 0; i < len; i++) {
+            address asset = assets[i];
+            uint256 principal = principals[i];
+            uint256 vaultBalance = s().vaultBalances[indexId][asset];
+            if (vaultBalance < principal) revert InsufficientPoolLiquidity(principal, vaultBalance);
+
+            uint256 requiredVaultAfter = Math.mulDiv(redeemableUnits, idx.bundleAmounts[i], LibEqualIndex.INDEX_SCALE);
+            uint256 vaultAfter = vaultBalance - principal;
+            if (vaultAfter < requiredVaultAfter) {
+                revert LibEqualIndexLending.RedeemabilityViolation(asset, requiredVaultAfter, vaultAfter);
+            }
+        }
+
         loanId = ls.nextLoanId;
         ls.nextLoanId = loanId + 1;
-
-        ls.outstandingPrincipal[indexId][asset] += amount;
         ls.lockedCollateralUnits[indexId] = lockedAfter;
-        s().vaultBalances[indexId][asset] = vaultAfter;
         ls.loans[loanId] = LibEqualIndexLending.IndexLoan({
             positionKey: positionKey,
             indexId: indexId,
-            borrowAsset: asset,
             collateralUnits: collateralUnits,
-            principal: amount,
+            ltvBps: cfg.ltvBps,
             maturity: uint40(block.timestamp + duration)
         });
+        _encumberWithAci(indexPool, positionKey, indexPoolId, collateralUnits);
 
-        LibModuleEncumbrance.encumber(positionKey, indexPoolId, LENDING_MODULE_ID, collateralUnits);
+        for (uint256 i = 0; i < len; i++) {
+            address asset = assets[i];
+            uint256 principal = principals[i];
+            uint256 assetPoolId = app.assetToPoolId[asset];
+            if (assetPoolId == 0) revert NoPoolForAsset(asset);
 
-        if (fee > 0) {
-            Types.PoolData storage borrowPool = app.pools[assetPoolId];
-            borrowPool.trackedBalance += fee;
-            LibFeeRouter.routeManagedShare(assetPoolId, fee, INDEX_LENDING_FEE_SOURCE, true, 0);
-        }
+            ls.outstandingPrincipal[indexId][asset] += principal;
+            s().vaultBalances[indexId][asset] -= principal;
 
-        if (netAmount > 0) {
-            if (LibCurrency.isNative(asset)) {
-                app.nativeTrackedTotal -= netAmount;
+            if (principal > 0) {
+                if (LibCurrency.isNative(asset)) {
+                    app.nativeTrackedTotal -= principal;
+                }
+                LibCurrency.transfer(asset, msg.sender, principal);
             }
-            LibCurrency.transfer(asset, msg.sender, netAmount);
+            emit LibEqualIndexLending.LoanAssetDelta(loanId, asset, principal, 0, true);
         }
 
         emit LibEqualIndexLending.LoanCreated(
-            loanId, positionKey, indexId, asset, collateralUnits, amount, uint40(block.timestamp + duration), fee
+            loanId, positionKey, indexId, collateralUnits, cfg.ltvBps, uint40(block.timestamp + duration)
         );
+        emit LibEqualIndexLending.BorrowFlatFeePaid(loanId, indexId, collateralUnits, flatFeeNative);
     }
 
     function repayFromPosition(uint256 positionId, uint256 loanId) external payable nonReentrant {
@@ -150,23 +177,36 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             revert LibEqualIndexLending.PositionMismatch(loan.positionKey, positionKey);
         }
 
-        LibCurrency.assertMsgValue(loan.borrowAsset, loan.principal);
-        LibCurrency.pullAtLeast(loan.borrowAsset, msg.sender, loan.principal, loan.principal);
+        Index storage idx = s().indexes[loan.indexId];
+        (address[] memory assets, uint256[] memory principals) = _loanPrincipals(idx, loan.collateralUnits, loan.ltvBps);
+        uint256 nativeDue = _sumForNative(assets, principals);
+
+        LibCurrency.assertMsgValue(address(0), nativeDue);
+        if (nativeDue > 0) {
+            LibCurrency.pullAtLeast(address(0), msg.sender, nativeDue, nativeDue);
+        }
 
         LibEqualIndexLending.LendingStorage storage ls = LibEqualIndexLending.s();
-        s().vaultBalances[loan.indexId][loan.borrowAsset] += loan.principal;
-        ls.outstandingPrincipal[loan.indexId][loan.borrowAsset] -= loan.principal;
+        uint256 len = assets.length;
+        for (uint256 i = 0; i < len; i++) {
+            address asset = assets[i];
+            uint256 principal = principals[i];
+            if (!LibCurrency.isNative(asset)) {
+                LibCurrency.pullAtLeast(asset, msg.sender, principal, principal);
+            }
+            s().vaultBalances[loan.indexId][asset] += principal;
+            ls.outstandingPrincipal[loan.indexId][asset] -= principal;
+            emit LibEqualIndexLending.LoanAssetDelta(loanId, asset, principal, 0, false);
+        }
+
         ls.lockedCollateralUnits[loan.indexId] -= loan.collateralUnits;
 
         uint256 indexPoolId = s().indexToPoolId[loan.indexId];
-        LibModuleEncumbrance.unencumber(positionKey, indexPoolId, LENDING_MODULE_ID, loan.collateralUnits);
+        _unencumberWithAci(LibAppStorage.s().pools[indexPoolId], positionKey, indexPoolId, loan.collateralUnits);
 
-        uint256 repaidPrincipal = loan.principal;
         uint256 repaidIndexId = loan.indexId;
-        address repaidAsset = loan.borrowAsset;
         delete ls.loans[loanId];
-
-        emit LibEqualIndexLending.LoanRepaid(loanId, repaidIndexId, repaidAsset, repaidPrincipal);
+        emit LibEqualIndexLending.LoanRepaid(loanId, repaidIndexId);
     }
 
     function extendFromPosition(uint256 positionId, uint256 loanId, uint40 addedDuration) external payable nonReentrant {
@@ -187,22 +227,18 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             revert LibEqualIndexLending.MaxDurationExceeded(uint40(newMaturity), uint40(maxAllowed));
         }
 
-        uint256 fee = Math.mulDiv(loan.principal, cfg.originationFeeBps, 10_000);
-        if (fee > 0) {
-            LibCurrency.assertMsgValue(loan.borrowAsset, fee);
-            LibCurrency.pullAtLeast(loan.borrowAsset, msg.sender, fee, fee);
-
-            uint256 poolId = LibAppStorage.s().assetToPoolId[loan.borrowAsset];
-            if (poolId == 0) revert NoPoolForAsset(loan.borrowAsset);
-            Types.PoolData storage pool = LibAppStorage.s().pools[poolId];
-            pool.trackedBalance += fee;
-            LibFeeRouter.routeManagedShare(poolId, fee, INDEX_LENDING_FEE_SOURCE, true, 0);
-        } else {
-            LibCurrency.assertMsgValue(loan.borrowAsset, 0);
-        }
+        uint256 flatFeeNative = _borrowFlatFee(loan.indexId, loan.collateralUnits);
+        _collectFlatNativeFee(flatFeeNative);
 
         loan.maturity = uint40(newMaturity);
-        emit LibEqualIndexLending.LoanExtended(loanId, loan.maturity, fee);
+        emit LibEqualIndexLending.LoanExtended(loanId, loan.maturity, flatFeeNative);
+        emit LibEqualIndexLending.LoanExtendFlatFeePaid(
+            loanId,
+            loan.indexId,
+            loan.collateralUnits,
+            addedDuration,
+            flatFeeNative
+        );
     }
 
     function recoverExpired(uint256 loanId) external nonReentrant {
@@ -213,11 +249,20 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
             revert LibEqualIndexLending.LoanNotExpired(loanId, loan.maturity);
         }
 
+        Index storage idx = s().indexes[loan.indexId];
+        (address[] memory assets, uint256[] memory principals) = _loanPrincipals(idx, loan.collateralUnits, loan.ltvBps);
+        uint256 len = assets.length;
+
         LibEqualIndexLending.LendingStorage storage ls = LibEqualIndexLending.s();
-        ls.outstandingPrincipal[loan.indexId][loan.borrowAsset] -= loan.principal;
+        uint256 writtenOffPrincipalTotal;
+        for (uint256 i = 0; i < len; i++) {
+            uint256 principal = principals[i];
+            ls.outstandingPrincipal[loan.indexId][assets[i]] -= principal;
+            writtenOffPrincipalTotal += principal;
+            emit LibEqualIndexLending.LoanAssetDelta(loanId, assets[i], principal, 0, false);
+        }
         ls.lockedCollateralUnits[loan.indexId] -= loan.collateralUnits;
 
-        Index storage idx = s().indexes[loan.indexId];
         idx.totalUnits -= loan.collateralUnits;
         IndexToken(idx.token).burnIndexUnits(address(this), loan.collateralUnits);
 
@@ -243,16 +288,14 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         indexPool.userFeeIndex[loan.positionKey] = indexPool.feeIndex;
         indexPool.userMaintenanceIndex[loan.positionKey] = indexPool.maintenanceIndex;
 
-        LibModuleEncumbrance.unencumber(loan.positionKey, indexPoolId, LENDING_MODULE_ID, loan.collateralUnits);
+        _unencumberWithAci(indexPool, loan.positionKey, indexPoolId, loan.collateralUnits);
 
         uint256 recoveredIndexId = loan.indexId;
-        address recoveredAsset = loan.borrowAsset;
         uint256 recoveredCollateral = loan.collateralUnits;
-        uint256 recoveredPrincipal = loan.principal;
         delete ls.loans[loanId];
 
         emit LibEqualIndexLending.LoanRecovered(
-            loanId, recoveredIndexId, recoveredAsset, recoveredCollateral, recoveredPrincipal
+            loanId, recoveredIndexId, recoveredCollateral, writtenOffPrincipalTotal
         );
     }
 
@@ -288,6 +331,7 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         returns (uint256)
     {
         if (collateralUnits == 0) return 0;
+        if (collateralUnits % LibEqualIndex.INDEX_SCALE != 0) revert InvalidParameterRange("collateralUnitsWhole");
         Index storage idx = s().indexes[indexId];
         (bool found, uint256 bundleAmount) = _bundleAmountForAsset(idx, asset);
         if (!found) revert LibEqualIndexLending.InvalidAsset(asset);
@@ -295,6 +339,45 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
         LibEqualIndexLending.LendingConfig memory cfg = _configuredLending(indexId);
         uint256 collateralValue = Math.mulDiv(collateralUnits, bundleAmount, LibEqualIndex.INDEX_SCALE);
         return Math.mulDiv(collateralValue, cfg.ltvBps, 10_000);
+    }
+
+    function quoteBorrowBasket(uint256 indexId, uint256 collateralUnits)
+        external
+        view
+        indexExists(indexId)
+        returns (address[] memory assets, uint256[] memory principals)
+    {
+        if (collateralUnits == 0) return (new address[](0), new uint256[](0));
+        if (collateralUnits % LibEqualIndex.INDEX_SCALE != 0) revert InvalidParameterRange("collateralUnitsWhole");
+        LibEqualIndexLending.LendingConfig memory cfg = _configuredLending(indexId);
+        return _loanPrincipals(s().indexes[indexId], collateralUnits, cfg.ltvBps);
+    }
+
+    function quoteBorrowFee(uint256 indexId, uint256 collateralUnits)
+        external
+        view
+        indexExists(indexId)
+        returns (uint256)
+    {
+        if (collateralUnits == 0) return 0;
+        if (collateralUnits % LibEqualIndex.INDEX_SCALE != 0) revert InvalidParameterRange("collateralUnitsWhole");
+        return _borrowFlatFee(indexId, collateralUnits);
+    }
+
+    function getBorrowFeeTiers(uint256 indexId)
+        external
+        view
+        indexExists(indexId)
+        returns (uint256[] memory minCollateralUnits, uint256[] memory flatFeeNative)
+    {
+        LibEqualIndexLending.BorrowFeeTier[] storage tiers = LibEqualIndexLending.s().borrowFeeTiers[indexId];
+        uint256 len = tiers.length;
+        minCollateralUnits = new uint256[](len);
+        flatFeeNative = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            minCollateralUnits[i] = tiers[i].minCollateralUnits;
+            flatFeeNative[i] = tiers[i].flatFeeNative;
+        }
     }
 
     function lendingModuleId() external pure returns (uint256) {
@@ -322,6 +405,75 @@ contract EqualIndexLendingFacet is EqualIndexBaseV3, ReentrancyGuardModifiers {
 
     function _requireLoan(uint256 loanId) private view returns (LibEqualIndexLending.IndexLoan storage loan) {
         loan = LibEqualIndexLending.s().loans[loanId];
-        if (loan.principal == 0) revert LibEqualIndexLending.LoanNotFound(loanId);
+        if (loan.collateralUnits == 0) revert LibEqualIndexLending.LoanNotFound(loanId);
+    }
+
+    function _loanPrincipals(Index storage idx, uint256 collateralUnits, uint16 ltvBps)
+        private
+        view
+        returns (address[] memory assets, uint256[] memory principals)
+    {
+        assets = idx.assets;
+        uint256 len = assets.length;
+        principals = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 collateralValue = Math.mulDiv(collateralUnits, idx.bundleAmounts[i], LibEqualIndex.INDEX_SCALE);
+            principals[i] = Math.mulDiv(collateralValue, ltvBps, 10_000);
+        }
+    }
+
+    function _borrowFlatFee(uint256 indexId, uint256 collateralUnits) private view returns (uint256 feeNative) {
+        LibEqualIndexLending.BorrowFeeTier[] storage tiers = LibEqualIndexLending.s().borrowFeeTiers[indexId];
+        uint256 len = tiers.length;
+        if (len == 0) return 0;
+        if (collateralUnits < tiers[0].minCollateralUnits) {
+            revert InvalidParameterRange("collateralUnitsBelowFeeTier");
+        }
+        for (uint256 i = len; i > 0; i--) {
+            LibEqualIndexLending.BorrowFeeTier storage tier = tiers[i - 1];
+            if (collateralUnits >= tier.minCollateralUnits) {
+                return tier.flatFeeNative;
+            }
+        }
+        return 0;
+    }
+
+    function _collectFlatNativeFee(uint256 feeNative) private {
+        if (feeNative == 0) {
+            LibCurrency.assertZeroMsgValue();
+            return;
+        }
+        if (msg.value != feeNative) {
+            revert LibEqualIndexLending.FlatFeePaymentMismatch(feeNative, msg.value);
+        }
+        address treasury = LibAppStorage.treasuryAddress(LibAppStorage.s());
+        if (treasury == address(0)) revert LibEqualIndexLending.FlatFeeTreasuryNotSet();
+        LibCurrency.transfer(address(0), treasury, feeNative);
+    }
+
+    function _sumForNative(address[] memory assets, uint256[] memory amounts) private pure returns (uint256 sum) {
+        uint256 len = assets.length;
+        for (uint256 i = 0; i < len; i++) {
+            if (LibCurrency.isNative(assets[i])) {
+                sum += amounts[i];
+            }
+        }
+    }
+
+    function _encumberWithAci(Types.PoolData storage pool, bytes32 positionKey, uint256 poolId, uint256 amount)
+        private
+    {
+        LibModuleEncumbrance.encumber(positionKey, poolId, LENDING_MODULE_ID, amount);
+        if (amount == 0 || LibModuleRegistry.s().moduleAciPaused) {
+            return;
+        }
+        LibActiveCreditIndex.applyEncumbranceIncrease(pool, poolId, positionKey, amount);
+    }
+
+    function _unencumberWithAci(Types.PoolData storage pool, bytes32 positionKey, uint256 poolId, uint256 amount)
+        private
+    {
+        LibModuleEncumbrance.unencumber(positionKey, poolId, LENDING_MODULE_ID, amount);
+        LibActiveCreditIndex.applyEncumbranceDecrease(pool, poolId, positionKey, amount);
     }
 }

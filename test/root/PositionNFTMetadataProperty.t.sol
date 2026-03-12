@@ -12,7 +12,7 @@ contract MockAgentURIDiamond {
         agentURIs[agentId] = uri;
     }
 
-    function getAgentURI(uint256 agentId) external view returns (string memory) {
+    function getPositionTokenURI(uint256 agentId) external view returns (string memory) {
         return agentURIs[agentId];
     }
 }
