@@ -34,6 +34,7 @@ import {MultiPoolPositionViewFacet} from "../src/views/MultiPoolPositionViewFace
 import {AuctionManagementViewFacet} from "../src/views/AuctionManagementViewFacet.sol";
 import {PositionManagementFacet} from "../src/equallend/PositionManagementFacet.sol";
 import {LendingFacet} from "../src/equallend/LendingFacet.sol";
+import {FlashLoanFacet} from "../src/equallend/FlashLoanFacet.sol";
 import {PenaltyFacet} from "../src/equallend/PenaltyFacet.sol";
 import {ActiveCreditViewFacet} from "../src/views/ActiveCreditViewFacet.sol";
 import {AmmAuctionFacet} from "../src/EqualX/AmmAuctionFacet.sol";
@@ -67,7 +68,7 @@ interface IPoolManagementFacetInitConfig {
 }
 
 contract DeployV1Script is Script {
-    uint256 internal constant V1_FACET_COUNT = 42;
+    uint256 internal constant V1_FACET_COUNT = 43;
     uint256 internal constant CUT_BATCH_SIZE = 14;
 
     struct BaseDeployment {
@@ -228,6 +229,10 @@ contract DeployV1Script is Script {
         }
         {
             LendingFacet facet = new LendingFacet();
+            cuts[i++] = _cut(address(facet), _selectors(facet));
+        }
+        {
+            FlashLoanFacet facet = new FlashLoanFacet();
             cuts[i++] = _cut(address(facet), _selectors(facet));
         }
         {
@@ -603,6 +608,12 @@ contract DeployV1Script is Script {
         s[3] = LendingFacet.closeRollingCreditFromPosition.selector;
         s[4] = LendingFacet.openFixedFromPosition.selector;
         s[5] = LendingFacet.repayFixedFromPosition.selector;
+    }
+
+    function _selectors(FlashLoanFacet) internal pure returns (bytes4[] memory s) {
+        s = new bytes4[](2);
+        s[0] = FlashLoanFacet.previewFlashLoanRepayment.selector;
+        s[1] = FlashLoanFacet.flashLoan.selector;
     }
 
     function _selectors(PenaltyFacet) internal pure returns (bytes4[] memory s) {
