@@ -269,9 +269,11 @@ contract AdminGovernanceFacetTest is Test {
         
         vm.prank(TIMELOCK);
         facet.initPool(PID + 20, address(0x20), config);
-        
-        // Verify the config was stored correctly
-        // The fallback behavior is tested in lending tests
+
+        Types.PoolConfig memory stored = facet.getPoolConfig(PID + 20);
+        assertEq(facet.getPoolUnderlying(PID + 20), address(0x20));
+        assertEq(stored.minLoanAmount, 1e6);
+        assertEq(stored.minTopupAmount, 0);
     }
     
     function _createConfig(uint256 minDeposit, uint256 minLoan) internal pure returns (Types.PoolConfig memory) {
@@ -647,12 +649,12 @@ contract AdminGovernanceFacetTest is Test {
         facet.initPool(PID + 506, address(0x506), config);
     }
     
-    /// @notice Test InvalidCollateralizationRatio error
-    function testError_InvalidCollateralizationRatio() public {
-        // External collateralization ratio was removed; ensure initPool succeeds with valid config.
+    /// @notice External collateralization ratio was removed; initPool should succeed with valid config.
+    function testInitPoolSucceeds_withoutExternalCollateralizationRatio() public {
         Types.PoolConfig memory config = _createConfig(1e6, 1e6);
         vm.prank(TIMELOCK);
         facet.initPool(PID + 507, address(0x507), config);
+        assertEq(facet.getPoolUnderlying(PID + 507), address(0x507));
     }
     
     /// @notice Test InvalidMaintenanceRate error
@@ -689,12 +691,12 @@ contract AdminGovernanceFacetTest is Test {
         facet.initPool(PID + 510, address(0x510), config);
     }
     
-    /// @notice Test InvalidAPYRate error for rolling APY external
-    function testError_InvalidAPYRate_RollingExternal() public {
+    /// @notice Rolling external APY parameter was removed; initPool should succeed with valid config.
+    function testInitPoolSucceeds_withoutRollingExternalApyField() public {
         Types.PoolConfig memory config = _createConfig(1e6, 1e6);
-        
         vm.prank(TIMELOCK);
         facet.initPool(PID + 511, address(0x511), config);
+        assertEq(facet.getPoolUnderlying(PID + 511), address(0x511));
     }
     
     /// @notice Test InvalidFixedTermDuration error
