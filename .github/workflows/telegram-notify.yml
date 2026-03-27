@@ -1,0 +1,27 @@
+name: Telegram Notify
+
+on:
+  push:
+    branches: ['**']
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Telegram notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: html
+          message: |
+            <b>🔀 Push to ${{ github.repository }}</b>
+
+            <b>Branch:</b> <code>${{ github.ref_name }}</code>
+            <b>Author:</b> ${{ github.actor }}
+            <b>Commits:</b> ${{ github.event.commits.length }}
+
+            ${{ join(github.event.commits.*.message, '
+            ') }}
+
+            <a href="${{ github.event.compare }}">View changes →</a>
