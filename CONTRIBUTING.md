@@ -1,116 +1,241 @@
 # Contributing to EqualFi
 
-Thank you for your interest in contributing to EqualFi! This document provides guidelines for contributing to the Equalis Protocol.
+Thank you for your interest in contributing to EqualFi and The Equalis Protocol! This document provides guidelines and instructions for contributing to our deterministic unified liquidity base layer for DeFi.
+
+## Table of Contents
+
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [Development Workflow](#development-workflow)
+- [Submitting Changes](#submitting-changes)
+- [Style Guidelines](#style-guidelines)
+- [Security](#security)
+- [Community](#community)
 
 ## Code of Conduct
 
-This project adheres to a standard of professional conduct. By participating, you agree to:
-- Be respectful and constructive in all interactions
-- Focus on technical merit and protocol improvement
-- Maintain confidentiality of non-public security issues
+This project and everyone participating in it is governed by our commitment to:
 
-## How to Contribute
+- **Be respectful**: Treat everyone with respect. Healthy debate is encouraged, but harassment is not tolerated.
+- **Be constructive**: Provide constructive feedback and be open to receiving it.
+- **Focus on what's best for the community**: Prioritize the collective benefit of the protocol and its users.
+- **Show empathy**: Understand that we all have different backgrounds and perspectives.
 
-### Reporting Issues
+## Getting Started
 
-If you find a bug or have a suggestion:
-1. Check existing issues to avoid duplicates
-2. Provide a clear description with steps to reproduce (for bugs)
-3. Include relevant code snippets, transaction hashes, or logs
-4. Tag the issue appropriately (bug, enhancement, documentation, etc.)
+### Prerequisites
 
-### Security Issues
+Before you begin, ensure you have the following installed:
 
-**Do not report security vulnerabilities publicly.**
+- **Git** (for submodules)
+- **Foundry** (forge, cast, anvil) — `solc` is pinned to **0.8.33** via Foundry config
+- **Bash** (for helper scripts under `script/`)
 
-For security-related issues, please follow responsible disclosure practices:
-- Contact the maintainers privately
-- Allow reasonable time for fixes before public disclosure
-- Do not exploit vulnerabilities for personal gain
+### Installation
 
-### Pull Request Process
-
-1. **Fork and Branch**: Create a feature branch from `dev`
+1. **Install Foundry** (if not already installed):
    ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Development Setup**:
-   ```bash
-   # Install Foundry
    curl -L https://foundry.paradigm.xyz | bash
    foundryup
-   
-   # Clone and setup
-   git submodule update --init --recursive
+   ```
+
+2. **Clone the repository**:
+   ```bash
+   git clone https://github.com/EqualFiLabs/EqualFi.git
+   cd EqualFi
+   ```
+
+3. **Install dependencies**:
+   The repo uses git submodules for core dependencies.
+   ```bash
+   forge install
+   ```
+
+4. **Verify installation**:
+   ```bash
    forge build
    ```
 
-3. **Make Changes**:
-   - Follow existing code style and patterns
-   - Add tests for new functionality
-   - Update documentation as needed
-   - Ensure all tests pass: `forge test`
+## Development Workflow
 
-4. **Commit Guidelines**:
-   - Use clear, descriptive commit messages
-   - Reference issues where applicable
-   - Keep commits focused and atomic
+### Branching Strategy
 
-5. **Submit PR**:
-   - Target the `dev` branch
-   - Provide a clear description of changes
-   - Link related issues
-   - Respond to review feedback promptly
+- `dev` — Main development branch
+- `main` — Production-ready code
+- Feature branches — Create from `dev` using the naming convention:
+  - `feature/description` for new features
+  - `fix/description` for bug fixes
+  - `docs/description` for documentation updates
+  - `refactor/description` for code refactoring
 
-## Development Guidelines
+### Building
 
-### Code Style
-
-- **Solidity**: Follow the [Solidity Style Guide](https://docs.soliditylang.org/en/latest/style-guide.html)
-- **Naming**: Use descriptive names; prefix internal functions with underscore
-- **Comments**: Document complex logic; use NatSpec for public functions
-- **Gas Optimization**: Consider gas costs for on-chain operations
+Compile the contracts:
+```bash
+forge build
+```
 
 ### Testing
 
-All contributions must include appropriate tests:
-- Unit tests for new functions
-- Integration tests for cross-contract interactions
-- Edge case coverage
-- Gas usage benchmarks where relevant
-
-Run tests before submitting:
+Run the test suite:
 ```bash
 forge test
 ```
 
+Run tests with verbosity:
+```bash
+forge test -vvv
+```
+
+Run specific test:
+```bash
+forge test --match-test testName
+```
+
+### Code Quality
+
+Before submitting changes, ensure:
+
+1. **All tests pass**:
+   ```bash
+   forge test
+   ```
+
+2. **Code is formatted**:
+   ```bash
+   forge fmt
+   ```
+
+3. **Static analysis passes** (if configured):
+   ```bash
+   forge snapshot
+   ```
+
+## Submitting Changes
+
+### Pull Request Process
+
+1. **Fork the repository** and create your branch from `dev`.
+
+2. **Make your changes** following our style guidelines.
+
+3. **Add or update tests** as necessary.
+
+4. **Update documentation** if your changes affect usage or architecture.
+
+5. **Ensure all tests pass** and code is properly formatted.
+
+6. **Fill out the pull request template** with:
+   - Clear description of changes
+   - Motivation for the changes
+   - Any breaking changes
+   - Testing performed
+
+7. **Request review** from maintainers.
+
+8. **Address review feedback** promptly.
+
+### Commit Message Guidelines
+
+We follow conventional commits:
+
+- `feat:` — New feature
+- `fix:` — Bug fix
+- `docs:` — Documentation changes
+- `style:` — Code style changes (formatting, no logic change)
+- `refactor:` — Code refactoring
+- `test:` — Adding or updating tests
+- `chore:` — Maintenance tasks
+
+Example:
+```
+feat: add support for multi-hop swaps
+
+Implements routing through multiple liquidity pools
+to optimize swap execution and reduce slippage.
+```
+
+## Style Guidelines
+
+### Solidity
+
+- Follow the [Solidity Style Guide](https://docs.soliditylang.org/en/latest/style-guide.html)
+- Use `solc` version 0.8.33 as specified in foundry.toml
+- Use NatSpec comments for all public functions
+- Maximum line length: 120 characters
+- Use explicit visibility modifiers
+- Follow naming conventions:
+  - `PascalCase` for contracts
+  - `camelCase` for functions and variables
+  - `SCREAMING_SNAKE_CASE` for constants
+
+### Testing
+
+- Write tests using Foundry's testing framework
+- Aim for high test coverage on critical paths
+- Use descriptive test names: `test_DescriptiveName_StateUnderTest_ExpectedBehavior`
+- Include both positive and negative test cases
+- Use fuzzing where appropriate for input validation
+
 ### Documentation
 
-- Update relevant docs in the `/docs` directory
-- Keep README.md current with setup instructions
-- Document architectural decisions in appropriate `.md` files
+- Document all public functions with NatSpec
+- Include `@notice` for user-facing documentation
+- Include `@dev` for developer notes
+- Include `@param` and `@return` where applicable
+- Update README.md for significant feature changes
 
-## Areas for Contribution
+## Security
 
-We welcome contributions in these areas:
+### Reporting Vulnerabilities
 
-- **Core Protocol**: Lending, borrowing, and index mechanics
-- **Agent Wallet**: ERC-6551 and ERC-6900 implementations
-- **Documentation**: Clarifications, examples, and tutorials
-- **Testing**: Additional test coverage and edge cases
-- **Tooling**: Developer tools and integrations
+**DO NOT** open public issues for security vulnerabilities.
 
-## Questions?
+Instead, please report security issues privately:
 
-- Join our [Discord](https://discord.gg/brsMNDux4T) for real-time discussion
-- Open a GitHub Discussion for architectural questions
-- Review existing documentation in `/docs`
+- Email: security@equalfi.io (if available)
+- Or open a private security advisory on GitHub
 
-## License
+Include:
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Suggested fix (if any)
 
-By contributing, you agree that your contributions will be licensed under the Business Source License 1.1 as specified in [LICENSE](./LICENSE).
+We will acknowledge receipt within 48 hours and provide updates on our progress.
+
+### Security Best Practices
+
+When contributing code:
+
+- Follow [Solidity security best practices](https://consensys.github.io/smart-contract-best-practices/)
+- Use checks-effects-interactions pattern
+- Be mindful of reentrancy vulnerabilities
+- Validate all external inputs
+- Use established libraries (OpenZeppelin) where possible
+- Consider gas optimization without sacrificing security
+
+## Community
+
+### Communication Channels
+
+- **Discord**: [Join our community](https://discord.gg/brrsMNDux4T)
+- **GitHub Discussions**: For technical questions and proposals
+- **GitHub Issues**: For bug reports and feature requests
+
+### Getting Help
+
+If you need help:
+
+1. Check existing documentation and README
+2. Search closed issues and discussions
+3. Ask in Discord community channel
+4. Open a discussion for complex questions
+
+### Recognition
+
+Contributors will be recognized in our release notes and documentation. Significant contributions may be eligible for additional rewards at the team's discretion.
 
 ---
 
-**Thank you for helping build the sovereign financial internet!**
+Thank you for helping build the future of deterministic unified liquidity on Base!
