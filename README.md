@@ -1,4 +1,6 @@
-# EqualFi and The Equalis Protocol
+# EqualFi
+
+Current work is taking place here: https://github.com/EqualFiLabs/EdenFi
 
 [![CI](https://github.com/EqualFiLabs/EqualFi/actions/workflows/ci.yml/badge.svg)](https://github.com/EqualFiLabs/EqualFi/actions/workflows/ci.yml)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/brsMNDux4T)
